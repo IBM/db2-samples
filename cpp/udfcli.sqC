@@ -1,0 +1,898 @@
+/****************************************************************************
+** (c) Copyright IBM Corp. 2007 All rights reserved.
+** 
+** The following sample of source code ("Sample") is owned by International 
+** Business Machines Corporation or one of its subsidiaries ("IBM") and is 
+** copyrighted and licensed, not sold. You may use, copy, modify, and 
+** distribute the Sample in any form without payment to IBM, for the purpose of 
+** assisting you in the development of your applications.
+** 
+** The Sample code is provided to you on an "AS IS" basis, without warranty of 
+** any kind. IBM HEREBY EXPRESSLY DISCLAIMS ALL WARRANTIES, EITHER EXPRESS OR 
+** IMPLIED, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED WARRANTIES OF 
+** MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE. Some jurisdictions do 
+** not allow for the exclusion or limitation of implied warranties, so the above 
+** limitations or exclusions may not apply to you. IBM shall not be liable for 
+** any damages you suffer as a result of using, copying, modifying or 
+** distributing the Sample, even if IBM has been advised of the possibility of 
+** such damages.
+*****************************************************************************
+**
+** SOURCE FILE NAME: udfcli.sqC
+**
+** SAMPLE: Call a variety of types of user-defined functions
+**          
+**         This file is a client for the UDFs from udfsrv.C . 
+**
+** SQL STATEMENTS USED:
+**         CLOSE
+**         COMMIT
+**         CREATE DISTINCT TYPE
+**         CREATE FUNCTION
+**         CREATE TABLE
+**         DECLARE CURSOR
+**         DROP DISTINCT TYPE
+**         DROP FUNCTION
+**         DROP TABLE
+**         EXECUTE IMMEDIATE
+**         FETCH
+**         PREPARE
+**
+** STRUCTURES USED:
+**         sqlca
+**
+** OUTPUT FILE: udfcli.out (available in the online documentation)
+*****************************************************************************
+**
+** For more information on the sample programs, see the README file.
+**
+** For information on developing C++ applications, see the Application
+** Development Guide.
+**
+** For information on using SQL statements, see the SQL Reference.
+**
+** For the latest information on programming, compiling, and running DB2
+** applications, visit the DB2 application development website at
+**     http://www.software.ibm.com/data/db2/udb/ad
+****************************************************************************/
+
+#include <string.h>
+#include <stdio.h>
+#include <sqlenv.h>
+#include "utilemb.h"
+#if ((__cplusplus >= 199711L) && !defined DB2HP && !defined DB2AIX) || \
+    (DB2LINUX && (__LP64__ || (__GNUC__ >= 3)) )
+   #include <iomanip>
+   #include <iostream>
+   using namespace std; 
+#else
+   #include <iomanip.h>
+   #include <iostream.h>
+#endif
+
+// Example directory path used in TblUDFClobFromFile UDF 
+#if(defined(DB2NT))
+#define TESTDIRPATH "c:\\My Download Files\\"
+#else
+#define TESTDIRPATH "/usr/bin/"
+#endif
+
+EXEC SQL BEGIN DECLARE SECTION;
+  char name[15];
+  char job[15];
+  double salary;
+  double newSalary;
+  sqlint32 counter;
+  char empno[7];
+  char resume_format[7];
+  sqlint32 numWords;
+  double comm;
+  short salaryInd;
+  sqlint32 maxCustNum;
+  char strStmt[256];
+  char fname[200];    
+  SQL TYPE IS CLOB (200000) clobFile;      
+  short clobInd;
+EXEC SQL END DECLARE SECTION;
+
+class UdfCli
+{
+  public:
+    // scalar UDFs
+    int ExternalScalarUDFUse();
+    int ExternalScratchpadScalarUDFUse();
+    int ExternalClobScalarUDFUse();
+    int ExternalScalarUDFReturningErrorUse();
+  
+    // column UDFs
+    int SourcedColumnUDFUse();
+
+    // table UDFs
+    int ExternalTableUDFUse();
+    int ExternalClobTableUDFUse();
+
+};
+
+int UdfCli::ExternalScalarUDFUse()
+{
+  struct sqlca sqlca;
+  int rc = 0;
+
+  cout << "\n-----------------------------------------------------------";
+  cout << "\nUSE THE SQL STATEMENTS" << endl;
+  cout << "  CREATE FUNCTION" << endl;
+  cout << "  COMMIT" << endl;
+  cout << "  SELECT" << endl;
+  cout << "  DROP FUNCTION" << endl;
+  cout << "TO WORK WITH SCALAR UDF:" << endl;
+
+  // drop scalar UDF, if exists
+  cout << "\n  DROP the scalar UDF, if exists." << endl;
+
+  EXEC SQL DROP FUNCTION ScalarUDF;
+
+  // register scalar UDF
+  cout << "\n  Register the scalar UDF." << endl;
+
+  EXEC SQL CREATE FUNCTION
+    ScalarUDF(CHAR(5), DOUBLE)
+    RETURNS DOUBLE
+    EXTERNAL NAME 'udfsrv!ScalarUDF'
+    FENCED
+    CALLED ON NULL INPUT
+    NOT VARIANT
+    NO SQL
+    PARAMETER STYLE DB2SQL
+    LANGUAGE C
+    NO EXTERNAL ACTION;
+  EMB_SQL_CHECK("scalar UDF -- register");
+
+  cout << "\n  COMMIT." << endl;
+
+  EXEC SQL COMMIT;
+  EMB_SQL_CHECK("transaction -- commit");
+
+  // use scalar UDF
+  cout << "\n  Use the scalar UDF:" << endl;
+  cout << "    SELECT name, job, salary, ScalarUDF(job, salary)" << endl;
+  cout << "      FROM staff" << endl;
+  cout << "      WHERE name LIKE 'S%'" << endl;
+
+  strcpy(strStmt, "SELECT name, job, salary, ScalarUDF(job, salary) "
+                  "  FROM staff "
+                  "  WHERE name LIKE 'S%' ");
+
+  EXEC SQL PREPARE stmt1 FROM :strStmt;
+  EMB_SQL_CHECK("statement -- prepare");
+
+  // declare cursor
+  EXEC SQL DECLARE c1 CURSOR FOR stmt1;
+
+  // open cursor
+  EXEC SQL OPEN c1;
+  EMB_SQL_CHECK("cursor -- open");
+
+  // fetch cursor
+  cout << "\n  Fetch each row and dispaly." << endl;
+  cout << "    NAME       JOB     SALARY   NEW_SALARY" << endl;
+  cout << "    ---------- ------- -------- ----------" << endl;
+
+  EXEC SQL FETCH c1 INTO :name, :job, :salary, :newSalary;
+  EMB_SQL_CHECK("cursor -- fetch");
+
+  while (sqlca.sqlcode != 100)
+  {
+    cout.setf(ios::left, ios::adjustfield);
+    cout << "    " << setw(10) << name << " " << setw(7) << job;
+    cout.setf(ios::right, ios::adjustfield);
+    cout << " " << setw(7) << salary << " " << setw(7) << newSalary << endl;
+
+    EXEC SQL FETCH c1 INTO :name, :job, :salary, :newSalary;
+    EMB_SQL_CHECK("cursor -- fetch");
+  }
+
+  // close cursor
+  EXEC SQL CLOSE c1;
+  EMB_SQL_CHECK("cursor -- close");
+
+  // drop scalar UDF
+  cout << "\n  DROP the scalar UDF." << endl;
+
+  EXEC SQL DROP FUNCTION ScalarUDF;
+  EMB_SQL_CHECK("scalar UDF -- drop");
+
+  EXEC SQL COMMIT;
+  cout << "\n  COMMIT." << endl;
+  EMB_SQL_CHECK("transaction -- commit");
+
+  return 0;
+} //UdfCli::ExternalScalarUDFUse
+
+int UdfCli::ExternalScratchpadScalarUDFUse()
+{
+  struct sqlca sqlca;
+  int rc = 0;
+
+  cout << "\n-----------------------------------------------------------";
+  cout << "\nUSE THE SQL STATEMENTS" << endl;
+  cout << "  CREATE FUNCTION" << endl;
+  cout << "  COMMIT" << endl;
+  cout << "  SELECT" << endl;
+  cout << "  DROP FUNCTION" << endl;
+  cout << "TO WORK WITH SCRATCHPAD SCALAR UDF:" << endl;
+
+  // drop SCRATCHPAD scalar UDF, if exists
+  cout << "\n  DROP the SCRATCHPAD scalar UDF, if exists." << endl;
+
+  EXEC SQL DROP FUNCTION ScratchpadScUDF;
+
+  // register SCRATCHPAD scalar UDF
+  cout << "\n  Register the SCRATCHPAD scalar UDF." << endl;
+
+  EXEC SQL CREATE FUNCTION ScratchpadScUDF() RETURNS INTEGER
+    EXTERNAL NAME 'udfsrv!ScratchpadScUDF' FENCED SCRATCHPAD 10 FINAL CALL
+    VARIANT NO SQL PARAMETER STYLE DB2SQL LANGUAGE C NO EXTERNAL ACTION;
+  EMB_SQL_CHECK("SCRATCHPAD scalar UDF -- register");
+
+  cout << "\n  COMMIT." << endl;
+
+  EXEC SQL COMMIT;
+  EMB_SQL_CHECK("transaction -- commit");
+
+  // use SCRATCHPAD scalar UDF
+  cout << "\n  Use the SCRATCHPAD scalar UDF:" << endl;
+  cout << "    SELECT ScratchpadScUDF(), name, job" << endl;
+  cout << "      FROM staff" << endl;
+  cout << "      WHERE name LIKE 'S%'" << endl;
+
+  strcpy(strStmt, "SELECT ScratchpadScUDF(), name, job "
+                  "  FROM staff "
+                  "  WHERE name LIKE 'S%' ");
+
+  EXEC SQL PREPARE stmt2 FROM :strStmt;
+  EMB_SQL_CHECK("statement -- prepare");
+
+  // declare cursor
+  EXEC SQL DECLARE c2 CURSOR FOR stmt2;
+
+  // open cursor
+  EXEC SQL OPEN c2;
+  EMB_SQL_CHECK("cursor -- open");
+
+  // fetch cursor
+  cout << "\n  Fetch each row and dispaly." << endl;
+  cout << "    COUNTER NAME       JOB    " << endl;
+  cout << "    ------- ---------- -------" << endl;
+
+  EXEC SQL FETCH c2 INTO :counter, :name, :job;
+  EMB_SQL_CHECK("cursor -- fetch");
+
+  while (sqlca.sqlcode != 100)
+  {
+    cout.setf(ios::right, ios::adjustfield);
+    cout << "    " << setw(7) << counter;
+    cout.setf(ios::left, ios::adjustfield);
+    cout << " " << setw(10) << name << " " << setw(7) << job << endl;
+
+    EXEC SQL FETCH c2 INTO :counter, :name, :job;
+    EMB_SQL_CHECK("cursor -- fetch");
+  }
+
+  // close cursor
+  EXEC SQL CLOSE c2;
+  EMB_SQL_CHECK("cursor -- close");
+
+  // drop SCRATCHPAD scalar UDF
+  cout << "\n  DROP the SCRATCHPAD scalar UDF." << endl;
+
+  EXEC SQL DROP FUNCTION ScratchpadScUDF;
+  EMB_SQL_CHECK("SCRATCHPAD scalar UDF -- drop");
+
+  cout << "\n  COMMIT." << endl;
+
+  EXEC SQL COMMIT;
+  EMB_SQL_CHECK("transaction -- commit");
+
+  return 0;
+} //UdfCli::ScratchpadScUDFUse
+
+int UdfCli::ExternalClobScalarUDFUse()
+{
+  struct sqlca sqlca;
+  int rc = 0;
+
+  cout << "\n-----------------------------------------------------------";
+  cout << "\nUSE THE SQL STATEMENTS" << endl;
+  cout << "  CREATE FUNCTION" << endl;
+  cout << "  COMMIT" << endl;
+  cout << "  SELECT" << endl;
+  cout << "TO WORK WITH CLOB SCALAR UDF:" << endl;
+
+  // drop CLOB scalar UDF, if exists
+  cout << "\n  DROP the CLOB scalar UDF, if exists." << endl;
+  EXEC SQL DROP FUNCTION ClobScalarUDF;
+
+  // register CLOB scalar UDF
+  cout << "\n  Register the CLOB scalar UDF." << endl;
+
+  EXEC SQL
+    CREATE FUNCTION ClobScalarUDF(CLOB(5 K))
+    RETURNS INTEGER
+    EXTERNAL NAME 'udfsrv!ClobScalarUDF'
+    FENCED
+    NOT VARIANT
+    NO SQL
+    PARAMETER STYLE DB2SQL
+    LANGUAGE C
+    NO EXTERNAL ACTION;
+  EMB_SQL_CHECK("CLOB scalar UDF -- register");
+
+  cout << "\n  COMMIT." << endl;
+
+  EXEC SQL COMMIT;
+  EMB_SQL_CHECK("transaction -- commit");
+
+  // use CLOB scalar UDF
+  cout << "\n  Use the CLOB scalar UDF:" << endl;
+  cout << "    SELECT empno, resume_format, ClobScalarUDF(resume)" << endl;
+  cout << "      FROM emp_resume" << endl;
+  cout << "      WHERE resume_format = 'ascii'" << endl;
+
+  strcpy(strStmt, "SELECT empno, resume_format, ClobScalarUDF(resume) "
+                  "  FROM emp_resume "
+                  "  WHERE resume_format = 'ascii' ");
+
+  EXEC SQL PREPARE stmt3 FROM :strStmt;
+  EMB_SQL_CHECK("statement -- prepare");
+
+  // declare cursor
+  EXEC SQL DECLARE c3 CURSOR FOR stmt3;
+
+  // open cursor
+  EXEC SQL OPEN c3;
+  EMB_SQL_CHECK("cursor -- open");
+
+  // fetch cursor
+  cout << "\n  Fetch each row and dispaly." << endl;
+  cout << "    EMPNO   RESUME_FORMAT NUM.WORDS" << endl;
+  cout << "    ------- ------------- ---------" << endl;
+
+  EXEC SQL FETCH c3 INTO :empno, :resume_format, :numWords;
+  EMB_SQL_CHECK("cursor -- fetch");
+
+  while (sqlca.sqlcode != 100)
+  {
+    cout << "    " << setw(7) << empno
+         << " " << setw(13) << resume_format
+         << " " << numWords << endl;
+
+    EXEC SQL FETCH c3 INTO :empno, :resume_format, :numWords;
+    EMB_SQL_CHECK("cursor -- fetch");
+  }
+
+  // close cursor
+  EXEC SQL CLOSE c3;
+  EMB_SQL_CHECK("cursor -- close");
+
+  // drop CLOB scalar UDF
+  cout << "\n  DROP the CLOB scalar UDF." << endl;
+
+  EXEC SQL DROP FUNCTION ClobScalarUDF;
+  EMB_SQL_CHECK("CLOB scalar UDF -- drop");
+
+  cout << "\n  COMMIT." << endl;
+
+  EXEC SQL COMMIT;
+  EMB_SQL_CHECK("transaction -- commit");
+
+  return 0;
+} //UdfCli::ExternalClobScalarUDFUse
+
+int UdfCli::ExternalScalarUDFReturningErrorUse()
+{
+  struct sqlca sqlca;
+  int rc = 0;
+
+  cout << "\n-----------------------------------------------------------";
+  cout << "\nUSE THE SQL STATEMENTS" << endl;
+  cout << "  CREATE FUNCTION" << endl;
+  cout << "  COMMIT" << endl;
+  cout << "  SELECT" << endl;
+  cout << "  DROP FUNCTION" << endl;
+  cout << "TO WORK WITH SCALAR UDF THAT RETURNS ERROR:" << endl;
+
+  // drop scalar UDF that returns errors, if exists
+  cout << "\n  DROP the scalar UDF that returns error, if exists." << endl;
+
+  EXEC SQL DROP FUNCTION ScUDFReturningErr;
+
+  // register scalar UDF that returns errors
+  cout << "\n  Register the scalar UDF that returns error." << endl;
+
+  EXEC SQL CREATE FUNCTION ScUDFReturningErr(DOUBLE, DOUBLE)
+    RETURNS DOUBLE
+    EXTERNAL NAME 'udfsrv!ScUDFReturningErr'
+    FENCED
+    NOT VARIANT
+    NO SQL
+    PARAMETER STYLE DB2SQL
+    LANGUAGE C
+    NO EXTERNAL ACTION;
+  EMB_SQL_CHECK("scalar UDF -- register");
+
+  cout << "\n  COMMIT." << endl;
+
+  EXEC SQL COMMIT;
+  EMB_SQL_CHECK("transaction -- commit");
+
+  // use scalar UDF that returns errors
+  cout << "\n  Use the scalar UDF that returns error:" << endl;
+  cout << "    SELECT name, job, ScUDFReturningErr(salary, 0.00)" << endl;
+  cout << "      FROM staff" << endl;
+  cout << "      WHERE name LIKE 'S%'" << endl;
+
+  strcpy(strStmt, "SELECT name, job, ScUDFReturningErr(salary, 0.00) "
+                  "  FROM staff "
+                  "  WHERE name LIKE 'S%' ");
+
+  EXEC SQL PREPARE stmt4 FROM :strStmt;
+  EMB_SQL_CHECK("statement -- prepare");
+
+  // declare cursor
+  EXEC SQL DECLARE c4 CURSOR FOR stmt4;
+
+  // open cursor
+  EXEC SQL OPEN c4;
+  EMB_SQL_CHECK("cursor -- open");
+
+  // fetch cursor
+  cout << "\n  Fetch each row and dispaly." << endl;
+  cout << "    NAME       JOB     COMM    " << endl;
+  cout << "    ---------- ------- --------" << endl;
+
+  EXEC SQL FETCH c4 INTO :name, :job, :comm;
+  EXPECTED_ERR_CHECK("cursor -- fetch");
+  if (sqlca.sqlcode < 0)
+  {
+    DbEmb::TransRollback();
+    return 1;
+  }
+
+  while (sqlca.sqlcode != 100)
+  {
+    cout << "    " << setw(10) << name << " " << setw(7) << job
+         << " " << setw(7) << comm << endl;
+
+    EXEC SQL FETCH c4 INTO :name, :job, :comm;
+    EMB_SQL_CHECK("cursor -- fetch");
+  }
+
+  // close cursor
+  EXEC SQL CLOSE c4;
+  EMB_SQL_CHECK("cursor -- close");
+
+  // drop scalar UDF that returns error
+  cout << "\n  DROP the scalar UDF that returns error." << endl;
+
+  EXEC SQL DROP FUNCTION ScUDFReturningErr;
+  EMB_SQL_CHECK("scalar UDF -- drop");
+
+  cout << "\n  COMMIT." << endl;
+
+  EXEC SQL COMMIT;
+  EMB_SQL_CHECK("transaction -- commit");
+
+  return 0;
+} //UdfCli::ExternalScalarUDFReturningErrorUse
+
+int UdfCli::SourcedColumnUDFUse()
+{
+  struct sqlca sqlca;
+  int rc = 0;
+
+  cout << "\n-----------------------------------------------------------";
+  cout << "\nUSE THE SQL STATEMENTS" << endl;
+  cout << "  CREATE DISTINCT TYPE" << endl;
+  cout << "  CREATE FUNCTION" << endl;
+  cout << "  CREATE TABLE" << endl;
+  cout << "  COMMIT" << endl;
+  cout << "  SELECT INTO" << endl;
+  cout << "  DROP TABLE" << endl;
+  cout << "  DROP FUNCTION" << endl;
+  cout << "  DROP DISTINCT TYPE" << endl;
+  cout << "TO WORK WITH SOURCED COLUMN UDF:" << endl;
+
+  cout << "\n  DROP the table 'customer', if exists." << endl;
+
+  EXEC SQL DROP TABLE customer;
+  strcpy(strStmt, "DROP FUNCTION MAX(cnum)");
+
+  EXEC SQL EXECUTE IMMEDIATE :strStmt;
+
+  cout << "\n  DROP DISTINCT TYPE cnum, if exists." << endl;
+
+  EXEC SQL DROP DISTINCT TYPE cnum;
+
+  cout << "\n  COMMIT." << endl;
+
+  EXEC SQL COMMIT;
+  EMB_SQL_CHECK("transaction -- commit");
+
+  // create distinct type
+  cout << "\n  CREATE DISTINCT TYPE cnum AS INTEGER  WITH COMPARISONS"
+       << endl;
+
+  EXEC SQL CREATE DISTINCT TYPE cnum AS INTEGER WITH COMPARISONS;
+  EMB_SQL_CHECK("distinct type -- create");
+
+  // create sourced column UDF
+  cout << "\n  CREATE FUNCTION MAX(cnum) RETURNS cnum"
+       << " SOURCE SYSIBM.MAX(INTEGER)" << endl;
+
+  EXEC SQL CREATE FUNCTION MAX(cnum) RETURNS cnum SOURCE SYSIBM.MAX(INTEGER);
+  EMB_SQL_CHECK("sourced column UDF -- create");
+
+  // create table that uses the distinct type
+  cout << "\n  CREATE TABLE customer(custNum CNUM NOT NULL,\n"
+       << "                        custName CHAR(30) NOT NULL)" << endl;
+
+  EXEC SQL CREATE TABLE customer(custNum CNUM NOT NULL,
+                                 custName CHAR(30) NOT NULL);
+  EMB_SQL_CHECK("table that uses distinct type -- create");
+
+  // populate customer table
+  cout << "\n  INSERT INTO CUSTOMER VALUES(CAST(1 AS CNUM), 'JOHN WALKER'),"
+       << endl
+       << "                             (CAST(2 AS CNUM), 'BRUCE ADAMSON'),"
+       << "\n                             (CAST(3 AS CNUM), 'SALLY KWAN')"
+       << endl;
+
+  strcpy(strStmt,
+         "INSERT INTO CUSTOMER VALUES(CAST(1 AS CNUM), 'JOHN WALKER'), "
+         "                           (CAST(2 AS CNUM), 'BRUCE ADAMSON'), "
+         "                           (CAST(3 AS CNUM), 'SALLY KWAN') ");
+
+  EXEC SQL EXECUTE IMMEDIATE :strStmt;
+  EMB_SQL_CHECK("customer table -- populate");
+
+  // commit transaction
+  cout << "\n  COMMIT" << endl;
+
+  EXEC SQL COMMIT;
+  EMB_SQL_CHECK("transaction -- commit");
+
+  // use sourced column UDF
+  cout << "\n  Use the sourced column UDF:" << endl;
+  cout << "    SELECT CAST(MAX(custNum) AS INTEGER) FROM customer" << endl;
+
+  strcpy(strStmt, "SELECT CAST(MAX(custNum) AS INTEGER) FROM customer");
+
+  EXEC SQL PREPARE stmt7 FROM :strStmt;
+  EMB_SQL_CHECK("statement -- prepare");
+
+  EXEC SQL DECLARE c7 CURSOR FOR stmt7;
+
+  EXEC SQL OPEN c7;
+  EMB_SQL_CHECK("cursor -- open");
+
+  EXEC SQL FETCH c7 INTO :maxCustNum;
+  EMB_SQL_CHECK("cursor -- fetch");
+
+  cout << "\n  MAX(custNum) is: " << maxCustNum << endl;
+
+  EXEC SQL CLOSE c7;
+  EMB_SQL_CHECK("cursor -- close");
+
+  // drop customer table
+  cout << "\n  DROP TABLE customer." << endl;
+
+  EXEC SQL DROP TABLE customer;
+  EMB_SQL_CHECK("customer table -- drop");
+
+  // drop sourced column UDF
+  cout << "\n  DROP FUNCTION MAX(cnum)" << endl;
+
+  strcpy(strStmt, "DROP FUNCTION MAX(cnum)");
+
+  EXEC SQL EXECUTE IMMEDIATE :strStmt;
+  EMB_SQL_CHECK("sourced column UDF -- drop");
+
+  // drop cnum distinct type
+  cout << "\n  DROP DISTINCT TYPE cnum" << endl;
+
+  EXEC SQL DROP DISTINCT TYPE cnum;
+  EMB_SQL_CHECK("cnum distinct type -- drop");
+
+  // commit transaction
+  cout << "\n  COMMIT" << endl;
+
+  EXEC SQL COMMIT;
+  EMB_SQL_CHECK("transaction -- commit");
+
+  return 0;
+} //UdfCli::SourcedColumnUDFUse
+
+int UdfCli::ExternalTableUDFUse()
+{
+  struct sqlca sqlca;
+  int rc = 0;
+
+  cout << "\n-----------------------------------------------------------";
+  cout << "\nUSE THE SQL STATEMENTS" << endl;
+  cout << "  CREATE FUNCTION" << endl;
+  cout << "  COMMIT" << endl;
+  cout << "  SELECT" << endl;
+  cout << "  DROP FUNCTION" << endl;
+  cout << "TO WORK WITH TABLE UDF:" << endl;
+
+  // drop table UDF, if exists
+  cout << "\n  DROP FUNCTION TableUDF, if exists." << endl;
+
+  EXEC SQL DROP FUNCTION TableUDF;
+
+  // register table UDF
+  cout << "\n  Register the table UDF." << endl;
+
+  EXEC SQL CREATE FUNCTION TableUDF(DOUBLE)
+    RETURNS TABLE(name VARCHAR(20), job VARCHAR(20), salary DOUBLE)
+    EXTERNAL NAME 'udfsrv!TableUDF'
+    LANGUAGE C  
+    PARAMETER STYLE DB2SQL
+    NOT DETERMINISTIC
+    FENCED
+    NO SQL 
+    NO EXTERNAL ACTION
+    SCRATCHPAD 10
+    FINAL CALL
+    DISALLOW PARALLEL
+    NO DBINFO;
+  EMB_SQL_CHECK("table UDF -- register");
+
+  cout << "\n  COMMIT." << endl;
+
+  EXEC SQL COMMIT;
+  EMB_SQL_CHECK("transaction -- commit");
+
+  // use table UDF
+  cout << "\n  Use the table UDF:" << endl;
+  cout << "    SELECT udfTable.name, udfTable.job, udfTable.salary" << endl;
+  cout << "      FROM TABLE(TableUDF(1.5))" << endl;
+  cout << "      AS udfTable" << endl;
+
+  strcpy(strStmt, "SELECT udfTable.name, udfTable.job, udfTable.salary "
+                  "  FROM TABLE(TableUDF(1.5)) "
+                  "  AS udfTable ");
+
+  EXEC SQL PREPARE stmt5 FROM :strStmt;
+  EMB_SQL_CHECK("statement -- prepare");
+
+  // declare cursor
+  EXEC SQL DECLARE c5 CURSOR FOR stmt5;
+
+  // open cursor
+  EXEC SQL OPEN c5;
+  EMB_SQL_CHECK("cursor -- open");
+
+  // fetch cursor
+  cout << "\n  Fetch each row and display." << endl;
+  cout << "    NAME       JOB     SALARY   " << endl;
+  cout << "    ---------- ------- ---------" << endl;
+
+  EXEC SQL FETCH c5 INTO :name, :job, :salary:salaryInd;
+  EMB_SQL_CHECK("cursor -- fetch");
+
+  while (sqlca.sqlcode != 100)
+  {
+    cout << "    " << setw(10) << name << " " << setw(7) << job;
+    if (salaryInd >= 0)
+    {
+      cout << " " << setw(7) << salary;
+    }
+    else
+    {
+      cout << " -       ";
+    }
+    cout << endl;
+
+    EXEC SQL FETCH c5 INTO :name, :job, :salary:salaryInd;
+    EMB_SQL_CHECK("cursor -- fetch");
+  }
+
+  // close cursor
+  EXEC SQL CLOSE c5;
+  EMB_SQL_CHECK("cursor -- close");
+
+  // drop table UDF
+  cout << "\n  DROP FUNCTION TableUDF." << endl;
+
+  EXEC SQL DROP FUNCTION TableUDF;
+  EMB_SQL_CHECK("table UDF -- drop");
+
+  cout << "\n  COMMIT." << endl;
+
+  EXEC SQL COMMIT;
+  EMB_SQL_CHECK("transaction -- commit");
+
+  return 0;
+} //UdfCli::TableUDFUse
+
+
+int UdfCli::ExternalClobTableUDFUse()
+{
+  struct sqlca sqlca;
+  int charNmb = 0;
+  int rc = 0;
+
+  cout << "\n-----------------------------------------------------------" << endl;
+  cout << "\nUSE THE SQL STATEMENTS\n                                   " << endl;
+  cout << "  CREATE FUNCTION                                            " << endl;
+  cout << "  COMMIT                                                     " << endl;
+  cout << "  SELECT                                                     " << endl;
+  cout << "TO WORK WITH CLOB TABLE UDF:                                 " << endl;
+
+  /* drop CLOB table UDF, if exists */
+  cout << "\n  DROP the CLOB scalar UDF, if exists." <<endl;
+
+  EXEC SQL DROP FUNCTION TblUDFClobFromFile;
+
+  /* register CLOB table UDF */
+  cout << "\n  Register the CLOB table UDF." << endl;
+
+  EXEC SQL CREATE FUNCTION TblUDFClobFromFile (dir varchar(40)) 
+    RETURNS TABLE (fname varchar(200), 
+                   file clob(200000))
+    EXTERNAL NAME 'udfsrv!TblUDFClobFromFile'
+    SPECIFIC TBLUDFCLOBFROMFILE
+    LANGUAGE C PARAMETER STYLE db2sql
+    SCRATCHPAD FINAL CALL
+    FENCED RETURNS NULL ON NULL INPUT
+    DETERMINISTIC
+    NO SQL
+    NO EXTERNAL ACTION
+    DISALLOW PARALLEL;
+  EMB_SQL_CHECK("CLOB table UDF -- register");
+
+  cout << "\n  COMMIT." << endl;
+
+  EXEC SQL COMMIT;
+  EMB_SQL_CHECK("transaction -- commit");
+
+  // use CLOB table UDF 
+  cout << "\n  Notes - regarding use of the CLOB table UDF:            "   << endl;                             
+  cout << "  -----                                                     "   << endl;
+  cout << "       1) USAGE                                             "   << endl;
+  cout << "          If no data is returned, verify that the input     "   << endl;
+  cout << "          parameter directory name is valid for your system."   << endl;
+  cout << "          If not, edit the #define TESTDIRPATH to one that  "   << endl;
+  cout << "          exists for your system or edit the input parameter"   << endl;
+  cout << "          directly in the SQL statement that follows below. "   << endl;
+  cout << "                                                            "   << endl;
+  cout << "       2) SECURITY:                                         "   << endl;
+  cout << "          Because this table function reads files           "   << endl;
+  cout << "          residing on the database server, caution should   "   << endl;
+  cout << "          be taken when granting execute priviliges of this "   << endl;
+  cout << "          function to database users.                       "   << endl;
+
+  // Select sub-strings of the columns fname (varchar) and file (clob) 
+  // from the table returned by calling TblUDFClobFromFile. One row is 
+  // returned per directory entry found in the directory specified by  
+  // the input parameter.                                              
+  sprintf(strStmt, "  SELECT substr(fname, 1, 20), substr(file,1, 10)"
+                   "  FROM table (TblUDFClobFromFile('%s')) as T", TESTDIRPATH);
+  
+  // Output the string to execute
+  cout << "\n  Use the CLOB table UDF:\n" << endl;
+  cout << setw(20) << strStmt   <<endl;
+
+  EXEC SQL PREPARE stmt6 FROM :strStmt;
+  EMB_SQL_CHECK("statement -- prepare");
+
+  // declare cursor 
+  EXEC SQL DECLARE c6 CURSOR FOR stmt6;
+
+  //  cursor 
+  EXEC SQL OPEN c6;
+  EMB_SQL_CHECK("cursor -- open");
+
+  // fetch cursor 
+  cout << "\n  Fetch each row and display. " << endl;
+  cout << "    FNAME   FILE(first 10 chars)" << endl;
+  cout << "    ------- --------------------" << endl;
+
+  EXEC SQL FETCH c6 INTO :fname, :clobFile:clobInd;
+  EMB_SQL_CHECK("cursor -- fetch");
+
+  while (sqlca.sqlcode != 100)
+  {
+    // Print the directory entry name
+    cout << "    " << setw(20) << fname << " " ;
+
+    // If CLOB is NULL, output a "NULL" string
+    // Otherwise, output 10 chars of data from clob
+    if (clobInd < 0)
+    {
+      cout << " " << setw(7) << "NULL";
+      cout << "" << endl;
+    }
+    else
+    {
+      for (charNmb = 0;
+          ((charNmb < 10) && (charNmb < clobFile.length));
+          charNmb++)
+      {
+        cout << setw(1) << clobFile.data[charNmb];
+      }
+      cout << ""<<endl;
+    }
+
+    EXEC SQL FETCH c6 INTO :fname, :clobFile:clobInd;
+    EMB_SQL_CHECK("cursor -- fetch");
+  }
+
+  // close cursor 
+  EXEC SQL CLOSE c6;
+  EMB_SQL_CHECK("cursor -- close");
+
+  // drop CLOB scalar UDF 
+  cout << "\n  DROP the CLOB table UDF." << endl;
+
+  EXEC SQL DROP FUNCTION TblUDFClobFromFile;
+  EMB_SQL_CHECK("CLOB table UDF -- drop");
+
+  cout << "\n  COMMIT." << endl;
+
+  EXEC SQL COMMIT;
+  EMB_SQL_CHECK("transaction -- commit");
+
+  return 0;
+} // ExternalClobTableUDFUse 
+
+
+int main(int argc, char *argv[])
+{
+  int rc = 0;
+  CmdLineArgs check;
+  UdfCli cli;
+  DbEmb db;
+
+  // check the command line arguments
+  rc = check.CmdLineArgsCheck1(argc, argv, db);
+  if (rc != 0)
+  {
+    return rc;
+  }
+
+  cout.setf(ios::fixed, ios::floatfield);
+  cout << setprecision(2);
+  cout << "\nTHIS SAMPLE SHOWS HOW TO WORK WITH UDFs." << endl;
+
+  // database -- connect
+  rc = db.Connect();
+  if (rc != 0)
+  {
+    return rc;
+  }
+
+  // scalar UDFs
+  rc = cli.ExternalScalarUDFUse();
+  rc = cli.ExternalScratchpadScalarUDFUse();
+  rc = cli.ExternalClobScalarUDFUse();
+  rc = cli.ExternalScalarUDFReturningErrorUse();
+  
+  // column UDFs
+  rc = cli.SourcedColumnUDFUse();
+
+  // table UDFs
+  rc = cli.ExternalTableUDFUse();
+  rc = cli.ExternalClobTableUDFUse();
+
+  // database -- disconnect
+  rc = db.Disconnect();
+  if (rc != 0)
+  {
+    return rc;
+  }
+
+  return 0;
+} //main
+

@@ -1,0 +1,95 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--  IBM Corporation  version 1.0   -->
+
+<!-- Configuration file for Maintenance Window Specification  -->
+
+<!--
+
+Use this file to specify a maintenance window during which DB2 will perform automatic maintenance:
+1) specify a period of low database activity for the online maintenance window; and
+2) if required, specify a period in the database for the offline maintenance window.
+
+ -->
+ 
+<DB2MaintenanceWindows 
+xmlns="http://www.ibm.com/xmlns/prod/db2/autonomic/config">
+
+
+<!-- Online Maintenance Window  -->
+
+<!--
+Specify when automatic jobs will be run 
+1. during the specified window time.(During); or
+2. any time apart from specified window time.(Outside)
+Set the "Occurrence" attribute to "Outside" or "During" to select one of these options.
+
+Window is specified using the following parameters:
+1.startTime  
+This is the time of day, expressed in 24 hour format, that the maintenance window should start.  For example, the following would cause the maintenance window to start at 11:00pm: startTime="23:00:00"
+
+2.duration
+This is the length of time, expressed in hours that the maintenance window should last.  For example, the following would cause the maintenance window to last 3 hours: duration="3" 
+
+3. <DaysOfMonth> is the day or days on the month during which the maintenance window will occur.  You can specify one day, several days in a list separated by spaces, or all days. The values can range from  1 to 31 or from -1 to -31. Valus in the range from 1 to 31 represent days of month. Values  in the range from -1 to -31 are counting backwards from end of month. For example, -1 represent last day of month and -4 represent 4th last day of month. 
+	
+For example, the following would cause the maintenance window to occur on day 29 of the month: <DaysOfMonth>29</DaysOfMonth>.  The following would cause the maintenance window to occur on days 1 and 15 of the month:  <DaysOfMonth>1 15</DaysOfMonth>.  The following would case the maintenance window to occur every day of the month: <DaysOfMonth>All</DaysOfMonth>.  The following would case the maintenance window to occur on the last day of every month:<DaysOfMonth>-1</DaysOfMonth>
+
+4. <DaysOfWeek> is the day or days of the Week when the maintenance window will occur.  You can specify one day, several days in a list separated by spaces, or all days. The names of the week days are expected to be abbreviated: Mon,Tue,Wed,Thu,Fri,Sat,Sun. For example, the following would cause the maintenance window to occur every Monday: <DaysOfWeek>Mon</DaysOfWeek>. The following would cause the maintenance window to occur every Tuesday and Friday:<DaysOfWeek>Tue Fri</DaysOfWeek>. The following would case the maintenance window to occur every day:<DaysOfWeek>All</DaysOfWeek>
+
+5.<MonthsOfYear> is the month or months during which the maintenance window will occur.  You can specify one month, several months in a list separated by spaces, or all months.  The names of the months are expected to be abbreviated: Jan,Feb,Mar,Apr,May,Jun,Jul,Aug, Sep,Oct,Nov,Dec.  For example, the following would cause the maintenance window to occur every January: <MonthsOfYear>Jan</MonthsOfYear>.  The following would cause the maintenance window to occur every January, April, July, and October: <MonthsOfYear>Jan Apr Jul Oct</MonthsOfYear>.  The following would case the maintenance window to occur every month: <MonthsOfYear>All</MonthsOfYear>
+	
+Note that the values specified for these options, <DaysOfMonth>, <DaysOfWeek>, <MonthsOfYear> are combined together logically to calculate the window.  For example, the following specifies that the window is on the first of the month:
+  <DaysOfMonth>1</DaysOfMonth>
+and the following specifies that the window is on the first of the month, only when that day is a Monday:
+  <DaysOfWeek>Mon</DaysOfWeek>
+  <DaysOfMonth>1</DaysOfMonth>
+
+Here are some examples of a valid Occurrence attribute specifications:
+
+The following causes the online maintenance to occur for 3 hours at the end of the first day of every month when ever falls on Monday:
+ <OnlineWindow Occurrence="During" startTime="21:00:00" duration="3">
+   <DaysOfWeek>Mon</DaysOfWeek>
+   <DaysOfMonth>1</DaysOfMonth>
+   <MonthsOfYear>All</MonthsOfYear>
+ </OnlineWindow>
+
+The following causes the online maintenance to occur for 5 hours starting at the end of the day, on the 1st, 15th and 2nd last day of July, October and December, fall on Monday or Friday.
+ <OnlineWindow Occurrence="During" startTime="21:00:00" duration="5">
+   <DaysOfWeek>Mon Fri</DaysOfWeek>
+   <DaysOfMonth>1 15 -2</DaysOfMonth>
+   <MonthsOfYear>Jul Oct Dec</MonthsOfYear>
+ </OnlineWindow>
+
+The following causes the online maintenance to occur for 3 hours at the beginning of the day, on the 2nd day,4th last day and last day of every months fall on Saturday or Sunday.
+ <OnlineWindow Occurrence="During" startTime="00:00:00" duration="3">
+   <DaysOfWeek>Sat Sun</DaysOfWeek>
+   <DaysOfMonth>2 -4 -1</DaysOfMonth>
+   <MonthsOfYear>All</MonthsOfYear>
+ </OnlineWindow>
+ -->
+ <OnlineWindow Occurrence="During" startTime="00:00:00" duration="24">
+   <DaysOfWeek>All</DaysOfWeek>
+   <DaysOfMonth>All</DaysOfMonth>
+   <MonthsOfYear>All</MonthsOfYear>
+ </OnlineWindow>
+
+<!--  Offline Maintenance Window -->
+
+<!--
+
+Optional:
+Specify when offline automatic maintenance can occur in the Occurrence attribute.  
+Specify the OfflineWindow using the same method as described above for the OnlineWindow.
+
+ -->
+
+<!--
+ <OfflineWindow Occurrence="During" startTime="00:00:00" duration="24" >
+   <DaysOfWeek>All</DaysOfWeek>
+   <DaysOfMonth>All</DaysOfMonth>
+   <MonthsOfYear>All</MonthsOfYear>
+ </OfflineWindow>
+ -->
+
+</DB2MaintenanceWindows>
+

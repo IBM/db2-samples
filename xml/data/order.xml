@@ -1,0 +1,27 @@
+<?xml version="1.0" encoding="UTF-8"?>
+                    <po:PurchaseOrder xmlns:po="http://www.test.com/po">
+                       <Header>
+                            <Id>1</Id>
+                            <date>2004-01-29</date>
+                            <description>purchase order</description>
+                            <value>20</value>
+                            <status>shipped</status>
+                       </Header>
+                       <Items>
+                            <Item>
+                                 <ItemDescription color="red" weight="5">
+                                          <Name>Widget C</Name>
+                                          <SKU>1</SKU>
+                                          <Price>30</Price>
+                                          <Comment>no comment</Comment>
+                                 </ItemDescription>
+                                 <NumberOrdered>1</NumberOrdered>
+                            </Item>
+                       </Items>
+                       <Customer type="regualar">
+                             <Name>Manoj K Sardana</Name>
+                             <Address>ring road, bangalore</Address>
+                             <Phone>918051055109</Phone>
+                             <email>msardana@in.ibm.com</email>
+                       </Customer>
+                    </po:PurchaseOrder>

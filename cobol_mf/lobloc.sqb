@@ -1,0 +1,194 @@
+      ***********************************************************************
+      ** (c) Copyright IBM Corp. 2007 All rights reserved.
+      ** 
+      ** The following sample of source code ("Sample") is owned by International 
+      ** Business Machines Corporation or one of its subsidiaries ("IBM") and is 
+      ** copyrighted and licensed, not sold. You may use, copy, modify, and 
+      ** distribute the Sample in any form without payment to IBM, for the purpose of 
+      ** assisting you in the development of your applications.
+      ** 
+      ** The Sample code is provided to you on an "AS IS" basis, without warranty of 
+      ** any kind. IBM HEREBY EXPRESSLY DISCLAIMS ALL WARRANTIES, EITHER EXPRESS OR 
+      ** IMPLIED, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED WARRANTIES OF 
+      ** MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE. Some jurisdictions do 
+      ** not allow for the exclusion or limitation of implied warranties, so the above 
+      ** limitations or exclusions may not apply to you. IBM shall not be liable for 
+      ** any damages you suffer as a result of using, copying, modifying or 
+      ** distributing the Sample, even if IBM has been advised of the possibility of 
+      ** such damages.
+      ***********************************************************************
+      **
+      ** SOURCE FILE NAME: lobloc.sqb 
+      **
+      ** SAMPLE: Demonstrates the use of LOB locators
+      **
+      **         This sample program demonstrates the use of LOB
+      **         locators.  The program creates a CURSOR, and fetches the
+      **         contents of the "emp_resume" table (the SAMPLE database
+      **         must be installed with the "db2sampl" executable), and
+      **         obtains the information specified to the "Department".
+      **         This  informations is then copied over to a buffer.
+      **         After the whole table has been scanned, the program
+      **         outputs the content of the buffer (information specific
+      **         to the "department" for all the resumes in the
+      **         "emp_resume" table.
+      **
+      ** SQL STATEMENTS USED:
+      **         BEGIN DECLARE SECTION 
+      **         END DECLARE SECTION 
+      **         FREE LOCATOR
+      **         CONNECT
+      **         DECLARE
+      **         VALUES
+      **         FETCH
+      **         CLOSE
+      **         OPEN
+      **
+      ** OUTPUT FILE: lobloc.out (available in the online documentation)
+      ***********************************************************************
+      **
+      ** For more information on the sample programs, see the README file. 
+      **
+      ** For information on developing COBOL applications, see the 
+      ** Application Development Guide.
+      **
+      ** For information on using SQL statements, see the SQL Reference. 
+      **
+      ** For the latest information on programming, compiling, and running
+      ** DB2 applications, visit the DB2 application development website: 
+      **     http://www.software.ibm.com/data/db2/udb/ad
+      ***********************************************************************
+
+       Identification Division.
+       Program-ID. "lobloc".
+
+       Data Division.
+       Working-Storage Section.
+
+           copy "sqlenv.cbl".
+           copy "sql.cbl".
+           copy "sqlca.cbl".
+
+           EXEC SQL BEGIN DECLARE SECTION END-EXEC.                     1
+       01 userid            pic x(8).
+       01 passwd.
+         49 passwd-length   pic s9(4) comp-5 value 0.
+         49 passwd-name     pic x(18).
+       01 empnum            pic x(6).
+       01 di-begin-loc      pic s9(9) comp-5.
+       01 di-end-loc        pic s9(9) comp-5.
+       01 resume            USAGE IS SQL TYPE IS CLOB-LOCATOR.
+       01 di-buffer         USAGE IS SQL TYPE IS CLOB-LOCATOR.
+       01 lobind            pic s9(4) comp-5.
+       01 buffer            USAGE IS SQL TYPE IS CLOB(1K).
+           EXEC SQL END DECLARE SECTION END-EXEC.
+
+       77 errloc          pic x(80).
+
+       Procedure Division.
+       Main Section.
+           display "Sample COBOL program: LOBLOC".
+
+      * Get database connection information.
+           display "Enter your user id (default none): " 
+                with no advancing.
+           accept userid.
+
+           if userid = spaces
+             EXEC SQL CONNECT TO sample END-EXEC
+           else
+             display "Enter your password : " with no advancing
+             accept passwd-name.
+
+      * Passwords in a CONNECT statement must be entered in a VARCHAR
+      * format with the length of the input string.
+           inspect passwd-name tallying passwd-length for characters
+              before initial " ".
+
+           EXEC SQL CONNECT TO sample USER :userid USING :passwd
+               END-EXEC.
+           move "CONNECT TO" to errloc.
+           call "checkerr" using SQLCA errloc.
+
+      * Employee A10030 is not included in the following select, because
+      * the lobeval program manipulates the record for A10030 so that it is
+      * not compatible with lobloc
+
+           EXEC SQL DECLARE c1 CURSOR FOR
+                    SELECT empno, resume FROM emp_resume
+                    WHERE resume_format = 'ascii'
+                    AND empno <> 'A00130' END-EXEC.
+
+           EXEC SQL OPEN c1 END-EXEC.
+           move "OPEN CURSOR" to errloc.
+           call "checkerr" using SQLCA errloc.
+
+           Move 0 to buffer-length. 
+
+           perform Fetch-Loop thru End-Fetch-Loop
+              until SQLCODE not equal 0.
+
+      * display contents of the buffer.
+           display buffer-data(1:buffer-length).
+
+           EXEC SQL FREE LOCATOR :resume, :di-buffer END-EXEC.          3
+           move "FREE LOCATOR" to errloc.
+           call "checkerr" using SQLCA errloc.
+
+           EXEC SQL CLOSE c1 END-EXEC.
+           move "CLOSE CURSOR" to errloc.
+           call "checkerr" using SQLCA errloc.
+
+           EXEC SQL CONNECT RESET END-EXEC.
+           move "CONNECT RESET" to errloc.
+           call "checkerr" using SQLCA errloc.
+       End-Main.
+              go to End-Prog.
+
+       Fetch-Loop Section.
+           EXEC SQL FETCH c1 INTO :empnum, :resume :lobind              2
+              END-EXEC.
+
+           if SQLCODE not equal 0
+              go to End-Fetch-Loop.
+
+      * check to see if the host variable indicator returns NULL.
+           if lobind less than 0 go to NULL-lob-indicated.
+
+      * Value exists.  Evaluate the LOB locator.
+      * Locate the beginning of "Department Information" section.
+           EXEC SQL VALUES (POSSTR(:resume, 'Department Information'))
+                    INTO :di-begin-loc END-EXEC.
+           move "VALUES1" to errloc.
+           call "checkerr" using SQLCA errloc.
+
+      * Locate the beginning of "Education" section (end of Dept.Info)
+           EXEC SQL VALUES (POSSTR(:resume, 'Education'))
+                     INTO :di-end-loc END-EXEC.
+           move "VALUES2" to errloc.
+           call "checkerr" using SQLCA errloc.
+
+           subtract di-begin-loc from di-end-loc.
+
+      * Obtain ONLY the "Department Information" section by using SUBSTR
+           EXEC SQL VALUES (SUBSTR(:resume, :di-begin-loc,
+                    :di-end-loc))
+                    INTO :di-buffer END-EXEC.
+           move "VALUES3" to errloc.
+           call "checkerr" using SQLCA errloc.
+
+      * Append the "Department Information" section to the :buffer var
+           EXEC SQL VALUES (:buffer || :di-buffer) INTO :buffer
+                    END-EXEC.
+           move "VALUES4" to errloc.
+           call "checkerr" using SQLCA errloc.
+
+           go to End-Fetch-Loop.
+
+       NULL-lob-indicated.
+           display "NULL LOB indicated".
+
+       End-Fetch-Loop. exit.
+
+       End-Prog.
+                  stop run.

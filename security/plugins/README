@@ -1,0 +1,80 @@
+*****************************************************************************
+*
+* README for Security Samples (all platforms)
+*
+* Last Update: May 2004
+*
+* These sample security plugins are designed to provide a simple
+* implementation that you can customize to meet the specific requirements
+* of your installation.  Security plugins can be used to replace the
+* mechanisms that DB2 uses to authenticate users and obtain their
+* group memberships.
+*
+* For information on developing security plugins, see the Application
+* Development Guide.
+*
+* For the latest information on programming, compiling, and running DB2 
+* applications (including security plugins), visit the DB2 application
+* development website: 
+*     http://www.software.ibm.com/data/db2/udb/ad
+*
+*****************************************************************************
+*
+* QUICKSTART
+*
+* - Copy sqllib/samples/security/plugins/* to a working directory.
+* - Examine the "makefile" and "bldplugin" script and update any
+*   path information to reflect your specific installation.
+* - Execute "make all" (or "nmake all" on Windows) to build the
+*   three supported samples ("combined", "group_file", and
+*   "gssapi_simple").
+* - Notes, usage information, and installation instructions are
+*   contained in the header of each "C" file.
+*
+*****************************************************************************
+*
+* Sample files:
+*
+* makefile
+*   Platform specific makefile for compiling the three basic samples.
+*
+* bldplugin (bldplugin.bat on Windows)
+*   Build script invoked from the makefile to handle compilation and
+*   linking.
+*
+* combined.c
+*    A single C file that implements both a simple userid/password
+*    based authentication mechanism plus a file based group membership
+*    lookup.  Userids, passwords, and groups are all maintained in an
+*    instance specific text file.  This sample would be suitable as a
+*    starting point for any userid/password based authentication scheme.
+*    This sample can be built using the makefile.
+*
+* group_file.c
+*    Implements a simple, file based group membership lookup.  A user's
+*    group memberships are recorded in an instance specific text file.
+*    Similar to the group lookup portion of "combined.c".
+*    This sample can be built using the makefile.
+*
+* gssapi_simple.c
+*    A highly simplified implementation of a GSS-API authentication
+*    plugin.  User credentials consist of an ASCII userid and password,
+*    which are validated against a simple text file on the server.
+*    This plugin is suitable as the basis for any GSS-API based
+*    authentication mechanism.
+*    This sample can be built using the makefile.
+*
+* IBMkrb5.c
+*    This file contains the source code for the IBM supplied Kerberos
+*    authentication plugin on UNIX.  This code is designed to be used
+*    with the IBM Network Authentication Services (NAS) toolkit, though
+*    it should be possible to modify it to work with any other Kerberos
+*    toolkit (such as the base MIT Kerberos 5).  
+*
+*    While this plugin cannot be built using the makefile, it is
+*    supplied as an example of a "production ready" GSS-API based 
+*    security plugin.  Although specific to Kerberos, it would be
+*    an excellent starting point for any authentication scheme
+*    based on a pre-existing GSS-API toolkit.
+*
+*****************************************************************************

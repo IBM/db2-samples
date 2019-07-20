@@ -1,0 +1,885 @@
+/****************************************************************************
+** (c) Copyright IBM Corp. 2007 All rights reserved.
+** 
+** The following sample of source code ("Sample") is owned by International 
+** Business Machines Corporation or one of its subsidiaries ("IBM") and is 
+** copyrighted and licensed, not sold. You may use, copy, modify, and 
+** distribute the Sample in any form without payment to IBM, for the purpose of 
+** assisting you in the development of your applications.
+** 
+** The Sample code is provided to you on an "AS IS" basis, without warranty of 
+** any kind. IBM HEREBY EXPRESSLY DISCLAIMS ALL WARRANTIES, EITHER EXPRESS OR 
+** IMPLIED, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED WARRANTIES OF 
+** MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE. Some jurisdictions do 
+** not allow for the exclusion or limitation of implied warranties, so the above 
+** limitations or exclusions may not apply to you. IBM shall not be liable for 
+** any damages you suffer as a result of using, copying, modifying or 
+** distributing the Sample, even if IBM has been advised of the possibility of 
+** such damages.
+*****************************************************************************
+**
+** SOURCE FILE NAME: dbinline.sqc
+**
+** SAMPLE: How to use inline SQL Procedure Language
+**
+**         This sample demonstrates how to use Inline SQL Procedure Language.
+**         The program uses an existing database to create various tables,
+**         functions and triggers to show three sample usages. The first
+**         example is a scalar function. The second example is a table-level
+**         function and the third example demonstrates a pair of triggers.
+**
+** SQL STATEMENTS USED:
+**         INCLUDE
+**         CREATE TABLE
+**         CREATE FUNCTION (SQL Scalar, Table or Row)
+**         CREATE TRIGGER
+**         INSERT
+**         DECLARE CURSOR
+**         OPEN
+**         FETCH
+**         CLOSE
+**         BEGIN ATOMIC
+**         LEAVE
+**         IF statement
+**         WHILE statement
+**         FOR statement
+**         RETURN
+**         SELECT
+**         UPDATE
+**         DROP FUNCTION
+**         DROP TABLE
+**         DROP TRIGGER
+**
+** STRUCTURES USED:
+**         sqlca
+**
+** OUTPUT FILE: dbinline.out (available in the online documentation)
+*****************************************************************************
+**
+** For more information on the sample programs, see the README file.
+**
+** For information on developing C applications, see the Application
+** Development Guide.
+**
+** For information on using SQL statements, see the SQL Reference.
+**
+** For the latest information on programming, building, and running DB2
+** applications, visit the DB2 application development website:
+**     http://www.software.ibm.com/data/db2/udb/ad
+****************************************************************************/
+
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+#include <sqlenv.h>
+#include <sqlcodes.h>
+#include <sqlutil.h>
+#include "utilemb.h"
+
+EXEC SQL INCLUDE SQLCA;
+
+EXEC SQL BEGIN DECLARE SECTION;
+
+  char dbAlias[15];
+  char user[15];
+  char pswd[15];
+  char strStmt[1000];
+  short input;
+  short output;
+  short key;
+  short value;
+  char status[8 + 1];
+  char part_no[5 + 1];
+  short amount;
+  short reorder_no;
+  short stock_change;
+  char action[3 + 1];
+  char timestamp [25 + 1];
+  short transaction_no;
+
+EXEC SQL END DECLARE SECTION;
+
+int ScalarFunction(void);
+int TableFunction(void);
+int Triggers(void);
+
+int main(int argc, char *argv[])
+{
+  int rc = 0;
+  char dbAlias[SQL_ALIAS_SZ + 1];
+  char user[USERID_SZ + 1];
+  char pswd[PSWD_SZ + 1];
+
+  /* check the command line arguments */
+  rc = CmdLineArgsCheck1(argc, argv, dbAlias, user, pswd);
+  if(rc != 0)
+  {
+    return rc;
+  }
+
+  printf("\nTHIS SAMPLE SHOWS HOW TO USE INLINE SQL PROCEDURE LANGUAGE.\n");
+
+  /* connect to database */
+  rc = DbConn(dbAlias, user, pswd);
+  if(rc != 0)
+  {
+    return rc;
+  }
+
+  ScalarFunction();
+  TableFunction();
+  Triggers();
+
+  /* disconnect from the database */
+  rc = DbDisconn(dbAlias);
+  if(rc != 0)
+  {
+    return rc;
+  }
+
+  return 0;
+
+} /* main */
+
+  /* ScalarFunction
+     This function shows BEGIN ATOMIC, DECLARE variable, IF, WHILE <label>,
+     SET and LEAVE. It consists of a function that calculates the sum of even
+     numbers from zero up to and including an input integer, which may be
+     positive or negative. */
+
+int ScalarFunction(void)
+{
+  printf("\n---------------------------------------------------------");
+  printf("\nSCALAR FUNCTION EXAMPLE\n");
+  printf("---------------------------------------------------------\n\n");
+  printf("  Function which calculates the sum of even numbers up to and ");
+  printf("including \n  an input integer, which may be positive or ");
+  printf("negative\n\n");
+  printf("  CREATE FUNCTION Even_sum(input INT)\n");
+  printf("    RETURNS int\n");
+  printf("    BEGIN ATOMIC\n");
+  printf("      DECLARE to_add INT DEFAULT 0;\n");
+  printf("      DECLARE result INT DEFAULT 0;\n");
+  printf("      DECLARE direction INT DEFAULT 0;\n");
+  printf("        IF (input < 0) THEN\n");
+  printf("          SET direction = -1;\n");
+  printf("        END IF;\n");
+  printf("        summing_loop:\n");
+  printf("        WHILE (1 = 1) DO\n");
+  printf("          IF (direction = 0) THEN\n");
+  printf("            SET to_add = to_add + 2;\n");
+  printf("              IF (to_add > input) THEN\n");
+  printf("                LEAVE summing_loop;\n");
+  printf("              END IF;\n");
+  printf("          ELSE\n");
+  printf("            SET to_add = to_add -2;\n");
+  printf("            IF (to_add < input) THEN\n");
+  printf("              LEAVE summing_loop;\n");
+  printf("            END IF;\n");
+  printf("          END IF;\n");
+  printf("          SET result = result + to_add;\n");
+  printf("        END WHILE summing_loop;\n");
+  printf("    RETURN result;\n");
+  printf("  END\n");
+
+  strcpy(strStmt, "CREATE FUNCTION Even_sum(input INT) "
+                  "RETURNS int "
+                  "BEGIN ATOMIC "
+                  "DECLARE to_add INT DEFAULT 0; "
+                  "DECLARE result INT DEFAULT 0; "
+                  "DECLARE direction INT DEFAULT 0; "
+                  "IF (input < 0) THEN "
+                  "SET direction = -1; "
+                  "END IF; "
+                  "summing_loop: "
+                  "WHILE (1 = 1) DO "
+                  "IF (direction = 0) THEN "
+                  "SET to_add = to_add + 2; "
+                  "IF (to_add > input) THEN "
+                  "LEAVE summing_loop; "
+                  "END IF; "
+                  "ELSE "
+                  "SET to_add = to_add -2; "
+                  "IF (to_add < input) THEN "
+                  "LEAVE summing_loop; "
+                  "END IF; "
+                  "END IF; "
+                  "SET result = result + to_add; "
+                  "END WHILE summing_loop; "
+                  "RETURN result; "
+                  "END");
+  EXEC SQL EXECUTE IMMEDIATE :strStmt;
+  EMB_SQL_CHECK("CREATE SCALAR FUNCTION");
+
+  printf("\n  Table to hold results generated by the function Even_sum");
+  printf("\n\n  CREATE TABLE Even_sum_result(input INT, output INT)");
+
+  /* table to hold the results demonstrating the function Even_sum */
+  EXEC SQL CREATE TABLE Even_sum_result(input INT, output INT);
+  EMB_SQL_CHECK("CREATE TABLE EVEN_SUM_RESULT");
+
+  printf("\n\n  INSERT INTO even_sum_result\n");
+  printf("    VALUES (10, Even_sum(10))\n");
+  printf("           (-5, Even_sum(-5))\n");
+  printf("           (-10, Even_sum(-10))\n");
+
+  strcpy(strStmt, "INSERT INTO even_sum_result VALUES "
+                  "(10, Even_sum(10)), "
+                  "(-5, Even_sum(-5)), "
+                  "(-10, Even_sum(-10))");
+  EXEC SQL EXECUTE IMMEDIATE :strStmt;
+  EMB_SQL_CHECK("INSERT INTO even_sum_result");
+
+  printf("\n  SELECT * FROM even_sum_result ORDER BY input");
+  printf("\n    INPUT OUTPUT\n");
+  printf("    ----- ------\n");
+
+  strcpy(strStmt, "SELECT * FROM even_sum_result ORDER BY input");
+  EXEC SQL PREPARE S1 FROM :strStmt;
+  EMB_SQL_CHECK("PREPARE S1");
+
+  EXEC SQL DECLARE C1 CURSOR FOR S1;
+
+  EXEC SQL OPEN C1;
+  EMB_SQL_CHECK("OPEN CURSOR");
+
+  EXEC SQL FETCH C1 INTO :input, :output;
+  EMB_SQL_CHECK("FETCH CURSOR");
+
+  while (sqlca.sqlcode != SQL_RC_W100)
+  {
+    printf("%9d %6d\n", input, output);
+
+    EXEC SQL FETCH C1 INTO :input, :output;
+    EMB_SQL_CHECK("FETCH CURSOR");
+  }
+
+  EXEC SQL CLOSE C1;
+  EMB_SQL_CHECK("CLOSE CURSOR");
+
+  printf("\n  DROP TABLE even_sum_result\n");
+  EXEC SQL DROP TABLE even_sum_result;
+  EMB_SQL_CHECK("DROP TABLE EVEN_SUM_RESULT");
+
+  printf("\n  DROP FUNCTION Even_sum\n");
+  EXEC SQL DROP FUNCTION Even_sum;
+  EMB_SQL_CHECK("DROP FUNCTION EVEN_SUM");
+
+  return 0;
+
+} /* ScalarFunction */
+
+  /* TableFunction:
+     Demonstrates a table function. No new statements introduced.
+     This function cleans a table by removing all values outside
+     the range between 0 and 1000, and aligns the remaining values
+     to the closest multiple of 10. */
+
+int TableFunction(void)
+{
+  printf("\n---------------------------------------------------------");
+  printf("\nTABLE FUNCTION EXAMPLE\n");
+  printf("---------------------------------------------------------\n\n");
+  printf("Function which cleans a table by removing all values outside");
+  printf("\nthe range between 0 and 1000, and aligns the remaining values");
+  printf("\nto the closest multiple of 10\n\n");
+  printf("  CREATE FUNCTION Discretize(raw INTEGER) RETURNS INTEGER\n");
+  printf("  RETURN CASE\n");
+  printf("    WHEN raw < 0 THEN CAST(NULL AS INTEGER)\n");
+  printf("    WHEN raw > 1000 THEN NULL\n");
+  printf("    ELSE (((raw + 5) / 10) * 10) END\n");
+
+  strcpy(strStmt, "CREATE FUNCTION Discretize(raw INTEGER) RETURNS INTEGER "
+                  "RETURN CASE "
+                  "WHEN raw < 0 THEN CAST(NULL AS INTEGER) "
+                  "WHEN raw > 1000 THEN NULL "
+                  "ELSE (((raw + 5) / 10) * 10) END");
+  EXEC SQL EXECUTE IMMEDIATE :strStmt;
+  EMB_SQL_CHECK("CREATE TABLE FUNCTION");
+
+  printf("\n  Table to be cleaned by the function Discretize");
+  printf("\n\n  CREATE TABLE source(key INT NOT NULL PRIMARY KEY,");
+  printf(" value INT)\n");
+
+  /* table to be cleaned by the function Discretize */
+  EXEC SQL CREATE TABLE source(key INT NOT NULL PRIMARY KEY, value INT);
+  EMB_SQL_CHECK("CREATE TABLE SOURCE");
+
+  printf("\n  INSERT INTO source\n");
+  printf("    VALUES (1,   -5),\n");
+  printf("           (2,    8),\n");
+  printf("           (3, 1200),\n");
+  printf("           (4,   23),\n");
+  printf("           (5,   10),\n");
+  printf("           (6,  876)\n");
+
+    strcpy(strStmt, "INSERT INTO source VALUES "
+                  "(1,   -5), "
+                  "(2,    8), "
+                  "(3, 1200), "
+                  "(4,   23), "
+                  "(5,   10), "
+                  "(6,  876)");
+  EXEC SQL EXECUTE IMMEDIATE :strStmt;
+  EMB_SQL_CHECK("INSERT INTO SOURCE");
+
+  printf("\n  SELECT * FROM source ORDER BY key");
+  printf("\n    KEY VALUE\n");
+  printf("    --- -----\n");
+
+  strcpy(strStmt, "SELECT * FROM source ORDER BY key");
+  EXEC SQL PREPARE S2 FROM :strStmt;
+  EMB_SQL_CHECK("PREPARE S2");
+
+  EXEC SQL DECLARE C2 CURSOR FOR S2;
+
+  EXEC SQL OPEN C2;
+  EMB_SQL_CHECK("OPEN CURSOR");
+
+  EXEC SQL FETCH C2 INTO :key, :value;
+  EMB_SQL_CHECK("FETCH CURSOR");
+
+  while (sqlca.sqlcode != SQL_RC_W100)
+  {
+    printf("%7d %5d\n", key, value);
+
+    EXEC SQL FETCH C2 INTO :key, :value;
+    EMB_SQL_CHECK("FETCH CURSOR");
+  }
+
+  EXEC SQL CLOSE C2;
+  EMB_SQL_CHECK("CLOSE CURSOR");
+
+  printf("\n  Table to hold the values cleaned by the function Discretize");
+  printf("\n\n  CREATE TABLE table_result(key INT NOT NULL PRIMARY KEY,");
+  printf(" value INT)\n");
+
+  /* table to hold the values cleaned by the function Discretize */
+  EXEC SQL CREATE TABLE table_result(key INT NOT NULL PRIMARY KEY,
+                                     value INT);
+  EMB_SQL_CHECK("CREATE TABLE TABLE_RESULT");
+
+  printf("\n  Table to hold the values outside of range");
+  printf("\n\n  CREATE TABLE outside_range(key INT NOT NULL PRIMARY KEY,\n");
+  printf("                             value INT)\n");
+
+  /* table to hold the values outside of range */
+  EXEC SQL CREATE TABLE outside_range(key INT NOT NULL PRIMARY KEY,
+                                      value INT);
+  EMB_SQL_CHECK("CREATE TABLE OUTSIDE_RANGE");
+
+  printf("\n  BEGIN ATOMIC\n");
+  printf("    FOR row AS\n");
+  printf("      SELECT key, value, Discretize(value) AS d FROM source\n");
+  printf("    DO\n");
+  printf("      IF row.d is NULL THEN\n");
+  printf("        INSERT INTO outside_range VALUES(row.key, row.value);\n");
+  printf("      ELSE\n");
+  printf("        INSERT INTO result VALUES(row.key, row.d);\n");
+  printf("      END IF;\n");
+  printf("    END FOR;\n");
+  printf("  END\n");
+
+  strcpy(strStmt, "BEGIN ATOMIC "
+                  "FOR row AS "
+                  "SELECT key, value, Discretize(value) AS d FROM source "
+                  "DO "
+                  "IF row.d is NULL THEN "
+                  "INSERT INTO outside_range VALUES(row.key, row.value); "
+                  "ELSE "
+                  "INSERT INTO table_result VALUES(row.key, row.d); "
+                  "END IF; "
+                  "END FOR; "
+                  "END");
+  EXEC SQL EXECUTE IMMEDIATE :strStmt;
+  EMB_SQL_CHECK("EXECUTE SCRIPT");
+
+  printf("\n  SELECT * FROM outside_range ORDER BY key");
+  printf("\n    KEY VALUE\n");
+  printf("    --- -----\n");
+
+  strcpy(strStmt, "SELECT * FROM outside_range ORDER BY key");
+  EXEC SQL PREPARE S3 FROM :strStmt;
+  EMB_SQL_CHECK("PREPARE S3");
+
+  EXEC SQL DECLARE C3 CURSOR FOR S3;
+
+  EXEC SQL OPEN C3;
+  EMB_SQL_CHECK("OPEN CURSOR");
+
+  EXEC SQL FETCH C3 INTO :key, :value;
+  EMB_SQL_CHECK("FETCH CURSOR");
+
+  while (sqlca.sqlcode != SQL_RC_W100)
+  {
+    printf("%7d %5d\n", key, value);
+
+    EXEC SQL FETCH C3 INTO :key, :value;
+    EMB_SQL_CHECK("FETCH CURSOR");
+  }
+
+  EXEC SQL CLOSE C3;
+  EMB_SQL_CHECK("CLOSE CURSOR");
+
+  printf("\n  SELECT * FROM table_result ORDER BY key");
+  printf("\n    KEY VALUE\n");
+  printf("    --- -----\n");
+
+  strcpy(strStmt, "SELECT * FROM table_result ORDER BY key");
+  EXEC SQL PREPARE S4 FROM :strStmt;
+  EMB_SQL_CHECK("PREPARE S4");
+
+  EXEC SQL DECLARE C4 CURSOR FOR S4;
+
+  EXEC SQL OPEN C4;
+  EMB_SQL_CHECK("OPEN CURSOR");
+
+  EXEC SQL FETCH C4 INTO :key, :value;
+  EMB_SQL_CHECK("FETCH CURSOR");
+
+  while (sqlca.sqlcode != SQL_RC_W100)
+  {
+    printf("%7d %5d\n", key, value);
+
+    EXEC SQL FETCH C4 INTO :key, :value;
+    EMB_SQL_CHECK("FETCH CURSOR");
+  }
+
+  EXEC SQL CLOSE C4;
+  EMB_SQL_CHECK("CLOSE CURSOR");
+
+  printf("\n  DROP TABLE source\n");
+
+  EXEC SQL DROP TABLE source;
+  EMB_SQL_CHECK("DROP TABLE SOURCE");
+
+  printf("\n  DROP TABLE table_result\n");
+
+  EXEC SQL DROP TABLE table_result;
+  EMB_SQL_CHECK("DROP TABLE TABLE_RESULT");
+
+  printf("\n  DROP TABLE outside_range\n");
+
+  EXEC SQL DROP TABLE outside_range;
+  EMB_SQL_CHECK("DROP TABLE OUTSIDE_RANGE");
+
+  printf("\n  DROP FUNCTION Discretize\n");
+
+  EXEC SQL DROP FUNCTION Discretize;
+  EMB_SQL_CHECK("DROP FUNCTION DISCRETIZE");
+
+  return 0;
+
+} /* TableFunction */
+
+  /* Triggers:
+     Demonstrates Inline SQL PL in triggers. This shows DECLARE <condition>,
+     SIGNAL and GET DIAGNOSTICS. */
+
+int Triggers(void)
+{
+  printf("\n---------------------------------------------------------");
+  printf("\nTRIGGER EXAMPLE\n");
+  printf("---------------------------------------------------------\n\n");
+
+  printf("  Table to record amount of inventory on hand using part number");
+  printf(", amount,\n  an amount in stock level upon which the given part");
+  printf(" will be reordered\n  and a status variable stating whether the ");
+  printf("amount of a given part in\n  stock is sufficient or a reorder ");
+  printf("is required\n\n");
+  printf("  CREATE TABLE in_stock(part_no VARCHAR(5) NOT NULL, amount INT,");
+  printf("\n                        reorder_no INT, status VARCHAR(8))\n");
+
+  /* table records amount of inventory on hand: part number, amount, an
+  amount in stock number upon which the given part will be reordered and
+  a status variable stating whether the amount of a given part in stock
+  is sufficient or a reorder is required */
+  EXEC SQL CREATE TABLE in_stock(part_no VARCHAR(5) NOT NULL, amount INT,
+                                 reorder_no INT, status VARCHAR(8));
+  EMB_SQL_CHECK("CREATE TABLE IN_STOCK");
+
+  printf("\n  INSERT INTO in_stock\n");
+  printf("    VALUES('10001', 50, 30, 'fine')\n");
+  printf("          ('10002', 30, 10, 'fine')\n");
+  strcpy(strStmt, "INSERT INTO in_stock VALUES "
+                  "('10001', 50, 30, 'fine'), "
+                  "('10002', 30, 10, 'fine')");
+  EXEC SQL EXECUTE IMMEDIATE :strStmt;
+  EMB_SQL_CHECK("INSERT INTO IN_STOCK");
+
+  printf("\n  SELECT * FROM in_stock ORDER BY part_no");
+  printf("\n    PART_NO AMOUNT REORDER_NO  STATUS\n");
+  printf("    ------- ------ ---------- -------\n");
+
+  strcpy(strStmt, "SELECT * FROM in_stock ORDER BY part_no");
+  EXEC SQL PREPARE S66 FROM :strStmt;
+  EMB_SQL_CHECK("PREPARE S66");
+
+  EXEC SQL DECLARE C66 CURSOR FOR S66;
+
+  EXEC SQL OPEN C66;
+  EMB_SQL_CHECK("OPEN CURSOR");
+
+  EXEC SQL FETCH C66 INTO :part_no, :amount, :reorder_no, :status;
+  EMB_SQL_CHECK("FETCH CURSOR");
+
+  while (sqlca.sqlcode != SQL_RC_W100)
+  {
+    printf("%11s %6d %10d %7s\n", part_no, amount, reorder_no, status);
+
+    EXEC SQL FETCH C66 INTO :part_no, :amount, :reorder_no, :status;
+    EMB_SQL_CHECK("FETCH CURSOR");
+  }
+
+  EXEC SQL CLOSE C66;
+  EMB_SQL_CHECK("CLOSE CURSOR");
+
+  printf("\n  This trigger updates the STATUS variable of the in_stock ");
+  printf("table if\n  the new amount is less than or equal to the reorder ");
+  printf("number\n");
+
+  /* This trigger updates the STATUS variable of the in_stock
+     table if the new amount is less than or equal to the
+     reorder number. */
+
+  printf("\n  CREATE TRIGGER stock_status\n");
+  printf("    NO CASCADE BEFORE UPDATE OF amount ON IN_STOCK\n");
+  printf("    REFERENCING NEW AS n\n");
+  printf("    FOR EACH ROW MODE DB2SQL\n");
+  printf("      BEGIN ATOMIC\n");
+  printf("        IF (n.amount > n.reorder_no) THEN\n");
+  printf("          SET n.status = 'fine';\n");
+  printf("        ELSE\n");
+  printf("          SET n.status = 'reorder';\n");
+  printf("        END IF;\n");
+  printf("  END\n");
+
+  strcpy(strStmt, "CREATE TRIGGER stock_status "
+                  "NO CASCADE BEFORE UPDATE OF amount ON IN_STOCK "
+                  "REFERENCING NEW AS n "
+                  "FOR EACH ROW MODE DB2SQL "
+                  "BEGIN ATOMIC "
+                  "IF (n.amount > n.reorder_no) THEN "
+                  "SET n.status = 'fine'; "
+                  "ELSE "
+                  "SET n.status = 'reorder'; "
+                  "END IF; "
+                  "END");
+  EXEC SQL EXECUTE IMMEDIATE :strStmt;
+  EMB_SQL_CHECK("CREATE TRIGGER STOCK_STATUS");
+
+  printf("\n  Table to record stock transactions using part number, amount");
+  printf(" by which\n  the given part changed, an action code (ADD for ");
+  printf("adding to stock,\n  SUB for removing from stock) and the time ");
+  printf("the transaction took place\n\n");
+  printf("  CREATE TABLE stock_history(part_no VARCHAR(5) NOT NULL,\n");
+  printf("                             stock_change INT,\n");
+  printf("                             action VARCHAR(3),\n");
+  printf("                             timestamp TIMESTAMP)\n");
+
+  /* table records stock transactions: part number, amount by which the
+  given part changed, an action code (ADD for adding to stock, SUB for
+  removing from stock) and the time the transaction took place */
+  EXEC SQL CREATE TABLE stock_history(part_no VARCHAR(5) NOT NULL,
+                                      stock_change INT, action VARCHAR(3),
+                                      timestamp TIMESTAMP);
+  EMB_SQL_CHECK("CREATE TABLE STOCK_HISTORY");
+
+  printf("\n  This trigger is activated when AMOUNT changes in the table ");
+  printf("in_stock\n  to record details of the transaction into the ");
+  printf("table stock_history\n");
+
+  /* This trigger is activated when AMOUNT changes in the table
+     in_stock to record the transaction into the table
+     stock_history. */
+
+  printf("\n  CREATE TRIGGER history\n");
+  printf("    AFTER UPDATE OF amount ON IN_STOCK\n");
+  printf("    REFERENCING NEW as n OLD AS o\n");
+  printf("    FOR EACH ROW MODE DB2SQL\n");
+  printf("      BEGIN ATOMIC\n");
+  printf("        DECLARE change INT;\n");
+  printf("        DECLARE type VARCHAR(3);\n");
+  printf("        DECLARE no_change CONDITION FOR SQLSTATE '80001';\n");
+  printf("        IF (n.amount > o.amount) THEN\n");
+  printf("          SET change = n.amount - o.amount;\n");
+  printf("          SET type = 'ADD';\n");
+  printf("        ELSEIF (n.amount < o.amount) THEN\n");
+  printf("          SET change = o.amount - n.amount;\n");
+  printf("          SET type = 'SUB';\n");
+  printf("        ELSE\n");
+  printf("          SIGNAL no_change SET MESSAGE_TEXT = ");
+  printf("'Identical amount';\n");
+  printf("        END IF;\n");
+  printf("        INSERT INTO stock_history\n");
+  printf("          VALUES(n.part_no,\n");
+  printf("                 change,\n");
+  printf("                 type,\n");
+  printf("                 TIMESTAMP(generate_unique()));\n");
+  printf("  END\n");
+
+  strcpy(strStmt, "CREATE TRIGGER history "
+                  "AFTER UPDATE OF amount ON IN_STOCK "
+                  "REFERENCING NEW as n OLD AS o "
+                  "FOR EACH ROW MODE DB2SQL "
+                  "BEGIN ATOMIC "
+                  "DECLARE change INT; "
+                  "DECLARE type VARCHAR(3); "
+                  "DECLARE no_change CONDITION FOR SQLSTATE '80001'; "
+                  "IF (n.amount > o.amount) THEN "
+                  "SET change = n.amount - o.amount; "
+                  "SET type = 'ADD'; "
+                  "ELSEIF (n.amount < o.amount) THEN "
+                  "SET change = o.amount - n.amount; "
+                  "SET type = 'SUB'; "
+                  "ELSE "
+                  "SIGNAL no_change SET MESSAGE_TEXT = 'Identical amount'; "
+                  "END IF; "
+                  "INSERT INTO stock_history "
+                  "VALUES(n.part_no, "
+                  "change, "
+                  "type, "
+                  "TIMESTAMP(generate_unique())); "
+                  "END");
+  EXEC SQL EXECUTE IMMEDIATE :strStmt;
+  EMB_SQL_CHECK("CREATE TRIGGER HISTORY");
+
+  printf("\n  UPDATE in_stock SET amount = 25 WHERE part_no = '10001'\n");
+  strcpy(strStmt, "UPDATE in_stock SET amount = 25 "
+                  "WHERE part_no = '10001'");
+  EXEC SQL EXECUTE IMMEDIATE :strStmt;
+  EMB_SQL_CHECK("FIRST UPDATE OF IN_STOCK");
+
+  printf("\n  SELECT status FROM in_stock WHERE part_no = '10001'");
+  printf("\n    STATUS\n");
+  printf("    -------\n");
+
+  strcpy(strStmt, "SELECT status FROM in_stock WHERE part_no = '10001'");
+  EXEC SQL PREPARE S5 from :strStmt;
+  EMB_SQL_CHECK("PREPARE S5");
+
+  EXEC SQL DECLARE C5 CURSOR FOR S5;
+
+  EXEC SQL OPEN C5;
+  EMB_SQL_CHECK("OPEN CURSOR");
+
+  EXEC SQL FETCH C5 INTO :status;
+  EMB_SQL_CHECK("FETCH CURSOR");
+
+  while (sqlca.sqlcode != SQL_RC_W100)
+  {
+    printf("%11s\n", status);
+
+    EXEC SQL FETCH C5 INTO :status;
+    EMB_SQL_CHECK("FETCH CURSOR");
+  }
+
+  EXEC SQL CLOSE C5;
+  EMB_SQL_CHECK("CLOSE CURSOR");
+
+  printf("\n  Updating in_stock with an identical amount is not possible ");
+  printf("in this\n  example to demonstrate DECLARE <condition> and ");
+  printf("SIGNAL\n");
+
+  printf("\n  UPDATE in_stock SET amount = 20 WHERE part_no = '10001'");
+  strcpy(strStmt, "UPDATE in_stock SET amount = 20 "
+                  "WHERE part_no = '10001'");
+  EXEC SQL EXECUTE IMMEDIATE :strStmt;
+  EMB_SQL_CHECK("SECOND UPDATE OF IN_STOCK");
+
+  printf("\n  UPDATE in_stock SET amount = 20 WHERE part_no = '10001'\n");
+  strcpy(strStmt, "UPDATE in_stock SET amount = 20 WHERE part_no = '10001'");
+  EXEC SQL EXECUTE IMMEDIATE :strStmt;
+  EXPECTED_ERR_CHECK("UPDATE OF IN_STOCK - FAILS BECAUSE AMOUNT IDENTICAL");
+
+  printf("\n  Populate stock_history with more entries\n");
+
+  printf("\n  UPDATE in_stock SET amount = 40 WHERE part_no = '10002'");
+  strcpy(strStmt, "UPDATE in_stock SET amount = 40 "
+                  "WHERE part_no = '10002'");
+  EXEC SQL EXECUTE IMMEDIATE :strStmt;
+  EMB_SQL_CHECK("FOURTH UPDATE OF IN_STOCK");
+
+  printf("\n  UPDATE in_stock SET amount = 10 WHERE part_no = '10002'");
+  strcpy(strStmt, "UPDATE in_stock SET amount = 10 "
+                  "WHERE part_no = '10002'");
+  EXEC SQL EXECUTE IMMEDIATE :strStmt;
+  EMB_SQL_CHECK("FIFTH UPDATE OF IN_STOCK");
+
+  printf("\n  UPDATE in_stock SET amount = 25 WHERE part_no = '10002'");
+  strcpy(strStmt, "UPDATE in_stock SET amount = 25 "
+                  "WHERE part_no = '10002'");
+  EXEC SQL EXECUTE IMMEDIATE :strStmt;
+  EMB_SQL_CHECK("SIXTH UPDATE OF IN_STOCK");
+
+  printf("\n\n  SELECT * FROM in_stock ORDER BY part_no");
+  printf("\n    PART_NO AMOUNT REORDER_NO  STATUS\n");
+  printf("    ------- ------ ---------- -------\n");
+
+  strcpy(strStmt, "SELECT * FROM in_stock ORDER BY part_no");
+  EXEC SQL PREPARE S6 FROM :strStmt;
+  EMB_SQL_CHECK("PREPARE S6");
+
+  EXEC SQL DECLARE C6 CURSOR FOR S6;
+
+  EXEC SQL OPEN C6;
+  EMB_SQL_CHECK("OPEN CURSOR");
+
+  EXEC SQL FETCH C6 INTO :part_no, :amount, :reorder_no, :status;
+  EMB_SQL_CHECK("FETCH CURSOR");
+
+  while (sqlca.sqlcode != SQL_RC_W100)
+  {
+    printf("%11s %6d %10d %7s\n", part_no, amount, reorder_no, status);
+
+    EXEC SQL FETCH C6 INTO :part_no, :amount, :reorder_no, :status;
+    EMB_SQL_CHECK("FETCH CURSOR");
+  }
+
+  EXEC SQL CLOSE C6;
+  EMB_SQL_CHECK("CLOSE CURSOR");
+
+  printf("\n  SELECT * FROM stock_history ORDER BY timestamp");
+  printf("\n    PART_NO STOCK_CHANGE ACTION TIMESTAMP\n");
+  printf("    ------- ------------ ------ --------------------------\n");
+
+  strcpy(strStmt, "SELECT * FROM stock_history ORDER BY timestamp");
+  EXEC SQL PREPARE S7 FROM :strStmt;
+  EMB_SQL_CHECK("PREPARE S7");
+
+  EXEC SQL DECLARE C7 CURSOR FOR S7;
+
+  EXEC SQL OPEN C7;
+  EMB_SQL_CHECK("OPEN CURSOR");
+
+  EXEC SQL FETCH C7 INTO :part_no, :stock_change, :action, :timestamp;
+  EMB_SQL_CHECK("FETCH CURSOR");
+
+  while (sqlca.sqlcode != SQL_RC_W100)
+  {
+    printf("%11s %12d %6s %.26s\n", part_no, stock_change, action, timestamp);
+
+    EXEC SQL FETCH C7 INTO :part_no, :stock_change, :action, :timestamp;
+    EMB_SQL_CHECK("FETCH CURSOR");
+  }
+
+  EXEC SQL CLOSE C7;
+  EMB_SQL_CHECK("CLOSE CURSOR");
+
+  printf("\n  Function Transaction_number determines the number of ");
+  printf("transactions\n  associated with a particular part number ");
+  printf("in stock_history\n");
+
+  /* Function transaction_number determines number of transactions
+     associated with particular part number in stock_history. */
+
+  printf("\n  CREATE FUNCTION Transaction_number(part VARCHAR(5))\n");
+  printf("    RETURNS INT\n");
+  printf("    BEGIN ATOMIC\n");
+  printf("      DECLARE a INT DEFAULT 0;\n");
+  printf("      SELECT * FROM stock_history WHERE part_no = part;\n");
+  printf("      GET DIAGNOSTICS a = ROW_COUNT;\n");
+  printf("      RETURN a;\n");
+  printf("  END\n");
+
+  strcpy(strStmt, "CREATE FUNCTION Transaction_number(part VARCHAR(5)) "
+                  "RETURNS INT "
+                  "BEGIN ATOMIC "
+                  "DECLARE a INT DEFAULT 0; "
+                  "SELECT * FROM stock_history WHERE part_no = part; "
+                  "GET DIAGNOSTICS a = ROW_COUNT; "
+                  "RETURN a; "
+                  "END");
+  EXEC SQL EXECUTE IMMEDIATE :strStmt;
+  EMB_SQL_CHECK("CREATE FUNCTION TRANSACTION_NUMBER");
+
+  printf("\n  Table to hold each part number which occurs in the ");
+  printf("stock_history\n  table and show the number of times it ");
+  printf("appears\n\n");
+  printf("  CREATE TABLE transaction_record(part_no VARCHAR(5) NOT NULL,\n");
+  printf("                                  transaction_no INT)\n");
+
+  /* table to hold each part number which occurs in the stock_history
+  table and the number of times it appears */
+  EXEC SQL CREATE TABLE transaction_record(part_no VARCHAR(5) NOT NULL,
+                                           transaction_no INT);
+  EMB_SQL_CHECK("CREATE TABLE TRANSACTION_RECORD");
+
+  /* routine to fill transaction_record */
+
+  printf("\n  BEGIN ATOMIC\n");
+  printf("    FOR row AS\n");
+  printf("      SELECT DISTINCT part_no, Transaction_number(part_no) AS p");
+  printf("\n        FROM stock_history GROUP BY part_no\n");
+  printf("    DO\n");
+  printf("      INSERT INTO transaction_record VALUES ");
+  printf("(row.part_no, row.p);\n");
+  printf("    END FOR;\n");
+  printf("  END\n");
+
+  strcpy(strStmt, "BEGIN ATOMIC "
+                  "FOR row AS "
+                  "SELECT DISTINCT part_no, Transaction_number(part_no) "
+                                  "AS p FROM stock_history GROUP BY part_no "
+                  "DO "
+                  "INSERT INTO transaction_record "
+                  "VALUES(row.part_no, row.p); "
+                  "END FOR; "
+                  "END");
+  EXEC SQL EXECUTE IMMEDIATE :strStmt;
+  EMB_SQL_CHECK("EXECUTE SCRIPT");
+
+  printf("\n  SELECT * FROM transaction_record ORDER BY part_no");
+  printf("\n    PART_NO TRANSACTION_NO\n");
+  printf("    ------- --------------\n");
+
+  strcpy(strStmt, "SELECT * FROM transaction_record ORDER BY part_no");
+  EXEC SQL PREPARE S8 FROM :strStmt;
+  EMB_SQL_CHECK("PREPARE S8");
+
+  EXEC SQL DECLARE C8 CURSOR FOR S8;
+
+  EXEC SQL OPEN C8;
+  EMB_SQL_CHECK("OPEN CURSOR");
+
+  EXEC SQL FETCH C8 INTO :part_no, :transaction_no;
+  EMB_SQL_CHECK("FETCH CURSOR");
+
+  while (sqlca.sqlcode != SQL_RC_W100)
+  {
+    printf("%11s %14d\n", part_no, transaction_no);
+
+    EXEC SQL FETCH C8 INTO :part_no, :transaction_no;
+    EMB_SQL_CHECK("FETCH CURSOR");
+  }
+
+  EXEC SQL CLOSE C8;
+  EMB_SQL_CHECK("CLOSE CURSOR");
+
+  printf("\n  DROP FUNCTION Transaction_number\n");
+  EXEC SQL DROP FUNCTION Transaction_number;
+  EMB_SQL_CHECK("DROP FUNCTION TRANSACTION_NUMBER");
+
+  printf("\n  DROP TRIGGER stock_status\n");
+  EXEC SQL DROP TRIGGER stock_status;
+  EMB_SQL_CHECK("DROP TRIGGER STOCK_STATUS");
+
+  printf("\n  DROP TRIGGER history\n");
+  EXEC SQL DROP TRIGGER history;
+  EMB_SQL_CHECK("DROP TRIGGER HISTORY");
+
+  printf("\n  DROP TABLE in_stock\n");
+  EXEC SQL DROP TABLE in_stock;
+  EMB_SQL_CHECK("DROP TABLE IN_STOCK");
+
+  printf("\n  DROP TABLE stock_history\n");
+  EXEC SQL DROP TABLE stock_history;
+  EMB_SQL_CHECK("DROP TABLE STOCK_HISTORY");
+
+  printf("\n  DROP TABLE transaction_record\n");
+  EXEC SQL DROP TABLE transaction_record;
+  EMB_SQL_CHECK("DROP TABLE TRANSACTION_HISTORY");
+
+  return 0;
+
+} /* Triggers */

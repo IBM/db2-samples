@@ -1,0 +1,105 @@
+ /*********************************************************************/
+ /*                                                                   */
+ /*     IBM Replication Monitor User Exit                             */
+ /*                                                                   */
+ /*     ASNMAIL sample program                                        */
+ /*                                                                   */
+ /*     Licensed Materials - Property of IBM                          */
+ /*                                                                   */
+ /*     (C) Copyright IBM Corp. 2002 All Rights Reserved              */
+ /*                                                                   */
+ /*     US Government Users Restricted Rights - Use, duplication      */
+ /*     or disclosure restricted by GSA ADP Schedule Contract         */
+ /*     with IBM Corp.                                                */
+ /*                                                                   */
+ /*********************************************************************/
+ /*     !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!                */
+ /*     PLEASE READ THE FOLLOWING BEFORE PROCEEDING...                */
+ /*     !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!                */
+ /*********************************************************************/
+ /*                                                                   */
+ /*     ASNMAIL is invoked by the Monitor program if a                */
+ /*     notification eMail have to be sended.                         */
+ /*     The ASNMAIL programm expects at least four parameters:        */
+ /*     1. The EMAIL_SERVER parameter for asnmon                      */
+ /*     2. The recipient e-mail address                               */
+ /*     3. The subject of the note                                    */
+ /*     4. The first line of the message                              */
+ /*        may follow                                                 */
+ /*                                                                   */
+ /*     Example:                                                      */
+ /*                                                                   */
+ /*           asnmail "smtpserver.com" "testuser@yourcompany.com"     */
+ /*                   "Alerts issued" "Fist line of node"             */
+ /*                   "second line of note"                           */
+ /*                                                                   */
+ /*  For building this file rename this file to asnmail.C             */
+ /*  The executable file must be named asnmail                        */
+ /*********************************************************************/
+ /*                                                                   */
+ /*     Installing the ASNMAIL program:                               */
+ /*     -------------------------------------                         */
+ /*     - place ASNMAIL in a directory which is in the search path    */
+ /*       for programs and commands specified by the PATH environment */
+ /*       variable.                                                   */
+ /*                                                                   */
+ /*********************************************************************/
+ /*                                                                   */
+ /*                                                                   */
+ /*                                                                   */
+ /*           NOTICE TO USERS OF THE SOURCE CODE EXAMPLE              */
+ /*                                                                   */
+ /* INTERNATIONAL BUSINESS MACHINES CORPORATION PROVIDES THE SOURCE   */
+ /* CODE EXAMPLE "AS IS" WITHOUT WARRANTY OF ANY KIND, EITHER         */
+ /* EXPRESSED OR IMPLIED, INCLUDING, BUT NOT LIMITED TO THE IMPLIED   */
+ /* WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR        */
+ /* PURPOSE. THE ENTIRE RISK AS TO THE QUALITY AND PERFORMANCE OF THE */
+ /* SOURCE CODE EXAMPLE IS WITH YOU. SHOULD ANY PART OF THE SOURCE    */
+ /* CODE EXAMPLE PROVES DEFECTIVE, YOU (AND NOT IBM) ASSUME THE       */
+ /* ENTIRE COST OF ALL NECESSARY SERVICING, REPAIR OR CORRECTION.     */
+ /*                                                                   */
+ /*********************************************************************/
+
+ /*********************************************************************/
+ /*  include files                                                    */
+ /*********************************************************************/
+
+#include<stdio.h>
+#include<stdlib.h>
+#include<string.h>
+
+ /*********************************************************************/
+ /*  define                                                           */
+ /*********************************************************************/
+#define SUCCESS 0
+#define WRONG_PARAMETER_COUNT 1
+
+ /*********************************************************************/
+ /*  main                                                             */
+ /*********************************************************************/
+	
+int main(int arg_count, char *args[])
+{
+   int rc = SUCCESS;
+   int index;                      /* index for arguments */
+   if (arg_count < 4)
+      { 
+      rc = WRONG_PARAMETER_COUNT);
+	}
+   else
+      {
+      /* args[1] contains the email_server parameter from asnmon */
+      /* args[2] contains the e-mail address of the recipient */
+      /* args[3] contains the subject of the note */
+      /* You can place your code in the following loop: */
+
+      for (index=4; index < arg_count; index++ )
+         {
+
+/* args[index] points to each line of the note  */
+ 
+
+         }   /* for */
+      }      /* if */
+   return rc;
+}

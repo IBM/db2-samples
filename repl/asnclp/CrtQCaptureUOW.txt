@@ -1,0 +1,50 @@
+/*********************************************************************/
+/*  IBM DB2 Q Replication                                            */
+/*                                                                   */
+/*     ASNCLP sample files                                           */
+/*                                                                   */
+/*     Licensed Materials - Property of IBM                          */
+/*                                                                   */
+/*     (C) Copyright IBM Corp. 2003, 2004 All Rights Reserved        */
+/*                                                                   */
+/*     US Government Users Restricted Rights - Use, duplication      */
+/*     or disclosure restricted by GSA ADP Schedule Contract         */
+/*     with IBM Corp.                                                */
+/*                                                                   */
+/*********************************************************************/
+/*********************************************************************/
+/*                                                                   */
+/*                                                                   */
+/*           NOTICE TO USERS OF THE SOURCE CODE EXAMPLE              */
+/*                                                                   */
+/* INTERNATIONAL BUSINESS MACHINES CORPORATION PROVIDES THE SOURCE   */
+/* CODE EXAMPLE "AS IS" WITHOUT WARRANTY OF ANY KIND, EITHER         */
+/* EXPRESSED OR IMPLIED, INCLUDING, BUT NOT LIMITED TO THE IMPLIED   */
+/* WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR        */
+/* PURPOSE. THE ENTIRE RISK AS TO THE QUALITY AND PERFORMANCE OF THE */
+/* SOURCE CODE EXAMPLE IS WITH YOU. SHOULD ANY PART OF THE SOURCE    */
+/* CODE EXAMPLE PROVES DEFECTIVE, YOU (AND NOT IBM) ASSUME THE       */
+/* ENTIRE COST OF ALL NECESSARY SERVICING, REPAIR OR CORRECTION.     */
+/*                                                                   */
+/*********************************************************************/
+
+# Create Q Capture Control Tables
+
+ASNCLP SESSION SET TO Q REPLICATION;
+SET SERVER CAPTURE TO DB <DATABASE> id <USERID> password "<PASSWORD>";
+SET QMANAGER <Q-MANAGER> FOR CAPTURE SCHEMA;
+SET CAPTURE SCHEMA SOURCE TO DEFAULT;
+
+SET RUN SCRIPT NOW STOP ON SQL ERROR ON;
+CREATE CONTROL TABLES FOR CAPTURE SERVER USING RESTARTQ "<RESTART-Q>" ADMINQ "<ADMINQ>";
+
+# Example:
+#
+# ASNCLP SESSION SET TO Q REPLICATION;
+# SET SERVER CAPTURE TO DB SAMPLEDB id db2admin password "mypassword";
+# SET QMANAGER QM1 FOR CAPTURE SCHEMA;
+# SET CAPTURE SCHEMA SOURCE MySchema;
+# SET RUN SCRIPT NOW STOP ON SQL ERROR ON;
+# CREATE CONTROL TABLES FOR CAPTURE SERVER USING RESTARTQ "restartq" ADMINQ "adminq"
+# STARTMODE COLD MEMORY LIMIT 4 MONITOR INTERVAL 3;
+

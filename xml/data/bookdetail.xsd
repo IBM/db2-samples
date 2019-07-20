@@ -1,0 +1,88 @@
+<!-- global annotation-->
+<xs:schema xmlns:xs="http://www.w3.org/2001/XMLSchema" xmlns:db2-xdb="http://www.ibm.com/xmlns/prod/db2/xdb1" elementFormDefault="qualified" attributeFormDefault="unqualified">
+<xs:annotation>
+	<xs:appinfo>
+		<db2-xdb:defaultSQLSchema>xdb</db2-xdb:defaultSQLSchema>
+		<db2-xdb:table>
+			<db2-xdb:SQLSchema>admin</db2-xdb:SQLSchema> 
+			<db2-xdb:name>BOOK_AUTHOR</db2-xdb:name>
+			<db2-xdb:rowSet>bookAuthorRowSet</db2-xdb:rowSet>
+		</db2-xdb:table>
+	</xs:appinfo>
+</xs:annotation>	
+
+<!-- The ISBN column of BOOK_AUTHOR  table is the primary key and it is referenced by ISBN column of the BOOK_CONTENTS and BOOK_AVAIL tables. so we should have the data in BOOK_AUTHOR  table prior to BOOK_CONTENTS and BOOK_AVAIL tables. The "rowSetOperationOrder" annotation is used to specify the order in which the data is stored in relational tables. -->
+
+<xs:annotation>
+  <xs:appinfo>
+     <db2-xdb:rowSetOperationOrder>
+        <db2-xdb:order>
+         <db2-xdb:rowSet>bookAuthorRowSet</db2-xdb:rowSet>
+         <db2-xdb:rowSet>BOOK_CONTENTS</db2-xdb:rowSet>
+         <db2-xdb:rowSet>BOOK_AVAIL</db2-xdb:rowSet>
+        </db2-xdb:order>
+     </db2-xdb:rowSetOperationOrder>
+  </xs:appinfo>
+</xs:annotation>
+
+<xs:element name="book">
+    <xs:complexType> 
+	<xs:sequence> 
+		<xs:element name="authorID" type="xs:integer"
+                        db2-xdb:rowSet="bookAuthorRowSet" db2-xdb:column="AUTHID" 
+                        db2-xdb:condition="CAST($DECOMP_CONTENT as INTEGER)BETWEEN 1 and 999" />
+		<xs:element name="chapter" type="chapterType" maxOccurs="unbounded" />
+	</xs:sequence> 
+
+<!--ISBN is mapped to all the three table-column pairs -->
+		<xs:attribute name="isbn" type="xs:string"
+			db2-xdb:rowSet="BOOK_CONTENTS" db2-xdb:column="ISBN" >
+			<xs:annotation>
+				<xs:appinfo>
+					<db2-xdb:rowSetMapping>
+			     		     <db2-xdb:rowSet>bookAuthorRowSet</db2-xdb:rowSet>
+					     <db2-xdb:column>ISBN</db2-xdb:column>
+					</db2-xdb:rowSetMapping>
+                                        <db2-xdb:rowSetMapping>
+                                             <db2-xdb:rowSet>BOOK_AVAIL</db2-xdb:rowSet>
+                                             <db2-xdb:column>ISBN</db2-xdb:column>
+                                        </db2-xdb:rowSetMapping>
+				</xs:appinfo>
+			</xs:annotation>
+		</xs:attribute> 
+		<xs:attribute name="title" type="xs:string"
+			db2-xdb:rowSet="bookAuthorRowSet" db2-xdb:column="BOOK_TITLE">
+                        <xs:annotation>
+                                <xs:appinfo>
+                                        <db2-xdb:rowSetMapping>
+                                             <db2-xdb:rowSet>BOOK_AVAIL</db2-xdb:rowSet>
+                                             <db2-xdb:column>BOOK_TITLE</db2-xdb:column>
+                                        </db2-xdb:rowSetMapping>
+                                </xs:appinfo>
+                        </xs:annotation>
+                </xs:attribute>
+     </xs:complexType>
+</xs:element> 
+
+<xs:complexType name="chapterType"> 
+	<xs:sequence> 
+		<xs:element name="ChapterContent" type="Chapter_Type" maxOccurs="unbounded"
+			db2-xdb:rowSet="BOOK_CONTENTS" 
+			db2-xdb:column="CHPTCONTENT"
+			db2-xdb:truncate="true"
+			db2-xdb:contentHandling="stringValue"/> 
+	</xs:sequence> 
+	<xs:attribute name="number" type="xs:integer" 
+			db2-xdb:rowSet="BOOK_CONTENTS" 
+			db2-xdb:column="CHPTNUM" /> 
+	<xs:attribute name="title" type="xs:string" 
+			db2-xdb:rowSet="BOOK_CONTENTS" 
+			db2-xdb:column="CHPTTITLE"/> 
+ </xs:complexType>
+ <xs:complexType name="Chapter_Type" mixed = "1">
+ 	<xs:choice>
+ 		<xs:element name = "ChapterSummary" type = "xs:string" minOccurs="0" maxOccurs="unbounded" />  
+ 	</xs:choice>
+ </xs:complexType>
+</xs:schema>
+

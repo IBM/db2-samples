@@ -1,0 +1,603 @@
+/****************************************************************************
+** (c) Copyright IBM Corp. 2007 All rights reserved.
+** 
+** The following sample of source code ("Sample") is owned by International 
+** Business Machines Corporation or one of its subsidiaries ("IBM") and is 
+** copyrighted and licensed, not sold. You may use, copy, modify, and 
+** distribute the Sample in any form without payment to IBM, for the purpose of 
+** assisting you in the development of your applications.
+** 
+** The Sample code is provided to you on an "AS IS" basis, without warranty of 
+** any kind. IBM HEREBY EXPRESSLY DISCLAIMS ALL WARRANTIES, EITHER EXPRESS OR 
+** IMPLIED, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED WARRANTIES OF 
+** MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE. Some jurisdictions do 
+** not allow for the exclusion or limitation of implied warranties, so the above 
+** limitations or exclusions may not apply to you. IBM shall not be liable for 
+** any damages you suffer as a result of using, copying, modifying or 
+** distributing the Sample, even if IBM has been advised of the possibility of 
+** such damages.
+*****************************************************************************
+**
+** SOURCE FILE NAME: udfemcli.sqc
+**
+** SAMPLE: Call a variety of types of embedded SQL user-defined functions.
+**
+**         This file is a client for the UDFs from udfemsrv.sqc.
+**
+** SQL STATEMENTS USED:
+**         CLOSE
+**         COMMIT
+**         CREATE FUNCTION
+**         CREATE TABLE
+**         DECLARE CURSOR
+**         DROP FUNCTION
+**         DROP TABLE
+**         EXECUTE IMMEDIATE
+**         FETCH
+**         PREPARE
+**
+** STRUCTURES USED:
+**         sqlca
+**
+** OUTPUT FILE: udfemcli.out (available in the online documentation)
+*****************************************************************************
+**
+** For more information on the sample programs, see the README file.
+**
+** For information on developing C applications, see the Application
+** Development Guide.
+**
+** For information on using SQL statements, see the SQL Reference.
+**
+** For the latest information on programming, building, and running DB2
+** applications, visit the DB2 application development website:
+**          http://www.software.ibm.com/data/db2/udb/ad
+****************************************************************************/
+
+#include <stdio.h>
+#include <string.h>
+#include <stdlib.h>
+#include <sqlenv.h>
+#include "utilemb.h"
+
+/* scalar UDFs */
+int ExternalScalarUDFWithSQLUse(void);
+int ExternalScalarUDFWithNestingUse(void);
+int ExternalClobLocatorScalarUDFUse(void);
+
+/* table UDFs */
+int ExternalTableUDFWithSQLUse(void);
+
+EXEC SQL BEGIN DECLARE SECTION;
+  char name[15];
+  char job[15];
+  double salary;
+  short salaryInd;
+  double salaryInUS;
+  char empno[7];
+  char resume_format[7];
+  sqlint32 numWords;
+  char deptNo[4];
+  short deptNoInd;
+  double amount;
+  short amountInd;
+
+  char strStmt[256];
+
+EXEC SQL END DECLARE SECTION;
+
+int main(int argc, char *argv[])
+{
+  int rc = 0;
+  char dbAlias[SQL_ALIAS_SZ + 1];
+  char user[USERID_SZ + 1];
+  char pswd[PSWD_SZ + 1];
+
+  /* check the command line arguments */
+  rc = CmdLineArgsCheck1(argc, argv, dbAlias, user, pswd);
+  if (rc != 0)
+  {
+    return rc;
+  }
+
+  printf("\nTHIS SAMPLE SHOWS HOW TO WORK WITH EMBEDDED SQL UDFs.\n");
+
+  /* connect to database */
+  rc = DbConn(dbAlias, user, pswd);
+  if (rc != 0)
+  {
+    return rc;
+  }
+
+  /* scalar UDFs */
+  rc = ExternalScalarUDFWithSQLUse();
+  rc = ExternalScalarUDFWithNestingUse();
+  rc = ExternalClobLocatorScalarUDFUse();
+
+  /* table UDFs */
+  rc = ExternalTableUDFWithSQLUse();
+
+  /* disconnect from database */
+  rc = DbDisconn(dbAlias);
+
+  return 0;
+} /* main */
+
+int ExternalScalarUDFWithSQLUse()
+{
+  struct sqlca sqlca;
+  int rc = 0;
+
+  printf("\n-----------------------------------------------------------");
+  printf("\nUSE THE SQL STATEMENTS\n");
+  printf("  CREATE FUNCTION\n");
+  printf("  COMMIT\n");
+  printf("  SELECT\n");
+  printf("  DROP FUNCTION\n");
+  printf("TO WORK WITH SCALAR UDF THAT CONTAINS EMBEDDED SQL:\n");
+
+  printf("\n  DROP FUNCTION Convert, if exists.\n");
+  EXEC SQL DROP FUNCTION Convert;
+
+  EXEC SQL DROP TABLE exchangeRate;
+
+  /* register the Scalar UDF 'Convert' */
+  printf("\n  Register the Scalar UDF 'Convert'.\n");
+
+  EXEC SQL CREATE FUNCTION Convert(CHAR(2), DOUBLE, CHAR(2))
+    RETURNS DOUBLE
+    EXTERNAL NAME 'udfemsrv!Convert'
+    FENCED
+    CALLED ON NULL INPUT
+    NOT VARIANT
+    READS SQL DATA
+    PARAMETER STYLE DB2SQL
+    LANGUAGE C
+    NO EXTERNAL ACTION;
+  EMB_SQL_CHECK("scalar UDF 'Convert' -- register");
+
+  /* Create the exchangeRate table */
+  printf("\n  Create a table called 'exchangeRate'.\n");
+
+  EXEC SQL CREATE TABLE exchangeRate (sourceCurrency char(2),
+                                      resultCurrency char(2),
+                                      exchangeRate double);
+  EMB_SQL_CHECK("scalar UDF 'Convert' -- create table");
+
+  /* Insert into the exchangeRate table */
+  printf("\n  Populate 'exchangeRate' table.\n");
+
+  strcpy(strStmt, "INSERT INTO exchangeRate values "
+         "(char('US'), char('CA'), 1.5), (char('CA'), char('US'), 0.67)");
+
+  EXEC SQL EXECUTE IMMEDIATE :strStmt;
+  EMB_SQL_CHECK("scalar UDF 'Convert' -- populate table");
+
+  printf("\n  COMMIT.\n");
+
+  EXEC SQL COMMIT;
+  EMB_SQL_CHECK("transaction -- commit");
+
+  /* use scalar UDF */
+  printf("\n  Use the scalar UDF 'Convert':\n");
+  printf("    SELECT name, job, salary, Convert(char('CA'), ");
+  printf("salary, char('US'))\n");
+  printf("      FROM staff\n");
+  printf("      WHERE name LIKE 'S%%'\n");
+
+  strcpy(strStmt, "SELECT name, job, salary, Convert(char('CA'), salary,"
+                  " char('US')) FROM staff WHERE name LIKE 'S%' ");
+
+  EXEC SQL PREPARE stmt10 FROM :strStmt;
+  EMB_SQL_CHECK("statement -- prepare");
+
+  /* declare cursor */
+  EXEC SQL DECLARE c10 CURSOR FOR stmt10;
+
+  /* open cursor */
+  EXEC SQL OPEN c10;
+  EMB_SQL_CHECK("cursor -- open");
+
+  /* fetch cursor */
+  printf("\n  Fetch each row and display.\n");
+  printf("    NAME       JOB     SALARY   SALARY IN US\n");
+  printf("    ---------- ------- -------- ------------\n");
+
+  EXEC SQL FETCH c10 INTO :name, :job, :salary, :salaryInUS;
+  EMB_SQL_CHECK("cursor -- fetch");
+
+  while (sqlca.sqlcode != 100)
+  {
+    printf("    %-10s %-7s %-7.2f %-7.2f", name, job, salary, salaryInUS);
+    printf("\n");
+
+    EXEC SQL FETCH c10 INTO :name, :job, :salary, :salaryInUS;
+    EMB_SQL_CHECK("cursor -- fetch");
+  }
+
+  /* close cursor */
+  EXEC SQL CLOSE c10;
+  EMB_SQL_CHECK("cursor -- close");
+
+  /* drop scalar UDF */
+  printf("\n  DROP the scalar UDF 'Convert'.\n");
+
+  EXEC SQL DROP FUNCTION Convert;
+  EMB_SQL_CHECK("scalar UDF -- drop");
+
+  /* drop exchangeRate table */
+  printf("\n  DROP TABLE exchangeRate.\n");
+
+  EXEC SQL DROP TABLE exchangeRate;
+  EMB_SQL_CHECK("scalar UDF -- drop table");
+
+  printf("\n  COMMIT.\n");
+
+  EXEC SQL COMMIT;
+  EMB_SQL_CHECK("transaction -- commit");
+
+  return 0;
+} /* ExternalScalarUDFWithSQLUse */
+
+int ExternalScalarUDFWithNestingUse()
+{
+  struct sqlca sqlca;
+  int rc = 0;
+
+  printf("\n-----------------------------------------------------------");
+  printf("\nUSE THE SQL STATEMENTS\n");
+  printf("  CREATE FUNCTION\n");
+  printf("  COMMIT\n");
+  printf("  SELECT\n");
+  printf("  DROP FUNCTION\n");
+  printf("TO WORK WITH NESTED SCALAR UDF THAT CONTAINS EMBEDDED SQL:\n");
+
+  /* drop scalar UDF, if exists */
+  printf("\n  DROP the scalar UDF, if exists.\n");
+
+  EXEC SQL DROP FUNCTION Convert;
+
+  EXEC SQL DROP FUNCTION SumSalary;
+
+  EXEC SQL DROP TABLE exchangeRate;
+
+  /* register scalar UDF */
+  printf("\n  Register the scalar UDFs 'Convert' and 'SumSalary'.\n");
+
+  EXEC SQL CREATE FUNCTION Convert(CHAR(2), DOUBLE, CHAR(2))
+    RETURNS DOUBLE
+    EXTERNAL NAME 'udfemsrv!Convert'
+    FENCED
+    CALLED ON NULL INPUT
+    NOT VARIANT
+    READS SQL DATA
+    PARAMETER STYLE DB2SQL
+    LANGUAGE C
+    NO EXTERNAL ACTION;
+  EMB_SQL_CHECK("scalar UDF -- register");
+
+  EXEC SQL CREATE FUNCTION SumSalary(CHAR(3))
+    RETURNS DOUBLE
+    EXTERNAL NAME 'udfemsrv!SumSalary'
+    FENCED
+    CALLED ON NULL INPUT
+    NOT VARIANT
+    READS SQL DATA
+    PARAMETER STYLE DB2SQL
+    LANGUAGE C
+    NO EXTERNAL ACTION;
+  EMB_SQL_CHECK("scalar UDF -- register");
+
+  /* Create the exchangeRate table */
+  printf("\n  Create the table 'exchangeRate'.\n");
+
+  EXEC SQL CREATE TABLE exchangeRate (sourceCurrency char(2),
+                                      resultCurrency char(2),
+                                      exchangeRate double);
+  EMB_SQL_CHECK("scalar UDF -- create table");
+
+  /* Insert into the exchangeRate table */
+  printf("\n  Populate the table 'exchangeRate'.\n");
+
+  strcpy(strStmt, "INSERT INTO exchangeRate values (char('US'), "
+                  "char('CA'), 1.5), (char('CA'), char('US'), 0.67)");
+
+  EXEC SQL EXECUTE IMMEDIATE :strStmt;
+
+  EMB_SQL_CHECK("scalar UDF -- populate table");
+
+  printf("\n  COMMIT.\n");
+
+  EXEC SQL COMMIT;
+  EMB_SQL_CHECK("transaction -- commit");
+
+  /* use scalar UDF */
+  printf("\n  Use the scalar UDF 'SumSalary':\n");
+  printf("    SELECT DeptNo, SumSalary(DeptNo)\n");
+  printf("      FROM department\n");
+
+  strcpy(strStmt, "SELECT DeptNo, SumSalary(DeptNo) FROM department");
+
+  EXEC SQL PREPARE stmt30 FROM :strStmt;
+  EMB_SQL_CHECK("statement -- prepare");
+
+  /* declare cursor */
+  EXEC SQL DECLARE c30 CURSOR FOR stmt30;
+
+  /* open cursor */
+  EXEC SQL OPEN c30;
+  EMB_SQL_CHECK("cursor -- open");
+
+  /* fetch cursor */
+  printf("\n  Fetch each row and display.\n");
+  printf("    DeptNo Sum of Salary in US currency\n");
+  printf("    ------ ------------------------------\n");
+
+  EXEC SQL FETCH c30 INTO :deptNo :deptNoInd, :amount :amountInd;
+  EMB_SQL_CHECK("cursor -- fetch");
+
+  while (sqlca.sqlcode != 100)
+  {
+    if (deptNoInd >= 0)
+    {
+      printf("    %-6s",deptNo);
+    }
+    else
+    {
+      printf("    -     ");
+    }
+
+    if (amountInd >= 0)
+    {
+         printf(" %f",amount);
+    }
+    else
+    {
+      printf(" -");
+    }
+    printf("\n");
+
+    EXEC SQL FETCH c30 INTO :deptNo :deptNoInd, :amount :amountInd;
+    EMB_SQL_CHECK("cursor -- fetch");
+  }
+
+  /* close cursor */
+  EXEC SQL CLOSE c30;
+  EMB_SQL_CHECK("cursor -- close");
+
+  /* drop scalar UDF 'SumSalary' */
+  printf("\n  DROP the scalar UDF 'SumSalary'.\n");
+
+  EXEC SQL DROP FUNCTION SumSalary;
+  EMB_SQL_CHECK("scalar UDF -- drop");
+
+  /* drop scalar UDF 'Convert' */
+  printf("\n  DROP the scalar UDF 'Convert'.\n");
+
+  EXEC SQL DROP FUNCTION Convert;
+  EMB_SQL_CHECK("scalar UDF -- drop");
+
+  /* drop exchangeRate table */
+  printf("\n  DROP TABLE exchangeRate.\n");
+
+  EXEC SQL DROP TABLE exchangeRate;
+  EMB_SQL_CHECK("scalar UDF -- drop table");
+
+  printf("\n  COMMIT.\n");
+
+  EXEC SQL COMMIT;
+  EMB_SQL_CHECK("transaction -- commit");
+
+  return 0;
+} /* ExternalScalarUDFWithNestingUse */
+
+int ExternalClobLocatorScalarUDFUse()
+{
+  struct sqlca sqlca;
+  int rc = 0;
+
+  printf("\n-----------------------------------------------------------");
+  printf("\nUSE THE SQL STATEMENTS\n");
+  printf("  CREATE FUNCTION\n");
+  printf("  COMMIT\n");
+  printf("  SELECT\n");
+  printf("  DROP FUNCTION\n");
+  printf("TO WORK WITH CLOB LOCATOR SCALAR UDF THAT CONTAINS ");
+  printf("EMBEDDED SQL:\n");
+
+  /* drop CLOB locator scalar UDF, if exists */
+  printf("\n  DROP the CLOB locator scalar UDF, if exists.\n");
+
+  EXEC SQL DROP FUNCTION CountWords;
+
+  /* register the CLOB Locator scalar UDF */
+  printf("\n  Register the CLOB locator scalar UDF 'CountWords'.\n");
+
+  EXEC SQL CREATE FUNCTION CountWords(CLOB(5k) AS LOCATOR)
+    RETURNS INTEGER
+    EXTERNAL NAME 'udfemsrv!ClobLocatorScalarUDF'
+    FENCED
+    RETURNS NULL ON NULL INPUT
+    NOT VARIANT
+    READS SQL DATA
+    PARAMETER STYLE DB2SQL
+    LANGUAGE C
+    NO EXTERNAL ACTION;
+  EMB_SQL_CHECK("scalar UDF -- register");
+
+  printf("\n  COMMIT.\n");
+
+  EXEC SQL COMMIT;
+  EMB_SQL_CHECK("transaction -- commit");
+
+  /* use CLOB locator scalar UDF */
+  printf("\n  Use the CLOB locator scalar UDF:\n");
+  printf("    SELECT empno, resume_format, CountWords(resume)\n");
+  printf("      FROM emp_resume\n");
+  printf("      WHERE resume_format = 'ascii'\n");
+
+  strcpy(strStmt, "SELECT empno, resume_format, CountWords(resume) "
+                  "  FROM emp_resume "
+                  "  WHERE resume_format = 'ascii' ");
+
+
+  EXEC SQL PREPARE stmt40 FROM :strStmt;
+  EMB_SQL_CHECK("statement -- prepare");
+
+  /* declare cursor */
+  EXEC SQL DECLARE c40 CURSOR FOR stmt40;
+
+  /* open cursor */
+  EXEC SQL OPEN c40;
+  EMB_SQL_CHECK("cursor -- open");
+
+  /* fetch cursor */
+  printf("\n  Fetch each row and display.\n");
+  printf("    EMPNO   RESUME_FORMAT NUM.WORDS\n");
+  printf("    ------- ------------- ---------\n");
+
+  EXEC SQL FETCH c40 INTO :empno, :resume_format, :numWords;
+  EMB_SQL_CHECK("cursor -- fetch");
+
+  while (sqlca.sqlcode != 100)
+  {
+    printf("    %-7s %-13s %ld", empno, resume_format, numWords);
+    printf("\n");
+
+    EXEC SQL FETCH c40 INTO :empno, :resume_format, :numWords;
+    EMB_SQL_CHECK("cursor -- fetch");
+  }
+
+  /* close cursor */
+  EXEC SQL CLOSE c40;
+  EMB_SQL_CHECK("cursor -- close");
+
+  /* drop the CLOB locator scalar UDF */
+  printf("\n  DROP the CLOB locator scalar UDF 'CountWords'.\n");
+
+  EXEC SQL DROP FUNCTION CountWords;
+  EMB_SQL_CHECK("scalar UDF -- drop");
+
+  printf("\n  COMMIT.\n");
+
+  EXEC SQL COMMIT;
+  EMB_SQL_CHECK("transaction -- commit");
+
+  return 0;
+} /* ExternalClobLocatorScalarUDFUse */
+
+
+int ExternalTableUDFWithSQLUse()
+{
+  struct sqlca sqlca;
+  int rc = 0;
+
+  printf("\n-----------------------------------------------------------");
+  printf("\nUSE THE SQL STATEMENTS\n");
+  printf("  CREATE FUNCTION\n");
+  printf("  COMMIT\n");
+  printf("  SELECT\n");
+  printf("  DROP FUNCTION\n");
+  printf("TO WORK WITH TABLE UDF THAT CONTAINS EMBEDDED SQL:\n");
+
+  /* drop table UDF, if exists */
+  printf("\n  DROP FUNCTION TableUDFWithSQL, if exists.\n");
+
+  EXEC SQL DROP FUNCTION TableUDFWithSQL;
+
+  /* register table UDF */
+  printf("\n  Register the table UDF 'TableUDFWithSQL'.\n");
+
+  EXEC SQL CREATE FUNCTION TableUDFWithSQL(DOUBLE)
+    RETURNS TABLE(name VARCHAR(20),
+                  job VARCHAR(20),
+                  salary DOUBLE)
+    EXTERNAL NAME 'udfemsrv!TableUDFWithSQL'
+    LANGUAGE C
+    PARAMETER STYLE DB2SQL
+    NOT DETERMINISTIC
+    FENCED
+    READS SQL DATA
+    NO EXTERNAL ACTION
+    SCRATCHPAD 10
+    FINAL CALL DISALLOW
+    PARALLEL NO DBINFO;
+  EMB_SQL_CHECK("table UDF with SQL -- register");
+
+  printf("\n  COMMIT.\n");
+
+  EXEC SQL COMMIT;
+  EMB_SQL_CHECK("transaction -- commit");
+
+  /* use table UDF */
+  printf("\n  Use the table UDF 'TableUDFWithSQL':");
+  printf("\n    SELECT udfTable.name, udfTable.job, udfTable.salary");
+  printf("\n      FROM TABLE(TableUDFWithSQL(1.5))");
+  printf("\n      AS udfTable\n");
+
+  strcpy(strStmt, "SELECT udfTable.name, udfTable.job, udfTable.salary "
+                  "  FROM TABLE(TableUDFWithSQL(1.5)) "
+                  "  AS udfTable ");
+
+  EXEC SQL PREPARE stmt50 FROM :strStmt;
+  EMB_SQL_CHECK("statement -- prepare");
+
+  /* delcare cursor */
+  EXEC SQL DECLARE c50 CURSOR FOR stmt50;
+
+  /* open cursor */
+  EXEC SQL OPEN c50;
+  EMB_SQL_CHECK("cursor -- open");
+
+  /* fetch cursor */
+  printf("\n  Fetch each row and display.\n");
+  printf("    NAME       JOB     SALARY   \n");
+  printf("    ---------- ------- ---------\n");
+
+  EXEC SQL FETCH c50 INTO :name, :job, :salary:salaryInd;
+  EMB_SQL_CHECK("cursor -- fetch");
+
+  while (sqlca.sqlcode != 100)
+  {
+    printf("    %-10s %-7s", name, job);
+    if (salaryInd >= 0)
+    {
+      printf(" %7.2f", salary);
+    }
+    else
+    {
+      printf(" %8s", "-");
+    }
+    printf("\n");
+
+    EXEC SQL FETCH c50 INTO :name, :job, :salary:salaryInd;
+    EMB_SQL_CHECK("cursor -- fetch");
+  }
+
+  /* close cursor */
+  EXEC SQL CLOSE c50;
+  EMB_SQL_CHECK("cursor -- close");
+
+  /* drop table UDF */
+  printf("\n  DROP FUNCTION TableUDFWithSQL.\n");
+
+  EXEC SQL DROP FUNCTION TableUDFWithSQL;
+  EMB_SQL_CHECK("table UDF -- drop");
+
+  printf("\n  COMMIT.\n");
+
+  EXEC SQL COMMIT;
+  EMB_SQL_CHECK("transaction -- commit");
+
+  return 0;
+} /* TableUDFWithSQLUse */
+
+
+
+
+
+
+
+
+
+

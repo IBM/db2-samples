@@ -1,0 +1,136 @@
+*******************************************************************************
+* (c) Copyright IBM Corp. 2007 All rights reserved.
+* 
+* The following sample of source code ("Sample") is owned by International 
+* Business Machines Corporation or one of its subsidiaries ("IBM") and is 
+* copyrighted and licensed, not sold. You may use, copy, modify, and 
+* distribute the Sample in any form without payment to IBM, for the purpose of 
+* assisting you in the development of your applications.
+* 
+* The Sample code is provided to you on an "AS IS" basis, without warranty of 
+* any kind. IBM HEREBY EXPRESSLY DISCLAIMS ALL WARRANTIES, EITHER EXPRESS OR 
+* IMPLIED, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED WARRANTIES OF 
+* MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE. Some jurisdictions do 
+* not allow for the exclusion or limitation of implied warranties, so the above 
+* limitations or exclusions may not apply to you. IBM shall not be liable for 
+* any damages you suffer as a result of using, copying, modifying or 
+* distributing the Sample, even if IBM has been advised of the possibility of 
+* such damages.
+*
+*******************************************************************************
+*
+*                    README for J2EE Samples
+*
+* The <install_path>/sqllib/samples/java/Websphere directory on UNIX and 
+* <install_path>\sqllib\samples\java\Websphere directory on Windows contain this README file
+* where <install_path> is the location of DB2 v9.5 on your hard drive.
+* The default location for <install_path> is $HOME for UNIX
+* and C:\Program Files\IBM for windows. 
+*
+* The DB2 v9.5 sample code for J2EE is located in the following directory :
+* <install_path>/sqllib/samples/java/Websphere directory on Unix and
+* <install_path>\sqllib\samples\java\Websphere directory on Windows.
+*
+* This README is organized into DIRECTORY ROADMAP, GETTING J2EE SAMPLES UP 
+* AND RUNNING, J2EE SAMPLES DETAILS sections.
+*
+*******************************************************************************
+*
+*                        DIRECTORY ROADMAP
+* 
+* Websphere/ : This directory contains a the J2EE samples as a *.war or *.ear file
+*
+* For more details on the content of these directories, please refer to the
+* the README file in the respective *.war or *.ear file. 
+* 
+********************************************************************************
+*
+*               GETTING J2EE SAMPLES UP AND RUNNING
+*
+* SETUP:
+*
+*   1) Copy the files from corresponding directory to a working 
+*      directory and ensure that directory has write permission.
+*
+*   2) Start the database manager with the following command:
+*      db2start
+*
+*   3) Create the sample database with the following command:
+*      db2sampl
+*
+*   4) Change directory (CD) to the directory containing the files 
+*      copied in step 1.
+*
+* BUILD AND RUN:
+*    1. Extract the sample and modify the connection details and add the JDBC driver.
+*    2. Deploy the sample in your Web server or Application server.     
+*             
+********************************************************************************
+*
+*                        DETAILS OF SAMPLES
+* Usage Scenarios
+*
+*  1)  Samples: AccessEmployee.ear
+*
+*       Consider a user who needs to access the EMPLOYEE table by using Servlet
+*       and EJB component.
+*        
+*       
+*  2)  Samples: OptimisticLocking.war
+*
+*       The application is written to demonstrate the DB2 Optimistic Locking feature.
+*       It describe that unlocked rows are unlikely to change before the update or delete operation. 
+*       If the row does change, the update or delete will fail and the application logic handles such failures.
+*
+*       
+*  3)  Samples: AIRLINE.war
+*               airline.db2
+*
+*       The application is written to demonstrate the Currently committed property.
+*       The cursor stability (CS) isolation level has been enhanced to allow for more concurrency. 
+*       In the new implementation of CS, the behavior of a read operation waiting for a row to commit 
+*       before returning a value is avoided, where possible. CS now returns the currently committed result, 
+*       ignoring what might happen to an uncommitted operation. The overall result of this new behavior is a 
+*       drastic reduction in lock wait and deadlock scenarios.
+*    
+*              
+*  	  SETUP
+*
+*       I) Open DB2 command window and set up the airline database with the 
+*          following command :
+*
+*            db2 -tvf airline.db2
+*
+*          This will setup the database for the application and configure the required variables.
+*
+*       II) Modify the CLASSPATH to include:
+*
+*          <install_path>\sqllib\java\db2jcc4.jar
+*          where <install_path> is the location of DB2 9.7 on your hard drive. 
+*          The default location for <install_path> is C:\Program Files\IBM
+*
+*       III) Deploy the application on WebSphere using the following steps :
+*
+*            i)  Open the administrative console
+*           ii)  Browse for "Applications" on left navigation pane of the console
+*          iii)  Click on "Install New Application"
+*           iv)  Provide the "Local File System Full path"(Path of the .war file)
+*            v)  Give the context root as "/AIRLINE" and click "Next"
+*           vi)  Click "Next" in the "Select installation options window"
+*          vii)  Select the checkbox of the AIRLINE application in "Map modules to server" window and click "Next"
+*         viii)  Click on Finish in the ‘Summary" window
+*           ix)  Click on "Save" after the application is installed 
+*            x)  Click on Enterprise Applications on the left navigation pane of the console
+*           xi)  Select the checkbox of the AIRLINE application and click on start.
+*
+*       RUNNING THE APPLICATION
+*
+*        I) Point your web browser to the following URL to run the Currently committed Sample
+*           http://<host-name>:<port-no>/AIRLINE 
+*
+*       II) The Log In page will be displayed.
+*           Provide the username, password, machine name (or the IP of the machine) and the 
+*           port on which DB2 is installed on the machine.
+*
+*
+********************************************************************************

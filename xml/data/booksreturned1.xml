@@ -1,0 +1,16 @@
+<books>
+                                 <book isbn="111111-1" >
+                                      <book_title>My First XML Book</book_title>
+                                      <author>Padma Kota</author>
+                                      <authid>532</authid>
+                                      <price>956</price>
+                                      <no_of_copies>50</no_of_copies>
+		                     </book>
+                                 <book isbn="111111-20">
+                                      <book_title>DB2 Architecture</book_title>
+                                      <author>Carl</author>
+                                      <authid>234</authid>
+                                      <price>1090</price>
+                                      <no_of_copies>15</no_of_copies>
+                                 </book>
+                             </books>

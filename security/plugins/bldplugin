@@ -1,0 +1,80 @@
+#! /bin/sh
+#############################################################################
+# Licensed Materials - Property of IBM
+#
+# Governed under the terms of the International
+# License Agreement for Non-Warranted Sample Code.
+#
+# (C) COPYRIGHT International Business Machines Corp. 1995, 2006
+# All Rights Reserved.
+#
+# US Government Users Restricted Rights - Use, duplication or
+# disclosure restricted by GSA ADP Schedule Contract with IBM Corp.
+#############################################################################
+# SCRIPT: bldplugin
+# Builds Linux C security plugins
+# Usage: bldplugin <prog_name> [ cc options ]
+#
+# NOTE: this script is intended to be invoked via makefile which will set
+# the appropriate compilation flags for the USERFILE defines.
+
+# Set DB2PATH to where DB2 will be accessed.
+# The default is the standard instance path.
+DB2PATH=$HOME/sqllib
+
+# The program to compile is $1.  Other parameters are passed to cc
+prog=$1
+shift
+
+# Figure out which Linux architecture we are on
+HARDWAREPLAT=`uname -m`
+
+# Default to native bitwidth for the platform
+if [ "$HARDWAREPLAT" = "x86_64" ] || [ "$HARDWAREPLAT" = "ppc64" ] || 
+   [ "HARDWAREPLAT" = "s390x" ] || [ "HARDWAREPLAT" = "ia64" ] ||
+   [ "$HARDWAREPLAT" = "ppc64le" ]
+then
+BITWIDTH=64
+else
+# x86 is the only native 32-bit platform
+BITWIDTH=32
+fi
+
+# Uncomment the next line to force a 32-bit application compile/link
+#BITWIDTH=32
+
+# Set flags for 32-bit compilation on non-native 32-bit platforms
+if [ $BITWIDTH = "32" ]
+then
+  if [ "$HARDWAREPLAT" = "s390x" ]
+  then
+      EXTRA_C_FLAGS="-m31"
+  else
+      if [ "$HARDWAREPLAT" = "ia64" ]
+      then
+         # DB2 does not support 32-bit applications on Linux on IA64
+         echo " DB2 does not support 32-bit applications on Linux on IA64"
+      else
+         EXTRA_C_FLAGS="-m32"
+      fi
+  fi
+fi
+
+# Compile the program.
+gcc $EXTRA_C_FLAG -fpic -DDB2_PLAT_UNIX -I$DB2PATH/include $* \
+        -c ${prog}.c -D_REENTRANT
+
+# Link the program and create a shared library
+if [ $prog = "IBMkrb5" ]
+  then
+  if [ $BITWIDTH = "32" ]
+  then
+    gcc $EXTRA_C_FLAGS -shared -Bsymbolic -o ${prog}.so ${prog}.o -lc -L/usr/krb5/lib/ -lgssapi_krb5 -lkrb5 -lksvc
+  else
+    gcc $EXTRA_C_FLAGS -shared -Bsymbolic -o ${prog}.so ${prog}.o -lc -L/usr/krb5/lib/lib64 -lgssapi_krb5 -lkrb5 -lksvc
+  fi
+else
+  gcc $EXTRA_C_FLAGS -shared -Bsymbolic -o ${prog}.so ${prog}.o -lc
+fi
+
+

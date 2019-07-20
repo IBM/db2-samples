@@ -1,0 +1,234 @@
+******************************************************************************
+* (c) Copyright IBM Corp. 2009 All rights reserved.
+* 
+* The following sample of source code called the QP to WLM Migration  
+* sample tool ("Sample") is owned by International Business Machines 
+* Corporation or one of its subsidiaries ("IBM") and is 
+* copyrighted and licensed, not sold. You may use, copy, modify, and 
+* distribute the Sample in any form without payment to IBM, for the purpose of 
+* assisting you in the development of your applications.
+* 
+* The Sample code is provided to you on an "AS IS" basis, without warranty of 
+* any kind. IBM HEREBY EXPRESSLY DISCLAIMS ALL WARRANTIES, EITHER EXPRESS OR 
+* IMPLIED, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED WARRANTIES OF 
+* MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE. Some jurisdictions do 
+* not allow for the exclusion or limitation of implied warranties, so the above 
+* limitations or exclusions may not apply to you. IBM shall not be liable for 
+* any damages you suffer as a result of using, copying, modifying or 
+* distributing the Sample, even if IBM has been advised of the possibility of 
+* such damages.
+*
+******************************************************************************
+*
+*    README for DB2 QP (Query Patroller) to DB2 WLM (Workload Management) 
+*       Migration Sample Tool
+*
+* The <install path>sqllib\samples\perl directory contains this README file
+* where <install_path> is the location of DB2 V9.7 FP1 on your hard drive. The
+* default location for <install_path> is C:\Program Files\IBM on Windows and
+* $HOME on UNIX
+*
+* This README describes the QP to WLM Migration sample tool.  
+*
+* The QP to WLM Migration sample tool helps you to transition from        
+* DB2 Query Patroller to DB2 workload management (WLM).  Use it to quickly
+* migrate your database to WLM.  You can continue to use the same approach
+* that QP currently uses to control your system until you determine how
+* best to use the new WLM capabilities.
+*
+* The QP to WLM Migration sample tool reads information from the QP control
+* tables and generate two DDL script files:
+*   1. <outputfile> - contains the DDL statements required to create the 
+*                     necessary WLM objects that will behave closest to 
+*                     the existing QP setup.
+*
+*   2. <outputfile>.DROP - contains the DDL statements required to disable
+*                          and drop objects being created in the first script.
+*                          In effect, it will "undo" the WLM setup created by
+*                          the first script.
+*
+*
+* The QP to WLM Migration sample tool files are located
+* in the following directory:
+*
+*  Windows:
+*    <install_path>\sqllib\samples\perl
+*  Unix:
+*    <install_path>/sqllib/samples/perl
+*
+* Copy the sample files from this directory to a working directory prior to
+* running the sample programs. The sample program directories are typically
+* read-only on most platforms and some samples produce output files that
+* require write permission on the directory.
+*
+* This sample tool must be executed by a user with DBADM authority.
+* The generated DDL scripts must be executed by a user with DBADM or WLMADM
+* authority.
+*
+*
+* WARNING: This sample tool generates 2 DDL scripts that will create, 
+*          alter, and drop database objects (such as service classes,
+*          workloads, thresholds and work action sets).  Execute the 
+*          generated DDL scripts against a test database first, such as the
+*          DB2 SAMPLE database to ensure you understand the effects of the 
+*          tool and the 2 generated DDL scripts. 
+*
+******************************************************************************
+*
+*   Prepare your QP to WLM Migration Sample Tool environment
+*
+*  1) Copy the files in <install path>sqllib\samples\perl\qpwlmmig* (windows),
+*     <install path>sqllib/samples/perl/qpwlmmig* (unix) to a working 
+*     directory and ensure that the directory has write permission.
+*
+*  2) Copy the file in <install path>sqllib\samples\perl\DB2WlmHist* (windows),
+*     <install path>sqllib/samples/perl/DB2WlmHist* (unix) to the same working
+*     directory as step 1 and ensure that directory has write permission.
+*
+*  3) Start the Database Manager with the following command:
+*       db2start
+*
+*  4) Test that you can connect to the database with the following command:
+*       db2 connect to <database>
+*     
+*  5) Navigate to the directory containing the files copied in Step 1.
+*       cd <working_qpwlmmig>
+*
+******************************************************************************
+*
+*       Steps for Running the QP to WLM Migration Sample Tool and
+*       its generated DDL scripts.
+*
+*
+* 1. Run the QP to WLM migration script, qpwlmmig.pl, to generate 
+* the two DDL script files; the first script <outputfile>, containing the DDL 
+* statements to create the WLM objects that most closely reflects the QP 
+* setup; the second script <outputfile>.DROP containing the DDL statements to 
+* drop the WLM objects created by the first script.
+*
+*  perl qpwlmmig.pl dbname user password outputfile
+*
+* 2. Open the DDL file <outputfile> to review the WLM objects that
+* will be altered and created.  Ensure that the names of the WLM
+* objects are appropriate.  If you change any of the WLM object names
+* in the <outputfile> file, be sure to also make the appropriate name 
+* changes in the <outputfile>.DROP file.  If you add or remove any of the
+* DDL from the <outputfile> file, be sure to also make the appropriate 
+* changes in the <outputfile>.DROP file.
+*
+* Note: Depending on what QP features are being used in the current 
+*       environment, there might be cases where there is not a direct mapping 
+*       from the QP setup to the WLM setup. Because of this, there are some 
+*       restrictions to what WLM DDL statements are generated.  For a list 
+*       of these restrictions, refer to the "Restrictions" section further 
+*       down in this file.
+*
+*
+* Running the generated DDL script files:
+*
+* 1. Connect to the database
+* 
+*  db2 connect to <databasename>
+*
+* 2. Run the generated <outputfile> file.
+*
+*  db2 -tf <outputfile> 
+*
+*   Note: This generated script contains DDL that will create WLM objects
+*         that are set up to collect either activity or aggregate
+*         information.  In order to capture this information, create the WLM
+*         event monitors using the wlmevmon.ddl script in the sqllib/misc
+*         directory
+* 
+* 3. To undo the changes made from running the <outputfile> file
+*    in step 1, run the generated <outputfile>.DROP file.
+*
+*  db2 -tf <outputfile>.DROP
+*
+******************************************************************************
+*
+*          QP to WLM Migration Sample Tool File Descriptions
+* 
+* The following are the files for the QP to WLM Migration Sample Tool
+* included with DB2.
+*
+*******************************************************************************
+*
+* The following is the Perl sample file.  For more information, refer
+* to the program source file.
+*
+* qpwlmmig.pl   - Reads the QP tables and generates two DDL script files    
+*                 described above.                                            
+*
+******************************************************************************
+*
+* Common Utility Perl Module
+*
+* DB2WlmHist.pm  - Defines common functions like prepare and execute SQL
+*                  statements and roll back if an error occurs that will be
+*                  used for the QP to WLM Migration Sample Tool script.
+*
+******************************************************************************
+*
+* Common files
+*
+* README_QPWLMMIG  - this file!
+*
+******************************************************************************
+*
+*       Restrictions
+*
+* Some QP features do not have a direct WLM mapping.  The following QP features
+* either will not have WLM DDL statements generated or will have WLM DDL 
+* statements generated that are commented out in the output scripts to 
+* control their use, because there are some differences in the behavior:
+*
+* 1. min_cost_to_manage setting in QP submitter profiles - has no equivalent
+*    WLM setting.  This setting will be ignored and no WLM DDL statements
+*    will be generated for it.
+*
+* 2. max_cost_allowed setting for a QP submitter profile 
+*    - if the qpwlmmig.pl script is run on DB2 V9.7 or later, 
+*    this setting will cause an ESTIMATEDSQLCOST threshold DDL
+*    statement to be added for the associated WLM workload object.
+*    - if this tool is run on DB2 V9.5, this setting will be ignored and
+*    no WLM DDL statements will be generated for it.
+*
+* 3. max_queries_allowed setting in QP submitter profiles - WLM can
+*    restrict the number of activities that can be run in a workload occurrence
+*    using the CONCURRENTWORKLOADACTIVITIES threshold.  However, this is
+*    not a queuing threshold.  In addition, this threshold controls the
+*    number of activities that can run concurrently in an occurrence of a 
+*    workload.  The max_queries_allowed setting in QP controls the number of 
+*    DML statements that can be run by a specific submitter profile.  
+*    Therefore, if this setting is used in QP, then a 
+*    CONCURRENTWORKLOADACTIVITIES threshold will be generated but will be 
+*    commented out.  You can uncomment it if required.
+*
+* 4. include_applications setting in QP system settings - There
+*    does exist a similar feature in WLM but because of the approach
+*    the qpwlmmig.pl script has taken in that workloads are created for
+*    each QP user or group profile, it was thought that further qualifying
+*    those workloads with an application name might not be exactly what 
+*    the user might expect.  Therefore, this setting will be ignored.
+*
+* 5. max_total_cost setting in the QP system settings - there is no WLM    
+*    equivalent to this setting so this value will be ignored and no WLM DDL
+*    statements will be generated for it.
+*
+* 6. max_total_queries setting in QP system settings - The max_total_queries
+*    setting controls the maximum number of DML statements that can
+*    run on the system at a time.  It does NOT, apply to any activities
+*    that are bypassing QP (either through the registry variables or through
+*    QP settings).  WLM has a similar functionality in the
+*    CONCURRENTDBCOORDACTIVITIES threshold.  When used with a DB2 Work Action
+*    Set, it can be used to control the total number of DML activities
+*    running on your system.  However, it applies to all DML activities, 
+*    including those that were bypassing QP.  Because of this, a work action
+*    set containing a CONCURRENTDBCOORDACTIVITIES threshold work action will be
+*    generated but it will be commented out.  You can uncomment it and adjust 
+*    its value if required.
+*  
+******************************************************************************
+
+

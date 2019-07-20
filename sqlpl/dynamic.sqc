@@ -1,0 +1,181 @@
+/****************************************************************************
+** (c) Copyright IBM Corp. 2007 All rights reserved.
+** 
+** The following sample of source code ("Sample") is owned by International 
+** Business Machines Corporation or one of its subsidiaries ("IBM") and is 
+** copyrighted and licensed, not sold. You may use, copy, modify, and 
+** distribute the Sample in any form without payment to IBM, for the purpose of 
+** assisting you in the development of your applications.
+** 
+** The Sample code is provided to you on an "AS IS" basis, without warranty of 
+** any kind. IBM HEREBY EXPRESSLY DISCLAIMS ALL WARRANTIES, EITHER EXPRESS OR 
+** IMPLIED, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED WARRANTIES OF 
+** MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE. Some jurisdictions do 
+** not allow for the exclusion or limitation of implied warranties, so the above 
+** limitations or exclusions may not apply to you. IBM shall not be liable for 
+** any damages you suffer as a result of using, copying, modifying or 
+** distributing the Sample, even if IBM has been advised of the possibility of 
+** such damages.
+*****************************************************************************
+**
+** SOURCE FILE NAME: dynamic.sqc 
+**    
+** SAMPLE: To call the CREATE_DEPT_TABLE SQL procedure
+**
+**         There are two parts to this program:
+**            1. the dynamic executable (placed on the client)
+**            2. the CREATE_DEPT_TABLE SQL procedure (created on the
+**               server with the dynamic.db2 CLP script)
+**
+**         dynamic calls the CREATE_DEPT_TABLE SQL procedure by preparing
+**         and executing a dynamic CALL statement:
+**
+**            sprintf(callstmt, "CALL %s (?,?)", procname);
+**            EXEC SQL prepare st from :callstmt;    
+**            EXEC SQL execute st INTO :table_name:tableind USING :deptnum:deptind;
+**
+**         When the CALL with Host Variable is used,
+**         the precompiler allocates and initializes an internal one
+**         variable SQLDA for both input and output.
+**
+**         The CREATE_DEPT_TABLE procedure uses dynamic DDL to create 
+**         a new table. The name of the table is based on the value 
+**         of the IN parameter to the procedure.
+**
+** SQL STATEMENTS USED:
+**         CONNECT 
+**         CALL
+**         PREPARE
+**         DECLARE CURSOR
+**         OPEN
+**         FETCH
+**         CLOSE
+**
+** OUTPUT FILE: dynamic.out (available in the online documentation)
+*****************************************************************************
+**
+** For more information on the sample programs, see the README file.
+**
+** For information on creating SQL procedures and developing C applications,
+** see the Application Development Guide.
+**
+** For information on using SQL statements, see the SQL Reference.
+**
+** For the latest information on programming, building, and running DB2 
+** applications, visit the DB2 application development website: 
+**     http://www.software.ibm.com/data/db2/udb/ad
+****************************************************************************/
+
+#include <stdio.h>
+#include <stdlib.h>
+#include <sql.h> 
+#include <sqlda.h>
+#include <sqlca.h>
+#include <string.h>
+#include "utilemb.h"
+
+
+int main(int argc, char *argv[]) {
+
+   EXEC SQL BEGIN DECLARE SECTION;
+     char database[9];
+     char userid[9];
+     char passwd[19];
+     char stmt[200];
+     char s1[200];
+
+     /* Declare a Local Variable for Holding the Procedure's Name */
+     char procname[254] = "CREATE_DEPT_TABLE";
+
+     /* Declare a statement string to call the procedure dynamically */
+     char callstmt[1200];
+
+     /* Declare Local Variables for Passing Data to SQL Procedure */
+     char deptnum[4];
+     sqlint16 deptind = 0; /* IN parameter */
+     char table_name[31];
+     sqlint16 tableind = -1; /* OUT parameter */
+
+     /* Declare Local Variables for Returning Data from New Table */
+     sqlint16 numrows = 0;
+   EXEC SQL END DECLARE SECTION;
+
+   /* Declare the output SQLDA */
+   struct sqlda *inout_sqlda = (struct sqlda *)
+   malloc(SQLDASIZE(2));
+
+   /* Declare the SQLCA */
+   struct sqlca sqlca;
+
+   char eBuffer[1024]; /* error message buffer */
+
+   if (argc != 4) {
+      printf ("\nUSAGE: dynamic remote_database userid passwd\n\n");
+      return 1;
+   }
+   strcpy (database, argv[1]);
+   strcpy (userid, argv[2]);
+   strcpy (passwd, argv[3]);
+   /* Connect to Remote Database */
+   printf("CONNECT TO Remote Database.\n");
+   EXEC SQL CONNECT TO :database USER :userid USING :passwd; 
+   EMB_SQL_CHECK("CONNECT TO RSAMPLE");
+
+   /********************************************************\
+   * Call the Remote Procedure via CALL with Host Variables *
+   \********************************************************/
+
+   strcpy (deptnum, "D11");
+   printf("Use CALL with Host Variables to invoke the Server Procedure "
+      "named %s\n", procname);
+   sprintf(callstmt, "CALL %s (?,?)", procname);
+
+   EXEC SQL prepare st from :callstmt;
+   EMB_SQL_CHECK("PREPARE CALL STATEMENT");
+
+   EXEC SQL execute st INTO :table_name:tableind USING :deptnum:deptind; 
+   EMB_SQL_CHECK("EXECUTE CALL STATEMENT");
+
+   /********************************************************\
+   * Display the number of rows after issuing CALL statement *
+   \********************************************************/
+
+   strcpy ( stmt, "SELECT COUNT(*) FROM ");
+   strcat (stmt, table_name);
+   EXEC SQL PREPARE s1 FROM :stmt;
+   EMB_SQL_CHECK("PREPARE");
+   EXEC SQL DECLARE c1 CURSOR FOR s1;
+   EXEC SQL OPEN c1;
+   EMB_SQL_CHECK("OPEN");
+   EXEC SQL FETCH c1 INTO :numrows;
+   EXEC SQL CLOSE c1;
+   EMB_SQL_CHECK("CLOSE");
+
+   printf("\nNumber of rows in %11s = %d\n", table_name, numrows); 
+
+   /* COMMIT or ROLLBACK the transaction */
+   if (SQLCODE == 0)
+   { /* Successful, but rollback the changes to the database */
+     EXEC SQL ROLLBACK;
+     printf("Server Procedure Complete.\n");
+   }
+   else
+   { /* print the error message, roll back the transaction and return */
+     sqlaintp (eBuffer, 1024, 80, &sqlca);
+     printf("\n%s\n", eBuffer);
+  
+     EXEC SQL ROLLBACK;
+     printf("Server Procedure Transaction Rolled Back.\n\n");
+     return 1;
+   }
+
+   /* Free allocated memory */
+   free( inout_sqlda ); 
+
+   /* Disconnect from Remote Database */
+   EXEC SQL CONNECT RESET; 
+   EMB_SQL_CHECK("CONNECT RESET");
+   return 0;
+}
+/* end of program : dynamic.sqc */
+

@@ -1,0 +1,934 @@
+/****************************************************************************
+** (c) Copyright IBM Corp. 2007 All rights reserved.
+** 
+** The following sample of source code ("Sample") is owned by International 
+** Business Machines Corporation or one of its subsidiaries ("IBM") and is 
+** copyrighted and licensed, not sold. You may use, copy, modify, and 
+** distribute the Sample in any form without payment to IBM, for the purpose of 
+** assisting you in the development of your applications.
+** 
+** The Sample code is provided to you on an "AS IS" basis, without warranty of 
+** any kind. IBM HEREBY EXPRESSLY DISCLAIMS ALL WARRANTIES, EITHER EXPRESS OR 
+** IMPLIED, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED WARRANTIES OF 
+** MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE. Some jurisdictions do 
+** not allow for the exclusion or limitation of implied warranties, so the above 
+** limitations or exclusions may not apply to you. IBM shall not be liable for 
+** any damages you suffer as a result of using, copying, modifying or 
+** distributing the Sample, even if IBM has been advised of the possibility of 
+** such damages.
+*****************************************************************************
+**
+** SOURCE FILE NAME: tbmod.sqc 
+**    
+** SAMPLE: How to modify table data 
+**           
+** SQL STATEMENTS USED:
+**         DELETE 
+**         DECLARE CURSOR 
+**         OPEN
+**         FETCH
+**         CLOSE
+**         INSERT
+**         UPDATE
+**
+** OUTPUT FILE: tbmod.out (available in the online documentation)
+*****************************************************************************
+**
+** For more information on the sample programs, see the README file.
+**
+** For information on developing C applications, see the Application
+** Development Guide.
+**
+** For information on using SQL statements, see the SQL Reference.
+**
+** For information on DB2 APIs, see the Administrative API Reference.
+**
+** For the latest information on programming, building, and running DB2 
+** applications, visit the DB2 application development website: 
+**     http://www.software.ibm.com/data/db2/udb/ad
+****************************************************************************/
+
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+#include <sqlenv.h>
+#include <sqlutil.h>
+#include "utilemb.h"
+
+/* types of insert */
+int InsertUsingValues(void);
+int InsertUsingFullselect(void);
+
+/* types of update */
+int UpdateWithoutSubqueries(void);
+int UpdateUsingSubqueryInSetClause(void);
+int UpdateUsingSubqueryInWhereClause(void);
+int UpdateUsingCorrelatedSubqueryInSetClause(void);
+int UpdateUsingCorrelatedSubqueryInWhereClause(void);
+int PositionedUpdateWithoutSubqueries(void);
+int PositionedUpdateUsingSubqueryInSetClause(void);
+int PositionedUpdateUsingCorrelatedSubqueryInSetClause(void);
+
+/* types of delete */
+int DeleteWithoutSubqueries(void);
+int DeleteUsingSubqueryInWhereClause(void);
+int DeleteUsingCorrelatedSubqueryInWhereClause(void);
+int PositionedDelete(void);
+
+/* support functions */
+int StaffTbContentDisplay(void);
+
+EXEC SQL BEGIN DECLARE SECTION;
+  short id;
+  char name[10];
+  short dept;
+  char job[10];
+  short jobInd;
+  short years;
+  short yearsInd;
+  double salary;
+  double comm;
+  short commInd;
+  char empno[7];
+  char workdept[8];
+EXEC SQL END DECLARE SECTION;
+
+int main(int argc, char *argv[])
+{
+  int rc = 0;
+  struct sqlca sqlca;
+
+  char dbAlias[SQL_ALIAS_SZ + 1];
+  char user[USERID_SZ + 1];
+  char pswd[PSWD_SZ + 1];
+
+  /* check the command line arguments */
+  rc = CmdLineArgsCheck1(argc, argv, dbAlias, user, pswd);
+  if (rc != 0)
+  {
+    return rc;
+  }
+
+  printf("\nTHIS SAMPLE SHOWS HOW TO MODIFY TABLE DATA.\n");
+
+  printf("\n  THERE ARE THREE WAYS TO MODIFY TABLE DATA:\n");
+  printf("    INSERT ROW(S)\n");
+  printf("    UPDATE ROW(S)\n");
+  printf("    DELETE ROW(S)\n");
+  printf("  THIS SAMPLE SHOWS ALL TYPES OF INSERT, UPDATE AND DELETE\n");
+  printf("  INVOKING THE STATEMENTS STATICALLY, WITHOUT PARAMETERS.\n");
+  printf("\n  HOWEVER, FOR EVERY TYPE, ALL THE METHODS\n");
+  printf("  DESCRIBED IN THE SAMPLE dbuse CAN BE USED, AS FOLLOWS:\n");
+  printf("    StaticStmtInvoke\n");
+  printf("    StaticStmtWithHostVarsInvoke\n");
+  printf("    DynamicStmtEXECUTE_IMMEDIATE\n");
+  printf("    DynamicStmtEXECUTE\n");
+  printf("    DynamicStmtWithMarkersEXECUTEusingHostVars\n");
+  printf("    DynamicStmtWithMarkersEXECUTEusingSQLDA\n");
+  printf("    CompoundStmtInvoke\n");
+
+  /* connect to database */
+  rc = DbConn(dbAlias, user, pswd);
+  if (rc != 0)
+  {
+    return rc;
+  }
+
+  /* create table for sample */
+  /*rc = CreateTableForSample();*/
+
+  /* types of Insert */
+  rc = InsertUsingValues();
+  rc = InsertUsingFullselect();
+
+  /* types of Update */
+  rc = UpdateWithoutSubqueries();
+  rc = UpdateUsingSubqueryInSetClause();
+  rc = UpdateUsingSubqueryInWhereClause();
+  rc = UpdateUsingCorrelatedSubqueryInSetClause();
+  rc = UpdateUsingCorrelatedSubqueryInWhereClause();
+  rc = PositionedUpdateWithoutSubqueries();
+  rc = PositionedUpdateUsingSubqueryInSetClause();
+  rc = PositionedUpdateUsingCorrelatedSubqueryInSetClause();
+
+  /* types of Delete */
+  rc = DeleteWithoutSubqueries();
+  rc = DeleteUsingSubqueryInWhereClause();
+  rc = DeleteUsingCorrelatedSubqueryInWhereClause();
+  rc = PositionedDelete();
+
+  /* disconnect from the database */
+  rc = DbDisconn(dbAlias);
+  if (rc != 0)
+  {
+    return rc;
+  }
+
+  return 0;
+} /* end main */
+
+int StaffTbContentDisplay(void)
+{
+  struct sqlca sqlca;
+
+  printf("\n  SELECT * FROM staff WHERE id >= 310\n");
+  printf("    ID  NAME     DEPT JOB   YEARS SALARY   COMM\n");
+  printf("    --- -------- ---- ----- ----- -------- -------\n");
+
+  EXEC SQL DECLARE posCur0 CURSOR FOR SELECT * FROM staff WHERE id >= 310;
+
+  EXEC SQL OPEN posCur0;
+  EMB_SQL_CHECK("cursor -- open");
+
+  EXEC SQL FETCH posCur0 INTO :id, :name, :dept, :job:jobInd,
+                              :years:yearsInd, :salary, :comm:commInd;
+  EMB_SQL_CHECK("cursor -- fetch");
+
+  while (sqlca.sqlcode != 100)
+  {
+    printf("    %3d %-8.8s %4d", id, name, dept);
+    if (jobInd >= 0)
+    {
+      printf(" %-5.5s", job);
+    }
+    else
+    {
+      printf("     -");
+    }
+
+    if (yearsInd >= 0)
+    {
+      printf(" %5d", years);
+    }
+    else
+    {
+      printf("     -");
+    }
+    printf(" %7.2f", salary);
+
+    if (commInd >= 0)
+    {
+      printf(" %7.2f", comm);
+    }
+    else
+    {
+      printf("       -");
+    }
+    printf("\n");
+
+    EXEC SQL FETCH posCur0 INTO :id, :name, :dept, :job:jobInd,
+                                :years:yearsInd, :salary, :comm:commInd;
+    EMB_SQL_CHECK("cursor -- fetch");
+  }
+
+  EXEC SQL CLOSE posCur0;
+  EMB_SQL_CHECK("cursor -- close");
+
+  return 0;
+} /* StaffTbContentDisplay */
+
+int InsertUsingValues(void)
+{
+  int rc = 0;
+  struct sqlca sqlca;
+
+  printf("\n-----------------------------------------------------------");
+  printf("\nUSE THE SQL STATEMENT:\n");
+  printf("  INSERT\n");
+  printf("TO INSERT DATA INTO A TABLE USING VALUES.\n");
+
+  /* display initial table content */
+  rc = StaffTbContentDisplay();
+
+  /* insert into table using values */
+  printf("\n  Invoke the statement\n");
+  printf("    INSERT INTO staff(id, name, dept, job, salary)\n");
+  printf("      VALUES(380, 'Pearce', 38, 'Clerk', 13217.50),\n");
+  printf("            (390, 'Hachey', 38, 'Mgr', 21270.00),\n");
+  printf("            (400, 'Wagland', 38, 'Clerk', 14575.00)\n");
+
+  EXEC SQL INSERT INTO staff(id, name, dept, job, salary)
+    VALUES(380, 'Pearce', 38, 'Clerk', 13217.50),
+          (390, 'Hachey', 38, 'Mgr', 21270.00),
+          (400, 'Wagland', 38, 'Clerk', 14575.00);
+  EMB_SQL_CHECK("table -- insert using values");
+
+  /* display content of final table */
+  rc = StaffTbContentDisplay();
+
+  /* rollback the transaction */
+  TransRollback();
+
+  return 0;
+} /* InsertUsingValues */
+
+int InsertUsingFullselect(void)
+{
+  int rc = 0;
+  struct sqlca sqlca;
+
+  printf("\n-----------------------------------------------------------");
+  printf("\nUSE THE SQL STATEMENT:\n");
+  printf("  INSERT\n");
+  printf("TO INSERT DATA INTO A TABLE USING FULLSELECT.\n");
+
+  /* display initial content of the table */
+  rc = StaffTbContentDisplay();
+
+  /* insert into the table using fullselect */
+  printf("\n  Invoke the statement\n");
+  printf("    INSERT INTO staff(id, name, dept, salary)\n");
+  printf("      SELECT INTEGER(empno)+100, lastname, 77, salary\n");
+  printf("        FROM employee\n");
+  printf("        WHERE INTEGER(empno) >= 310\n");
+  printf("        AND INTEGER(empno) <= 340\n");
+
+  EXEC SQL INSERT INTO staff(id, name, dept, salary)
+    SELECT INTEGER(empno) + 100, lastname, 77, salary
+      FROM employee
+      WHERE INTEGER(empno) >= 310
+      AND INTEGER(empno) <= 340;
+  EMB_SQL_CHECK("table -- insert using fullselect");
+
+  /* display content of final table */
+  rc = StaffTbContentDisplay();
+
+  /* rollback the transaction */
+  TransRollback();
+
+  return 0;
+} /* InsertUsingFullselect */
+
+int UpdateWithoutSubqueries(void)
+{
+  int rc = 0;
+  struct sqlca sqlca;
+
+  printf("\n-----------------------------------------------------------");
+  printf("\nUSE THE SQL STATEMENT:\n");
+  printf("  UPDATE\n");
+  printf("TO UPDATE TABLE DATA.\n");
+
+  /* display initial content of the table */
+  rc = StaffTbContentDisplay();
+
+  /* update the table */
+  printf("\n  Invoke the statement\n");
+  printf("    UPDATE staff SET salary = salary + 1000\n");
+  printf("      WHERE id >= 310 AND dept = 84\n");
+
+  EXEC SQL UPDATE staff SET salary = salary + 1000
+    WHERE id >= 310 AND dept = 84;
+  EMB_SQL_CHECK("table -- update");
+
+  /* display content of final table */
+  rc = StaffTbContentDisplay();
+
+  /* rollback the transaction */
+  TransRollback();
+
+  return 0;
+} /* UpdateWithoutSubqueries */
+
+int UpdateUsingSubqueryInSetClause(void)
+{
+  int rc = 0;
+  struct sqlca sqlca;
+
+  printf("\n-----------------------------------------------------------");
+  printf("\nUSE THE SQL STATEMENT:\n");
+  printf("  UPDATE\n");
+  printf("TO UPDATE TABLE DATA\n");
+  printf("USING SUBQUERY IN 'SET' CLAUSE.\n");
+
+  /* display initial content of the table */
+  rc = StaffTbContentDisplay();
+
+  /* table -- update using subquery in SET clause */
+  printf("\n  Invoke the statement\n");
+  printf("    UPDATE staff SET salary = (SELECT MIN(salary)\n");
+  printf("                                 FROM staff\n");
+  printf("                                 WHERE id >= 310)\n");
+  printf("      WHERE id = 350\n");
+
+  EXEC SQL UPDATE staff SET salary = (SELECT MIN(salary)
+                                        FROM staff
+                                        WHERE id >= 310)
+    WHERE id = 350;
+  EMB_SQL_CHECK("table -- update using subquery in SET clause");
+
+  /* display content of final table */
+  rc = StaffTbContentDisplay();
+
+  /* rollback the transaction */
+  TransRollback();
+
+  return 0;
+} /* UpdateUsingSubqueryInSetClause */
+
+int UpdateUsingSubqueryInWhereClause(void)
+{
+  int rc = 0;
+  struct sqlca sqlca;
+
+  printf("\n-----------------------------------------------------------");
+  printf("\nUSE THE SQL STATEMENT:\n");
+  printf("  UPDATE\n");
+  printf("TO UPDATE TABLE DATA\n");
+  printf("USING SUBQUERY IN 'WHERE' CLAUSE.\n");
+
+  /* display initial content of the table */
+  rc = StaffTbContentDisplay();
+
+  /* update the table using subquery in WHERE clause */
+  printf("\n  Invoke the statement\n");
+  printf("    UPDATE staff SET comm = 250.00\n");
+  printf("      WHERE dept = 84 AND\n");
+  printf("            salary < (SELECT AVG(salary)\n");
+  printf("                        FROM staff\n");
+  printf("                        WHERE id >= 310 AND dept = 84)\n");
+
+  EXEC SQL UPDATE staff SET comm = 250.00
+    WHERE dept = 84 AND
+          salary < (SELECT AVG(salary)
+                      FROM staff
+                      WHERE id >= 310 AND dept = 84);
+  EMB_SQL_CHECK("table -- update using subquery in WHERE clause");
+
+  /* display content of final table */
+  rc = StaffTbContentDisplay();
+
+  /* rollback the transaction */
+  TransRollback();
+
+  return 0;
+} /* UpdateUsingSubqueryInWhereClause */
+
+int UpdateUsingCorrelatedSubqueryInSetClause(void)
+{
+  int rc = 0;
+  struct sqlca sqlca;
+
+  printf("\n-----------------------------------------------------------");
+  printf("\nUSE THE SQL STATEMENT:\n");
+  printf("  UPDATE\n");
+  printf("TO UPDATE TABLE DATA\n");
+  printf("USING CORRELATED SUBQUERY IN 'SET' CLAUSE.\n");
+
+  /* display initial content of the table */
+  rc = StaffTbContentDisplay();
+
+  /* update the table using correlated subquery in SET clause */
+  printf("\n  Invoke the statement\n");
+  printf("    UPDATE staff s1\n");
+  printf("      SET comm = 0.01 * (SELECT MIN(salary)\n");
+  printf("                           FROM staff s2\n");
+  printf("                           WHERE id >= 310 AND\n");
+  printf("                                 s2.dept = s1.dept)\n");
+  printf("      WHERE id >= 340\n");
+
+  EXEC SQL UPDATE staff s1
+    SET comm = 0.01 * (SELECT MIN(salary)
+                         FROM staff s2
+                         WHERE id >= 310 AND
+                               s2.dept = s1.dept)
+    WHERE id >= 340;
+  EMB_SQL_CHECK("table -- update using correl. subquery in SET clause");
+
+  /* display content of final table */
+  rc = StaffTbContentDisplay();
+
+  /* rollback the transaction */
+  TransRollback();
+
+  return 0;
+} /* UpdateUsingCorrelatedSubqueryInSetClause */
+
+int UpdateUsingCorrelatedSubqueryInWhereClause(void)
+{
+  int rc = 0;
+  struct sqlca sqlca;
+
+  printf("\n-----------------------------------------------------------");
+  printf("\nUSE THE SQL STATEMENT:\n");
+  printf("  UPDATE\n");
+  printf("TO UPDATE TABLE DATA\n");
+  printf("USING CORRELATED SUBQUERY IN 'WHERE' CLAUSE.\n");
+
+  /* display initial content of the table */
+  rc = StaffTbContentDisplay();
+
+  /* update the table using correlated subquery in WHERE clause */
+  printf("\n  Invoke the statement\n");
+  printf("    UPDATE staff s1 SET comm = 700\n");
+  printf("      WHERE id >= 340 AND\n");
+  printf("            salary < (SELECT AVG(salary)\n");
+  printf("                        FROM staff s2\n");
+  printf("                        WHERE id >= 310 AND\n");
+  printf("                              s2.dept = s1.dept)\n");
+
+  EXEC SQL UPDATE staff s1 SET comm = 700
+    WHERE id >= 340 AND
+          salary < (SELECT AVG(salary)
+                      FROM staff s2
+                      WHERE id >= 310 AND
+                            s2.dept = s1.dept);
+  EMB_SQL_CHECK("table -- update using correl. subquery in WHERE clause");
+
+  /* display content of final table */
+  rc = StaffTbContentDisplay();
+
+  /* rollback the transaction */
+  TransRollback();
+
+  return 0;
+} /* UpdateUsingCorrelatedSubqueryInWhereClause */
+
+int PositionedUpdateWithoutSubqueries(void)
+{
+  int rc = 0;
+  struct sqlca sqlca;
+
+  printf("\n-----------------------------------------------------------");
+  printf("\nUSE THE SQL STATEMENTS:\n");
+  printf("  DECLARE CURSOR\n");
+  printf("  OPEN\n");
+  printf("  FETCH\n");
+  printf("  UPDATE\n");
+  printf("  CLOSE\n");
+  printf("TO PERFORM POSITIONED UPDATE ON A ROW.\n");
+
+  /* display initial content of the table */
+  rc = StaffTbContentDisplay();
+
+  printf("\n  Invoke the statements:\n");
+  printf("    DECLARE posCur1 CURSOR FOR\n");
+  printf("      SELECT name, dept FROM staff WHERE id >= 310");
+  printf(" FOR UPDATE OF comm\n");
+  printf("    OPEN posCur1\n");
+  printf("    FETCH posCur1 INTO :name, :dept\n");
+  printf("    while (successful fetch)\n");
+  printf("    {\n");
+  printf("      if (dept != 84)\n");
+  printf("      {\n");
+  printf("        UPDATE staff SET comm = NULL");
+  printf(" WHERE CURRENT OF posCur1\n");
+  printf("      }\n");
+  printf("      FETCH posCur1 INTO :name, :dept\n");
+  printf("    }\n");
+
+  /* declare cursor */
+  EXEC SQL DECLARE posCur1 CURSOR FOR
+    SELECT name, dept FROM staff WHERE id >= 310 FOR UPDATE OF comm;
+
+  /* open cursor */
+  EXEC SQL OPEN posCur1;
+  EMB_SQL_CHECK("cursor -- open");
+
+  /* fetch cursor */
+  EXEC SQL FETCH posCur1 INTO :name, :dept;
+  EMB_SQL_CHECK("cursor -- fetch");
+
+  while (sqlca.sqlcode != 100)
+  {
+    if (dept != 84)
+    {
+      EXEC SQL UPDATE staff SET comm = NULL WHERE CURRENT OF posCur1;
+      EMB_SQL_CHECK("table -- positioned update");
+    }
+
+    EXEC SQL FETCH posCur1 INTO :name, :dept;
+    EMB_SQL_CHECK("cursor -- fetch");
+  }
+
+  /* close cursor */
+  EXEC SQL CLOSE posCur1;
+  EMB_SQL_CHECK("cursor -- close");
+
+  /* display content of final table */
+  rc = StaffTbContentDisplay();
+
+  /* rollback the transaction */
+  TransRollback();
+
+  return 0;
+} /* PositionedUpdateWithoutSubqueries */
+
+int PositionedUpdateUsingSubqueryInSetClause(void)
+{
+  int rc = 0;
+  struct sqlca sqlca;
+
+  printf("\n-----------------------------------------------------------");
+  printf("\nUSE THE SQL STATEMENTS:\n");
+  printf("  DECLARE CURSOR\n");
+  printf("  OPEN\n");
+  printf("  FETCH\n");
+  printf("  UPDATE\n");
+  printf("  CLOSE\n");
+  printf("TO PERFORM POSITIONED UPDATE ON A ROW\n");
+  printf("USING SUBQUERY IN 'SET' CLAUSE.\n");
+
+  /* display initial content of the table */
+  rc = StaffTbContentDisplay();
+
+  printf("\n  Invoke the statements:\n");
+  printf("    DECLARE posCur2 CURSOR FOR\n");
+  printf("      SELECT name, dept FROM staff WHERE id >= 310");
+  printf(" FOR UPDATE OF comm\n");
+  printf("    OPEN posCur2\n");
+  printf("    FETCH posCur2 INTO :name, :dept\n");
+  printf("    while (successful fetch)\n");
+  printf("    {\n");
+  printf("      if (dept != 84)\n");
+  printf("      {\n");
+  printf("        UPDATE staff\n");
+  printf("          SET comm = 0.01 * (SELECT AVG(salary)\n");
+  printf("                               FROM staff\n");
+  printf("                               WHERE id >= 310)\n");
+  printf("          WHERE CURRENT OF posCur2\n");
+  printf("      }\n");
+  printf("      FETCH posCur2 INTO :name, :dept\n");
+  printf("    }\n");
+
+  /* declare cursor */
+  EXEC SQL DECLARE posCur2 CURSOR FOR
+    SELECT name, dept FROM staff WHERE id >= 310 FOR UPDATE OF comm;
+
+  /* open cursor */
+  EXEC SQL OPEN posCur2;
+  EMB_SQL_CHECK("cursor -- open");
+
+  /* fetch cursor */
+  EXEC SQL FETCH posCur2 INTO :name, :dept;
+  EMB_SQL_CHECK("cursor -- fetch");
+
+  while (sqlca.sqlcode != 100)
+  {
+    if (dept != 84)
+    {
+      EXEC SQL UPDATE staff
+        SET comm = 0.01 * (SELECT AVG(salary)
+                             FROM staff
+                             WHERE id >= 310)
+        WHERE CURRENT OF posCur2;
+      EMB_SQL_CHECK("table -- positioned update using subquery");
+    }
+
+    EXEC SQL FETCH posCur2 INTO :name, :dept;
+    EMB_SQL_CHECK("cursor -- fetch");
+  }
+
+  /* close cursor */
+  EXEC SQL CLOSE posCur2;
+  EMB_SQL_CHECK("cursor -- close");
+
+  /* display content of final table */
+  rc = StaffTbContentDisplay();
+
+  /* rollback the transaction */
+  TransRollback();
+
+  return 0;
+} /* PositionedUpdateUsingSubqueryInSetClause */
+
+int PositionedUpdateUsingCorrelatedSubqueryInSetClause(void)
+{
+  int rc = 0;
+  struct sqlca sqlca;
+
+  printf("\n-----------------------------------------------------------");
+  printf("\nUSE THE SQL STATEMENTS:\n");
+  printf("  DECLARE CURSOR\n");
+  printf("  OPEN\n");
+  printf("  FETCH\n");
+  printf("  UPDATE\n");
+  printf("  CLOSE\n");
+  printf("TO PERFORM POSITIONED UPDATE ON A ROW\n");
+  printf("USING CORRELATED SUBQUERY IN 'SET' CLAUSE.\n");
+
+  /* display initial content of the table */
+  rc = StaffTbContentDisplay();
+
+  printf("\n  Invoke the statements:\n");
+  printf("    DECLARE posCur3 CURSOR FOR\n");
+  printf("      SELECT name, dept FROM staff WHERE id >= 310");
+  printf(" FOR UPDATE OF comm\n");
+  printf("    OPEN posCur3\n");
+  printf("    FETCH posCur3 INTO :name, :dept\n");
+  printf("    while (successful fetch)\n");
+  printf("    {\n");
+  printf("      if (dept != 84)\n");
+  printf("      {\n");
+  printf("        UPDATE staff s1\n");
+  printf("          SET comm = 0.01 * (SELECT AVG(salary)\n");
+  printf("                               FROM staff s2\n");
+  printf("                               WHERE id >= 310 AND\n");
+  printf("                                     s2.dept = s1.dept)\n");
+  printf("          WHERE CURRENT OF posCur3\n");
+  printf("      }\n");
+  printf("      FETCH posCur3 INTO :name, :dept\n");
+  printf("    }\n");
+
+  /* declare cursor */
+  EXEC SQL DECLARE posCur3 CURSOR FOR
+    SELECT name, dept FROM staff WHERE id >= 310 FOR UPDATE OF comm;
+
+  /* open cursor */
+  EXEC SQL OPEN posCur3;
+  EMB_SQL_CHECK("cursor -- open");
+
+  /* fetch cursor */
+  EXEC SQL FETCH posCur3 INTO :name, :dept;
+  EMB_SQL_CHECK("cursor -- fetch");
+
+  while (sqlca.sqlcode != 100)
+  {
+    if (dept != 84)
+    {
+      EXEC SQL UPDATE staff s1
+        SET comm = 0.01 * (SELECT AVG(salary)
+                             FROM staff s2
+                             WHERE id >= 310 AND
+                                   s2.dept = s1.dept)
+        WHERE CURRENT OF posCur3;
+      EMB_SQL_CHECK("table -- pos. update using correl. subquery");
+    }
+
+    EXEC SQL FETCH posCur3 INTO :name, :dept;
+    EMB_SQL_CHECK("cursor -- fetch");
+  }
+
+  /* close cursor */
+  EXEC SQL CLOSE posCur3;
+  EMB_SQL_CHECK("cursor -- close");
+
+  /* display content of final table */
+  rc = StaffTbContentDisplay();
+
+  /* rollback the transaction */
+  TransRollback();
+
+  return 0;
+} /* UpdateUsingCorrelatedSubqueryInSetClause */
+
+int DeleteWithoutSubqueries(void)
+{
+  int rc = 0;
+  struct sqlca sqlca;
+
+  printf("\n-----------------------------------------------------------");
+  printf("\nUSE THE SQL STATEMENT:\n");
+  printf("  DELETE\n");
+  printf("TO DELETE TABLE DATA.\n");
+
+  /* display initial content of the table */
+  rc = StaffTbContentDisplay();
+
+  /* delete the table data without subqueries */
+  printf("\n  Invoke the statement\n");
+  printf("    DELETE FROM staff WHERE id >= 310 AND salary > 20000 AND job != 'Sales'\n");
+
+  EXEC SQL DELETE FROM staff WHERE id >= 310 AND salary > 20000 AND job != 'Sales';
+  EMB_SQL_CHECK("table -- delete without subqueries");
+
+  /* display content of final table */
+  rc = StaffTbContentDisplay();
+
+  /* rollback the transaction */
+  TransRollback();
+
+  return 0;
+} /* DeleteWithoutSubqueries */
+
+int DeleteUsingSubqueryInWhereClause(void)
+{
+  int rc = 0;
+  struct sqlca sqlca;
+
+  printf("\n-----------------------------------------------------------");
+  printf("\nUSE THE SQL STATEMENT:\n");
+  printf("  DELETE\n");
+  printf("TO DELETE TABLE DATA\n");
+  printf("USING SUBQUERY IN 'WHERE' CLAUSE.\n");
+
+  /* display initial content of the table */
+  rc = StaffTbContentDisplay();
+
+  /* display selected content from employee table */
+  printf("\n  SELECT empno, salary, workdept FROM employee");
+  printf(" WHERE workdept = 'E11'\n");
+  printf("    EMPNO  SALARY     WORKDEPT\n");
+  printf("    ------ ---------- --------\n");
+
+  EXEC SQL DECLARE c0 CURSOR FOR
+    SELECT empno, salary, workdept FROM employee WHERE workdept = 'E11';
+
+  EXEC SQL OPEN c0;
+  EMB_SQL_CHECK("cursor -- open");
+
+  EXEC SQL FETCH c0 INTO :empno, :salary, :workdept;
+  EMB_SQL_CHECK("cursor -- fetch");
+
+  while (sqlca.sqlcode != 100)
+  {
+    printf("    %-6s %10.2f %-8s\n", empno, salary, workdept);
+
+    EXEC SQL FETCH c0 INTO :empno, :salary, :workdept;
+    EMB_SQL_CHECK("cursor -- fetch");
+  }
+
+  EXEC SQL CLOSE c0;
+  EMB_SQL_CHECK("cursor -- close");
+
+  /* delete the table data using subquery in WHERE clause */
+  printf("\n  Invoke the statement\n");
+  printf("    DELETE FROM staff\n");
+  printf("      WHERE id >= 310 AND\n");
+  printf("            job != 'Sales' AND\n");
+  printf("            salary > (SELECT AVG(salary)\n");
+  printf("                        FROM employee\n");
+  printf("                        WHERE workdept = 'E11')\n");
+
+  EXEC SQL DELETE FROM staff
+    WHERE id >= 310 AND
+          job != 'Sales' AND
+          salary > (SELECT AVG(salary)
+                      FROM employee
+                      WHERE workdept = 'E11');
+  EMB_SQL_CHECK("table -- insert using values");
+
+  /* display content of final table */
+  rc = StaffTbContentDisplay();
+
+  /* rollback the transaction */
+  TransRollback();
+
+  return 0;
+} /* DeleteUsingSubqueryInWhereClause */
+
+int DeleteUsingCorrelatedSubqueryInWhereClause(void)
+{
+  int rc = 0;
+  struct sqlca sqlca;
+
+  printf("\n-----------------------------------------------------------");
+  printf("\nUSE THE SQL STATEMENT:\n");
+  printf("  DELETE\n");
+  printf("TO DELETE TABLE DATA\n");
+  printf("USING A CORRELATED SUBQUERY IN 'WHERE' CLAUSE.\n");
+
+  /* display initial content of the table */
+  rc = StaffTbContentDisplay();
+
+  /* delete the table data using correlated subquery in WHERE clause */
+  printf("\n  Invoke the statement\n");
+  printf("    DELETE FROM staff s1\n");
+  printf("      WHERE id >= 310 AND\n");
+  printf("            job != 'Sales' AND\n");
+  printf("            salary < (SELECT AVG(salary)\n");
+  printf("                        FROM staff s2\n");
+  printf("                        WHERE s2.dept = s1.dept)\n");
+
+  EXEC SQL DELETE FROM staff s1
+    WHERE id >= 310 AND
+          job != 'Sales' AND
+          salary < (SELECT AVG(salary)
+                      FROM staff s2
+                      WHERE s2.dept = s1.dept);
+  EMB_SQL_CHECK("table -- delete using correl. subquery in WHERE clause");
+
+  /* display content of final table */
+  rc = StaffTbContentDisplay();
+
+  /* rollback the transaction */
+  TransRollback();
+
+  return 0;
+} /* TbDeleteUsingCorrelatedSubqueryInWhereClause */
+
+int PositionedDelete(void)
+{
+  int rc = 0;
+  struct sqlca sqlca;
+
+  printf("\n-----------------------------------------------------------");
+  printf("\nUSE THE SQL STATEMENTS:\n");
+  printf("  DECLARE CURSOR\n");
+  printf("  OPEN\n");
+  printf("  FETCH\n");
+  printf("  DELETE\n");
+  printf("  CLOSE\n");
+  printf("TO PERFORM POSITIONED DELETE ON A ROW.\n");
+
+  /* display initial content of the table */
+  rc = StaffTbContentDisplay();
+
+  printf("\n  Invoke the statements:\n");
+  printf("    DECLARE posCur4 CURSOR FOR\n");
+  printf("      SELECT name, dept FROM staff WHERE id >= 310 AND job != 'Sales' \n");
+  printf("    OPEN posCur4\n");
+  printf("    FETCH posCur4 INTO :name, :dept\n");
+  printf("    while (successful fetch)\n");
+  printf("    {\n");
+  printf("      if (dept != 84)\n");
+  printf("      {\n");
+  printf("        DELETE FROM staff WHERE CURRENT OF posCur4\n");
+  printf("      }\n");
+  printf("      FETCH posCur4 INTO :name, :dept\n");
+  printf("    }\n");
+
+  /* declare cursor */
+  EXEC SQL DECLARE posCur4 CURSOR FOR
+    SELECT name, dept FROM staff WHERE id >= 310 AND job != 'Sales' ;
+
+  /* open cursor */
+  EXEC SQL OPEN posCur4;
+  EMB_SQL_CHECK("cursor -- open");
+
+  /* fetch cursor */
+  EXEC SQL FETCH posCur4 INTO :name, :dept;
+  EMB_SQL_CHECK("cursor -- fetch");
+
+  while (sqlca.sqlcode != 100)
+  {
+    if (dept != 84)
+    {
+      EXEC SQL DELETE FROM staff WHERE CURRENT OF posCur4;
+      EMB_SQL_CHECK("table -- positioned delete");
+    }
+
+    EXEC SQL FETCH posCur4 INTO :name, :dept;
+    EMB_SQL_CHECK("cursor -- fetch");
+  }
+
+  /* close cursor */
+  EXEC SQL CLOSE posCur4;
+  EMB_SQL_CHECK("cursor -- close");
+
+  /* display content of final table */
+  rc = StaffTbContentDisplay();
+
+  /* rollback the transaction */
+  TransRollback();
+
+  return 0;
+} /* PositionedDelete */
+
+int CreateTableForSample(void)
+{
+  int rc = 0;
+  struct sqlca sqlca;
+
+  /* delete the table data without subqueries */
+  printf("\n  Create table for the sample \n");
+
+  EXEC SQL create table staff like staff;
+  EMB_SQL_CHECK("create table staff");
+
+  EXEC SQL insert into staff select * from staff;
+  EMB_SQL_CHECK("insert data in table staff");
+
+  return 0;
+} /* CreateTableForSample */
+

@@ -1,0 +1,35 @@
+<xsd:schema xmlns:xsd="http://www.w3.org/2001/XMLSchema" 
+            targetNamespace="http://www.test.com/po" 
+            xmlns:po="http://www.test.com/po"
+            xmlns:head="http://www.test.com/header"
+            xmlns:prod = "http://www.test.com/product"
+            xmlns:cust = "http://www.test.com/customer">
+
+<xsd:import namespace="http://www.test.com/product" schemaLocation="product.xsd" />
+<xsd:import namespace="http://www.test.com/customer" schemaLocation="customer.xsd" />
+<xsd:import namespace="http://www.test.com/header" schemaLocation="header.xsd" />
+<xsd:complexType name="itemType">
+<xsd:sequence>
+  <xsd:element name="Item" minOccurs="1" maxOccurs="unbounded" >
+    <xsd:complexType>
+       <xsd:sequence>
+         <xsd:element name="ItemDescription" type="prod:prodType" />
+         <xsd:element name="NumberOrdered" type="xsd:integer" />
+       </xsd:sequence>
+    </xsd:complexType>
+  </xsd:element>
+</xsd:sequence>
+</xsd:complexType>
+
+<xsd:complexType name="potype">
+<xsd:sequence>
+  <xsd:element name="Header"   type="head:headerType"  />
+  <xsd:element name="Items"    type="po:itemType" />
+  <xsd:element name="Customer" type="cust:customerType" />
+</xsd:sequence>
+</xsd:complexType>
+
+<xsd:element name="PurchaseOrder" type="po:potype" />
+
+</xsd:schema>
+

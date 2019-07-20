@@ -1,0 +1,2052 @@
+/******************************************************************************
+ *
+ * Source File Name = db2uext2.ctape 
+ *
+ * Licensed Materials - Property of IBM
+ *
+ * (C) COPYRIGHT International Business Machines Corp. 1996.
+ * All Rights Reserved
+ *
+ * US Government Users Restricted Rights - Use, duplication or
+ * disclosure restricted by GSA ADP Schedule Contract with IBM Corp.
+ *
+ * Function = Sample Log Management User Exit C Source Code
+ *
+ *****************************************************************************/
+
+/*****************************************************************************/
+/*                                                                           */
+/* Sample Name: db2uext2.ctape                                               */
+/*                                                                           */
+/*                                                                           */
+/* Purpose:    This is a sample User Exit utilizing the AIX system tape      */
+/*             commands to Archive and Retrieve database log files.  All     */
+/*             limitations of the AIX system tape commands are limitations   */
+/*             of this user exit.                                            */
+/*                                                                           */
+/*                                                                           */
+/* Options:    1. This sample provides an audit trail of calls ( stored in a */
+/*                separate file for each option ) including a timestamp and  */
+/*                parameters received.  This option can be disabled.         */
+/*                                                                           */
+/*             2. This sample provides an error trail of calls in error      */
+/*                including a timestamp and an error isolation string for    */
+/*                problem determination.  This option can be disabled.       */
+/*                                                                           */
+/*                                                                           */
+/* Usage:      1. Copy "db2uext2.ctape" to "db2uext2.c" and place this file  */
+/*                into a working directory.                                  */
+/*                                                                           */
+/*             2. Modify the "Installation Defined Variables" to suit your   */
+/*                environment.  Two example scenarios have been provided     */
+/*                below for illustrative purposes.                           */
+/*                                                                           */
+/*             3. Modify the program logic to suit your environment.  If     */
+/*                there are situations where the user exit program fails on  */
+/*                archive request and you want DB2 to retry the request, set */
+/*                the return code to RC_OPATTN.                              */
+/*                                                                           */
+/*             4. Compile and link "db2uext2.c" with the following command:  */
+/*                "cc -o db2uext2 db2uext2.c" or a functional equivalent.    */
+/*                Place the resultant "db2uext2" named executable            */
+/*                into sqllib/adm.                                           */
+/*                                                                           */
+/*                *** NOTE ***  Code/command modification may be required    */
+/*                              depending on compiler options used and       */
+/*                              header file location                         */
+/*                                                                           */
+/*             5. DB2 calls "db2uext2" in the following format -             */
+/*                                                                           */
+/*                  db2uext2 -OS<os> -RL<release> -RQ<request> -DB<dbname>   */
+/*                           -NN<nodenumber> -LP<logpath> -LN<logname>       */
+/*                           [-AP<adsmpasswd>]                               */
+/*                                                                           */
+/*                  where:  os         = operating system                    */
+/*                          release    = DB2 release                         */
+/*                          request    = 'ARCHIVE' or 'RETRIEVE'             */
+/*                          dbname     = database name                       */
+/*                          nodenumber = node number                         */
+/*                          logpath    = log file path                       */
+/*                          logname    = log file name                       */
+/*                          adsmpasswd = ADSM password (optional)            */
+/*                                                                           */
+/*             6. This user exit is designed to handle both archiving and    */
+/*                retrieving to and from the SAME tape.  As such, the        */
+/*                performance tends to slow down as the tape fills.  We have */
+/*                listed performance tips you may wish to make to improve    */
+/*                the performance.                                           */
+/*                                                                           */
+/*             7. Log files are archived and retrieved from tape with the    */
+/*                following file naming convention:                          */
+/*                                                                           */
+/*                    database name + . + node number + . + log file name    */
+/*                                                                           */
+/*                For example: If the database name was "SAMPLE", the node   */
+/*                             number was NODE0000 and the log file name was */
+/*                             "S0000001.LOG", the image of the log file     */
+/*                             would be named "SAMPLE.NODE0000.S0000001.LOG" */
+/*                                                                           */
+/*             Note: This sample program may not work properly on multiple   */
+/*                   logical nodes, because multiple instances of the user   */
+/*                   exit may attempt to remove or create the temporary      */
+/*                   directory at the same time.                             */
+/*                                                                           */
+/*                                                                           */
+/* Logic Flow: 1. install signal handlers                                    */
+/*             2. verify the number of parameters passed                     */
+/*             3. verify the action requested                                */
+/*             4. start the audit trail ( if requested )                     */
+/*             5. cleanup the working environment by removing and creating   */
+/*                a temporary directory to hold the archived or retrieved    */
+/*                log file before/after transferring it to/from tape         */
+/*             6. if the requested action is to archive a file:              */
+/*                . copy the log file to be archived from the log path to    */
+/*                  the temporary directory                                  */
+/*                 if the log file is not found, proceed to point 16         */
+/*             7. open the tape                                              */
+/*             8. rewind the tape                                            */
+/*             9. close the tape                                             */
+/*            10. if the requested action is to archive a file:              */
+/*                . search the tape to find the next available location      */
+/*                  and store the location for future use                    */
+/*                if the requested action is to retrieve a file:             */
+/*                . search the tape to find the file and store the location  */
+/*                  for future use                                           */
+/*                . if the log file is not found, proceed to point 16        */
+/*            11. open the tape                                              */
+/*            12. rewind the tape                                            */
+/*            13. forward the tape to the stored location                    */
+/*            14. close the tape                                             */
+/*            15. if the requested action is to archive a file:              */
+/*                . copy the log file from the temporary directory onto      */
+/*                  the tape                                                 */
+/*                if the requested action is to retrieve a file:             */
+/*                . copy the log file to the temporary directory from the    */
+/*                  tape                                                     */
+/*                . copy the retrieved log file from the temporary directory */
+/*                  to the log path                                          */
+/*            16. cleanup the working environment by removing the temporary  */
+/*                directory                                                  */
+/*            17. log errors ( if requested and required )                   */
+/*            18. end the audit trail ( if requested )                       */
+/*            19. exit with the appropriate return code                      */
+/*                                                                           */
+/*                                                                           */
+/* Performance                                                               */
+/* Tips:       1. Archiving files to tape                                    */
+/*                . If you can guarantee that no retrieving of files will    */
+/*                  take place when you are archiving, you will be able      */
+/*                  to remove the logic listed in points 7 to 14.            */
+/*                  This may improve performance drastically as no rewinding */
+/*                  or file searching will be attempted.                     */
+/*                  However, before connecting to the database, you must     */
+/*                  forward the tape to the point after the last file on the */
+/*                  tape to prevent the logs from overwriting existing data. */
+/*                . If you make the change listed above, do not use a device */
+/*                  configured for automatic rewinding as you will be        */
+/*                  constantly overwriting the first file on the tape.       */
+/*                                                                           */
+/*             2. Retrieving files from tape                                 */
+/*                . If you can guarantee that no archiving of files will     */
+/*                  take place then you are retrieving and the log files     */
+/*                  being retrieved were archived in order to the same tape  */
+/*                  and the tape does not contain log files from any other   */
+/*                  database, you will be able to remove the logic listed in */
+/*                  points 7 to 14. This may improve performance drastically */
+/*                  as no rewinding or file searching will be attempted.     */
+/*                  However, before connecting to the database, you must     */
+/*                  forward the tape to the point at which the first log     */
+/*                  file to be retrieved resides to prevent an incorrect log */
+/*                  file from being retrieved.                               */
+/*                . If you make the change listed above, do not use a device */
+/*                  configured for automatic rewinding as you will be        */
+/*                  constantly reading the first file on the tape.           */
+/*                                                                           */
+/*                                                                           */
+/*****************************************************************************/
+
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+#include <time.h>
+#include <signal.h>
+#include <errno.h>
+#include <sys/types.h>
+#include <fcntl.h>
+#include <sys/ioctl.h>
+#include <sys/tape.h>
+#include <unistd.h>
+
+/*===========================================================================*/
+/*==                                                                       ==*/
+/*== ------------------ INSTALLATION DEFINED VARIABLES ------------------- ==*/
+/*==                                                                       ==*/
+/*== -------------------- REQUIRES USER MODIFICATION --------------------- ==*/
+/*==                                                                       ==*/
+/*===========================================================================*/
+/*== TAPE_DEV:  Physical name of the tape device                           ==*/
+/*==            Notes: 1. this user exit is designed for a tape device in  ==*/
+/*==                      non-rewinding mode ( ie. rmtx.1 )                ==*/
+/*==                   2. any change to the device may require             ==*/
+/*==                      modification to the user exit logic              ==*/
+/*==                   3. the default device is "/dev/rmt0.1"              ==*/
+/*==                                                                       ==*/
+/*== TAPE_PERM: Tape device open permissions                               ==*/
+/*==            Notes: 1. the default permissions are "0666"               ==*/
+/*==                                                                       ==*/
+/*== TEMP_DIR:  Temporary directory used to store tape image of the log    ==*/
+/*==            file to be archived or retrieved                           ==*/
+/*==            Notes: 1. will be CREATED and REMOVED by the user exit     ==*/
+/*==                   2. the default temporary directory is               ==*/
+/*==                      "/tmp/UserExits"                                 ==*/
+/*==                                                                       ==*/
+/*== AUDIT_ACTIVE:  The user may wish an audit trail of the user exit run. ==*/
+/*==                Sample audit functions have been provided              ==*/
+/*==                ( AuditLogStart() and AuditLogEnd() )                  ==*/
+/*==                Notes: 1. enable audit logging by setting AUDIT_ACTIVE ==*/
+/*==                          to 1                                         ==*/
+/*==                       2. disable audit logging by setting             ==*/
+/*==                          AUDIT_ACTIVE to 0                            ==*/
+/*==                       3. archive requests will be traced in a file    ==*/
+/*==                          named "ARCHIVE.LOG" located in the audit and ==*/
+/*==                          error file path                              ==*/
+/*==                       4. retrieve requests will be traced in a file   ==*/
+/*==                          named "RETRIEVE.LOG" located in the audit    ==*/
+/*==                          and error file path                          ==*/
+/*==                       5. the default setting is enable audit          ==*/
+/*==                          logging                                      ==*/
+/*==                                                                       ==*/
+/*== ERROR_ACTIVE:  The user may wish an error trail of the user exit run. ==*/
+/*==                A sample error log function has been provided          ==*/
+/*==                ( ErrorLog() )                                         ==*/
+/*==                Notes: 1. enable error logging by setting ERROR_ACTIVE ==*/
+/*==                          to 1                                         ==*/
+/*==                       2. disable error logging by setting             ==*/
+/*==                          ERROR_ACTIVE to 0                            ==*/
+/*==                       3. errors will be traced in a file named        ==*/
+/*==                          "USEREXIT.ERR" located in the audit and      ==*/
+/*==                          error file path                              ==*/
+/*==                       4. the default setting is enable error          ==*/
+/*==                          logging                                      ==*/
+/*==                                                                       ==*/
+/*== AUDIT_ERROR_PATH: Path where Audit and Error logs will reside         ==*/
+/*==                   Notes: 1. the path must exist ( the user exit will  ==*/
+/*==                             not create the path )                     ==*/
+/*==                          2. the path must end with a back slash       ==*/
+/*==                          3. do not make the path the same as TEMP_DIR ==*/
+/*==                             ( TEMP_DIR is removed )                   ==*/
+/*==                          4. the default is "/u/"                      ==*/
+/*==                                                                       ==*/
+/*== AUDIT_ERROR_ATTR: Standard C file open attributes for the Audit and   ==*/
+/*==                   Error logs                                          ==*/
+/*==                   Notes: 1. the default is "a" (text append)          ==*/
+/*==                                                                       ==*/
+
+#define TAPE_DEV       "/dev/rmt0.1"       /* non-rewinding device           */
+#define TAPE_PERM               666        /* tape permissions               */
+#define TEMP_DIR    "/tmp/UserExits"       /* created and removed by the     */
+                                           /* user exit                      */
+
+#define AUDIT_ACTIVE               1       /* enable audit trail logging     */
+#define ERROR_ACTIVE               1       /* enable error trail logging     */
+#define AUDIT_ERROR_PATH       "/u/"       /* path must end with a slash     */
+#define AUDIT_ERROR_ATTR         "a"       /* append to text file            */
+
+
+/*===========================================================================*/
+/*==                                                                       ==*/
+/*== ------------------------ EXAMPLE SCENARIOS -------------------------- ==*/
+/*==                  ( FOR ILLUSTRATIVE PURPOSES ONLY )                   ==*/
+/*==                                                                       ==*/
+/*===========================================================================*/
+/*==                                                                       ==*/
+/*== 1) Given that we are "userid1", are working with a database           ==*/
+/*==    named "SAMPLE1" on node NODE0001 and have modified the             ==*/
+/*==    installation defined variables to the following values:            ==*/
+/*==                                                                       ==*/
+/*==        TAPE_DEV          "/dev/rmt0.1"                                ==*/
+/*==        TEMP_DIR          "/tmp/UserExits"                             ==*/
+/*==        AUDIT_ACTIVE      1                                            ==*/
+/*==        ERROR_ACTIVE      1                                            ==*/
+/*==        AUDIT_ERROR_PATH  "/u/userid1/AuditLogs/"                      ==*/
+/*==        AUDIT_ERROR_ATTR  "a"                                          ==*/
+/*==                                                                       ==*/
+/*==    If a request is received to archive log S0000000.LOG:              ==*/
+/*==                                                                       ==*/
+/*==    . the audit log would be opened in append text mode and be named:  ==*/
+/*==      ==> "/u/userid1/AuditLogs/ARCHIVE.LOG"                           ==*/
+/*==          ( AUDIT_ERROR_PATH + archive audit log file name )           ==*/
+/*==                                                                       ==*/
+/*==    . a temporary directory would be created and be named:             ==*/
+/*==      ==> "/tmp/UserExits"                                             ==*/
+/*==          ( TEMP_DIR )                                                 ==*/
+/*==                                                                       ==*/
+/*==    . a tape image name for the log file would be created named:       ==*/
+/*==      ==> "SAMPLE1.NODE0001.S0000000.LOG"                              ==*/
+/*==          ( database name + node number + log file name )              ==*/
+/*==                                                                       ==*/
+/*==    . the log file would be copied from the log path directory         ==*/
+/*==      for database "SAMPLE1" to the temporary directory as:            ==*/
+/*==      ==> "/tmp/UserExits/SAMPLE1.NODE0001.S0000000.LOG"               ==*/
+/*==          ( TEMP_DIR + temporary log file name )                       ==*/
+/*==                                                                       ==*/
+/*==    . the temporary directory log file image would be archived to:     ==*/
+/*==      ==> "/dev/rmt0.1" as "SAMPLE1.NODE0001.S0000000.LOG"             ==*/
+/*==          ( TAPE_DEV )            ( tape image name )                  ==*/
+/*==                                                                       ==*/
+/*==    . the error log would be opened in append text mode and be named:  ==*/
+/*==      ==> "/u/userid1/AuditLogs/USEREXIT.ERR"                          ==*/
+/*==          ( AUDIT_ERROR_PATH + error log file name ( defined below ) ) ==*/
+/*==                                                                       ==*/
+/*==                                                                       ==*/
+/*== 2) Given that we are "userid2", are working with a database           ==*/
+/*==    named "SAMPLE2" on node NODE0000 and have modified the             ==*/
+/*==    installation defined variables to the following values:            ==*/
+/*==                                                                       ==*/
+/*==        TAPE_DEV          "/dev/rmt2.1"                                ==*/
+/*==        TEMP_DIR          "/u/userid2/tmp"                             ==*/
+/*==        AUDIT_ACTIVE      1                                            ==*/
+/*==        ERROR_ACTIVE      0                                            ==*/
+/*==        AUDIT_ERROR_PATH  "/u/userid2/Audit/Logs/"                     ==*/
+/*==        AUDIT_ERROR_ATTR  "w"                                          ==*/
+/*==                                                                       ==*/
+/*==    If a request is received to retrieve log S0000001.LOG:             ==*/
+/*==                                                                       ==*/
+/*==    . the audit log would be opened in write text mode and be named:   ==*/
+/*==      ==> "/u/userid2/Audit/Logs/RETRIEVE.LOG"                         ==*/
+/*==          ( AUDIT_ERROR_PATH + retrieve audit log file name )          ==*/
+/*==                                                                       ==*/
+/*==    . a temporary directory would be created and be named:             ==*/
+/*==      ==> "/u/userid2/tmp"                                             ==*/
+/*==          ( TEMP_DIR )                                                 ==*/
+/*==                                                                       ==*/
+/*==    . a tape image name for the log file would be created named:       ==*/
+/*==      ==> "SAMPLE2.NODE0000.S0000001.LOG"                              ==*/
+/*==          ( database name + node number log file name )                ==*/
+/*==                                                                       ==*/
+/*==    . the tape log file image would be retrieved from:                 ==*/
+/*==      ==> "/dev/rmt2.1" as "SAMPLE2.NODE0000.S0000001.LOG"             ==*/
+/*==      and placed into the temporary directory as:                      ==*/
+/*==      ==> "/u/userid2/tmp/SAMPLE2.NODE0000.S0000001.LOG"               ==*/
+/*==          ( TEMP_DIR + tape image name )                               ==*/
+/*==                                                                       ==*/
+/*==    . the tape image would be copied from the temporary directory to   ==*/
+/*==      the log path directory for database "SAMPLE2" as:                ==*/
+/*==      ==> "S0000001.LOG"                                               ==*/
+/*==          ( log file name )                                            ==*/
+/*==                                                                       ==*/
+/*==    . the error log would not be activated                             ==*/
+/*==                                                                       ==*/
+/*===========================================================================*/
+
+
+/* ----------------------------------------------------------------- */
+/* User Exit Supported Return Codes                                  */
+/*    NOTE: DB2 will reinvoke the user exit for the same request     */
+/*          after 5 minutes if return code is 4 or 8.                */
+/*                                                                   */
+/*          For other non-zero return codes, DB2 will not invoke     */
+/*          user exit for the database for at least 5 minutes.       */
+/*          If this request is to archive a log file, DB2 will not   */
+/*          make another archive request for this file, or other     */
+/*          log files produced during the 5 minute time period.      */
+/*          These log files will only be archived when all           */
+/*          applications disconnect from and the database, and the   */
+/*          database is reopenned.                                   */
+/* ----------------------------------------------------------------- */
+#define RC_OK                  0  /* ok                              */
+#define RC_RES                 4  /* resource allocation error       */
+#define RC_OPATTN              8  /* operator/user attention required*/
+#define RC_HARDWARE           12  /* hardware error                  */
+#define RC_DEFECT             16  /* software error                  */
+#define RC_PARM               20  /* invalid parameters              */
+#define RC_NOTFOUND           24  /* db2uext2() / file not found     */
+#define RC_UNKNOWN            28  /* unknown error                   */
+#define RC_OPCAN              32  /* operator/user terminated        */
+
+
+/* ----------------------------------------------------------------- */
+/* User Exit Constants                                               */
+/* ----------------------------------------------------------------- */
+#define NUM_VALID_PARMS        5  /* number of valid parameters      */
+#define SLASH                "/"  /* default slash character         */
+#define NEW_LINE            "\n"  /* new line character              */
+#define NULL_TERM           "\0"  /* null terminator                 */
+#define FILE_EXT          ".LOG"  /* audit log file extension/type   */
+#define MEDIA_TYPE        "tape"  /* media type used                 */
+#define AUDIT_IO_ERROR        99  /* audit log I/O error             */
+#define SYSTEM_CALL_LEN      550  /* system call string length       */
+#define OUTPUT_LINE_LEN      550  /* output line length              */
+#define FILE_NAME_LEN        255  /* file name length                */
+#define HELP_STRING_LEN       80  /* error help string length        */
+#define DELIMITER_LEN         80  /* delimiter length                */
+#define PIPE_COMMAND_LEN      80  /* pipe command length             */
+#define TAPE_FILE_LEN         32  /* tape file name length           */
+#define COPY                "cp"  /* disk copy command               */
+#define MKDIR            "mkdir"  /* make directory command          */
+#define RMDIR           "rm -rf"  /* remove command (with force)     */
+#define CHANGE_DIR          "cd"  /* change directory command        */
+#define DOT                  "."  /* file name separator             */
+#define SEMI_COLON           ";"  /* command separator               */
+
+#define ARCHIVE_COMMAND   "tar -cvf" /* copy file to tape command    */
+#define RETRIEVE_COMMAND  "tar -xvf" /* copy file from tape command  */
+#define QUERY_COMMAND     "tar -tf"  /* query file on tape command   */
+#define ERROR_FILE_NAME   "USEREXIT.ERR"
+                                     /* error log file name          */
+
+
+/* ----------------------------------------------------------------- */
+/* Define TRUE and FALSE if required                                 */
+/* ----------------------------------------------------------------- */
+#ifndef TRUE
+#  define  TRUE   1
+#endif
+
+#ifndef FALSE
+#  define  FALSE  0
+#endif
+
+/* ----------------------------------------------------------------- */
+/* Define structure for input parameters                             */
+/* ----------------------------------------------------------------- */
+typedef struct input_parms
+{
+   int   argc;
+   char* adsmPasswd;
+   char* dbName;
+   char* logFile;
+   char* label;
+   char* logFilePath;
+   char* mode;
+   char* nodeNumber;
+   char* operatingSys;
+   char* redFile;
+   char* responseFile;
+   char* release;
+   char* request;
+} INPUT_PARMS;
+
+/* ----------------------------------------------------------------- */
+/* Print error to Error Log macro                                    */
+/* ----------------------------------------------------------------- */
+#define PrintErr  { if ( ERROR_ACTIVE )                               \
+                    {                                                 \
+                      ErrorLog( inputParms, auditFileName,            \
+                               systemCallParms, userExitRc,           \
+                               errorHelpString) ;                     \
+                    }                                                 \
+                  }
+
+
+/* ----------------------------------------------------------------- */
+/* User Exit Function Prototypes for Archive, Retrieve and Data      */
+/* Manipulation                                                      */
+/* ----------------------------------------------------------------- */
+unsigned int
+     ArchiveFile( char *,            /* system call parameters       */
+                  char *,            /* tape file image name         */
+                  char * ) ;         /* error isolation string       */
+
+unsigned int
+     RetrieveFile( char *,           /* system call parameters       */
+                   char *,           /* tape file image name         */
+                   char * ) ;        /* error isolation string       */
+
+void RemoveTempDir() ;               /* no parameters                */
+
+unsigned int
+     CreateTempDir( char *,          /* system call parameters       */
+                    char * ) ;       /* error isolation string       */
+
+unsigned int
+     CopyFile( char *,               /* system call parameters       */
+               char *,               /* tape file image name         */
+               INPUT_PARMS *,        /* input parameters structure   */
+               unsigned int *,       /* file missing flag            */
+               char * ) ;            /* error isolation string       */
+
+
+/* ----------------------------------------------------------------- */
+/* User Exit Function Prototypes for Tape Management                 */
+/* ----------------------------------------------------------------- */
+unsigned int
+     TapeOpen( signed int *,         /* tape device file descriptor  */
+               char * ) ;            /* error isolation string       */
+
+unsigned int
+     TapeClose( signed int,          /* tape device file descriptor  */
+                char * ) ;           /* error isolation string       */
+
+unsigned int
+     TapeRewind( signed   int,       /* tape device file descriptor  */
+                 char * ) ;          /* error isolation string       */
+
+unsigned int
+     TapeForward( signed   int,      /* tape device file descriptor  */
+                  unsigned int,      /* positional tape file count   */
+                  char * ) ;         /* error isolation string       */
+
+unsigned int
+     TapeFileSearch( char *,         /* tape file name               */
+                     unsigned int *, /* positional tape file count   */
+                     unsigned int *, /* file missing flag            */
+                     char * ) ;      /* error isolation string       */
+
+
+/* ----------------------------------------------------------------- */
+/* User Exit Function Prototype for Signal Handler                   */
+/* ----------------------------------------------------------------- */
+void SignalEnd( int ) ;              /* signal type                  */
+
+
+/* ----------------------------------------------------------------- */
+/* User Exit Function Prototypes for Audit and Error Logs            */
+/* ----------------------------------------------------------------- */
+unsigned int
+     AuditLogStart( INPUT_PARMS *,   /* input parameter structure    */
+                    char *,          /* audit file name (with path)  */
+                    char *);         /* error isolation string       */
+
+unsigned int
+     AuditLogEnd( char *,            /* audit file name (with path)  */
+                  unsigned int,      /* user exit return code        */
+                  char * );          /* error isolation string       */
+
+void ErrorLog(  INPUT_PARMS *,       /* input parameter structure    */
+                char *,              /* audit file name (with path)  */
+                char *,              /* system call parameter string */
+                unsigned int,        /* user exit return code        */
+                char * ) ;           /* error isolation string       */
+
+unsigned int
+   ParseArguments( int ,             /* input parameter count        */
+                   char * [] ,       /* input paramter list          */
+                   INPUT_PARMS * ,   /* input parameter structure    */
+                   char * ) ;        /* error help string            */
+
+unsigned int
+   PrintArguments( FILE *,           /* output file pointer          */
+                   INPUT_PARMS * ) ; /* input parameter structure    */
+
+
+/* ----------------------------------------------------------------- */
+/* User Exit Global Variables                                        */
+/* ----------------------------------------------------------------- */
+unsigned int  archiveRequested  ;    /* archive requested flag       */
+unsigned int  retrieveRequested ;    /* retrieve requested flag      */
+
+
+/*********************************************************************/
+/* User Exit Mainline                                                */
+/*********************************************************************/
+int main( int argc, char *argv[] )
+{
+   unsigned int  userExitRc ;             /* user exit return code   */
+   unsigned int  auditLogRc ;             /* return call from audit  */
+
+   INPUT_PARMS  inputParmsStruct;
+   INPUT_PARMS *inputParms = &inputParmsStruct;
+
+   signed   int  tapeDevFD ;              /* tape dev file descriptor*/
+   unsigned int  fileCount ;              /* positional file count   */
+   unsigned int  fileMissing ;            /* file missing flag       */
+   char          systemCallParms[ SYSTEM_CALL_LEN ] ;
+                                          /* system call parm string */
+   char          auditFileName[ FILE_NAME_LEN ] ;
+                                          /* audit log file name     */
+   char          tapeFileName[ TAPE_FILE_LEN ] ;
+                                          /* tape image file name    */
+   char          errorHelpString[ HELP_STRING_LEN ] ;
+                                          /* error help string       */
+   char          dummyHelpString[ HELP_STRING_LEN ] ;
+                                          /* dummy help string       */
+
+   /* -------------------------------------------------------------- */
+   /* Initialize variables                                           */
+   /* -------------------------------------------------------------- */
+   archiveRequested  = FALSE ;
+   retrieveRequested = FALSE ;
+   userExitRc        = RC_OK ;
+   auditLogRc        = RC_OK ;
+   tapeDevFD         = 0 ;
+   fileCount         = 0 ;
+   fileMissing       = FALSE ;
+   memset( inputParms, '\0', sizeof(INPUT_PARMS) );
+   memset( systemCallParms, '\0', SYSTEM_CALL_LEN ) ;
+   memset( auditFileName,   '\0', FILE_NAME_LEN   ) ;
+   memset( tapeFileName,    '\0', TAPE_FILE_LEN   ) ;
+   memset( errorHelpString, '\0', HELP_STRING_LEN ) ;
+   memset( dummyHelpString, '\0', HELP_STRING_LEN ) ;
+
+   /* -------------------------------------------------------------- */
+   /* Install signal handlers for terminate and interrupt            */
+   /* -------------------------------------------------------------- */
+   if (( signal( SIGTERM, SignalEnd ) == SIG_ERR ) ||
+       ( signal( SIGINT,  SignalEnd ) == SIG_ERR ))
+   {
+      userExitRc = RC_DEFECT ;              /* handler not installed */
+
+      sprintf( errorHelpString, "%s%s",
+               "Unable to install signal handler(s)", NEW_LINE ) ;
+
+      PrintErr ;
+   }
+
+   /* -------------------------------------------------------------- */
+   /* Set the local variables to the passed parameters               */
+   /* -------------------------------------------------------------- */
+   if ( userExitRc == RC_OK )
+   {
+      userExitRc = ParseArguments( argc, argv, inputParms,
+                                   errorHelpString ) ;
+   }
+
+   if ( userExitRc == RC_OK )
+   {
+
+      /* ----------------------------------------------------------- */
+      /* Determine the user exit action                              */
+      /* ----------------------------------------------------------- */
+      if ( (inputParms->request != NULL) &&
+           (strcmp( inputParms->request, "ARCHIVE" ) == 0 ) )
+      {
+         archiveRequested = TRUE ;          /* action is ARCHIVE     */
+      }
+      else
+      {
+         if ( (inputParms->request != NULL) &&
+              (strcmp( inputParms->request, "RETRIEVE" ) == 0 ) )
+         {
+            retrieveRequested = TRUE ;      /* action is RETRIEVE    */
+         }
+         else
+         {
+            userExitRc = RC_PARM ;          /* invalid action        */
+
+            sprintf( errorHelpString, "%s %s %s%s", "Action",
+                     inputParms->request, "is not valid", NEW_LINE ) ;
+
+            PrintErr ;
+         }
+      }
+   }
+
+   if ( userExitRc == RC_OK )
+   {
+      /* ----------------------------------------------------------- */
+      /* Trace the start of execution if the user has asked for an   */
+      /* audit log                                                   */
+      /* ----------------------------------------------------------- */
+      if ( AUDIT_ACTIVE )
+      {
+         sprintf( auditFileName,            /* audit log file name   */
+                  "%s%s%s",                 /* format of the name    */
+                  AUDIT_ERROR_PATH,         /* audit log file path   */
+                  inputParms->request,      /* ARCHIVE or RETRIEVE   */
+                  FILE_EXT ) ;              /* file extension/type   */
+
+         auditLogRc = AuditLogStart(
+                          inputParms,       /* input parms astructure*/
+                          auditFileName,    /* audit log file name   */
+                          errorHelpString );/* error isolation string*/
+
+         if ( auditLogRc == AUDIT_IO_ERROR )/* IO error on audit log */
+         {
+            PrintErr ;
+         }
+      }
+
+      /* ----------------------------------------------------------- */
+      /* Remove and create a temporary directory to hold the log to  */
+      /* be archived or retrieved                                    */
+      /* ----------------------------------------------------------- */
+      RemoveTempDir() ;
+
+      userExitRc = CreateTempDir( systemCallParms,
+                                  errorHelpString ) ;
+
+      if ( userExitRc == RC_OK )
+      {
+         /* -------------------------------------------------------- */
+         /* Create the file name to be archived or retrieved         */
+         /* -------------------------------------------------------- */
+         sprintf( tapeFileName,
+                  "%s%s%s%s%s%s",
+                  inputParms->dbName,       /* database name         */
+                  DOT,                      /* .                     */
+                  inputParms->nodeNumber,   /* node number           */
+                  DOT,                      /* .                     */
+                  inputParms->logFile,      /* log file name         */
+                  NULL_TERM ) ;
+
+         /* -------------------------------------------------------- */
+         /* On an archive, copy the log file to the temporary        */
+         /* directory under the tape file name alias                 */
+         /* -------------------------------------------------------- */
+         if ( archiveRequested )
+         {
+            userExitRc = CopyFile( systemCallParms,
+                                   tapeFileName,
+                                   inputParms,
+                                   &fileMissing,
+                                   errorHelpString ) ;
+         }
+
+         /* -------------------------------------------------------- */
+         /* Open, rewind and close the tape device                   */
+         /* -------------------------------------------------------- */
+         if (( userExitRc == RC_OK ) &&
+             ( !fileMissing ))
+         {
+            memset( systemCallParms, '\0', SYSTEM_CALL_LEN ) ;
+
+            userExitRc = TapeOpen( &tapeDevFD,
+                                   errorHelpString ) ;
+
+            if ( userExitRc == RC_OK )
+            {
+               userExitRc = TapeRewind( tapeDevFD,
+                                        errorHelpString ) ;
+
+               if ( userExitRc == RC_OK )
+               {
+                  userExitRc = TapeClose( tapeDevFD,
+                                          errorHelpString ) ;
+               }
+               else
+               {
+                  ( void )  TapeClose( tapeDevFD,
+                                       dummyHelpString ) ;
+               }
+            }
+         }
+
+         /* -------------------------------------------------------- */
+         /* Search the tape for the next available spot in the case  */
+         /* of an archive or the actual file in the case of a        */
+         /* retrieve                                                 */
+         /* -------------------------------------------------------- */
+         if (( userExitRc == RC_OK ) &&
+             ( !fileMissing ))
+         {
+            userExitRc = TapeFileSearch( tapeFileName,
+                                         &fileCount,
+                                         &fileMissing,
+                                         errorHelpString ) ;
+         }
+
+         /* -------------------------------------------------------- */
+         /* Open, rewind and forward the tape to the appropriate     */
+         /* location                                                 */
+         /* -------------------------------------------------------- */
+         if (( userExitRc == RC_OK ) &&
+             ( !fileMissing ))
+         {
+            userExitRc = TapeOpen( &tapeDevFD,
+                                   errorHelpString ) ;
+
+            if ( userExitRc == RC_OK )
+            {
+               userExitRc = TapeRewind( tapeDevFD,
+                                        errorHelpString ) ;
+
+               if ( userExitRc == RC_OK )
+               {
+                  userExitRc = TapeForward( tapeDevFD,
+                                            fileCount,
+                                            errorHelpString ) ;
+               }
+
+               if ( userExitRc == RC_OK )
+               {
+                  userExitRc = TapeClose( tapeDevFD,
+                                          errorHelpString ) ;
+               }
+               else
+               {
+                  ( void ) TapeClose( tapeDevFD,
+                                      dummyHelpString ) ;
+               }
+            }
+         }
+
+         /* -------------------------------------------------------- */
+         /* If all is well, archive or retrieve the file             */
+         /* -------------------------------------------------------- */
+         if (( userExitRc == RC_OK ) &&
+             ( !fileMissing ))
+         {
+            if ( archiveRequested )
+            {
+               userExitRc = ArchiveFile( systemCallParms,
+                                         tapeFileName,
+                                         errorHelpString ) ;
+            }
+            else
+            {
+               userExitRc = RetrieveFile( systemCallParms,
+                                          tapeFileName,
+                                          errorHelpString ) ;
+
+               /* -------------------------------------------------- */
+               /* The retrieved file must be copied from the temp    */
+               /* directory, renamed and placed into the log path    */
+               /* -------------------------------------------------- */
+               if ( userExitRc == RC_OK )
+               {
+                  userExitRc = CopyFile( systemCallParms,
+                                         tapeFileName,
+                                         inputParms,
+                                         &fileMissing,
+                                         errorHelpString ) ;
+               }
+            }
+         }
+
+         /* -------------------------------------------------------- */
+         /* Remove the temporary directory                           */
+         /* -------------------------------------------------------- */
+         RemoveTempDir() ;
+      }
+
+      /* ----------------------------------------------------------- */
+      /* Trace any errors                                            */
+      /* ----------------------------------------------------------- */
+      if ( userExitRc != RC_OK )
+      {
+         PrintErr ;
+      }
+
+      /* ----------------------------------------------------------- */
+      /* Trace the end of execution if the user has asked for an     */
+      /* audit log                                                   */
+      /* ----------------------------------------------------------- */
+      if (( AUDIT_ACTIVE ) &&
+          ( auditLogRc != AUDIT_IO_ERROR ))
+      {
+         auditLogRc = AuditLogEnd (
+                       auditFileName,       /* audit log file name   */
+                       userExitRc,          /* user exit return code */
+                       errorHelpString ) ;  /* error isolation string*/
+
+         if ( auditLogRc == AUDIT_IO_ERROR )/* IO error on audit log */
+         {
+            PrintErr ;
+         }
+      }
+   }
+
+   /* -------------------------------------------------------------- */
+   /* Return the specified value to the caller                       */
+   /* -------------------------------------------------------------- */
+   exit( userExitRc ) ;
+}
+
+
+/*********************************************************************/
+/* ArchiveFile() - Archive a log file to tape from a temporary       */
+/*                 directory.                                        */
+/*********************************************************************/
+unsigned int
+   ArchiveFile( char *systemCallParms,
+                char *tapeFileName,
+                char *errorHelpString )
+{
+   /* -------------------------------------------------------------- */
+   /* Declare and initialize variables                               */
+   /* -------------------------------------------------------------- */
+   unsigned int rc = RC_OK ;                /* function return code  */
+   signed   int systemCallRc = RC_OK ;      /* system call rc        */
+
+   /* -------------------------------------------------------------- */
+   /* Construct the archive system call string                       */
+   /* -------------------------------------------------------------- */
+   sprintf( systemCallParms,
+            "%s %s%s %s %s %s%s",
+            CHANGE_DIR,                     /* change directory      */
+            TEMP_DIR,                       /* temporary directory   */
+            SEMI_COLON,                     /* ;                     */
+            ARCHIVE_COMMAND,                /* archive ( tar )       */
+            TAPE_DEV,                       /* tape device           */
+            tapeFileName,                   /* tape file name        */
+            NULL_TERM ) ;
+
+   systemCallRc = system( systemCallParms ) ;
+
+   if ( systemCallRc != RC_OK )
+   {
+      rc = RC_UNKNOWN ;                     /* command error         */
+
+      sprintf( errorHelpString, "%s %s %s%s", "Error archiving file",
+               tapeFileName, "to tape", NEW_LINE ) ;
+   }
+   else
+   {
+      rc = RC_OK ;                          /* successful archive    */
+   }
+
+   return( rc ) ;
+}
+
+
+/*********************************************************************/
+/* RetrieveFile() - Retrieve a log file from tape and place it in a  */
+/*                  temporary directory.                             */
+/*********************************************************************/
+unsigned int
+   RetrieveFile( char *systemCallParms,
+                 char *tapeFileName,
+                 char *errorHelpString )
+{
+   /* -------------------------------------------------------------- */
+   /* Declare and initialize variables                               */
+   /* -------------------------------------------------------------- */
+   unsigned int rc = RC_OK ;                /* function return code  */
+   signed   int systemCallRc = RC_OK ;      /* system call rc        */
+
+   /* -------------------------------------------------------------- */
+   /* Construct the retrieve system call string                      */
+   /* -------------------------------------------------------------- */
+   sprintf( systemCallParms,
+            "%s %s%s %s %s %s%s",
+            CHANGE_DIR,                     /* change directory      */
+            TEMP_DIR,                       /* temporary directory   */
+            SEMI_COLON,                     /* ;                     */
+            RETRIEVE_COMMAND,               /* retrieve ( tar )      */
+            TAPE_DEV,                       /* tape device           */
+            tapeFileName,                   /* tape file name        */
+            NULL_TERM ) ;
+
+   systemCallRc = system( systemCallParms ) ;
+
+   if ( systemCallRc != RC_OK )
+   {
+      rc = RC_UNKNOWN ;                     /* command error         */
+
+      sprintf( errorHelpString, "%s %s %s%s", "Error retrieving file",
+               tapeFileName, "from tape", NEW_LINE ) ;
+   }
+   else
+   {
+      rc = RC_OK ;                          /* successful retrieve   */
+   }
+
+   return( rc ) ;
+}
+
+
+/*********************************************************************/
+/* RemoveTempDir() -  Remove the temporary directory containing the  */
+/*                    log file to be archived/retrieved to/from tape.*/
+/*********************************************************************/
+void RemoveTempDir()
+{
+   /* -------------------------------------------------------------- */
+   /* Declare and initialize variables                               */
+   /* -------------------------------------------------------------- */
+   char removeCallString[SYSTEM_CALL_LEN]; /* remove dir string      */
+
+   memset( removeCallString, '\0', SYSTEM_CALL_LEN ) ;
+
+   /* -------------------------------------------------------------- */
+   /* Construct the remove directory system call string              */
+   /* -------------------------------------------------------------- */
+   sprintf( removeCallString,
+            "%s %s%s",
+            RMDIR,                          /* remove with force     */
+            TEMP_DIR,                       /* temporary directory   */
+            NULL_TERM ) ;
+
+   system( removeCallString ) ;
+}
+
+
+/*********************************************************************/
+/* CreateTempDir() -  Create the temporary directory which will      */
+/*                    contain the log to be archived/retrieved       */
+/*                    to/from tape.                                  */
+/*********************************************************************/
+unsigned int
+   CreateTempDir( char *systemCallParms,
+                  char *errorHelpString )
+{
+   /* -------------------------------------------------------------- */
+   /* Declare and initialize variables                               */
+   /* -------------------------------------------------------------- */
+   unsigned int rc = RC_OK ;                /* function return code  */
+   signed   int systemCallRc = RC_OK ;      /* system call rc        */
+
+   /* -------------------------------------------------------------- */
+   /* Construct the make directory system call string                */
+   /* -------------------------------------------------------------- */
+   sprintf( systemCallParms,
+            "%s %s%s",
+            MKDIR,                          /* make directory        */
+            TEMP_DIR,                       /* temporary directory   */
+            NULL_TERM ) ;
+
+   systemCallRc = system( systemCallParms ) ;
+
+   if ( systemCallRc != RC_OK )
+   {
+      rc = RC_UNKNOWN ;                     /* could not create dir  */
+
+      sprintf( errorHelpString, "%s %s%s",
+               "Error creating directory", TEMP_DIR, NEW_LINE ) ;
+   }
+   else
+   {
+      rc = RC_OK ;                          /* successful creation   */
+   }
+
+   return( rc ) ;
+}
+
+
+/*********************************************************************/
+/* CopyFile() -  Copy a log file to/from the temporary directory     */
+/*               from/to the database log directory for a specific   */
+/*               database.                                           */
+/*********************************************************************/
+unsigned int
+   CopyFile( char         *systemCallParms,
+             char         *tapeFileName,
+             INPUT_PARMS  *inputParms,
+             unsigned int *fileMissing,
+             char         *errorHelpString )
+{
+   /* -------------------------------------------------------------- */
+   /* Declare and initialize variables                               */
+   /* -------------------------------------------------------------- */
+   FILE         *tempFp = NULL  ;           /* temporary file pointer*/
+   unsigned int  rc     = RC_OK ;           /* function return code  */
+   signed   int  systemCallRc = RC_OK ;     /* system call rc        */
+   char          fileToArchive[ FILE_NAME_LEN ] ;
+                                            /* file to be archived   */
+
+   /* -------------------------------------------------------------- */
+   /* Construct the copy system call string depending on whether an  */
+   /* archive or retrieve request was received                       */
+   /* -------------------------------------------------------------- */
+   if ( archiveRequested )                  /* ARCHIVE in progress   */
+   {
+      sprintf( systemCallParms,
+               "%s %s%s %s%s%s%s",
+               COPY,                        /* copy                  */
+               inputParms->logFilePath,     /* log file path         */
+               inputParms->logFile,         /* log file name         */
+               TEMP_DIR,                    /* temporary directory   */
+               SLASH,                       /* slash                 */
+               tapeFileName,                /* constructed file name */
+               NULL_TERM ) ;
+
+   }
+   else                                     /* RETRIEVE in progress  */
+   {
+      sprintf( systemCallParms,
+               "%s %s%s%s %s%s%s",
+               COPY,                        /* copy                  */
+               TEMP_DIR,                    /* temporary directory   */
+               SLASH,                       /* slash                 */
+               tapeFileName,                /* constructed file name */
+               inputParms->logFilePath,     /* log file path         */
+               inputParms->logFile,         /* log file name         */
+               NULL_TERM ) ;
+   }
+
+   systemCallRc = system( systemCallParms ) ;
+
+   if ( systemCallRc != RC_OK )
+   {
+      /* ----------------------------------------------------------- */
+      /* If we are archiving the log file, check to see if it exists */
+      /* in the log path                                             */
+      /* ----------------------------------------------------------- */
+      if ( archiveRequested )
+      {
+         memset( fileToArchive, '\0', FILE_NAME_LEN ) ;
+
+         sprintf( fileToArchive,            /* file to be archived   */
+                  "%s%s%s",                 /* format of parm string */
+                  inputParms->logFilePath,  /* log file path         */
+                  inputParms->logFile,      /* log file name         */
+                  NULL_TERM ) ;
+
+         if (( tempFp = fopen( fileToArchive, "rb" )) == NULL )
+         {
+            if (errno == ENOENT)
+            {
+                rc = RC_OK;                
+                strcpy(errorHelpString, 
+                       "File does not exist, assume it is already archived.");
+            }
+            else
+            {
+                rc = RC_UNKNOWN;   
+                sprintf(errorHelpString, 
+                        "Fail to open the log file %s, errno = %d%s",
+                        fileToArchive, errno, NEW_LINE);
+            }
+
+            *fileMissing = TRUE ;           /* file not found        */
+         }
+         else
+         {
+            ( void ) fclose( tempFp ) ;     /* close the file        */
+
+            sprintf(errorHelpString,"%s %s %s %s%s%s%s",
+                    "Error copying",fileToArchive,"to",TEMP_DIR,
+                    SLASH,tapeFileName,NEW_LINE) ;
+
+            rc = RC_UNKNOWN ;               /* could not copy file   */
+         }
+      }
+      else
+      {
+         rc = RC_UNKNOWN ;                  /* could not copy file   */
+
+         sprintf(errorHelpString,"%s %s%s%s %s %s%s%s","Error copying",
+                 TEMP_DIR, SLASH, tapeFileName, "to",
+                 inputParms->logFilePath, inputParms->logFile,
+                 NEW_LINE ) ;
+      }
+   }
+   else
+   {
+      rc = RC_OK ;                          /* successful copy       */
+   }
+
+   return( rc ) ;
+}
+
+
+/*********************************************************************/
+/* TapeOpen() - Open a tape device.                                  */
+/*********************************************************************/
+unsigned int
+   TapeOpen( signed int *tapeDevFD,
+             char       *errorHelpString )
+{
+   /* -------------------------------------------------------------- */
+   /* Declare and initialize variables                               */
+   /* -------------------------------------------------------------- */
+   unsigned int rc = RC_OK ;                /* function return code  */
+
+   /* -------------------------------------------------------------- */
+   /* Open the tape device in READ/WRITE mode using user defined     */
+   /* permissions                                                    */
+   /* -------------------------------------------------------------- */
+   *tapeDevFD = open( TAPE_DEV,             /* tape device name      */
+                      O_RDWR,               /* open mode             */
+                      TAPE_PERM ) ;         /* tape permissions      */
+
+   if ( *tapeDevFD == -1 )                  /* error opening device  */
+   {
+      rc = RC_HARDWARE ;                    /* tape problem          */
+
+      sprintf( errorHelpString,"%s %s %d %s%s","Error opening device",
+               TAPE_DEV,O_RDWR,TAPE_PERM,NEW_LINE ) ;
+   }
+   else
+   {
+      rc = RC_OK ;                          /* successful open       */
+   }
+
+   return( rc ) ;
+}
+
+/*********************************************************************/
+/* TapeClose() -  Close a tape device.                               */
+/*********************************************************************/
+unsigned int
+   TapeClose( signed int  tapeDevFD,
+              char       *errorHelpString )
+{
+   /* -------------------------------------------------------------- */
+   /* Declare and initialize variables                               */
+   /* -------------------------------------------------------------- */
+   unsigned int rc     = RC_OK ;            /* function return code  */
+   signed   int tapeRc = RC_OK ;            /* tape close rc         */
+
+   /* -------------------------------------------------------------- */
+   /* Close the device identified by the file descriptor             */
+   /* -------------------------------------------------------------- */
+   tapeRc = close( tapeDevFD ) ;
+
+   if ( tapeRc != RC_OK )                   /* error closing device  */
+   {
+      rc = RC_HARDWARE ;                    /* tape problem          */
+
+      sprintf( errorHelpString,"%s %s%s","Error closing device",
+               TAPE_DEV,NEW_LINE ) ;
+   }
+   else
+   {
+      rc = RC_OK ;                          /* successful close      */
+   }
+
+   return( rc ) ;
+}
+
+
+/*********************************************************************/
+/* TapeRewind() - Rewind a tape.                                     */
+/*********************************************************************/
+unsigned int
+   TapeRewind( signed int  tapeDevFD,
+               char       *errorHelpString )
+{
+   /* -------------------------------------------------------------- */
+   /* Declare and initialize variables                               */
+   /* -------------------------------------------------------------- */
+   unsigned int  rc     = RC_OK ;           /* function return code  */
+   signed   int  tapeRc = RC_OK ;           /* tape ioctl() rc       */
+   struct   stop tapeOperation  ;           /* ioctl() values        */
+
+   tapeOperation.st_op    = STREW ;         /* rewind                */
+   tapeOperation.st_count = 1  ;            /* to the beginning      */
+
+   /* -------------------------------------------------------------- */
+   /* Call ioctl() to rewind the tape to the beginning               */
+   /* -------------------------------------------------------------- */
+   tapeRc = ioctl( tapeDevFD,               /* file descriptor       */
+                   STIOCTOP,                /* ioctl for tape        */
+                   &tapeOperation ) ;       /* rewind operation      */
+
+   if ( tapeRc != RC_OK )                   /* error rewinding tape  */
+   {
+      rc = RC_HARDWARE ;                    /* tape problem          */
+
+      sprintf( errorHelpString,"%s %s%s","Error rewinding device",
+               TAPE_DEV,NEW_LINE ) ;
+   }
+   else
+   {
+      rc = RC_OK ;                          /* successful rewind     */
+   }
+
+   return( rc ) ;
+
+}
+
+
+/*********************************************************************/
+/* TapeForward() - Fast forward the tape to a specified point.       */
+/*********************************************************************/
+unsigned int
+   TapeForward( signed   int  tapeDevFD,
+                unsigned int  fileCount,
+                char         *errorHelpString )
+{
+   /* -------------------------------------------------------------- */
+   /* Declare and initialize variables                               */
+   /* -------------------------------------------------------------- */
+   unsigned int  rc     = RC_OK ;           /* function return code  */
+   signed   int  tapeRc = RC_OK ;           /* tape ioctl() rc       */
+   struct   stop tapeOperation  ;           /* ioctl() values        */
+
+   tapeOperation.st_op    = STFSF ;         /* fast forward          */
+   tapeOperation.st_count = ( daddr_t ) fileCount ;
+                                            /* specified file count  */
+
+   /* -------------------------------------------------------------- */
+   /* Call ioctl() to fast forward the tape to the specified point   */
+   /* -------------------------------------------------------------- */
+   tapeRc = ioctl( tapeDevFD,               /* file descriptor       */
+                   STIOCTOP,                /* ioctl for tape        */
+                   &tapeOperation ) ;       /* forward operation     */
+
+   if ( tapeRc != RC_OK )                   /* error fast forwarding */
+   {
+      rc = RC_HARDWARE ;                    /* tape problem          */
+
+      sprintf( errorHelpString,"%s %s %s %d%s",
+               "Error forwarding device",TAPE_DEV,"to",
+               fileCount, NEW_LINE ) ;
+   }
+   else
+   {
+      rc = RC_OK ;                          /* successful forward    */
+   }
+
+   return( rc ) ;
+}
+
+
+/*********************************************************************/
+/* TapeFileSearch() - Search the tape for a specified file.          */
+/*********************************************************************/
+unsigned int
+   TapeFileSearch( char         *tapeFileName,
+                   unsigned int *fileCount,
+                   unsigned int *fileMissing,
+                   char         *errorHelpString )
+{
+   /* -------------------------------------------------------------- */
+   /* Declare and initialize variables                               */
+   /* -------------------------------------------------------------- */
+   FILE         *commandPtr ;               /* received from popen() */
+   unsigned int  fileNotFound ;             /* file found indicator  */
+   unsigned int  endOfTapeData ;            /* end of tape indicator */
+   unsigned int  rc ;                       /* function return code  */
+   char          popenCommand[ PIPE_COMMAND_LEN ] ;
+                                            /* pipe command string   */
+   char          fileOnTape[ TAPE_FILE_LEN ] ;
+                                            /* file name on tape     */
+   char          fileRequested[ TAPE_FILE_LEN] ;
+                                            /* file name requested   */
+
+   char         *emptyFileName = "" ;       /* empty file name       */
+
+   commandPtr    = NULL  ;
+   fileNotFound  = TRUE  ;
+   endOfTapeData = FALSE ;
+   rc            = RC_OK ;
+   *fileMissing  = FALSE ;
+   memset( popenCommand, '\0', PIPE_COMMAND_LEN ) ;
+   memset( fileOnTape,   '\0', TAPE_FILE_LEN ) ;
+   memset( fileRequested,'\0', TAPE_FILE_LEN ) ;
+
+   /* -------------------------------------------------------------- */
+   /* Construct the requested file name by appending a new line      */
+   /* character string to the tape file name passed to the function  */
+   /* -------------------------------------------------------------- */
+   sprintf( fileRequested,
+            "%s%s",
+            tapeFileName,                   /* tape file name        */
+            NEW_LINE ) ;
+
+   /* -------------------------------------------------------------- */
+   /* Construct the command for popen() to query the name of the     */
+   /* next file on tape                                              */
+   /* -------------------------------------------------------------- */
+   sprintf( popenCommand,
+            "%s %s%s",
+            QUERY_COMMAND,                  /* tape query command    */
+            TAPE_DEV,                       /* tape device           */
+            NULL_TERM ) ;
+
+   /* -------------------------------------------------------------- */
+   /* Issue query commands until the file is found or we reach the   */
+   /* end of data on the tape. Keep track of the current file count  */
+   /* on the tape.                                                   */
+   /* -------------------------------------------------------------- */
+   while (( fileNotFound    ) &&
+          ( !endOfTapeData  ) &&
+          ( !( *fileMissing )))
+   {
+      (*fileCount)++ ;                      /* increment file count  */
+
+      memset( fileOnTape, '\0', TAPE_FILE_LEN ) ;
+
+      /* ----------------------------------------------------------- */
+      /* Open a pipe to receive file names from tape. The popen()    */
+      /* will issue a tar query command to display the next file     */
+      /* on tape ( which will be read by the fread() ).              */
+      /* ----------------------------------------------------------- */
+      commandPtr = popen( popenCommand, "r" ) ;
+
+      if ( commandPtr != NULL )             /* open was successful   */
+      {
+         /* -------------------------------------------------------- */
+         /* Read the file name from the pipe                         */
+         /* -------------------------------------------------------- */
+         fread( fileOnTape, 1, TAPE_FILE_LEN, commandPtr ) ;
+
+         /* -------------------------------------------------------- */
+         /* If the file at this location is the one to be retrieved, */
+         /* set the file found flag                                  */
+         /* -------------------------------------------------------- */
+         if (( retrieveRequested ) &&
+             ( strcmp( fileOnTape, fileRequested ) == 0 ))
+         {
+            fileNotFound = FALSE ;
+         }
+         else
+         {
+            /* ----------------------------------------------------- */
+            /* If we have found an available location and we are     */
+            /* archiving a file, set the end of tape data flag.  If  */
+            /* we are retrieving a file, it does not reside on this  */
+            /* tape.                                                 */
+            /* ----------------------------------------------------- */
+            if ( strcmp( fileOnTape, emptyFileName ) == 0 )
+            {
+               if ( archiveRequested )
+               {
+                  endOfTapeData = TRUE ;
+               }
+               else
+               {
+                  rc = RC_OK ;              /* file not found while  */
+                                            /* retrieving is ok      */
+                  *fileMissing = TRUE ;
+               }
+            }
+         }
+
+         /* -------------------------------------------------------- */
+         /* Close the pipe                                           */
+         /* -------------------------------------------------------- */
+         pclose( commandPtr ) ;
+
+      }
+      else
+      {
+         rc = RC_UNKNOWN ;                  /* could not open pipe   */
+
+         sprintf( errorHelpString,"%s%s","Error opening pipe",
+                  NEW_LINE ) ;
+      }
+   }
+
+   /* -------------------------------------------------------------- */
+   /* Decrement the file count by one as we have counted the last    */
+   /* file read and when fast forwarding, we want to position the    */
+   /* tape to the point before this file                             */
+   /* -------------------------------------------------------------- */
+   (*fileCount)-- ;
+
+   return( rc ) ;
+}
+
+/*********************************************************************/
+/* SignalEnd() - If a signal has been raised for which we have       */
+/*               installed a handler, perform the following:         */
+/*                 . trace the signal in the error log  (if enabled) */
+/*                 . exit the user exit with a RC_OPCAN return code  */
+/*********************************************************************/
+void SignalEnd( int sigNum )
+{
+   unsigned int userExitRc ;              /* user exit return code   */
+   char         errorHelpString[ HELP_STRING_LEN ] ;
+                                          /* error help string       */
+
+   /* -------------------------------------------------------------- */
+   /* Set the user exit return code to operator cancelled            */
+   /* -------------------------------------------------------------- */
+   userExitRc = RC_OPCAN ;
+
+   /* -------------------------------------------------------------- */
+   /* Log the error if the error log has been requested              */
+   /* -------------------------------------------------------------- */
+   if ( ERROR_ACTIVE )
+   {
+      memset( errorHelpString, '\0', HELP_STRING_LEN ) ;
+
+      sprintf( errorHelpString,"%s %d %s %s%s","Signal",sigNum,
+               ( sigNum == SIGTERM ) ? "(SIGTERM)" : "(SIGINT)",
+               "has been raised",NEW_LINE ) ;
+
+      ErrorLog( NULL, NULL, NULL, userExitRc, errorHelpString ) ;
+   }
+
+   /* -------------------------------------------------------------- */
+   /* Exit the user exit with the appropriate return code            */
+   /* -------------------------------------------------------------- */
+   exit( userExitRc ) ;
+}
+
+
+/*********************************************************************/
+/* AuditLogStart() - Log the following at user exit entrance:        */
+/*                     1. time system call was made                  */
+/*                     2. parameters passed to the user exit         */
+/*                     3. media type                                 */
+/*********************************************************************/
+unsigned int
+   AuditLogStart( INPUT_PARMS *inputParms,
+                  char *auditFileName,
+                  char *errorHelpString )
+{
+   FILE         *auditLogFp ;          /* pointer to audit log file  */
+   unsigned int  auditLogRc ;          /* AuditLogStart() return code*/
+   time_t        actionTime ;          /* date and time of exit start*/
+   char          outputLine[ OUTPUT_LINE_LEN ] ;
+                                       /* line to be written to log  */
+
+   /* -------------------------------------------------------------- */
+   /* Initialize variables                                           */
+   /* -------------------------------------------------------------- */
+   auditLogFp = NULL  ;
+   auditLogRc = RC_OK ;
+   memset( &actionTime,   0, sizeof( actionTime )) ;
+   memset( outputLine, '\0', OUTPUT_LINE_LEN     ) ;
+
+   /* -------------------------------------------------------------- */
+   /* Open the audit log file using the appropriate file name and    */
+   /* user defined file attributes                                   */
+   /* -------------------------------------------------------------- */
+   auditLogFp = fopen( auditFileName, AUDIT_ERROR_ATTR ) ;
+
+   /* -------------------------------------------------------------- */
+   /* If the audit log file opened successfully, write the data to   */
+   /* the file                                                       */
+   /* -------------------------------------------------------------- */
+   if ( auditLogFp != NULL )
+   {
+      memset( outputLine, '*', DELIMITER_LEN ) ;
+      outputLine[ DELIMITER_LEN ] = '\n' ;
+
+      if (( fprintf( auditLogFp, outputLine ) ) <= 0 )
+         auditLogRc = AUDIT_IO_ERROR ;
+
+      time( &actionTime ) ;            /* time user exit started     */
+      sprintf( outputLine,
+               "%s%s%s",
+               "Time Started:      ",
+               ctime( &actionTime ),
+               NEW_LINE ) ;
+
+      if (( fprintf( auditLogFp, outputLine ) ) <= 0 )
+         auditLogRc = AUDIT_IO_ERROR ;
+
+      if ( PrintArguments( auditLogFp, inputParms ) != RC_OK )
+         auditLogRc = AUDIT_IO_ERROR ;
+
+      sprintf( outputLine,             /* system action              */
+               "%s %s %s%s %s %s%s",
+               "System Action:    ",
+               inputParms->request,
+               inputParms->logFilePath,
+               inputParms->logFile,
+               ( archiveRequested ) ? "to" : "from",
+               TAPE_DEV,
+               NEW_LINE ) ;
+
+      if (( fprintf( auditLogFp, outputLine ) ) <= 0 )
+         auditLogRc = AUDIT_IO_ERROR ;
+
+      sprintf( outputLine,             /* user defined media type    */
+               "%s %s%s",
+               "Media Type:       ",
+               MEDIA_TYPE,
+               NEW_LINE ) ;
+
+      if (( fprintf( auditLogFp, outputLine ) ) <= 0 )
+         auditLogRc = AUDIT_IO_ERROR ;
+
+      /* ----------------------------------------------------------- */
+      /* If an error was encountered during the audit log write      */
+      /* ----------------------------------------------------------- */
+      if ( auditLogRc == AUDIT_IO_ERROR )
+      {
+         sprintf( errorHelpString,"%s%s",
+                  "Error writing to the Audit Log file", NEW_LINE ) ;
+
+         ( void ) fclose( auditLogFp ) ;
+      }
+      else
+      {
+         if ( fclose( auditLogFp ) )
+         {
+            auditLogRc = AUDIT_IO_ERROR ;
+
+            sprintf( errorHelpString, "%s%s",
+                     "Error closing Audit Log file", NEW_LINE ) ;
+         }
+      }
+   }
+   else                                     /* error opening file    */
+   {
+      auditLogRc = AUDIT_IO_ERROR ;
+
+      sprintf( errorHelpString,"%s%s",
+               "Error opening Audit Log file",NEW_LINE ) ;
+   }
+
+   return( auditLogRc ) ;
+}
+
+
+/*********************************************************************/
+/* AuditLogEnd() - Log the following at user exit end:               */
+/*                   1. time system call returned                    */
+/*                   2. user exit return code                        */
+/*********************************************************************/
+unsigned int
+   AuditLogEnd( char         *auditFileName,
+                unsigned int  userExitRc,
+                char         *errorHelpString )
+{
+   FILE         *auditLogFp ;          /* pointer to audit log file  */
+   unsigned int  auditLogRc ;          /* AuditLogEnd() return code  */
+   time_t        actionTime ;          /* date and time of exit end  */
+   char          outputLine[OUTPUT_LINE_LEN];
+                                       /* line to be written to log  */
+
+   /* -------------------------------------------------------------- */
+   /* Initialize variables                                           */
+   /* -------------------------------------------------------------- */
+   auditLogFp = NULL  ;
+   auditLogRc = RC_OK ;
+   memset( &actionTime,   0, sizeof( actionTime )) ;
+   memset( outputLine, '\0', OUTPUT_LINE_LEN ) ;
+
+   /* -------------------------------------------------------------- */
+   /* Open the audit log file using the appropriate file name and    */
+   /* user defined file attributes                                   */
+   /* -------------------------------------------------------------- */
+   auditLogFp = fopen( auditFileName, AUDIT_ERROR_ATTR ) ;
+
+   /* -------------------------------------------------------------- */
+   /* If the audit log file opened successfully, write the data to   */
+   /* the file                                                       */
+   /* -------------------------------------------------------------- */
+   if ( auditLogFp != NULL )
+   {
+      sprintf( outputLine,             /* user exit return code      */
+               "%s %d            %s%s",
+               "User Exit RC:     ",
+               userExitRc,
+               ( userExitRc ) ? "|||> ERROR <|||" : errorHelpString,
+               NEW_LINE ) ;
+
+      if (( fprintf( auditLogFp, outputLine )) <= 0 )
+         auditLogRc = AUDIT_IO_ERROR ;
+
+      time( &actionTime ) ;            /* time system call completed */
+      sprintf( outputLine,
+               "%s %s%s",
+               "Time Completed:   ",
+               ctime( &actionTime ),
+               NEW_LINE ) ;
+
+      if (( fprintf( auditLogFp, outputLine )) <= 0 )
+         auditLogRc = AUDIT_IO_ERROR ;
+
+      /* ----------------------------------------------------------- */
+      /* If an error was encountered during the audit log write      */
+      /* ----------------------------------------------------------- */
+      if ( auditLogRc == AUDIT_IO_ERROR )
+      {
+         sprintf( errorHelpString, "%s%s",
+                  "Error writing to the Audit Log file",NEW_LINE ) ;
+
+         ( void ) fclose( auditLogFp ) ;    /* close the audit log   */
+      }
+      else
+      {
+         if ( fclose( auditLogFp ) )        /* close the audit log   */
+         {
+            auditLogRc = AUDIT_IO_ERROR ;
+
+            sprintf( errorHelpString,"%s%s",
+                     "Error closing Audit Log file", NEW_LINE ) ;
+         }
+      }
+   }
+   else                                     /* error opening file    */
+   {
+      auditLogRc = AUDIT_IO_ERROR ;
+
+      sprintf( errorHelpString,"%s%s",
+               "Error opening Audit Log file", NEW_LINE ) ;
+   }
+
+   return( auditLogRc ) ;
+}
+
+
+/*********************************************************************/
+/* ErrorLog() - Log the following if an error has occurred:          */
+/*                . time the error occurred                          */
+/*                . values of all parameters passed to the user      */
+/*                  exit at the time of the error                    */
+/*                . media type                                       */
+/*                . audit log file name                              */
+/*                . system call string                               */
+/*                . user exit return code                            */
+/*                . error isolation help string                      */
+/*********************************************************************/
+void ErrorLog( INPUT_PARMS *inputParms,
+               char        *auditFileName,
+               char        *systemCallParms,
+               unsigned int userExitRc,
+               char        *errorHelpString )
+{
+   FILE   *errorLogFp ;                /* pointer to error log file  */
+   time_t  actionTime ;                /* date and time of error     */
+   char    outputLine[ OUTPUT_LINE_LEN ] ;
+                                       /* line to be written to log  */
+   char    errorFileName[ FILE_NAME_LEN ] ;
+                                       /* error log file name        */
+
+   /* -------------------------------------------------------------- */
+   /* Initialize variables                                           */
+   /* -------------------------------------------------------------- */
+   errorLogFp = NULL ;
+   memset( &actionTime,      0, sizeof( actionTime )) ;
+   memset( outputLine,    '\0', OUTPUT_LINE_LEN ) ;
+   memset( errorFileName, '\0', FILE_NAME_LEN   ) ;
+
+   /* -------------------------------------------------------------- */
+   /* Open the error log file using the user defined name and file   */
+   /* attributes                                                     */
+   /* -------------------------------------------------------------- */
+   sprintf( errorFileName,
+            "%s%s",
+            AUDIT_ERROR_PATH,          /* error log path             */
+            ERROR_FILE_NAME ) ;        /* error log file name        */
+
+   errorLogFp = fopen( errorFileName, AUDIT_ERROR_ATTR ) ;
+
+   /* -------------------------------------------------------------- */
+   /* If the error log file opened successfully, write the available */
+   /* data to the file                                               */
+   /* -------------------------------------------------------------- */
+   if ( errorLogFp != NULL )
+   {
+      memset( outputLine, '*', DELIMITER_LEN ) ;
+      outputLine[ DELIMITER_LEN ] = '\n' ;
+      fprintf( errorLogFp, outputLine ) ;
+
+      time( &actionTime ) ;            /* time error occurred        */
+      sprintf( outputLine,
+               "%s %s%s",
+               "Time of Error:    ",
+               ctime( &actionTime ),
+               NEW_LINE ) ;
+      fprintf( errorLogFp, outputLine ) ;
+
+
+      if ( inputParms != NULL )        /* parmeters passed to user   */
+      {                                /* exit                       */
+         (void) PrintArguments( errorLogFp, inputParms ) ;
+      }
+
+      sprintf( outputLine,             /* audit log file name        */
+               "%s %s%s",
+               "Audit Log File:   ",
+               auditFileName,
+               NEW_LINE ) ;
+      fprintf( errorLogFp, outputLine ) ;
+
+      sprintf( outputLine,             /* system call string         */
+               "%s %s%s",
+               "System Call Parms:",
+               systemCallParms,
+               NEW_LINE ) ;
+      fprintf( errorLogFp, outputLine ) ;
+
+      sprintf( outputLine,             /* user defined media type    */
+               "%s %s%s",
+               "Media Type:       ",
+               MEDIA_TYPE,
+               NEW_LINE ) ;
+      fprintf( errorLogFp, outputLine ) ;
+
+      sprintf( outputLine,             /* user exit return code      */
+               "%s %d %s%s",
+               "User Exit RC:     ",
+               userExitRc,
+               NEW_LINE,
+               NEW_LINE ) ;
+      fprintf( errorLogFp, outputLine ) ;
+
+      sprintf( outputLine,             /* error isolation string     */
+               "%s %s%s%s",
+               "> Error isolation:",
+               errorHelpString,
+               NEW_LINE,
+               NEW_LINE ) ;
+      fprintf( errorLogFp, outputLine ) ;
+
+      /* ----------------------------------------------------------- */
+      /* Close the error log file                                    */
+      /* ----------------------------------------------------------- */
+      fclose( errorLogFp ) ;
+   }
+
+   return ;
+}
+
+
+unsigned int
+   ParseArguments( int argc ,
+                   char *argv[] ,
+                   INPUT_PARMS *inputParms ,
+                   char *errorHelpString )
+{
+   int parseRc;                      /* ParseArguments() return code */
+   int count;                        /* index for for loop           */
+   char *argument;                   /* pointer to argument          */
+   int  parmLen;                     /* length of parameter          */
+   int  parmIden;                    /* parameter identifier         */
+   char *parmValue;                  /* parameter value              */
+
+
+   /* -------------------------------------------------------------- */
+   /* Initialize variables                                           */
+   /* -------------------------------------------------------------- */
+   parseRc = RC_OK ;
+   count   = 1 ;
+
+   /* -------------------------------------------------------------- */
+   /* Copy values into inputParms structure.                         */
+   /* -------------------------------------------------------------- */
+   inputParms->argc = argc;
+
+   while ( ( count < argc ) && ( parseRc == RC_OK) )
+   {
+      argument = argv[count];
+
+      parmLen = strlen(argument);
+      if (parmLen < 4)
+      {
+        parseRc = RC_PARM;
+        break;
+      }
+
+      parmIden = ((argument[2]) | (argument[1] << 8) | (argument[0] << 16));
+      parmValue = &argument[3];
+
+#define INPUT_PARM_AP 0x2d4150    /* -AP */
+#define INPUT_PARM_DB 0x2d4442    /* -DB */
+#define INPUT_PARM_LN 0x2d4c4e    /* -LN */
+#define INPUT_PARM_LB 0x2d4c42    /* -LB */
+#define INPUT_PARM_LP 0x2d4c50    /* -LP */
+#define INPUT_PARM_MD 0x2d4d44    /* -MD */
+#define INPUT_PARM_NN 0x2d4e4e    /* -NN */
+#define INPUT_PARM_OS 0x2d4f53    /* -OS */
+#define INPUT_PARM_RD 0x2d5244    /* -RD */
+#define INPUT_PARM_RF 0x2d5246    /* -RF */
+#define INPUT_PARM_RL 0x2d524c    /* -RL */
+#define INPUT_PARM_RQ 0x2d5251    /* -RQ */
+
+      switch(parmIden)
+      {
+        case INPUT_PARM_AP:            /* ADSM password              */
+           inputParms->adsmPasswd = parmValue;
+           break;
+        case INPUT_PARM_DB:            /* database name              */
+           inputParms->dbName = parmValue;
+           break;
+        case INPUT_PARM_LN:            /* log file name              */
+           inputParms->logFile = parmValue;
+           break;
+        case INPUT_PARM_LB:            /* label                      */
+           inputParms->label = parmValue;
+           break;
+        case INPUT_PARM_LP:            /* log file path              */
+           inputParms->logFilePath = parmValue;
+           break;
+        case INPUT_PARM_MD:            /* mode                       */
+           inputParms->mode = parmValue;
+           break;
+        case INPUT_PARM_NN:            /* node number                */
+           inputParms->nodeNumber = parmValue;
+           break;
+        case INPUT_PARM_OS:            /* operating system           */
+           inputParms->operatingSys = parmValue;
+           break;
+        case INPUT_PARM_RD:            /* redirection file           */
+           inputParms->redFile = parmValue;
+           break;
+        case INPUT_PARM_RF:            /* response file              */
+           inputParms->responseFile = parmValue;
+           break;
+        case INPUT_PARM_RL:            /* DB2 release                */
+           inputParms->release = parmValue;
+           break;
+        case INPUT_PARM_RQ:            /* user exit request          */
+           inputParms->request = parmValue;
+           break;
+        default:                       /* log unrecognized parameter */
+           if ( ERROR_ACTIVE )
+           {
+              memset(  errorHelpString, '\0', HELP_STRING_LEN ) ;
+
+              sprintf( errorHelpString,
+                       "%s %s%s%s%s",
+                       "Unrecognized parameter :",
+                       argument,
+                       NEW_LINE,
+                       "Parameter has been ignored.",
+                       NEW_LINE ) ;
+
+              ErrorLog( NULL, NULL, NULL, RC_OK, errorHelpString ) ;
+           }
+           break;
+      }
+
+      count ++ ;                       /* increment count            */
+   }
+
+  return(parseRc);
+}
+
+
+
+unsigned int
+   PrintArguments(FILE *fp, INPUT_PARMS *inputParms)
+{
+   char          outputLine[ OUTPUT_LINE_LEN ] ;
+   int           printRc = RC_OK ;
+
+   sprintf( outputLine,
+            "%s %d%s",
+            "Parameter Count:     ",
+            inputParms->argc,
+            NEW_LINE ) ;
+
+   if (( fprintf( fp, outputLine ) ) <= 0 )
+         printRc = AUDIT_IO_ERROR ;
+
+   if ( printRc == RC_OK )
+   {
+      sprintf( outputLine,
+               "%s %s",
+               "Parameters Passed:",
+               NEW_LINE ) ;
+      if (( fprintf( fp, outputLine ) ) <= 0 )
+         printRc = AUDIT_IO_ERROR;
+   }
+
+   if ( ( printRc == RC_OK ) &&
+        ( inputParms->adsmPasswd != NULL ) )
+   {
+      sprintf( outputLine,
+               "%s %s%s",
+               "ADSM password:    ",
+               inputParms->adsmPasswd,
+               NEW_LINE ) ;
+      if (( fprintf( fp, outputLine ) ) <= 0 )
+         printRc = AUDIT_IO_ERROR;
+   }
+
+   if ( ( printRc == RC_OK ) &&
+        ( inputParms->dbName != NULL ) )
+   {
+      sprintf( outputLine,
+               "%s %s%s",
+               "Database name:    ",
+               inputParms->dbName,
+               NEW_LINE ) ;
+      if (( fprintf( fp, outputLine ) ) <= 0 )
+         printRc = AUDIT_IO_ERROR;
+   }
+
+   if ( ( printRc == RC_OK ) &&
+        ( inputParms->logFile != NULL ) )
+   {
+      sprintf( outputLine,
+               "%s %s%s",
+               "Logfile name:     ",
+               inputParms->logFile,
+               NEW_LINE ) ;
+      if (( fprintf( fp, outputLine ) ) <= 0 )
+         printRc = AUDIT_IO_ERROR;
+   }
+
+   if ( ( printRc == RC_OK ) &&
+        ( inputParms->label != NULL ) )
+   {
+      sprintf( outputLine,
+               "%s %s%s",
+               "Label:            ",
+               inputParms->label,
+               NEW_LINE ) ;
+      if (( fprintf( fp, outputLine ) ) <= 0 )
+         printRc = AUDIT_IO_ERROR;
+   }
+
+   if ( ( printRc == RC_OK ) &&
+        ( inputParms->logFilePath != NULL ) )
+   {
+      sprintf( outputLine,
+               "%s %s%s",
+               "Logfile path:     ",
+               inputParms->logFilePath,
+               NEW_LINE ) ;
+      if (( fprintf( fp, outputLine ) ) <= 0 )
+         printRc = AUDIT_IO_ERROR;
+   }
+
+   if ( ( printRc == RC_OK ) &&
+        ( inputParms->mode != NULL ) )
+   {
+      sprintf( outputLine,
+               "%s %s%s",
+               "Mode:             ",
+               inputParms->mode,
+               NEW_LINE ) ;
+      if (( fprintf( fp, outputLine ) ) <= 0 )
+         printRc = AUDIT_IO_ERROR;
+   }
+
+   if ( ( printRc == RC_OK ) &&
+        ( inputParms->nodeNumber != NULL ) )
+   {
+      sprintf( outputLine,
+               "%s %s%s",
+               "Node number:      ",
+               inputParms->nodeNumber,
+               NEW_LINE ) ;
+      if (( fprintf( fp, outputLine ) ) <= 0 )
+         printRc = AUDIT_IO_ERROR;
+   }
+
+   if ( ( printRc == RC_OK ) &&
+        ( inputParms->operatingSys != NULL ) )
+   {
+      sprintf( outputLine,
+               "%s %s%s",
+               "Operating system: ",
+               inputParms->operatingSys,
+               NEW_LINE ) ;
+      if (( fprintf( fp, outputLine ) ) <= 0 )
+         printRc = AUDIT_IO_ERROR;
+   }
+
+   if ( ( printRc == RC_OK ) &&
+        ( inputParms->redFile != NULL ) )
+   {
+      sprintf( outputLine,
+               "%s %s%s",
+               "Red file:         ",
+               inputParms->redFile,
+               NEW_LINE ) ;
+      if (( fprintf( fp, outputLine ) ) <= 0 )
+         printRc = AUDIT_IO_ERROR;
+   }
+
+   if ( ( printRc == RC_OK ) &&
+        ( inputParms->responseFile != NULL ) )
+   {
+      sprintf( outputLine,
+               "%s %s%s",
+               "Response file:    ",
+               inputParms->responseFile,
+               NEW_LINE ) ;
+      if (( fprintf( fp, outputLine ) ) <= 0 )
+         printRc = AUDIT_IO_ERROR;
+   }
+
+   if ( ( printRc == RC_OK ) &&
+        ( inputParms->release != NULL ) )
+   {
+      sprintf( outputLine,
+               "%s %s%s",
+               "Release:          ",
+               inputParms->release,
+               NEW_LINE ) ;
+      if (( fprintf( fp, outputLine ) ) <= 0 )
+         printRc = AUDIT_IO_ERROR;
+   }
+
+   if ( ( printRc == RC_OK ) &&
+        ( inputParms->request != NULL ) )
+   {
+      sprintf( outputLine,
+               "%s %s%s",
+               "Request:          ",
+               inputParms->request,
+               NEW_LINE ) ;
+      if (( fprintf( fp, outputLine ) ) <= 0 )
+         printRc = AUDIT_IO_ERROR;
+   }
+
+   return(printRc);
+}

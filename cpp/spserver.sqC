@@ -1,0 +1,2038 @@
+/*************************************************************************
+** (c) Copyright IBM Corp. 2007 All rights reserved.
+** 
+** The following sample of source code ("Sample") is owned by International 
+** Business Machines Corporation or one of its subsidiaries ("IBM") and is 
+** copyrighted and licensed, not sold. You may use, copy, modify, and 
+** distribute the Sample in any form without payment to IBM, for the purpose of 
+** assisting you in the development of your applications.
+** 
+** The Sample code is provided to you on an "AS IS" basis, without warranty of 
+** any kind. IBM HEREBY EXPRESSLY DISCLAIMS ALL WARRANTIES, EITHER EXPRESS OR 
+** IMPLIED, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED WARRANTIES OF 
+** MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE. Some jurisdictions do 
+** not allow for the exclusion or limitation of implied warranties, so the above 
+** limitations or exclusions may not apply to you. IBM shall not be liable for 
+** any damages you suffer as a result of using, copying, modifying or 
+** distributing the Sample, even if IBM has been advised of the possibility of 
+** such damages.
+***************************************************************************
+**
+** SOURCE FILE NAME: spserver.sqC
+**
+** SAMPLE: Code implementations of various types of stored procedures
+**
+**         The stored procedures defined in this program are called by the
+**         client application spclient.sqC. Before building and running
+**         spclient.sqC, build the shared library by completing the following
+**         steps:
+**
+** BUILDING THE SHARED LIBRARY:
+** 1. Ensure the Database Manager Configuration file has the keyword
+**    KEEPFENCED set to "no". This allows shared libraries to be unloaded
+**    while you are developing stored procedures. You can view the file's
+**    settings by issuing the command: "db2 get dbm cfg". You can set
+**    KEEPFENCED to "no" with this command: "db2 update dbm cfg using
+**    KEEPFENCED no". NOTE: Setting KEEPFENCED to "no" reduces performance
+**    the performance of accessing stored procedures, because they have
+**    to be reloaded into memory each time they are called. If this is a
+**    concern, set KEEPFENCED to "yes", stop and then restart DB2 before
+**    building the shared library, by entering "db2stop" followed by
+**    "db2start". This forces DB2 to unload shared libraries and enables
+**    the build file or the makefile to delete a previous version of the
+**    shared library from the "sqllib/function" directory. 
+** 2. To build the shared library, enter "bldrtn spserver", or use the 
+**    makefile: "make spserver" (UNIX) or "nmake spserver" (Windows).
+**
+** CATALOGING THE STORED PROCEDURES
+** 1. The stored procedures are cataloged automatically when you build
+**    the client application "spclient" using the appropriate "make" utility
+**    for your Operating System and the "makefile" provided with these 
+**    samples. If you wish to catalog or recatalog them manually, enter 
+**    "spcat". The spcat script (UNIX) or spcat.bat batch file (Windows) 
+**    connects to the database, runs spdrop.db2 to uncatalog the stored 
+**    procedures if they were previously cataloged, then runs spcreate.db2 
+**    which catalogs the stored procedures, then disconnects from the 
+**    database.
+**
+** CALLING THE STORED PROCEDURES IN THE SHARED LIBRARY:
+** 1. Compile the spclient program with "bldapp spclient" or use the 
+**    makefile: "make spclient" (UNIX) or "nmake spclient" (Windows).
+** 2. Run spclient: "spclient" (if calling remotely add the parameters for
+**    database, user ID and password.)
+**
+** SQL STATEMENTS USED:
+**         CLOSE
+**         DECLARE
+**         FETCH
+**         FREE LOCATOR
+**         OPEN
+**         SELECT
+**         SELECT INTO
+**         UPDATE
+**         VALUES 
+**         WHENEVER 
+**
+** STRUCTURES USED:
+**         sqlca
+**         sqlda
+**
+** EXTERNAL DEPENDENCIES:
+**        This program must be built on a DB2 server.
+**        Ensure existence of the sample database.
+**        Precompile with the SQL precompiler (PREP in DB2)
+**        Bind to a database (BIND in DB2)
+**        Compile and link loop with the compiler supported on your 
+**        platform.
+**
+** OUTPUT FILE: spclient.out (available in the online documentation)
+***************************************************************************
+**
+** For more information on the sample programs, see the README file.
+**
+** For information on developing C++ applications, see the Application
+** Development Guide.
+**
+** For information on using SQL statements, see the SQL Reference.
+**
+** For the latest information on programming, building, and running DB2 
+** applications, visit the DB2 application development website: 
+**     http://www.software.ibm.com/data/db2/udb/ad
+***************************************************************************/
+ 
+#include <stdio.h>
+#include <string.h>
+#include <stdlib.h>
+#include <sqlda.h>
+#include <sqlca.h>
+#include <sqludf.h>
+#include <sql.h>
+#include <memory.h>
+
+//  NOTE:
+//  -----
+//  If a routine (stored procedure or user-defined function
+//  (UDF)) calls another routine within the same library, you must
+//  declare the function prototypes here (above the actual routine
+//  implementations).
+
+// declare function prototypes for this stored procedure library
+extern "C" SQL_API_RC SQL_API_FN OutLanguage(
+                                   char *,
+                                   sqlint16 *,
+                                   char *,
+                                   char *,
+                                   char *,
+                                   char *);
+extern "C" SQL_API_RC SQL_API_FN OutParam(
+                                   double *,
+                                   sqlint16 *,
+                                   char *,
+                                   char *,
+                                   char *,
+                                   char *);
+extern "C" SQL_API_RC SQL_API_FN InParams(
+                                   double *,
+                                   double *, 
+                                   double *,
+                                   char *, 
+                                   sqlint16 *, 
+                                   sqlint16 *,
+                                   sqlint16 *, 
+                                   sqlint16 *, 
+                                   char *, 
+                                   char *, 
+                                   char *, 
+                                   char *);
+extern "C" SQL_API_RC SQL_API_FN InOutParam(
+                                   double *, 
+                                   sqlint16 *, 
+                                   char *, 
+                                   char *,
+                                   char *, 
+                                   char *);
+extern "C" SQL_API_RC SQL_API_FN ExtractFromClob(
+                                   char *, 
+                                   char *,
+                                   sqlint16 *, 
+                                   sqlint16 *,
+                                   char *, 
+                                   char *,
+                                   char *, 
+                                   char *);
+extern "C" SQL_API_RC SQL_API_FN DbinfoExample(
+                                   char *,
+                                   double *,
+                                   char *,
+                                   char *,
+                                   sqlint16 *,
+                                   sqlint16 *,
+                                   sqlint16 *,
+                                   sqlint16 *,
+                                   char *,
+                                   char *,
+                                   char *,
+                                   char *,
+                                   struct sqludf_dbinfo *);
+extern "C" SQL_API_RC SQL_API_FN MainExample(
+                                   int,
+                                   char **);
+extern "C" SQL_API_RC SQL_API_FN AllDataTypes(
+                                   sqlint16 *,
+                                   sqlint32 *,
+                                   sqlint64 *,
+                                   float *,
+                                   double *,
+                                   char *,
+                                   char *,
+                                   char *,
+                                   char *,
+                                   char *,
+                                   sqlint16 *,
+                                   sqlint16 *,
+                                   sqlint16 *,
+                                   sqlint16 *,
+                                   sqlint16 *,
+                                   sqlint16 *,
+                                   sqlint16 *,
+                                   sqlint16 *,
+                                   sqlint16 *,
+                                   sqlint16 *,
+                                   SQLUDF_TRAIL_ARGS);
+extern "C" SQL_API_RC SQL_API_FN OneResultSetToClient(
+                                   double *, 
+                                   sqlint16 *, 
+                                   char *,
+                                   char *,
+                                   char *,
+                                   char *);
+extern "C" SQL_API_RC SQL_API_FN TwoResultSets(
+                                   double *, 
+                                   sqlint16 *, 
+                                   SQLUDF_TRAIL_ARGS);
+extern "C" SQL_API_RC SQL_API_FN GeneralExample(
+                                   sqlint32 *,
+                                   sqlint32 *,
+                                   char *);
+extern "C" SQL_API_RC SQL_API_FN GeneralWithNullsExample(
+                                   sqlint32 *,
+                                   sqlint32 *,
+                                   char *,
+                                   sqlint16 *);  
+
+//  a description of each routine and its parameters is provided
+//  with the code body of each routine in this file (see below). 
+
+//*************************************************************************
+//  Stored Procedure: OutLanguage
+// 
+//  Purpose:  Returns the code implementation language of
+//            routine 'OutLanguage' (as it appears in the
+//            database catalog) in an output parameter.
+//
+//            Shows how to:
+//             - define an OUT parameter in PARAMETER STYLE SQL
+//             - define a NULL indicator for the parameter
+//             - execute an SQL statement
+//             - how to set a Null indicator when parameter is
+//               not null
+//
+//  Parameters:
+//
+//   IN:      (none)
+//   OUT:     outLanguage - the code language of this routine
+//
+//            When the PARAMETER STYLE SQL clause is specified 
+//            in the CREATE PROCEDURE statement for the procedure
+//            (see the script spcreate.db2), in addition to the 
+//            parameters passed at procedure invocation time, the 
+//            following parameters are passed to the routine
+//            in the following order:
+//
+//             - one null indicator for each IN/INOUT/OUT parameter
+//               is specified in the same order as the corresponding
+//               parameter declarations.
+//             - sqlstate: to be returned to the caller to indicate 
+//               state (output)
+//             - routine-name: qualified name of the routine (input)
+//             - specific-name: the specific name of the routine (input)
+//             - diagnostic-message: an optional text string returned to the
+//               caller (output)
+//
+//            See the actual parameter declarations below to see
+//            the recommended datatypes and sizes for them.
+//
+//            CODE TIP:
+//            --------
+//            As an alternative to coding the non-functional parameters 
+//            required with parameter style SQL (sqlstate, routine-name, 
+//            specific-name, diagnostic-message), you can use a macro:
+//            SQLUDF_TRAIL_ARGS. This macro is defined in DB2 include
+//            file sqludf.h
+//   
+//            TIP EXAMPLE:
+//            ------------
+//            The following stored procedure prototype is equivalent 
+//            to the actual prototype implementation for this stored 
+//            procedure. It is simpler to implement. See stored 
+//            procedure sample TwoResultSets in this file to see the
+//            SQLUDF_TRAIL_ARGS macro in use.
+//    
+//              SQL_API_RC SQL_API_FN OutLanguage(
+//                                      char outLanguage[9],
+//                                      sqlint16 *outLanguageNullInd,
+//                                      SQLUDF_TRAIL_ARGS)
+//
+//  Note: With parameter style SQL it is mandatory to declare either the 
+//        four non-functional parameters (sqlstate, routine-name, 
+//        specific-name, diagnostic-message) or SQLUDF_TRAIL_ARGS macro.
+// 
+//*************************************************************************
+SQL_API_RC SQL_API_FN OutLanguage(char outLanguage[9], // CHAR(8)
+                                  sqlint16 *outLanguageNullInd,
+                                  char sqlstate[6],      
+                                  char qualName[28],  
+                                  char specName[19],  
+                                  char diagMsg[71])
+{
+  EXEC SQL INCLUDE SQLCA; 
+    
+  // SQL host variable declaration section 
+  // each host variable names must be unique within a code
+  // file, or the precompiler will raise SQL0307 error 
+  EXEC SQL BEGIN DECLARE SECTION;
+    char hvOutLangLanguage[9];
+  EXEC SQL END DECLARE SECTION;
+
+  // text information appended to diagMsg upon the event of an error
+  char sqlStmtInfo[60];
+  
+  // initialize output parameter string to NULL 
+  memset(outLanguage, '\0', 9);
+  *outLanguageNullInd = -1;
+  
+  // initialize sqlStmtInfo to NULL
+  memset(sqlStmtInfo, '\0', 60);   
+
+  EXEC SQL WHENEVER SQLERROR GOTO return_error;
+  
+  strcpy(sqlStmtInfo, "SELECT statement failed");
+
+  // select the implementation language of this routine 
+  // from the DB2 catalog table sysibm.sysprocedures    
+  EXEC SQL SELECT language INTO :hvOutLangLanguage
+             FROM sysibm.sysprocedures
+               WHERE procname = 'OUT_LANGUAGE';
+   
+  // copy value of hvLanguage to output parameter language 
+  strcpy(outLanguage, hvOutLangLanguage);
+
+  // set NULL indicator for parameter 'outLanguage' to 0 to
+  // indicate that output parameter 'outLanguage' is not NULL.
+  // When the value to be returned is intended to be a NULL,
+  // set the null indicator for that parameter to -1 
+  *outLanguageNullInd = 0;
+
+  return (0);
+  
+  // set custom diagMsg and sqlstate to return to client 
+  return_error:
+  {
+    strcpy(sqlstate, sqlca.sqlstate);  
+    
+    sprintf(diagMsg, "%d", sqlca.sqlcode);
+    strcat(diagMsg, ": ");
+    strcat(diagMsg, sqlStmtInfo);
+
+    return (0);  
+  }  
+} // OutLanguage function 
+
+//*************************************************************************
+//  Stored Procedure: OutParam
+//
+//  Purpose:  Sorts table STAFF by salary, locates and returns
+//            the median salary
+//
+//            Shows how to:
+//             - define OUT parameters in PARAMETER STYLE SQL
+//             - execute SQL to declare and work with a cursor
+//             - how to set a Null indicator when parameter is
+//               not null
+//             - define the extra parameters associated with
+//               PARAMETER STYLE SQL 
+//
+//  Parameters:
+//
+//   IN:      (none)
+//   OUT:     outMedianSalary - median salary in table STAFF
+//
+//            When the PARAMETER STYLE SQL clause is specified 
+//            in the CREATE PROCEDURE statement for the procedure
+//            (see the script spcreate.db2), in addition to the 
+//            parameters passed at procedure invocation time, the 
+//            following parameters are passed to the routine
+//            in the following order:
+//
+//             - one null indicator for each IN/INOUT/OUT parameter
+//               is specified in the same order as the corresponding
+//               parameter declarations.
+//             - sqlstate: to be returned to the caller to indicate 
+//               state (output)
+//             - routine-name: qualified name of the routine (input)
+//             - specific-name: the specific name of the routine (input)
+//             - diagnostic-message: an optional text string returned to the
+//               caller (output)
+//
+//            See the actual parameter declarations below to see
+//            the recommended datatypes and sizes for them.
+//
+//            CODE TIP:
+//            --------
+//            As an alternative to coding the non-functional parameters 
+//            required with parameter style SQL (sqlstate, routine-name, 
+//            specific-name, diagnostic-message), you can use a macro:
+//            SQLUDF_TRAIL_ARGS. This macro is defined in DB2 include
+//            file sqludf.h
+//   
+//            TIP EXAMPLE:
+//            ------------
+//            The following stored procedure prototype is equivalent 
+//            to the actual prototype implementation for this stored 
+//            procedure. It is simpler to implement. See stored 
+//            procedure sample TwoResultSets in this file to see the
+//            SQLUDF_TRAIL_ARGS macro in use.
+//    
+//              SQL_API_RC SQL_API_FN OutParam(
+//                                      double *outMedianSalary, 
+//                                      sqlint16 *outMedianSalaryNullInd,
+//                                      SQLUDF_TRAIL_ARGS)
+//
+//  Note: With parameter style SQL it is mandatory to declare either the 
+//        four non-functional parameters (sqlstate, routine-name, 
+//        specific-name, diagnostic-message) or SQLUDF_TRAIL_ARGS macro.
+// 
+//*************************************************************************
+SQL_API_RC SQL_API_FN OutParam(double *outMedianSalary, 
+                               sqlint16 *outMedianSalaryNullInd,
+                               char sqlstate[6],      
+                               char qualName[28],  
+                               char specName[19],  
+                               char diagMsg[71])
+{
+  EXEC SQL INCLUDE SQLCA; 
+  
+  // SQL host variable declaration section 
+  // each host variable names must be unique within a code
+  // file, or the precompiler will raise SQL0307 error 
+  EXEC SQL BEGIN DECLARE SECTION;
+    sqlint32 hvOutParamNumRecords;
+    double hvOutParamSalary;
+  EXEC SQL END DECLARE SECTION;
+  
+  // text information appended to diagMsg upon the event of an error
+  char sqlStmtInfo[60];
+
+  // local variable 
+  int counter = 0;
+  
+  // initialize output parameter 
+  *outMedianSalary = 0;
+  *outMedianSalaryNullInd = -1;
+  
+  // initialize sqlStmtInfo to NULL
+  memset(sqlStmtInfo, '\0', 60); 
+
+  EXEC SQL WHENEVER SQLERROR GOTO return_error;
+
+  strcpy(sqlStmtInfo, "DECLARE statement failed");
+    
+  EXEC SQL DECLARE curOutParam CURSOR FOR 
+             SELECT CAST(salary AS DOUBLE)
+               FROM staff
+                 ORDER BY salary;
+
+  strcpy(sqlStmtInfo, "SELECT statement failed");
+  
+  EXEC SQL SELECT COUNT(*) INTO: hvOutParamNumRecords FROM staff; 
+
+  strcpy(sqlStmtInfo, "OPEN statement failed");
+  
+  EXEC SQL OPEN curOutParam;
+  
+  strcpy(sqlStmtInfo, "FETCH statement failed");
+  
+  while (counter < (hvOutParamNumRecords / 2 + 1))
+  {                                
+    EXEC SQL FETCH curOutParam INTO :hvOutParamSalary; 
+    counter = counter + 1;
+  }
+
+  // set value of OUT parameter to host variable                             
+  *outMedianSalary = hvOutParamSalary; 
+  *outMedianSalaryNullInd = 0;
+  
+  strcpy(sqlStmtInfo, "CLOSE statement failed");
+  
+  EXEC SQL CLOSE curOutParam;
+
+  return (0); 
+  
+  // set custom diagMsg and sqlstate to return to client 
+  return_error:
+  { 
+    strcpy(sqlstate, sqlca.sqlstate);  
+    
+    sprintf(diagMsg, "%d", SQLCODE);
+    strcat(diagMsg, ": ");
+    strcat(diagMsg, sqlStmtInfo);   
+    
+    return (0);
+  }
+} // OutParam function 
+
+//*************************************************************************
+//  Stored Procedure: InParams
+//
+//  Purpose:  Updates salaries of employees in department indept
+//            using inputs inLowSal, inMedSal, inHighSal as
+//            salary raise or adjustment values.
+//
+//            Shows how to:
+//             - define IN parameters using PARAMETER STYLE SQL
+//             - define and use NULL indicators for parameters
+//             - define the extra parameters associated with
+//               PARAMETER STYLE SQL
+//
+//  Parameters:
+//
+//   IN:      inLowSal    - new salary for low salary employees
+//            inMedSal    - new salary for mid salary employees
+//            inHighSal   - new salary for high salary employees
+//            inDept      - department to use in SELECT predicate
+//   OUT:     (none)
+//
+//            When the PARAMETER STYLE SQL clause is specified 
+//            in the CREATE PROCEDURE statement for the procedure
+//            (see the script spcreate.db2), in addition to the 
+//            parameters passed at procedure invocation time, the 
+//            following parameters are passed to the routine
+//            in the following order:
+//
+//             - one null indicator for each IN/INOUT/OUT parameter
+//               is specified in the same order as the corresponding
+//               parameter declarations.
+//             - sqlstate: to be returned to the caller to indicate 
+//               state (output)
+//             - routine-name: qualified name of the routine (input)
+//             - specific-name: the specific name of the routine (input)
+//             - diagnostic-message: an optional text string returned to the
+//               caller (output)
+//
+//            See the actual parameter declarations below to see
+//            the recommended datatypes and sizes for them.
+//
+//            CODE TIP:
+//            --------
+//            As an alternative to coding the non-functional parameters 
+//            required with parameter style SQL (sqlstate, routine-name, 
+//            specific-name, diagnostic-message), you can use a macro:
+//            SQLUDF_TRAIL_ARGS. This macro is defined in DB2 include
+//            file sqludf.h
+//   
+//            TIP EXAMPLE:
+//            ------------
+//            The following stored procedure prototype is equivalent 
+//            to the actual prototype implementation for this stored 
+//            procedure. It is simpler to implement. See stored 
+//            procedure sample TwoResultSets in this file to see the
+//            SQLUDF_TRAIL_ARGS macro in use.
+//    
+//              SQL_API_RC SQL_API_FN InParams(
+//                                      double *inLowSal,
+//                                      double *inMedSal,
+//                                      double *inHighSal,
+//                                      char inDept[4],
+//                                      sqlint16 *inLowSalNullInd,
+//                                      sqlint16 *inMedSalNullInd,
+//                                      sqlint16 *inHighSalNullInd,
+//                                      sqlint16 *inDeptNullInd,
+//                                      SQLUDF_TRAIL_ARGS)
+//
+//  Note: With parameter style SQL it is mandatory to declare either the 
+//        four non-functional parameters (sqlstate, routine-name, 
+//        specific-name, diagnostic-message) or SQLUDF_TRAIL_ARGS macro.
+// 
+//*************************************************************************
+SQL_API_RC SQL_API_FN InParams(double *inLowSal,
+                               double *inMedSal,
+                               double *inHighSal,
+                               char inDept[4], // CHAR(3)
+                               sqlint16 *inLowSalNullInd,
+                               sqlint16 *inMedSalNullInd,
+                               sqlint16 *inHighSalNullInd,
+                               sqlint16 *inDeptNullInd,
+                               char sqlstate[6],      
+                               char qualName[28],  
+                               char specName[19],  
+                               char diagMsg[71]) 
+{
+  EXEC SQL INCLUDE SQLCA; 
+  
+  // SQL host variable declaration section 
+  // each host variable names must be unique within a code
+  // file, or the precompiler will raise SQL0307 error 
+  EXEC SQL BEGIN DECLARE SECTION;
+    double hvInParamLowSal;
+    double hvInParamMedSal;
+    double hvInParamHighSal;
+    double hvInParamSalary;
+    char hvInParamDept[4];
+  EXEC SQL END DECLARE SECTION;
+
+  // text information appended to diagMsg upon the event of an error
+  char sqlStmtInfo[60];
+
+  // initialize sqlStmtInfo to NULL
+  memset(sqlStmtInfo, '\0', 60); 
+
+  EXEC SQL WHENEVER SQLERROR GOTO return_error;
+ 
+  if ((*inLowSalNullInd) < 0 || 
+      (*inMedSalNullInd) < 0 ||  
+      (*inHighSalNullInd) < 0 ||
+      (*inDeptNullInd) < 0)
+  {
+    // set custom sqlstate to return to client. 
+    strcpy(sqlstate, "38100");
+
+    // set custom message to return to client. Note that although the
+    // OUT parameter is declared as CHAR(70), DB2 prepends the
+    // procedure name and shared library entry point to the message.
+    // Keep the custom message short to avoid truncation. 
+    strcpy(diagMsg, "Received null input.");
+    
+    return(0);
+  }
+  
+  // copy input parameters to local host variables 
+  hvInParamLowSal = *inLowSal;
+  hvInParamMedSal = *inMedSal;
+  hvInParamHighSal = *inHighSal;
+  strcpy(hvInParamDept, inDept);
+
+  strcpy(sqlStmtInfo, "DECLARE statement failed");
+    
+  EXEC SQL DECLARE curInParam CURSOR FOR
+             SELECT CAST(salary AS DOUBLE)
+               FROM employee
+                 WHERE workdept = :hvInParamDept FOR UPDATE;
+  
+  strcpy(sqlStmtInfo, "OPEN statement failed");
+  
+  EXEC SQL OPEN curInParam;
+
+  strcpy(sqlStmtInfo, "FETCH statement failed");
+   
+  EXEC SQL FETCH curInParam INTO :hvInParamSalary;
+
+  if (sqlca.sqlcode == 100)
+  {
+    strcpy(sqlstate, "38200");  
+      
+    // fetch returned no data, so exit the stored procedure 
+    strcpy(diagMsg, " 100: NO DATA FOUND");
+
+    strcpy(sqlStmtInfo, "CLOSE statement failed");
+
+    // close cursor before exiting 
+    EXEC SQL CLOSE curInParam;
+
+    return (0);
+  }    
+  
+  while (sqlca.sqlcode == 0)
+  {
+    strcpy(sqlStmtInfo, "UPDATE statement failed");   
+
+    if (hvInParamLowSal > hvInParamSalary)
+    {
+      EXEC SQL UPDATE employee SET salary = :hvInParamLowSal
+	         WHERE CURRENT OF curInParam;
+    }
+    else if (hvInParamMedSal > hvInParamSalary)
+    {
+      EXEC SQL UPDATE employee SET salary = :hvInParamMedSal 
+	         WHERE CURRENT OF curInParam;
+    }
+    else if (hvInParamHighSal > hvInParamSalary)
+    {
+      EXEC SQL UPDATE employee SET salary = :hvInParamHighSal 
+	         WHERE CURRENT OF curInParam;
+    }
+    else
+    {
+      EXEC SQL UPDATE employee
+                 SET salary = :hvInParamSalary * 1.10
+                   WHERE CURRENT OF curInParam;
+    }
+    
+    strcpy(sqlStmtInfo, "FETCH statement failed");
+    
+    EXEC SQL FETCH curInParam INTO: hvInParamSalary;
+  }
+
+  strcpy(sqlStmtInfo, "CLOSE statement failed");
+    
+  EXEC SQL CLOSE curInParam;
+  
+  return (0);
+
+  // set custom diagMsg and sqlstate to return to client 
+  return_error:
+  {  
+    strcpy(sqlstate, sqlca.sqlstate);  
+    
+    sprintf(diagMsg, "%d", sqlca.sqlcode);
+    strcat(diagMsg, ": ");
+    strcat(diagMsg, sqlStmtInfo);
+    return (0);
+  }
+} // InParams function 
+
+//*************************************************************************
+//  Stored Procedure: InOutParam
+//
+//  Purpose:  Calculates the median salary of all salaries above
+//            the input median salary.
+//
+//            Shows how to:
+//             - define an INOUT parameter using PARAMETER STYLE SQL
+//             - define and use NULL indicators for parameters
+//             - define the extra parameters associated with
+//               PARAMETER STYLE SQL
+//
+//  Parameters:
+//
+//   IN/OUT:  inOutMedian - median salary
+//                          input value used in SELECT predicate
+//                          output set to median salary found
+//
+//            When the PARAMETER STYLE SQL clause is specified 
+//            in the CREATE PROCEDURE statement for the procedure
+//            (see the script spcreate.db2), in addition to the 
+//            parameters passed at procedure invocation time, the 
+//            following parameters are passed to the routine
+//            in the following order:
+//
+//             - one null indicator for each IN/INOUT/OUT parameter
+//               is specified in the same order as the corresponding
+//               parameter declarations.
+//             - sqlstate: to be returned to the caller to indicate 
+//               state (output)
+//             - routine-name: qualified name of the routine (input)
+//             - specific-name: the specific name of the routine (input)
+//             - diagnostic-message: an optional text string returned to the
+//               caller (output)
+//
+//            See the actual parameter declarations below to see
+//            the recommended datatypes and sizes for them.
+//
+//            CODE TIP:
+//            --------
+//            As an alternative to coding the non-functional parameters 
+//            required with parameter style SQL (sqlstate, routine-name, 
+//            specific-name, diagnostic-message), you can use a macro:
+//            SQLUDF_TRAIL_ARGS. This macro is defined in DB2 include
+//            file sqludf.h
+//   
+//            TIP EXAMPLE:
+//            ------------
+//            The following stored procedure prototype is equivalent 
+//            to the actual prototype implementation for this stored 
+//            procedure. It is simpler to implement. See stored 
+//            procedure sample TwoResultSets in this file to see the
+//            SQLUDF_TRAIL_ARGS macro in use.
+//    
+//              SQL_API_RC SQL_API_FN InOutParam(double *inOutMedian,  
+//                                      sqlint16 *inOutMedianNullInd, 
+//                                      SQLUDF_TRAIL_ARGS)
+//
+//  Note: With parameter style SQL it is mandatory to declare either the 
+//        four non-functional parameters (sqlstate, routine-name, 
+//        specific-name, diagnostic-message) or SQLUDF_TRAIL_ARGS macro.
+// 
+//*************************************************************************
+SQL_API_RC SQL_API_FN InOutParam(double *inOutMedian,  
+                                 sqlint16 *inOutMedianNullInd,   
+                                 char sqlstate[6],      
+                                 char qualName[28],  
+                                 char specName[19],  
+                                 char diagMsg[71]) 
+{
+  EXEC SQL INCLUDE SQLCA; 
+  
+  // SQL host variable declaration section 
+  // each host variable name must be unique within a code
+  // file, or the precompiler will raise SQL0307 error 
+  EXEC SQL BEGIN DECLARE SECTION;
+    double hvInOutParamMedianSal;
+    sqlint32 hvInOutParamNumRecords;
+  EXEC SQL END DECLARE SECTION;
+
+  // text information appended to diagMsg upon the event of an error
+  char sqlStmtInfo[60];
+
+  // local variable declaration 
+  int counter;
+  
+  // initialize sqlStmtInfo to NULL
+  memset(sqlStmtInfo, '\0', 60); 
+
+  EXEC SQL WHENEVER SQLERROR GOTO return_error;
+  
+  if ((*inOutMedianNullInd) < 0)
+  {
+    // set custom sqlstate to return to client. 
+    strcpy(sqlstate, "38100");
+    
+    // set the null indicator
+    *inOutMedianNullInd = -1;
+    
+    // set custom message to return to client. Note that although the
+    // OUT parameter is declared as CHAR(70), DB2 prepends the
+    // procedure name and shared library entry point to the message.
+    // Keep the custom message short to avoid truncation. 
+    strcpy(diagMsg, "Received null input.");
+    return (0);
+  }
+  
+  if ((*inOutMedian) < 0)
+  {
+    // set custom sqlstate to return to client. 
+    strcpy(sqlstate, "38100");
+
+    // set the null indicator
+    *inOutMedianNullInd = -1;
+    
+    strcpy(diagMsg, "Received invalid input.");
+    return (0);
+  }
+    
+  counter = 0;
+  hvInOutParamMedianSal = *inOutMedian;
+   
+  strcpy(sqlStmtInfo, "DECLARE statement failed");
+    
+  EXEC SQL DECLARE curInOutParam CURSOR FOR
+    SELECT CAST(salary AS DOUBLE)
+      FROM staff
+        WHERE salary > :hvInOutParamMedianSal
+          ORDER BY salary;
+
+  strcpy(sqlStmtInfo, "SELECT statement failed");
+
+  EXEC SQL SELECT COUNT(*) INTO :hvInOutParamNumRecords
+             FROM staff
+               WHERE salary > :hvInOutParamMedianSal;
+
+  if (hvInOutParamNumRecords > 0) // at least one record was found 
+  {
+    strcpy(sqlStmtInfo, "OPEN statement failed");
+  
+    EXEC SQL OPEN curInOutParam USING :hvInOutParamMedianSal;
+     
+    strcpy(sqlStmtInfo, "FETCH statement failed");
+     
+    while (counter < (hvInOutParamNumRecords / 2 + 1))
+    {
+      EXEC SQL FETCH curInOutParam INTO :hvInOutParamMedianSal;
+      counter = counter + 1;
+    }
+
+    // set value of INOUT parameter to host variable 
+    *inOutMedian = hvInOutParamMedianSal;     
+
+    strcpy(sqlStmtInfo, "CLOSE statement failed");
+
+    EXEC SQL CLOSE curInOutParam;
+  }
+  else // no records were found 
+  {
+    *inOutMedianNullInd = -1;
+       
+    // return the custom error state and error message to client 
+    strcpy(sqlstate, "38200");
+    strcpy(diagMsg, "100: NO DATA FOUND");
+  }
+  
+  return (0);
+  
+  // set custom diagMsg and sqlstate to return to client 
+  return_error:
+  { 
+    strcpy(sqlstate, sqlca.sqlstate);  
+    
+    sprintf(diagMsg, "%d", sqlca.sqlcode);
+    strcat(diagMsg, ": ");
+    strcat(diagMsg, sqlStmtInfo); 
+    return (0);
+  }
+} // InOutParam function 
+
+//*************************************************************************
+//  Stored Procedure: ExtractFromClob
+//
+//  Purpose:  Extracts department information from a large object (LOB) 
+//            resume of employee data returns this information
+//            to the caller in output parameter outDeptInfo.
+//
+//            Shows how to:
+//             - define IN and OUT parameters in STYLE SQL 
+//             - define a local lob locator variable
+//             - locate information within a formatted lob
+//             - extract information from within a clob/copy it
+//               to a host variable
+//
+//  Parameters:
+//  
+//   IN:      inEmpNumber - employee number
+//   OUT:     outDeptInfo - department information section of the 
+//            employee's resume     
+//
+//            When the PARAMETER STYLE SQL clause is specified 
+//            in the CREATE PROCEDURE statement for the procedure
+//            (see the script spcreate.db2), in addition to the 
+//            parameters passed at procedure invocation time, the 
+//            following parameters are passed to the routine
+//            in the following order:
+//
+//             - one null indicator for each IN/INOUT/OUT parameter
+//               is specified in the same order as the corresponding
+//               parameter declarations.
+//             - sqlstate: to be returned to the caller to indicate 
+//               state (output)
+//             - routine-name: qualified name of the routine (input)
+//             - specific-name: the specific name of the routine (input)
+//             - diagnostic-message: an optional text string returned to the
+//               caller (output)
+//
+//            See the actual parameter declarations below to see
+//            the recommended datatypes and sizes for them.
+//
+//            CODE TIP:
+//            --------
+//            As an alternative to coding the non-functional parameters 
+//            required with parameter style SQL (sqlstate, routine-name, 
+//            specific-name, diagnostic-message), you can use a macro:
+//            SQLUDF_TRAIL_ARGS. This macro is defined in DB2 include
+//            file sqludf.h
+//   
+//            TIP EXAMPLE:
+//            ------------
+//            The following stored procedure prototype is equivalent 
+//            to the actual prototype implementation for this stored 
+//            procedure. It is simpler to implement. See stored 
+//            procedure sample TwoResultSets in this file to see the
+//            SQLUDF_TRAIL_ARGS macro in use.
+//
+//              SQL_API_RC SQL_API_FN ExtractFromClob(
+//                                      char inEmpNumber[7],
+//                                      char outDeptInfo[1001],
+//                                      sqlint16 *inEmpNumberNullInd,
+//                                      sqlint16 *outDeptInfoNullInd,
+//                                      SQLUDF_TRAIL_ARGS)
+//
+//  Note: With parameter style SQL it is mandatory to declare either the 
+//        four non-functional parameters (sqlstate, routine-name, 
+//        specific-name, diagnostic-message) or SQLUDF_TRAIL_ARGS macro.
+// 
+//*************************************************************************
+SQL_API_RC SQL_API_FN ExtractFromClob(char inEmpNumber[7], // CHAR(6) 
+                                      char outDeptInfo[1001], // VARCHAR(1000)
+                                      sqlint16 *inEmpNumberNullInd,
+                                      sqlint16 *outDeptInfoNullInd,
+                                      char sqlstate[6],
+                                      char qualName[28],
+                                      char specName[19],
+                                      char diagMsg[71])
+{
+  EXEC SQL INCLUDE SQLCA; 
+
+  // SQL host variable declaration section  
+  // Each host variable names must be unique within a code
+  // file, or the precompiler will raise SQL0307 error 
+  EXEC SQL BEGIN DECLARE SECTION;
+    char     hvExtFromClobEmpNum[7];
+    char     hvExtFromClobResume[1001];
+    sqlint32 hvExtFromClobDeptInfoBeginLoc;
+    sqlint32 hvExtFromClobDeptInfoEndLoc;
+    SQL TYPE IS CLOB_LOCATOR locExtFromClobResume;
+    SQL TYPE IS CLOB_LOCATOR locExtFromClobDept;
+    sqlint16 hvExtFromClobDeptLobInd;
+  EXEC SQL END DECLARE SECTION;
+
+  // text information appended to diagMsg upon the event of an error
+  char sqlStmtInfo[60];
+
+  // initialize sqlStmtInfo to NULL
+  memset(sqlStmtInfo, '\0', 60); 
+
+  // initialize output parameters (strings set to NULL) 
+  memset(hvExtFromClobResume, '\0', 1001);
+  memset(outDeptInfo, '\0', 1001);
+  *outDeptInfoNullInd = -1;
+  
+  EXEC SQL WHENEVER SQLERROR GOTO return_error;  
+  
+  // copy input into local host variable 
+  strcpy(hvExtFromClobEmpNum, inEmpNumber);
+  
+  strcpy(sqlStmtInfo, "SELECT statement failed");
+
+  EXEC SQL SELECT resume INTO :locExtFromClobResume:hvExtFromClobDeptLobInd
+             FROM emp_resume
+             WHERE resume_format = 'ascii' AND empno =:hvExtFromClobEmpNum;
+
+  if (hvExtFromClobDeptLobInd < 0)
+  {
+    // set custom sqlstate to return to client. 
+    strcpy(sqlstate, "38200");
+
+    // set custom message to return to client. Note that although the
+    // OUT parameter is declared as CHAR(70), DB2 prepends the
+    // procedure name and shared library entry point to the message.
+    // Keep the custom message short to avoid truncation. 
+    strcpy(diagMsg,
+           "NULL value returned for CLOB.\n");
+  }
+  else
+  {
+    // locate the beginning of the 'Department Information' section of
+    // the lob resume 
+    
+    strcpy(sqlStmtInfo, "VALUES statement failed(1)");
+  
+    EXEC SQL VALUES(POSSTR(:locExtFromClobResume, 'Department Information'))
+               INTO :hvExtFromClobDeptInfoBeginLoc;
+
+    // locate the beginning of the 'Education' section - this marks the end
+    // of the 'Department Information' section of the lob resume 
+    strcpy(sqlStmtInfo, "VALUES statement failed(2)");
+           
+    EXEC SQL VALUES(POSSTR(:locExtFromClobResume, 'Education')) 
+	       INTO :hvExtFromClobDeptInfoEndLoc;
+
+    // obtain ONLY the "Department Information" section by using SUBSTR 
+    strcpy(sqlStmtInfo, "VALUES statement failed(3)");
+           
+    EXEC SQL VALUES(SUBSTR(:locExtFromClobResume, 
+			               :hvExtFromClobDeptInfoBeginLoc,
+                           :hvExtFromClobDeptInfoEndLoc -
+                           :hvExtFromClobDeptInfoBeginLoc))
+               INTO:locExtFromClobDept;
+
+    // append the "Department Information" section to the :out_resume var. 
+    strcpy(sqlStmtInfo, "VALUES statement failed(4)");
+           
+    EXEC SQL VALUES(:hvExtFromClobResume || :locExtFromClobDept) 
+	       INTO :hvExtFromClobResume;
+
+    strcpy(outDeptInfo, hvExtFromClobResume);
+    *outDeptInfoNullInd = 0;
+  } // endif 
+ 
+  strcpy(sqlStmtInfo, "FREE statement failed");
+
+  EXEC SQL FREE LOCATOR :locExtFromClobResume, :locExtFromClobDept;
+
+  return (0);
+
+  // set custom diagMsg and sqlstate to return to client 
+  return_error:
+  {   
+    strcpy(sqlstate, sqlca.sqlstate);  
+    
+    sprintf(diagMsg, "%d", sqlca.sqlcode);
+    strcat(diagMsg, ": ");
+    strcat(diagMsg, sqlStmtInfo);    
+    return (0);
+  }
+} // ExtractFromClob procedure 
+
+//*************************************************************************
+//  Stored Procedure: DbinfoExample
+//
+//  Purpose:  This routine takes in a job type and returns the
+//            average salary of all employees with that job, as
+//            well as information about the database (name,
+//            version of database).  The database information
+//            is retrieved from the dbinfo object.
+//
+//            Shows how to:
+//             - define IN/ OUT parameters in PARAMETER STYLE SQL
+//             - declare a parameter pointer to the dbinfo structure
+//             - retrieve values from the dbinfo structure
+//
+//  Parameters:
+//
+//   IN:      inJob  - a job type, used in a SELECT predicate 
+//   OUT:     outSalary - average salary of employees with job specified 
+//            by injob
+//            outDbName - database name retrieved from DBINFO
+//            outDbVersion - database version retrieved from DBINFO
+//            sqludf_dbinfo - pointer to DBINFO structure
+//
+//            When the PARAMETER STYLE SQL clause is specified 
+//            in the CREATE PROCEDURE statement for the procedure
+//            (see the script spcreate.db2), in addition to the 
+//            parameters passed at procedure invocation time, the 
+//            following parameters are passed to the routine
+//            in the following order:
+//
+//             - one null indicator for each IN/INOUT/OUT parameter
+//               is specified in the same order as the corresponding
+//               parameter declarations.
+//             - sqlstate: to be returned to the caller to indicate 
+//               state (output)
+//             - routine-name: qualified name of the routine (input)
+//             - specific-name: the specific name of the routine (input)
+//             - diagnostic-message: an optional text string returned to the
+//               caller (output)
+//
+//            See the actual parameter declarations below to see
+//            the recommended datatypes and sizes for them.
+//
+//            CODE TIP:
+//            --------
+//            As an alternative to coding the non-functional parameters 
+//            required with parameter style SQL (sqlstate, routine-name, 
+//            specific-name, diagnostic-message), you can use a macro:
+//            SQLUDF_TRAIL_ARGS. This macro is defined in DB2 include
+//            file sqludf.h
+//   
+//            TIP EXAMPLE:
+//            ------------
+//            The following stored procedure prototype is equivalent 
+//            to the actual prototype implementation for this stored 
+//            procedure. It is simpler to implement. See stored 
+//            procedure sample TwoResultSets in this file to see the
+//            SQLUDF_TRAIL_ARGS macro in use.
+//    
+//              SQL_API_RC SQL_API_FN DbinfoExample(char inJob[9],    
+//                                      double *outSalary,   
+//                                      char outDbName[129],  
+//                                      char outDbVersion[9], 
+//                                      sqlint16 *inJobNullInd,
+//                                      sqlint16 *outSalaryNullInd,
+//                                      sqlint16 *outDbNameNullInd,
+//                                      sqlint16 *outDbVersionNullInd,
+//                                      SQLUDF_TRAIL_ARGS,
+//                                      struct sqludf_dbinfo * dbinfo)                                 
+//
+//  Note: With parameter style SQL it is mandatory to declare either the 
+//        four non-functional parameters (sqlstate, routine-name, 
+//        specific-name, diagnostic-message) or SQLUDF_TRAIL_ARGS macro.
+// 
+//*************************************************************************
+SQL_API_RC SQL_API_FN DbinfoExample(char inJob[9], // CHAR(8)    
+                                    double *outSalary,   
+                                    char outDbName[129], // CHAR(128) 
+                                    char outDbVersion[9], // CHAR(8)
+                                    sqlint16 *inJobNullInd,
+                                    sqlint16 *outSalaryNullInd,
+                                    sqlint16 *outDbNameNullInd,
+                                    sqlint16 *outDbVersionNullInd, 
+                                    char sqlstate[6],      
+                                    char qualName[28],  
+                                    char specName[19],  
+                                    char diagMsg[71],
+                                    struct sqludf_dbinfo *dbinfo)
+{
+  EXEC SQL INCLUDE SQLCA; 
+
+  // SQL host variable declaration section 
+  // Each host variable names must be unique within a code
+  // file, or the precompiler will raise SQL0307 error 
+  EXEC SQL BEGIN DECLARE SECTION;
+    char hvDbinfoJob[9];
+    double hvDbinfoSalary;
+  EXEC SQL END DECLARE SECTION;
+
+  // text information appended to diagMsg upon the event of an error
+  char sqlStmtInfo[60];
+
+  // initialize sqlStmtInfo to NULL
+  memset(sqlStmtInfo, '\0', 60); 
+
+  // initialize output parameters - set strings to NULL 
+  memset(outDbName, '\0', 129);
+  memset(outDbVersion, '\0', 9);
+  *outSalary = 0;
+  *outSalaryNullInd = -1;
+  *outDbNameNullInd = -1;
+  *outDbVersionNullInd = -1;
+  
+  EXEC SQL WHENEVER SQLERROR GOTO return_error;
+  
+  if ((*inJobNullInd) < 0)
+  {
+    // set custom sqlstate to return to client. 
+    strcpy(sqlstate, "38100");
+
+    // set custom message to return to client. Note that although the
+    // OUT parameter is declared as CHAR(70), DB2 prepends the
+    // procedure name and shared library entry point to the message.
+    // Keep the custom message short to avoid truncation. 
+    strcpy(diagMsg, "Received null input.");
+    *outSalaryNullInd = -1;
+  }
+  else
+  {
+    // copy input parameter into local host variable 
+    strcpy(hvDbinfoJob, inJob);
+
+    strcpy(sqlStmtInfo, "SELECT statement failed");
+
+    EXEC SQL SELECT AVG(salary) INTO :hvDbinfoSalary
+               FROM employee
+                 WHERE job = :hvDbinfoJob;
+
+    *outSalary = hvDbinfoSalary;
+    *outSalaryNullInd = 0;
+  }
+   
+  // copy values from the DBINFO structure into the output parameters 
+  // You must explicitly null-terminate the strings.                  
+  // Information such as the database name, and the version of the    
+  // database product can be found in the DBINFO structure as well as 
+  // other information fields. 
+  strncpy(outDbName, (char *)(dbinfo->dbname), dbinfo->dbnamelen);
+  outDbName[dbinfo->dbnamelen] = '\0';
+  strncpy(outDbVersion, (char *)(dbinfo->ver_rel), 8);
+  outDbVersion[8] = '\0';
+  *outDbNameNullInd = 0;
+  *outDbVersionNullInd = 0;  
+  
+  return (0);
+  
+  // set custom diagMsg and sqlstate to return to client 
+  return_error:
+  {  
+    strcpy(sqlstate, sqlca.sqlstate);  
+    
+    sprintf(diagMsg, "%d", sqlca.sqlcode);
+    strcat(diagMsg, ": ");
+    strcat(diagMsg, sqlStmtInfo);    
+    return (0);
+  }
+} // DbinfoExample function 
+
+//*************************************************************************
+//  Stored Procedure: MainExample
+//                              
+//  Purpose:  Returns the average salary of employees in table
+//            employee that have the job specified by argv[1]
+//
+//            Shows how to:
+//             - use standard argc and argv parameters to a main
+//               C routine to pass parameters in and out
+//             - define IN parameters using PARAMETER STYLE SQL
+//             - define and use NULL indicators for parameters
+//             - define the extra parameters associated with
+//               PARAMETER STYLE SQL
+//
+//  Parameters:
+//
+//   IN:      argc    - count of the number of parameters
+//            argv[1] - job type (char[8])
+//   OUT:     argv[2] - average salary of employees with that job (double)
+//                      
+//            When the PARAMETER STYLE SQL clause is specified 
+//            in the CREATE PROCEDURE statement for the procedure
+//            (see the script spcreate.db2), in addition to the 
+//            parameters passed at procedure invocation time, the 
+//            following parameters are passed to the routine
+//            in the following order:
+//
+//             - one null indicator for each IN/INOUT/OUT parameter
+//               is specified in the same order as the corresponding
+//               parameter declarations.
+//             - sqlstate: to be returned to the caller to indicate 
+//               state (output)
+//             - routine-name: qualified name of the routine (input)
+//             - specific-name: the specific name of the routine (input)
+//             - diagnostic-message: an optional text string returned to the
+//               caller (output)
+//
+//  Note: With parameter style SQL it is mandatory to declare either the 
+//        four non-functional parameters (sqlstate, routine-name, 
+//        specific-name, diagnostic-message) or SQLUDF_TRAIL_ARGS macro.
+// 
+//*************************************************************************
+SQL_API_RC SQL_API_FN MainExample(int argc, char **argv)
+{
+  EXEC SQL INCLUDE SQLCA; 
+  
+  // SQL host variable declaration section 
+  // Each host variable names must be unique within a code
+  // file, or the precompiler will raise SQL0307 error 
+  EXEC SQL BEGIN DECLARE SECTION;
+    char hvMainJob[9];
+    double hvMainSalary;                               
+  EXEC SQL END DECLARE SECTION;
+
+  // note:
+  // argv[0]: program name
+  // argv[1]: job type (char[8], input) 
+  // argv[2]: average salary (double, output)
+  // argv[3]: null indicator for job type 
+  // argv[4]: null indicator for average salary
+  // argv[5]: sqlstate (char[6], output)
+  // argv[6]: qualName (char[28], output)
+  // argv[7]: specName (char[19], output)
+  // argv[8]: diagMsg (char[71], output)
+  
+  // initialize ouput null indicator   
+  *(sqlint16 *)argv[4] = -1;
+  
+  // text information appended to diagMsg upon the event of an error
+  char sqlStmtInfo[60];
+  char sqlCode[10];
+
+  strcpy(sqlStmtInfo, "\0");
+  strcpy(sqlCode, "\0"); 
+ 
+  // initialize sqlStmtInfo to NULL
+  memset(sqlStmtInfo, '\0', 60);     
+  
+  EXEC SQL WHENEVER SQLERROR GOTO return_error;  
+    
+  // check the null indicator variable for the input parameter 
+  if (*(sqlint16 *)argv[3] < 0)
+  {
+    // set custom SQLSTATE to return to client. 
+    strcpy((char *)argv[5], "38100");
+
+    // set custom message to return to client. Note that although the
+    // OUT parameter is declared as CHAR(70), DB2 prepends the
+    // procedure name and shared library entry point to the message.
+    // Keep the custom message short to avoid truncation. 
+    strcpy((char *)argv[8], "Received null input.");
+    
+    // set the null indicator variable for the output parameter
+    // to indicate a null value
+    *(sqlint16 *)argv[4] = -1;
+    
+    return (0);
+  }
+  else
+  {
+    // argv[0] contains the procedure name, so parameters start at argv[1] 
+    strcpy(hvMainJob, (char *)argv[1]);
+
+    strcpy(sqlStmtInfo, "SELECT statement failed");
+    
+    EXEC SQL SELECT AVG(salary)
+      INTO :hvMainSalary
+      FROM employee
+      WHERE job = :hvMainJob;
+
+    // set the output parameter values including the sqlca.sqlcode
+    memcpy((double *)argv[2], (double *)&hvMainSalary, sizeof(double));
+    
+    // set the null indicator variable for the output parameter
+    // to indicate a non-null value
+    *(sqlint16 *)argv[4] = 0;
+  }
+ 
+  return (0);
+ 
+  // set custom diagMsg and sqlstate to return to client 
+  return_error:
+  {    
+    strcpy((char *)argv[5], sqlca.sqlstate);  
+        
+    sprintf(sqlCode, "%d", sqlca.sqlcode);    
+    strcat(sqlCode, " : ");
+    strcpy((char *)argv[8], sqlCode);
+    strcat((char *)argv[8], sqlStmtInfo);
+      
+    return (0);
+  }
+} // MainExample function 
+
+//*************************************************************************
+// Embedded C/C++ stored procedures do not provide direct support for DECIMAL
+// data type.
+// The following programming languages can be used to directly  
+// manipulate DECIMAL type: 
+//          - JDBC
+//          - SQLJ
+//          - SQL routines
+//          - .NET common language runtime languages (C#, Visual Basic) 
+// Please see the SpServer implementation for one of the above 
+// language to see this functionality.
+//*************************************************************************
+
+//*************************************************************************
+//  Stored Procedure: AllDataTypes 
+//
+//  Purpose: Take each parameter and set it to a new output value.
+//           This sample shows only a subset of DB2 supported data types.
+//           For a full listing of DB2 data types, please see the SQL 
+//           Reference. 
+//
+//            Shows how to:
+//             - define INOUT/OUT parameters in PARAMETER STYLE SQL 
+//             - declare host variables and assign values to them
+//             - assign output values to INOUT/OUT parameters
+//
+//  Parameters:
+//  
+//   INOUT:   inOutSmall, inOutInt, inOutBig, inOutReal, outDouble
+//   OUT:     outChar, outChars, outVarchar, outDate, outTime
+//
+//            When the PARAMETER STYLE SQL clause is specified 
+//            in the CREATE PROCEDURE statement for the procedure
+//            (see the script spcreate.db2), in addition to the 
+//            parameters passed at procedure invocation time, the 
+//            following parameters are passed to the routine
+//            in the following order:
+//
+//             - one null indicator for each IN/INOUT/OUT parameter
+//               is specified in the same order as the corresponding
+//               parameter declarations.
+//             - sqlstate: to be returned to the caller to indicate 
+//               state (output)
+//             - routine-name: qualified name of the routine (input)
+//             - specific-name: the specific name of the routine (input)
+//             - diagnostic-message: an optional text string returned to the
+//               caller (output)
+//
+//             In this example we use macro SQLUDF_TRAIL_ARGS
+//             (defined in sqludf.h - this file must be included)
+//             to replace the 4 'extra' parameters:
+//               sqlstate, qualified routine name, specific name of
+//               routine, diagnostic string.
+//
+//             When referencing the 'extra' parameters, use the
+//             parameter names provided in the macro definition in
+//             sqludf.h:
+//
+//                sqludf_sqlstate
+//                sqludf_fname
+//                sqludf_fspecname
+//                sqludf_msgtext
+//
+//  Note: With parameter style SQL it is mandatory to declare either the 
+//        four non-functional parameters (sqlstate, routine-name, 
+//        specific-name, diagnostic-message) or SQLUDF_TRAIL_ARGS macro.
+//        
+//*************************************************************************
+SQL_API_RC SQL_API_FN AllDataTypes(sqlint16 *inOutSmall,
+                                   sqlint32 *inOutInt,
+                                   sqlint64 *inOutBig,
+                                   float *inOutReal,
+                                   double *inOutDouble,
+                                   char outChar[2], // CHAR(1)
+                                   char outChars[16], // CHAR(15)
+                                   char outVarchar[13], // VARCHAR(13)
+                                   char outDate[11], // DATE
+                                   char outTime[9], // TIME
+                                   sqlint16 *inOutSmallNullInd,
+                                   sqlint16 *inOutIntNullInd,
+                                   sqlint16 *inOutBigNullInd,
+                                   sqlint16 *inOutRealNullInd,
+                                   sqlint16 *inOutDoubleNullInd,
+                                   sqlint16 *outCharNullInd,
+                                   sqlint16 *outCharsNullInd,
+                                   sqlint16 *outVarcharNullInd,
+                                   sqlint16 *outDateNullInd,
+                                   sqlint16 *outTimeNullInd,
+                                   SQLUDF_TRAIL_ARGS)
+{
+  EXEC SQL INCLUDE SQLCA; 
+
+  // SQL host variable declaration section 
+  // Each host variable names must be unique within a code
+  // file, or the precompiler will raise SQL0307 error 
+  EXEC SQL BEGIN DECLARE SECTION;
+    char hvAllDataTypesChar[2];     
+    char hvAllDataTypesChars[16];   
+    char hvAllDataTypesVarchar[13]; 
+    char hvAllDataTypesDate[11];    
+    char hvAllDataTypesTime[9];     
+  EXEC SQL END DECLARE SECTION;
+
+  // text information appended to diagMsg upon the event of an error
+  char sqlStmtInfo[60];
+
+  // initialize sqlStmtInfo to NULL
+  memset(sqlStmtInfo, '\0', 60); 
+
+  // initialize the OUT parameters and Null indicators
+  memset(outChar, '\0', 2);
+  memset(outChars, '\0', 16);
+  memset(outVarchar, '\0', 13);
+  memset(outDate, '\0', 11);
+  memset(outTime, '\0', 9);
+  *outCharNullInd = -1;
+  *outCharsNullInd = -1;
+  *outVarcharNullInd = -1;
+  *outDateNullInd = -1;
+  *outTimeNullInd = -1;
+  
+  EXEC SQL WHENEVER SQLERROR GOTO return_error;
+  
+  if (*inOutSmall == 0)
+  {
+    *inOutSmall = 1;
+  }
+  else
+  {
+    *inOutSmall = (*inOutSmall / 2);
+  }
+
+  if (*inOutInt == 0)
+  {
+    *inOutInt = 1;
+  }
+  else
+  {
+    *inOutInt = (*inOutInt / 2);
+  }
+
+  if (*inOutBig == 0)
+  {
+    *inOutBig = 1;
+  }
+  else
+  {
+    *inOutBig = (*inOutBig / 2);
+  }
+
+  if (*inOutReal == 0)
+  {
+    *inOutReal = 1;
+  }
+  else
+  {
+    *inOutReal = (*inOutReal / 2);
+  }
+
+  if (*inOutDouble == 0)
+  {
+    *inOutDouble = 1;
+  }
+  else
+  {
+    *inOutDouble = (*inOutDouble / 2);
+  }
+  
+  strcpy(sqlStmtInfo, "SELECT midinit,... failed");
+
+  EXEC SQL SELECT midinit, lastname, firstnme
+    INTO :hvAllDataTypesChar, :hvAllDataTypesChars, :hvAllDataTypesVarchar
+    FROM employee
+    WHERE empno = '000180';
+    
+  strcpy(outChar, hvAllDataTypesChar);
+  strcpy(outChars, hvAllDataTypesChars);
+  strcpy(outVarchar, hvAllDataTypesVarchar);
+  
+  *outCharNullInd = 0;
+  *outCharsNullInd = 0;
+  *outVarcharNullInd = 0;
+  
+  strcpy(sqlStmtInfo, "VALUES statement failed");
+
+  EXEC SQL VALUES CURRENT DATE INTO :hvAllDataTypesDate;
+  strcpy(outDate, hvAllDataTypesDate);
+  *outDateNullInd = 0;
+  
+  strcpy(sqlStmtInfo, "VALUES statement failed");
+
+  EXEC SQL VALUES CURRENT TIME INTO :hvAllDataTypesTime;
+  strcpy(outTime, hvAllDataTypesTime);
+  *outTimeNullInd = 0;
+  
+  return (0);
+
+  // set custom diagMsg and sqlstate to return to client 
+  return_error:
+  {
+    // set custom sqlstate to return to client. 
+    strcpy(sqludf_sqlstate, sqlca.sqlstate);  
+    
+    sprintf(sqludf_msgtext, "%d", sqlca.sqlcode);
+    strcat(sqludf_msgtext, " : ");
+    strcat(sqludf_msgtext, sqlStmtInfo);    
+    return (0);
+  }
+} // AllDataTypes procedure 
+
+//*************************************************************************
+//  Stored Procedure: OneResultSetToClient
+//
+//  Purpose:  Returns a result set to the caller that identifies employees
+//            with salaries greater than the value of input parameter
+//            inSalary.
+//
+//            Shows how to:
+//             - define IN and OUT parameters in STYLE SQL
+//             - define and use NULL indicators for parameters
+//             - define the extra parameters associated with
+//               PARAMETER STYLE SQL
+//             - return a result set to the client
+//
+//           Note: Extraction of result sets is not supported from 
+//                 C/C++ clients
+//
+//  Parameters:
+// 
+//   IN:      inSalary - salary
+//
+//            When the PARAMETER STYLE SQL clause is specified 
+//            in the CREATE PROCEDURE statement for the procedure
+//            (see the script spcreate.db2), in addition to the 
+//            parameters passed at procedure invocation time, the 
+//            following parameters are passed to the routine
+//            in the following order:
+//
+//             - one null indicator for each IN/INOUT/OUT parameter
+//               is specified in the same order as the corresponding
+//               parameter declarations.
+//             - sqlstate: to be returned to the caller to indicate 
+//               state (output)
+//             - routine-name: qualified name of the routine (input)
+//             - specific-name: the specific name of the routine (input)
+//             - diagnostic-message: an optional text string returned to the
+//               caller (output)
+//
+//            See the actual parameter declarations below to see
+//            the recommended datatypes and sizes for them.
+//
+//            CODE TIP:
+//            --------
+//            As an alternative to coding the non-functional parameters 
+//            required with parameter style SQL (sqlstate, routine-name, 
+//            specific-name, diagnostic-message), you can use a macro:
+//            SQLUDF_TRAIL_ARGS. This macro is defined in DB2 include
+//            file sqludf.h
+//   
+//            TIP EXAMPLE:
+//            ------------
+//            The following stored procedure prototype is equivalent 
+//            to the actual prototype implementation for this stored 
+//            procedure. It is simpler to implement. See stored 
+//            procedure sample TwoResultSets in this file to see the
+//            SQLUDF_TRAIL_ARGS macro in use.
+//
+//            SQL_API_RC SQL_API_FN OneResultSetToClient(double *inSalary,
+//                                    sqlint16 *inSalaryNullInd,
+//                                    SQLUDF_TRAIL_ARGS)
+//    
+//  Note: With parameter style SQL it is mandatory to declare either the 
+//        four non-functional parameters (sqlstate, routine-name, 
+//        specific-name, diagnostic-message) or SQLUDF_TRAIL_ARGS macro.
+// 
+//*************************************************************************
+SQL_API_RC SQL_API_FN OneResultSetToClient(double *inSalary,      
+                                           sqlint16 *inSalaryNullInd,
+                                           char sqlstate[6],  
+                                           char qualName[28],
+                                           char specName[19],
+                                           char diagMsg[71]) 
+{
+  EXEC SQL INCLUDE SQLCA; 
+    
+  // SQL host variable declaration section 
+  // Each host variable names must be unique within a code
+  // file, or the precompiler will raise SQL0307 error 
+  EXEC SQL BEGIN DECLARE SECTION;
+    double hvOneResultSetSalary;
+  EXEC SQL END DECLARE SECTION;
+
+  // text information appended to diagMsg upon the event of an error
+  char sqlStmtInfo[60];
+
+  // initialize sqlStmtInfo to NULL
+  memset(sqlStmtInfo, '\0', 60);   
+ 
+  EXEC SQL WHENEVER SQLERROR GOTO return_error;
+
+  if ((*inSalaryNullInd) < 0)
+  {
+    // set custom sqlstate to return to client. 
+    strcpy(sqlstate, "38100");
+
+    // set custom message to return to client. Note that although the
+    // OUT parameter is declared as CHAR(70), DB2 prepends the
+    // procedure name and shared library entry point to the message.
+    // Keep the custom message short to avoid truncation. 
+    strcpy(diagMsg, "Received null input.");
+    
+    return (0);
+  }
+  
+  hvOneResultSetSalary = *inSalary;
+ 
+  strcpy(sqlStmtInfo, "DECLARE statement failed");
+    
+  EXEC SQL DECLARE curOneResultSet CURSOR FOR
+             SELECT name, job, CAST(salary AS DOUBLE)
+               FROM staff
+                 WHERE salary > :hvOneResultSetSalary
+                   ORDER BY salary;
+  
+  strcpy(sqlStmtInfo, "OPEN statement failed");
+
+  // leave cursor open to return result set 
+  EXEC SQL OPEN curOneResultSet;
+
+  return (0);
+
+  // set custom diagMsg and sqlstate to return to client 
+  return_error:
+  {  
+    strcpy(sqlstate, sqlca.sqlstate);  
+    
+    sprintf(diagMsg, "%d", sqlca.sqlcode);
+    strcat(diagMsg, ": ");
+    strcat(diagMsg, sqlStmtInfo);       
+    return (0);
+  }
+} // OneResultSetToClient function 
+
+//*************************************************************************
+//  Stored Procedure: TwoResultSets
+//
+//  Purpose:  Returns two result sets to the caller. One result set
+//            consists of employee data of all employees with salaries
+//            greater than inMedianSalary.  The other result set contains
+//            employee data for employees with salaries less than
+//            inMedianSalary.
+//
+//            Shows how to:
+//              - define IN and OUT parameters in STYLE SQL
+//              - define and use NULL indicators for parameters
+//              - define the extra parameters associated with
+//                PARAMETER STYLE SQL
+//              - return more than 1 result set to the client
+//
+//           Note: Extraction of result sets is not supported from 
+//                 C/C++ clients
+//
+//  Parameters:
+// 
+//   IN:      inMedianSalary - salary
+//
+//            When the PARAMETER STYLE SQL clause is specified 
+//            in the CREATE PROCEDURE statement for the procedure
+//            (see the script spcreate.db2), in addition to the 
+//            parameters passed at procedure invocation time, the 
+//            following parameters are passed to the routine
+//            in the following order:
+//
+//             - one null indicator for each IN/INOUT/OUT parameter
+//               is specified in the same order as the corresponding
+//               parameter declarations.
+//             - sqlstate: to be returned to the caller to indicate 
+//               state (output)
+//             - routine-name: qualified name of the routine (input)
+//             - specific-name: the specific name of the routine (input)
+//             - diagnostic-message: an optional text string returned to the
+//               caller (output)
+// 
+//             CODE TIP:
+//             ========
+//             See the parameter declarations in stored procedure
+//             example OutLanguage for datatypes and sizes for these.
+//
+//             In this example we use macro SQLUDF_TRAIL_ARGS
+//             (defined in sqludf.h - this file must be included)
+//             to replace the 4 'extra' parameters:
+//               sqlstate, qualified routine name, specific name of
+//               routine, diagnostic string.
+//
+//             When referencing the 'extra' parameters, use the
+//             parameter names provided in the macro definition in
+//             sqludf.h:
+//
+//                sqludf_sqlstate
+//                sqludf_fname
+//                sqludf_fspecname
+//                sqludf_msgtext
+//
+//  Note: With parameter style SQL it is mandatory to declare either the 
+//        four non-functional parameters (sqlstate, routine-name, 
+//        specific-name, diagnostic-message) or SQLUDF_TRAIL_ARGS macro.
+// 
+//*************************************************************************
+SQL_API_RC SQL_API_FN TwoResultSets(double *inMedianSalary,       
+                                    sqlint16 *inMedianSalaryNullInd,
+                                    SQLUDF_TRAIL_ARGS)
+{
+  EXEC SQL INCLUDE SQLCA; 
+    
+  // SQL host variable declaration section 
+  // Each host variable names must be unique within a code
+  // file, or the precompiler will raise SQL0307 error 
+  EXEC SQL BEGIN DECLARE SECTION;
+    double hvTwoResultSetsSalary;
+  EXEC SQL END DECLARE SECTION;
+
+  // text information appended to diagMsg upon the event of an error
+  char sqlStmtInfo[60];
+
+  // initialize sqlStmtInfo to NULL
+  memset(sqlStmtInfo, '\0', 60); 
+
+  EXEC SQL WHENEVER SQLERROR GOTO return_error;
+
+  if (*inMedianSalaryNullInd < 0)
+  {
+    // set custom sqlstate to return to client. 
+    strcpy(sqludf_sqlstate, "38100");
+
+    // set custom message to return to client. Note that although the
+    // OUT parameter is declared as CHAR(70), DB2 prepends the
+    // procedure name and shared library entry point to the message.
+    // Keep the custom message short to avoid truncation. 
+    strcpy(sqludf_msgtext, "Received null input.");
+    
+    return (0);
+  }
+
+  hvTwoResultSetsSalary = *inMedianSalary;
+
+  strcpy(sqlStmtInfo, "DECLARE curTwoResultSets1 statement failed");
+ 
+  EXEC SQL DECLARE curTwoResultSets1 CURSOR FOR
+             SELECT name, job, CAST(salary AS DOUBLE)
+               FROM staff
+                 WHERE salary > :hvTwoResultSetsSalary ORDER BY salary;
+
+  strcpy(sqlStmtInfo, "DECLARE curTwoResultSets2 statement failed");
+
+  EXEC SQL DECLARE curTwoResultSets2 CURSOR FOR
+             SELECT name, job, CAST(salary AS DOUBLE)
+               FROM staff WHERE salary < :hvTwoResultSetsSalary
+                 ORDER BY salary DESC;
+
+  strcpy(sqlStmtInfo, "OPEN statement failed");
+
+  EXEC SQL OPEN curTwoResultSets1;
+
+  strcpy(sqlStmtInfo, "OPEN statement failed");
+
+  EXEC SQL OPEN curTwoResultSets2;
+
+  // leave both cursors open to return result sets 
+  return (0);
+
+  // set custom diagMsg and sqlstate to return to client 
+  return_error:
+  {        
+    // set custom sqlstate to return to client. 
+    strcpy(sqludf_sqlstate, sqlca.sqlstate);  
+    
+    sprintf(sqludf_msgtext, "%d", sqlca.sqlcode);
+    strcat(sqludf_msgtext, " : ");
+    strcat(sqludf_msgtext, sqlStmtInfo);     
+    return (0);
+  }
+} // TwoResultSets function 
+
+//*************************************************************************
+//  Stored Procedure: GeneralExample
+//
+//  Purpose:  Return a result set to the caller that identifies those
+//            employees with an education level equal to the value of
+//            input parameter inEdLevel.
+//
+//            Shows how to:
+//             - define IN and OUT parameters in STYLE GENERAL
+//             - execute SQL to declare and work with a cursor 
+//             - return a result set to the client
+//
+//            Note: Extraction of result sets is not supported from 
+//                  C/C++ clients
+//
+//  Parameters:
+// 
+//   IN:      inEdLevel - education level of the employee
+//   OUT:     outReturnCode - sqlcode of error (if one is raised)
+//            outErrorMsg - text information returned to the client to
+//            locate the error, if any
+//
+//            When PARAMETER STYLE GENERAL clause is specified in the 
+//            CREATE PROCEDURE statement for the procedure 
+//            (see the script spcreate.db2), only the parameters passed
+//            during invocation are passed to the routine. With 
+//            PARAMETER STYLE GENERAL, there is no concept of null. You  
+//            cannot assess the nullability of variable, nor can you set  
+//            a value to an SQL equivalent to NULL.
+//            
+//*************************************************************************
+SQL_API_RC SQL_API_FN GeneralExample(sqlint32 *inEdLevel,
+                                     sqlint32 *outReturnCode,
+                                     char outErrorMsg[33]) // CHAR(32) 
+{                                     
+  EXEC SQL INCLUDE SQLCA; 
+  
+  // SQL host variable declaration section 
+  // Each host variable names must be unique within a code
+  // file, or the precompiler will raise SQL0307 error 
+  EXEC SQL BEGIN DECLARE SECTION;
+    sqlint32 hvGeneralEduLevel;
+  EXEC SQL END DECLARE SECTION;
+
+  // initialize output parameters 
+  *outReturnCode = 0;
+  memset(outErrorMsg, '\0', 33);
+  
+  EXEC SQL WHENEVER SQLERROR GOTO return_error; 
+    
+  if ( (*inEdLevel > 25) || (*inEdLevel < 0))
+  {
+    // set the output error code and message
+    *outReturnCode = -1;
+    strcpy(outErrorMsg, "Received invalid input");
+    
+    return (0);   
+  }   
+
+  hvGeneralEduLevel = *inEdLevel;  
+  
+  strcpy(outErrorMsg, "DECLARE curGeneral failed");
+  
+  EXEC SQL DECLARE curGeneral CURSOR FOR
+             SELECT firstnme, lastname, workdept
+               FROM employee
+               WHERE edlevel = :hvGeneralEduLevel
+               ORDER BY workdept;
+  
+  // leave cursor open to return result set 
+  strcpy(outErrorMsg, "OPEN curGeneral failed");
+  EXEC SQL OPEN curGeneral;
+
+  return (0);
+  
+  // set error code information to return to client 
+  return_error:
+  {
+    *outReturnCode = sqlca.sqlcode;
+    return (0);
+  }
+} // GeneralExample function 
+
+//*************************************************************************
+//  Stored Procedure: GeneralWithNullsExample
+//
+//  Purpose:  Returns a result set to the caller that contains sales 
+//            information for a particular business quarter, as specified 
+//            by input parameter inQuarter.
+//
+//            Shows how to:
+//             - define IN and OUT parameters in STYLE GENERAL WITH NULLS
+//             - define and use NULL indicators for parameters
+//             - execute SQL to declare and use a cursor 
+//             - return a result set to the client
+//
+//            Note: Extraction of result sets is not supported from 
+//                  C/C++ clients
+//
+//  Parameters:
+// 
+//   IN:      inQuarter - the business quarter for which sales information 
+//            is returned
+//   OUT:     outReturnCode - sqlcode of error (if one is raised)
+//            outErrorMsg - text information returned to the client to
+//            locate the error, if any
+//
+//            When PARAMETER STYLE GENERAL WITH NULLS is defined
+//            for the routine (see routine registration script 
+//            spcreate.db2), in addition to the parameters passed during
+//            invocation, a vector containing a null indicator for each
+//            parameter in the CALL statement is passed to the routine.
+// 
+//*************************************************************************
+SQL_API_RC SQL_API_FN GeneralWithNullsExample(sqlint32 *inQuarter,
+                                              sqlint32 *outReturnCode,
+                                              char outErrorMsg[33], // CHAR(32)
+                                              sqlint16 nullInds[3])  
+{                                   
+  EXEC SQL INCLUDE SQLCA; 
+     
+  // SQL host variable declaration section 
+  // Each host variable names must be unique within a code
+  // file, or the precompiler will raise SQL0307 error 
+  EXEC SQL BEGIN DECLARE SECTION;
+    sqlint32 hvGenWithNullsQuarter;
+  EXEC SQL END DECLARE SECTION;
+  
+  EXEC SQL WHENEVER SQLERROR GOTO return_error;
+  
+  // Note: nullInds[0] corresponds to inQuarter
+  //       nullInds[1] corresponds to outReturnCode
+  //       nullInds[2] corresponds to outErrorMsg 
+  
+  // initialize output parameters and their corresponding null indicators
+  *outReturnCode = 0;
+  memset(outErrorMsg, '\0', 33);
+  nullInds[1] = 0;
+  nullInds[2] = -1;
+      
+  if (nullInds[0] < 0)
+  {
+    // set the output error code and message
+    *outReturnCode = -1;
+    strcpy(outErrorMsg, "Received null input");
+    
+    // received null inputs, so set the output null indicators accordingly    
+    nullInds[1] = 0;
+    nullInds[2] = 0;   
+    
+    return (0);
+  }
+  
+  if ((*inQuarter) < 1 || (*inQuarter) > 4)
+  {
+    // set the output error code and message
+    *outReturnCode = -1;
+    strcpy(outErrorMsg, "Received invalid input");
+    
+    // set the output null indicators to indicate that the output 
+    // parameters are not null
+    nullInds[1] = 0;
+    nullInds[2] = 0;
+    
+    return (0);
+  }  
+       
+  hvGenWithNullsQuarter = *inQuarter;
+    
+  strcpy(outErrorMsg, "DECLARE curGenWithNulls failed");
+    
+  EXEC SQL DECLARE curGenWithNulls CURSOR FOR
+             SELECT sales_person, region, sales
+               FROM sales
+               WHERE quarter(sales_date) = :hvGenWithNullsQuarter;
+                       
+  // leave cursor open to return result set 
+  strcpy(outErrorMsg, "OPEN curGenWithNulls failed");                        
+  EXEC SQL OPEN curGenWithNulls;
+      
+  return (0);
+
+  // set error code information to return to client 
+  return_error:
+  {
+    *outReturnCode = sqlca.sqlcode;
+    nullInds[1] = 0;
+    nullInds[2] = 0;    
+    return (0);
+  }
+} // GeneralWithNullsExample function 

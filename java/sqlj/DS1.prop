@@ -1,0 +1,9 @@
+serverName=
+portNumber=
+databaseName=sample
+dataSourceName=jdbc/defaultDataSource
+driverType=4
+securityMechanism=3
+kerberosPrincipal=null
+userName=
+password=

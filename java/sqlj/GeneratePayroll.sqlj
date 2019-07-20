@@ -1,0 +1,367 @@
+//***************************************************************************
+// (c) Copyright IBM Corp. 2007 All rights reserved.
+// 
+// The following sample of source code ("Sample") is owned by International 
+// Business Machines Corporation or one of its subsidiaries ("IBM") and is 
+// copyrighted and licensed, not sold. You may use, copy, modify, and 
+// distribute the Sample in any form without payment to IBM, for the purpose of 
+// assisting you in the development of your applications.
+// 
+// The Sample code is provided to you on an "AS IS" basis, without warranty of 
+// any kind. IBM HEREBY EXPRESSLY DISCLAIMS ALL WARRANTIES, EITHER EXPRESS OR 
+// IMPLIED, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED WARRANTIES OF 
+// MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE. Some jurisdictions do 
+// not allow for the exclusion or limitation of implied warranties, so the above 
+// limitations or exclusions may not apply to you. IBM shall not be liable for 
+// any damages you suffer as a result of using, copying, modifying or 
+// distributing the Sample, even if IBM has been advised of the possibility of 
+// such damages.
+//***************************************************************************
+//
+// SOURCE FILE NAME: GeneratePayroll.sqlj
+//
+// SAMPLE: Geneate payroll reports by department
+//
+// SQL Statements USED:
+//         SELECT
+//
+// Classes used from Util.sqlj are:
+//         Db
+//         SqljException
+//***************************************************************************
+//
+// For more information on the sample programs, see the README file.
+//
+// For information on developing SQLJ applications, see the Application
+// Development Guide.
+//
+// For information on using SQL statements, see the SQL Reference.
+//
+// For the latest information on programming, compiling, and running DB2
+// applications, visit the DB2 application development website at
+//     http://www.software.ibm.com/data/db2/udb/ad
+//**************************************************************************/
+
+import java.lang.*;
+import java.io.*;
+import java.sql.*;
+import java.util.Vector;
+import sqlj.runtime.*;
+import sqlj.runtime.ref.*;
+
+
+#sql iterator EmployeeInfo(String, String, String, String, String, String, String, String);
+#sql iterator DepartNum(String);
+
+class GeneratePayroll
+{
+  public static void main(String argv[])
+  {
+    String workdept=null;
+
+    try
+    {
+      Db db = new Db(argv);
+
+      System.out.println();
+      System.out.println(
+        "THIS SAMPLE GENERATES THE PAYROLL REPORTS BY DEPARTMENT.");
+
+      // connect to the 'sample' database
+      db.getDefaultContext();
+
+      // list all department numbers in the database
+      listDepart();
+
+      // get the Department number that user enters.
+      workdept = getDepartNum("Please enter the department number:");
+
+      Vector employeelist = new Vector();
+
+      payrollReport(workdept, employeelist);
+
+      Object[] temp = employeelist.toArray();
+      Payroll[] pl = new Payroll[temp.length];
+
+      for(int i = 0; i < temp.length; i++)
+      {
+        pl[i] = (Payroll)employeelist.get(i);
+      }
+
+      // print the payroll report
+      printReport(pl);
+
+      // disconnect from the 'sample' database
+      db.disconnect();
+    }
+    catch (Exception e)
+    {
+      SqljException sqljExc = new SqljException(e);
+      sqljExc.handle();
+    }
+  } // main
+
+
+  static void printReport(Payroll[] pl)
+  {
+     EmployeeInfo results;
+     String empno = null;
+     String firstnme = null;
+     String midinit = null;
+     String lastname = null;
+     String workdept = null;
+     String salary = null;
+     String bonus = null;
+     String comm = null;
+
+
+     for(int i = 0; i < pl.length; i++)
+     {
+       empno = pl[i].getEmpno();
+       firstnme = pl[i].getFirstnme();
+       midinit = pl[i].getMidinit();
+       lastname = pl[i].getLastname();
+       workdept = pl[i].getWorkdept();
+       salary = pl[i].getSalary();
+       bonus = pl[i].getBonus();
+       comm = pl[i].getComm();
+
+       System.out.println("Payroll report\n ");
+       System.out.println("----------------------------------------------------\n ");
+       System.out.println("Employee Id:   " + empno + "\n");
+       System.out.println("Employee name: " + firstnme + " " + midinit + " " + lastname + "\n");
+       System.out.println("Department:    " + workdept + "\n");
+       System.out.println("Payment:       " + salary + "\n");
+       System.out.println("Bonus:         " + bonus + "\n");
+       System.out.println("Commission:    " + comm + "\n");
+       System.out.println("----------------------------------------------------\n ");
+     }
+
+   } //printReport
+
+
+  static void payrollReport(String department, Vector employeelist)
+  {
+    EmployeeInfo results;
+    String empno = null;
+    String firstnme = null;
+    String midinit = null;
+    String lastname = null;
+    String workdept = null;
+    String salary = null;
+    String bonus = null;
+    String comm = null;
+
+    try
+    {
+      System.out.println();
+
+      #sql results={SELECT empno, firstnme, midinit, lastname, workdept, salary, bonus, comm FROM EMPLOYEE WHERE workdept=:department};
+
+      while (true)
+      {
+      
+        #sql {FETCH :results INTO :empno, :firstnme, :midinit, :lastname, 
+                                  :workdept,:salary, :bonus, :comm};
+
+        if (results.endFetch())
+        {
+          break;
+        }
+
+        Payroll user = new Payroll();
+        user.setEmpno(empno);
+        user.setFirstnme(firstnme);
+        user.setMidinit(midinit);
+        user.setLastname(lastname);
+        user.setWorkdept(workdept);
+        user.setSalary(salary);
+        user.setBonus(bonus);
+        user.setComm(comm);
+
+        employeelist.add(user);
+       }
+
+       results.close();
+    }
+    catch (Exception e)
+    {
+      SqljException sqljExc = new SqljException(e);
+      sqljExc.handle();
+    }
+
+  }
+  // employeeAdd
+
+
+  static String getDepartNum(String text)
+  {
+    // prompt the user to enter information
+    System.out.print(text);
+
+    // open up standard input
+    BufferedReader br = new BufferedReader(new InputStreamReader(System.in));
+
+    String data = null;
+
+    try {
+       data = br.readLine();
+    }
+    catch (IOException ioe) {
+       System.out.println("IO error trying to read input!");
+       System.exit(1);
+    }
+    return data;
+  }
+
+
+  static void listDepart()
+  {
+    DepartNum results;
+    String department = null;
+    try
+    {
+      System.out.println();
+      System.out.println("Department");
+      System.out.println("----------");
+
+      #sql results={SELECT distinct workdept FROM EMPLOYEE};
+
+      while (true)
+      {
+        #sql {FETCH :results INTO :department};
+
+        if (results.endFetch())
+        {
+          break;
+        }
+
+        System.out.println(department);
+      }
+
+      System.out.println("----------");
+      System.out.println();
+
+      results.close();
+    }
+    catch (Exception e)
+    {
+      SqljException sqljExc = new SqljException(e);
+      sqljExc.handle();
+    }
+
+  }
+
+//CreateEmployee
+}
+
+class Payroll
+{
+
+  private String empno=null;
+  private String firstnme=null;
+  private String midinit=null;
+  private String lastname=null;
+  private String workdept=null;
+  private String phoneno=null;
+  private String hiredate=null;
+  private String job=null;
+  private String edlevel=null;
+  private String sex=null;
+  private String birthdate=null;
+  private String salary=null;
+  private String bonus=null;
+  private String comm=null;
+
+//--------set method----------------
+
+  public void setEmpno(String empno) {
+    this.empno = empno;
+  }
+  public void setFirstnme(String firstnme) {
+    this.firstnme = firstnme;
+  }
+  public void setMidinit(String midinit) {
+    this.midinit = midinit;
+  }
+  public void setLastname(String lastname) {
+    this.lastname = lastname;
+  }
+  public void setWorkdept(String workdept) {
+    this.workdept = workdept;
+  }
+  public void setPhoneno(String phoneno) {
+    this.phoneno = phoneno;
+  }
+  public void setHiredate(String hiredate) {
+    this.hiredate = hiredate;
+  }
+  public void setJob(String job) {
+    this.job = job;
+  }
+  public void setEdlevel(String edlevel) {
+    this.edlevel = edlevel;
+  }
+  public void setSex(String sex) {
+    this.sex = sex;
+  }
+  public void setBirthdate(String birthdate) {
+    this.birthdate = birthdate;
+  }
+  public void setSalary(String salary) {
+    this.salary = salary;
+  }
+  public void setBonus(String bonus) {
+    this.bonus = bonus;
+  }
+  public void setComm(String comm) {
+    this.comm = comm;
+  }
+
+//-----------get method -----------------
+
+  public String getEmpno() {
+    return empno;
+  }
+  public String getFirstnme() {
+    return firstnme;
+  }
+  public String getMidinit() {
+    return midinit;
+  }
+  public String getLastname() {
+    return lastname;
+  }
+  public String getWorkdept() {
+    return workdept;
+  }
+  public String getPhoneno() {
+    return phoneno;
+  }
+  public String getHiredate() {
+    return hiredate;
+  }
+  public String getJob() {
+    return job;
+  }
+  public String getEdlevel() {
+    return edlevel;
+  }
+  public String getSex() {
+    return sex;
+  }
+  public String getBirthdate() {
+    return birthdate;
+  }
+  public String getSalary() {
+    return salary;
+  }
+  public String getBonus() {
+    return bonus;
+  }
+  public String getComm() {
+    return comm;
+  }
+
+//payroll
+}

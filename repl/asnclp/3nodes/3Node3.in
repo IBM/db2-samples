@@ -1,0 +1,59 @@
+#*******************************************************************#
+#  IBM DB2 Q Replication                                            #
+#                                                                   #
+#     ASNCLP sample files                                           #
+#                                                                   #
+#     Licensed Materials - Property of IBM                          #
+#                                                                   #
+#     (C) Copyright IBM Corp. 2004 All Rights Reserved              #
+#                                                                   #
+#     US Government Users Restricted Rights - Use, duplication      #
+#     or disclosure restricted by GSA ADP Schedule Contract         #
+#     with IBM Corp.                                                #
+#                                                                   #
+#*******************************************************************#
+#*******************************************************************#
+#                                                                   #
+#                                                                   #
+#           NOTICE TO USERS OF THE SOURCE CODE EXAMPLE              #
+#                                                                   #
+# INTERNATIONAL BUSINESS MACHINES CORPORATION PROVIDES THE SOURCE   #
+# CODE EXAMPLE "AS IS" WITHOUT WARRANTY OF ANY KIND, EITHER         #
+# EXPRESSED OR IMPLIED, INCLUDING, BUT NOT LIMITED TO THE IMPLIED   #
+# WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR        #
+# PURPOSE. THE ENTIRE RISK AS TO THE QUALITY AND PERFORMANCE OF THE #
+# SOURCE CODE EXAMPLE IS WITH YOU. SHOULD ANY PART OF THE SOURCE    #
+# CODE EXAMPLE PROVES DEFECTIVE, YOU (AND NOT IBM) ASSUME THE       #
+# ENTIRE COST OF ALL NECESSARY SERVICING, REPAIR OR CORRECTION.     #
+#                                                                   #
+#*******************************************************************#
+
+# input file for 3 Node P2P
+
+set subgroup "3Node3";
+
+set server multidir to db "testdb";
+set server multidir to db "testdb1";
+set server multidir to db "testdb2";
+
+set multidir schema "testdb".BLUE;
+set multidir schema "testdb1".RED;
+set multidir schema "testdb2".YELLOW;
+
+set connection SOURCE "testdb".BLUE TARGET "testdb1".RED replqmap "BLUEtoRED";
+set connection SOURCE "testdb".BLUE TARGET "testdb2".YELLOW replqmap "BLUEtoYELLOW";
+
+set connection SOURCE "testdb1".RED TARGET "testdb".BLUE replqmap "REDtoBLUE";
+set connection SOURCE "testdb1".RED TARGET "testdb2".YELLOW replqmap "REDtoYELLOW";
+
+set connection SOURCE "testdb2".YELLOW TARGET "testdb".BLUE replqmap "YELLOWtoBLUE";
+set connection SOURCE "testdb2".YELLOW TARGET "testdb1".RED replqmap "YELLOWtoRED";
+
+set tables("testdb".BLUE.BLUE.AllTypes3);
+create qsub subtype p;
+
+set tables("testdb".BLUE.BLUE.AllTypes4);
+create qsub subtype p source has load phase I;
+
+set tables("testdb".BLUE.BLUE.AllTypes5);
+create qsub subtype p source has load phase E target error action D load type 2 OKSQLSTATES "000101";

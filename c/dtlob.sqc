@@ -1,0 +1,366 @@
+/****************************************************************************
+** (c) Copyright IBM Corp. 2007 All rights reserved.
+** 
+** The following sample of source code ("Sample") is owned by International 
+** Business Machines Corporation or one of its subsidiaries ("IBM") and is 
+** copyrighted and licensed, not sold. You may use, copy, modify, and 
+** distribute the Sample in any form without payment to IBM, for the purpose of 
+** assisting you in the development of your applications.
+** 
+** The Sample code is provided to you on an "AS IS" basis, without warranty of 
+** any kind. IBM HEREBY EXPRESSLY DISCLAIMS ALL WARRANTIES, EITHER EXPRESS OR 
+** IMPLIED, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED WARRANTIES OF 
+** MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE. Some jurisdictions do 
+** not allow for the exclusion or limitation of implied warranties, so the above 
+** limitations or exclusions may not apply to you. IBM shall not be liable for 
+** any damages you suffer as a result of using, copying, modifying or 
+** distributing the Sample, even if IBM has been advised of the possibility of 
+** such damages.
+*****************************************************************************
+**
+** SOURCE FILE NAME: dtlob.sqc 
+**    
+** SAMPLE: How to use the LOB data type 
+**           
+** SQL STATEMENTS USED:
+**         SELECT INTO
+**         INSERT
+**         DELETE
+**         DECLARE CURSOR
+**         OPEN
+**         FETCH
+**         CLOSE
+**         VALUES
+**         FREE LOCATOR
+**
+** OUTPUT FILE: dtlob.out (available in the online documentation)
+*****************************************************************************
+**
+** For more information on the sample programs, see the README file.
+**
+** For information on developing C applications, see the Application
+** Development Guide.
+**
+** For information on using SQL statements, see the SQL Reference.
+**
+** For the latest information on programming, building, and running DB2 
+** applications, visit the DB2 application development website: 
+**     http://www.software.ibm.com/data/db2/udb/ad
+****************************************************************************/
+
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+#include <sqlenv.h>
+#include <sqlutil.h>
+#include <sql.h>
+#include "utilemb.h"
+
+int BlobFileUse(void);
+int ClobUse(void);
+int ClobFileUse(void);
+int ClobLocatorUse(void);
+
+EXEC SQL BEGIN DECLARE SECTION;
+  SQL TYPE IS BLOB_FILE blobFilePhoto;
+  char photoFormat[10];
+  char empno[7];
+  SQL TYPE IS CLOB(5 K) clobResume;
+  SQL TYPE IS CLOB_FILE clobFileResume;
+  SQL TYPE IS CLOB_LOCATOR clobLocResume;
+  sqlint32 posBeginDeptInfo;
+  sqlint32 posBeginEducation;
+  SQL TYPE IS CLOB(5 K) clobDeptInfo;
+  SQL TYPE IS CLOB_LOCATOR clobLocShortResume;
+  SQL TYPE IS CLOB_LOCATOR clobLocNewResume;
+  short lobind;
+EXEC SQL END DECLARE SECTION;
+
+int main(int argc, char *argv[])
+{
+  int rc = 0;
+  char dbAlias[SQL_ALIAS_SZ + 1];
+  char user[USERID_SZ + 1];
+  char pswd[PSWD_SZ + 1];
+
+  /* check the command line arguments */
+  rc = CmdLineArgsCheck1(argc, argv, dbAlias, user, pswd);
+  if (rc != 0)
+  {
+    return rc;
+  }
+
+  printf("\nTHIS SAMPLE SHOWS HOW TO USE THE LOB DATA TYPE.\n");
+
+  /* connect to the database */
+  rc = DbConn(dbAlias, user, pswd);
+  if (rc != 0)
+  {
+    return rc;
+  }
+
+  rc = BlobFileUse();
+  rc = ClobUse();
+  rc = ClobFileUse();
+  rc = ClobLocatorUse();
+
+  /* disconnect from the database */
+  rc = DbDisconn(dbAlias);
+  if (rc != 0)
+  {
+    return rc;
+  }
+
+  return 0;
+} /* main */
+
+int BlobFileUse(void)
+{
+  struct sqlca sqlca;
+  char fileName[15];
+
+  printf("\n-----------------------------------------------------------");
+  printf("\nUSE THE SQL STATEMENTS:\n");
+  printf("  SELECT INTO\n");
+  printf("  INSERT\n");
+  printf("  DELETE\n");
+  printf("TO SHOW HOW TO USE A BLOB FILE.\n");
+
+#if(defined(DB2NT))
+  strcpy(photoFormat, "bitmap");
+  strcpy(fileName, "photo.BMP");
+#else /* UNIX */
+  strcpy(photoFormat, "gif");
+  strcpy(fileName, "photo.GIF");
+#endif
+
+  /* initialize blobFile */
+  strcpy(blobFilePhoto.name, fileName);
+  blobFilePhoto.name_length = strlen(blobFilePhoto.name);
+
+  /* read BLOB data */
+  printf("\n  Read BLOB data in the file '%s'.\n", fileName);
+  blobFilePhoto.file_options = SQL_FILE_OVERWRITE;
+
+  EXEC SQL SELECT picture INTO :blobFilePhoto:lobind
+    FROM emp_photo
+    WHERE photo_format = :photoFormat AND empno = '000130';
+  EMB_SQL_CHECK("BLOB data -- read");
+
+  if (lobind < 0)
+  {
+    printf("  NULL LOB indicated.\n");
+    return 1;
+  }
+
+  /* write BLOB data */
+  printf("  Write BLOB data from the file '%s'.\n", fileName);
+  blobFilePhoto.file_options = SQL_FILE_READ;
+
+  EXEC SQL INSERT INTO emp_photo(empno, photo_format, picture)
+    VALUES('200340', :photoFormat, :blobFilePhoto);
+  EMB_SQL_CHECK("BLOB data -- write");
+
+  /* delete new record */
+  printf("  Delete the new record from the database.\n");
+
+  EXEC SQL DELETE FROM emp_photo WHERE empno = '200340';
+  EMB_SQL_CHECK("new record -- delete");
+
+  return 0;
+} /* BlobFileUse */
+
+int ClobUse(void)
+{
+  struct sqlca sqlca;
+  int charNb;
+  int lineNb;
+
+  printf("\n-----------------------------------------------------------");
+  printf("\nUSE THE SQL STATEMENTS:\n");
+  printf("  DECLARE CURSOR\n");
+  printf("  OPEN\n");
+  printf("  FETCH\n");
+  printf("  CLOSE\n");
+  printf("TO SHOW HOW TO USE THE CLOB DATA TYPE.\n");
+
+  printf("\n  READ THE CLOB DATA:\n");
+
+  EXEC SQL DECLARE c1 CURSOR FOR
+    SELECT empno, resume
+      FROM emp_resume
+      WHERE resume_format = 'ascii' AND empno = '000130';
+
+  EXEC SQL OPEN c1;
+  EMB_SQL_CHECK("cursor -- open");
+
+  EXEC SQL FETCH c1 INTO :empno, :clobResume:lobind;
+  EMB_SQL_CHECK("cursor -- fetch");
+
+  while (sqlca.sqlcode != 100)
+  {
+    if (lobind < 0)
+    {
+      printf("  NULL LOB indicated.\n");
+    }
+    else
+    {
+      printf("\n    Empno: %s\n", empno);
+      printf("    Resume length: %d\n", clobResume.length);
+      printf("    First 15 lines of the resume:\n");
+
+      for (charNb = 0, lineNb = 0;
+           lineNb < 15 && charNb < clobResume.length;
+           charNb++)
+      {
+        printf("%c", clobResume.data[charNb]);
+        if (clobResume.data[charNb] == '\n')
+        {
+          printf("       ");
+          lineNb++;
+        }
+      }
+    }
+    EXEC SQL FETCH c1 INTO :empno, :clobResume:lobind;
+    EMB_SQL_CHECK("cursor -- fetch");
+  }
+
+  EXEC SQL CLOSE c1;
+  EMB_SQL_CHECK("cursor -- close");
+
+  return 0;
+} /* ClobUse */
+
+int ClobFileUse(void)
+{
+  struct sqlca sqlca;
+  char fileName[15];
+
+  printf("\n-----------------------------------------------------------");
+  printf("\nUSE THE SQL STATEMENT:\n");
+  printf("  SELECT INTO\n");
+  printf("TO SHOW HOW TO USE A CLOB FILE.\n");
+
+  strcpy(fileName, "resume.TXT");
+
+  /* initialize clobFile */
+  strcpy(clobFileResume.name, fileName);
+  clobFileResume.name_length = strlen(clobFileResume.name);
+
+  /* read CLOB data */
+  printf("\n  Read CLOB data in the file '%s'.\n", fileName);
+  clobFileResume.file_options = SQL_FILE_OVERWRITE;
+
+  EXEC SQL SELECT resume INTO :clobFileResume:lobind
+    FROM emp_resume
+    WHERE resume_format = 'ascii' AND empno = '000130';
+  EMB_SQL_CHECK("CLOB data -- read");
+
+  if (lobind < 0)
+  {
+    printf("  NULL LOB indicated.\n");
+    return 1;
+  }
+
+  return 0;
+
+} /* ClobFileUse */
+
+int ClobLocatorUse(void)
+{
+  struct sqlca sqlca;
+  int charNb;
+
+  printf("\n-----------------------------------------------------------");
+  printf("\nUSE THE SQL STATEMENTS:\n");
+  printf("  SELECT INTO\n");
+  printf("  INSERT\n");
+  printf("  DELETE\n");
+  printf("  VALUES\n");
+  printf("  FREE LOCATOR\n");
+  printf("TO SHOW HOW TO USE A CLOB LOCATOR.\n");
+
+  printf("\n  **************************************************\n");
+  printf("           ORIGINAL RESUME -- VIEW\n");
+  printf("  **************************************************\n");
+
+  EXEC SQL SELECT resume INTO :clobResume
+    FROM emp_resume
+    WHERE empno = '000130' AND resume_format = 'ascii';
+  EMB_SQL_CHECK("old resume -- read");
+
+  for (charNb = 0; charNb < clobResume.length; charNb++)
+  {
+    printf("%c", clobResume.data[charNb]);
+  }
+
+  printf("\n  ********************************************\n");
+  printf("       NEW RESUME -- CREATE\n");
+  printf("  ********************************************\n");
+
+  EXEC SQL SELECT resume INTO :clobLocResume
+    FROM emp_resume
+    WHERE empno = '000130' AND resume_format = 'ascii';
+  EMB_SQL_CHECK("resume -- read");
+
+  EXEC SQL VALUES(POSSTR(:clobLocResume, 'Department Information'))
+    INTO :posBeginDeptInfo;
+  EMB_SQL_CHECK("Department Info position -- get");
+
+  EXEC SQL VALUES(POSSTR(:clobLocResume, 'Education'))
+    INTO :posBeginEducation;
+  EMB_SQL_CHECK("Education position -- get");
+
+  printf("\n    Create short resume without Department Info.\n");
+
+  EXEC SQL VALUES(SUBSTR(:clobLocResume, 1, :posBeginDeptInfo - 1) ||
+                  SUBSTR(:clobLocResume, :posBeginEducation))
+    INTO :clobLocShortResume;
+  EMB_SQL_CHECK("short resume -- create");
+
+  EXEC SQL VALUES(SUBSTR(:clobLocResume,
+                         :posBeginDeptInfo,
+                         :posBeginEducation - :posBeginDeptInfo))
+    INTO :clobDeptInfo;
+  EMB_SQL_CHECK("Department Info -- create");
+
+  printf("  Append Department Info at the end of Short resume.\n");
+
+  EXEC SQL VALUES(:clobLocShortResume || :clobDeptInfo)
+    INTO :clobLocNewResume;
+  EMB_SQL_CHECK("new resume -- create");
+
+  printf("  Insert the new resume in the database.\n");
+
+  EXEC SQL INSERT INTO emp_resume(empno, resume_format, resume)
+    VALUES('200340', 'ascii', :clobLocNewResume);
+  EMB_SQL_CHECK("new resume -- write");
+
+  EXEC SQL FREE LOCATOR :clobLocResume, :clobLocShortResume,
+                        :clobLocNewResume;
+  EMB_SQL_CHECK("locators -- free");
+
+  printf("\n  *************************************\n");
+  printf("      NEW RESUME -- VIEW\n");
+  printf("  *************************************\n");
+
+  EXEC SQL SELECT resume INTO :clobResume
+    FROM emp_resume
+    WHERE empno = '200340';
+  EMB_SQL_CHECK("new resume -- read");
+
+  for (charNb = 0; charNb < clobResume.length; charNb++)
+  {
+    printf("%c", clobResume.data[charNb]);
+  }
+
+  printf("\n  **************************************\n");
+  printf("      NEW RESUME -- DELETE\n");
+  printf("  **************************************\n");
+
+  EXEC SQL DELETE FROM emp_resume WHERE empno = '200340';
+  EMB_SQL_CHECK("new resume -- delete");
+
+  return 0;
+} /* LobLocatorUse */
+

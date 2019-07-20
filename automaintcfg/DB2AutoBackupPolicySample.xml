@@ -1,0 +1,120 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- IBM Corporation  version 1.0  -->
+
+<!--  Configuration file for automatic backup  -->
+
+<!--
+
+Use this file to configure DB2 to automatically backup your database using the following:
+
+    1)  the backup options like  media onto which the backup and  mode of backup.
+    2)  the frequency of automatic backups;
+
+ -->
+
+<DB2AutoBackupPolicy 
+xmlns="http://www.ibm.com/xmlns/prod/db2/autonomic/config">
+
+<!--   Backup Options  -->
+<!--
+Specify the backup options 
+   1)  the media onto which the backup will be stored; and
+
+   2)  whether the automatic backup should be online or offline.
+
+specify the type of media on which your backup image will be stored, and configure associated options. 
+Valid types of media are:
+
+   1)  DiskBackupTarget - backup to a file system;
+   2)  TapeBackupTarget - backup to tape;
+   3)  TSMBackupTarget - backup to Tivoli Storage Manager (TSM);
+   4)  XBSABackupTarget - use Backup Services APIs (XBSA); and
+   5)  VendorLibBackupTarget - backup to other vendor storage.
+
+For each of these media types, there are different configuration details required:
+DiskBackupTarget - The location needs to be specified using PathName. If you specify <PathName/> with empty values, the default DB2 backup location will be used.  To store the backup somewhere other than the default location, use PathName to specify a valid location on your file system.  For example, <PathName>c:/db1/bakcupimage</PathName> will store backup image in c:\db1\backupimage on your file system.  If you specify the backup should be stored on Disk, DB2 will automatically prune backup images from the directory specified.
+
+TapeBackupTarget - specify PathName of tape media to store the backup images.The PathName can not be empty.
+TSMBackupTarget - specify the session number for the TSM using numberOfSession.  Session numbers can range from 1 to 999.  If no session number is specified, a default value of 1 will be used. For Example,  <TSMBackupTarget numberOfSessions = "2" /> uses 2 session to store the backup images in TSM  server.
+
+XBSABackupTarget - specify the session number for XBSA using numberOfSession.  Session numbers can range from 1 to 999.  If no session number is specified, a default value of 1 will be used.
+
+VendorLibBackupTarget - specify the vender library using LibFileName, and arguments to the library using LibOptions. You must use a fully qualified file name with LibFileName.The LibFileName can not be empty.
+
+Specify whether backup needs to be performed online or offline:
+
+    1)  Online - Users can access the database during the backup. An online backup will run during the online maintenance window.
+
+    2)  Offline - Users cannot access the database during the backup. An offline backup will run during offline maintenance window.
+
+For example,the following would case automatic backup using  online mode and store the image in the default location in your file system.
+ <BackupOptions mode="Online" > 
+  <BackupTarget>
+   <DiskBackupTarget >
+     <PathName/>
+   </DiskBackupTarget>
+  </BackupTarget>
+ </BackupOptions>
+
+ -->
+
+ <BackupOptions mode="Online" >
+  <BackupTarget>
+   <DiskBackupTarget>
+     <PathName/>
+   </DiskBackupTarget>
+
+<!--
+   <TapeBackupTarget>
+      <PathName>M:/TAPE1/db2/bakcupimages</PathName>
+   </TapeBackupTarget>
+ -->
+
+<!--
+    <TSMBackupTarget numberOfSessions="1" />
+ -->
+
+<!--
+    <XBSABackupTarget numberOfSessions="1" />
+ -->
+ 
+<!-- 
+    <VendorLibBackupTarget>
+      <LibFilename>c:/Drivers/temp</LibFilename>
+      <LibOptions>t1</LibOptions>
+    </VendorLibBackupTarget>
+ -->
+
+  </BackupTarget>
+ </BackupOptions>
+
+<!--  Frequency of automatic backups -->
+
+<!--
+Specify the criteria for determining backup frequency of automatic backups. Use the following 3  conditions to  determine the frequency:
+
+  1. numberOfFullBackups ; and
+  2. timeSinceLastBackup ; and
+  3. logSpaceConsumedSinceLasBackup.
+
+If any one of the above 3  conditions meet, then there will be a backup scheduled.
+
+specify the minimum number of full backups.
+
+specify timeSinceLastBackup ,maximum time between backups in terms of hours. For example 24 hours represents 1 day and 168 hours represents 1 week.
+
+specify logspaceConsumedSinceLastBackup in  4 kilobytes. The value can be non negative  integer starting from 1.If the logspace value is 1 it means, if logspace consumed after last backup is greater than 4KB needs a backup now.
+
+For example, the following case would take backup if any of the following condition are true
+   number of full backup is less than 2 
+   time since last backup is 2 weeks 
+   log space consumed is greater than 1000 * 4 KB. 
+
+
+ <BackupCriteria numberOfFullBackups="2" timeSinceLastBackup="336" logSpaceConsumedSinceLastBackup="1000" />
+
+-->
+ <BackupCriteria numberOfFullBackups="1" timeSinceLastBackup="168" logSpaceConsumedSinceLastBackup="6400" />
+
+</DB2AutoBackupPolicy>
+

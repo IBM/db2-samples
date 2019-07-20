@@ -1,0 +1,147 @@
+How to install this RHEL5 SELinux policy (customer setup).
+
+1. Install the selinux-policy-devel rpm from the Redhat install media.
+
+2. Type "make" -- this will compile the SELinux module, db2.pp
+
+3. Run "semodule -i db2.pp" -- this will install the db2 module
+
+4. Make sure selinux is enabled in /etc/sysconfig/selinux:
+
+	# SELINUX= can take one of these three values:
+	#	enforcing - SELinux security policy is enforced.
+	#	permissive - SELinux prints warnings instead of enforcing.
+	#	disabled - SELinux is fully disabled.
+	SELINUX=enforcing    <---- set to "enforcing"
+
+5. If SELINUX was not previously "enforcing" in /etc/sysconfig/selinux,
+   reboot the machine -- this will enable selinux and cause files in
+   /opt/ibm/db2 to be relabeled.
+
+   If SELINUX was previously "enforcing" in /etc/sysconfig/selinux,
+   run "restorecon -R /opt/ibm/db2". After that is done, you should
+   see this (note db2_file_t label):
+
+	# ls -Z /opt/ibm/db2/V9.5/
+	dr-xr-xr-x  bin  bin  root:object_r:db2_file_t         adm
+	dr-xr-xr-x  bin  bin  root:object_r:db2_file_t         adsm
+	dr-xr-xr-x  bin  bin  root:object_r:db2_file_t         bin
+	dr-xr-xr-x  bin  bin  root:object_r:db2_file_t         bnd
+	dr-xr-xr-x  bin  bin  root:object_r:db2_file_t         cfg
+	dr-xr-xr-x  bin  bin  root:object_r:db2_file_t         conv
+	dr-xr-xr-x  bin  bin  root:object_r:db2_file_t         das
+	dr-xr-xr-x  bin  bin  root:object_r:db2_file_t         dasfcn
+	-rw-rw-r--  root root root:object_r:db2_file_t         default.env
+	dr-xr-xr-x  bin  bin  root:object_r:db2_file_t         doc
+	dr-xr-xr-x  bin  bin  root:object_r:db2_file_t         function
+	dr-xr-xr-x  bin  bin  root:object_r:db2_file_t         ha
+	dr-xr-xr-x  bin  bin  root:object_r:db2_file_t         icons
+	dr-xr-xr-x  bin  bin  root:object_r:db2_file_t         include
+	dr-xr-xr-x  bin  bin  root:object_r:db2_file_t         infopop
+	dr-xr-xr-x  bin  bin  root:object_r:db2_file_t         install
+	dr-xr-xr-x  bin  bin  root:object_r:db2_file_t         instance
+	dr-xr-xr-x  bin  bin  root:object_r:db2_file_t         java
+	dr-xr-xr-x  bin  bin  root:object_r:db2_file_t         lib32
+	dr-xr-xr-x  bin  bin  root:object_r:db2_file_t         lib64
+	drwxr-xr-x  root root root:object_r:db2_file_t         license
+	dr-xr-xr-x  bin  bin  root:object_r:db2_file_t         map
+	dr-xr-xr-x  bin  bin  root:object_r:db2_file_t         misc
+	dr-xr-xr-x  bin  bin  root:object_r:db2_file_t         msg
+	-rw-r--r--  root root root:object_r:db2_file_t         profiles.reg
+	dr-xr-xr-x  bin  bin  root:object_r:db2_file_t         Readme
+	dr-xr-xr-x  bin  bin  root:object_r:db2_file_t         samples
+	dr-xr-xr-x  bin  bin  root:object_r:db2_file_t         security32
+	dr-xr-xr-x  bin  bin  root:object_r:db2_file_t         security64
+	dr-xr-xr-x  bin  bin  root:object_r:db2_file_t         tivready
+	dr-xr-xr-x  bin  bin  root:object_r:db2_file_t         tools
+
+6. Run the "ibm_db2_semanage_das" script to apply SELinux labels to the files
+   in the DAS user's home directory. Example:
+
+        ./ibm_db2_semanage_das -a /home/dasusr1
+
+7. Run the "ibm_db2_semanage_db2inst" script to apply SELinux labels to the
+   files and directories in the instance owner's home directory:
+
+	# ./ibm_db2_semanage_db2inst -a db2inst1 /home/db2inst1
+	# ls -Z /home/db2inst1/sqllib
+	drwxr-xr-x  db2inst1 db2grp1 user_u:object_r:db2_file_t       adm
+	lrwxrwxrwx  root     db2grp1 user_u:object_r:db2_file_t       adsm -> /opt/ibm/db2/V9.5/adsm
+	drwxr-x---  db2inst1 db2grp1 user_u:object_r:db2_file_t       backup
+	lrwxrwxrwx  root     db2grp1 user_u:object_r:db2_file_t       bin -> /opt/ibm/db2/V9.5/bin
+	lrwxrwxrwx  root     db2grp1 user_u:object_r:db2_file_t       bnd -> /opt/ibm/db2/V9.5/bnd
+	drwxrwsr-t  db2inst1 db2grp1 user_u:object_r:db2_file_t       cfg
+	lrwxrwxrwx  root     db2grp1 user_u:object_r:db2_file_t       conv -> /opt/ibm/db2/V9.5/conv
+	drwxrwsr-t  db2inst1 db2grp1 user_u:object_r:db2_file_t       ctrl
+	drwxrwsr-t  db2inst1 db2grp1 user_u:object_r:db2_file_t       dasfcn
+	-rwxr-xr-x  db2inst1 db2grp1 user_u:object_r:db2_file_t       db2cshrc
+	drwxrwsrwt  db2inst1 db2grp1 user_u:object_r:db2_diag_t       db2dump
+	-r--r--r--  db2inst1 db2grp1 user_u:object_r:db2_file_t       db2nodes.cfg
+	-rwxr-xr-x  db2inst1 db2grp1 user_u:object_r:db2_file_t       db2profile
+	-rw-rw-r--  db2inst1 db2grp1 user_u:object_r:db2_file_t       db2systm
+	lrwxrwxrwx  root     db2grp1 user_u:object_r:db2_file_t       doc -> /opt/ibm/db2/V9.5/doc
+	-rw-r--r--  db2inst1 db2grp1 user_u:object_r:db2_file_t       fm.diego.reg
+	drwxrwsr-t  db2inst1 db2grp1 user_u:object_r:db2_shlib_t      function
+	drwx------  db2inst1 db2grp1 user_u:object_r:db2_file_t       hmonCache
+	lrwxrwxrwx  root     db2grp1 user_u:object_r:db2_file_t       include -> /opt/ibm/db2/V9.5/include
+	lrwxrwxrwx  root     db2grp1 user_u:object_r:db2_file_t       infopop -> /opt/ibm/db2/V9.5/infopop
+	lrwxrwxrwx  root     db2grp1 user_u:object_r:db2_file_t       java -> /opt/ibm/db2/V9.5/java
+	lrwxrwxrwx  root     db2grp1 user_u:object_r:db2_file_t       lib -> lib64
+	lrwxrwxrwx  root     db2grp1 user_u:object_r:db2_file_t       lib32 -> /opt/ibm/db2/V9.5/lib32
+	lrwxrwxrwx  root     db2grp1 user_u:object_r:db2_file_t       lib64 -> /opt/ibm/db2/V9.5/lib64
+	drwxrwsr-t  db2inst1 db2grp1 user_u:object_r:db2_file_t       log
+	lrwxrwxrwx  root     db2grp1 user_u:object_r:db2_file_t       map -> /opt/ibm/db2/V9.5/map
+	lrwxrwxrwx  root     db2grp1 user_u:object_r:db2_file_t       misc -> /opt/ibm/db2/V9.5/misc
+	lrwxrwxrwx  root     db2grp1 user_u:object_r:db2_file_t       msg -> /opt/ibm/db2/V9.5/msg
+	-rw-rw-r--  db2inst1 db2grp1 user_u:object_r:db2_file_t       profile.env
+	lrwxrwxrwx  root     db2grp1 user_u:object_r:db2_file_t       Readme -> /opt/ibm/db2/V9.5/Readme
+	lrwxrwxrwx  root     db2grp1 user_u:object_r:db2_file_t       samples -> /opt/ibm/db2/V9.5/samples
+	drwxr-xr-x  db2inst1 db2grp1 user_u:object_r:db2_file_t       security
+	drwxr-xr-x  db2inst1 db2grp1 user_u:object_r:db2_file_t       security32
+	drwxr-xr-x  db2inst1 db2grp1 user_u:object_r:db2_file_t       security64
+	drwxrwsrwx  db2inst1 db2grp1 user_u:object_r:db2_file_t       tmp
+	lrwxrwxrwx  root     db2grp1 user_u:object_r:db2_file_t       tools -> /opt/ibm/db2/V9.5/tools
+	drwxrwxrwx  db2inst1 db2grp1 user_u:object_r:db2_file_t       uif
+	-rwxr-xr-x  db2inst1 db2grp1 user_u:object_r:db2_file_t       usercshrc
+	-rwxr-xr-x  db2inst1 db2grp1 user_u:object_r:db2_file_t       userprofile
+
+8. Reboot the machine to restart the DB2 Fault Monitor
+
+9. Make sure DB2 is running in its own domain(s):
+	# ps aux -Z | grep db2
+	system_u:system_r:init_t        root      2928  0.0  0.1  34384  4292 ?        Ss   Apr18   0:01 /opt/ibm/db2/V9.5/bin/db2fmcd
+	system_u:system_r:db2_t         dasusr1   3077  0.0  0.1 109500  6944 ?        Sl   Apr18   0:00 /home/dasusr1/das/adm/db2dasrrm
+	system_u:system_r:db2_t         dasusr1   3098  0.0  0.1  57092  4400 ?        S    Apr18   0:00 /opt/ibm/db2/V9.5/das/bin/db2fmd -i dasusr1 -m /opt/ibm/db2/V9.5/das/lib/libdb2dasgcf.so.1
+	system_u:system_r:unconfined_t  root     10658  0.0  0.0  60228   708 pts/1    S+   12:07   0:00 grep db2
+
+10. The DB2 instance's processes will also run in their own domain(s):
+	$ ps aux -Z | grep db2inst1
+	system_u:system_r:unconfined_t  root     10677  0.0  0.0 100056  1264 pts/1    S    12:08   0:00 su - db2inst1
+	system_u:system_r:unconfined_t  db2inst1 10678  0.0  0.0  65128  1496 pts/1    S    12:08   0:00 -bash
+	system_u:system_r:db2adm_t      db2inst1 10777  0.0  0.6 341284 25576 pts/1    S    12:08   0:00 db2sysc 0
+	system_u:system_r:db2adm_t      db2inst1 10782  0.0  0.4 337084 17260 pts/1    S    12:08   0:00 db2licc 0
+	system_u:system_r:db2adm_t      db2inst1 10783  0.0  0.4 337084 16972 pts/1    S    12:08   0:00 db2ipccm 0
+	system_u:system_r:db2adm_t      db2inst1 10784  0.0  0.4 341284 16952 pts/1    S    12:08   0:00 db2tcpcm 0
+	system_u:system_r:db2adm_t      db2inst1 10785  0.0  0.4 341284 16948 pts/1    S    12:08   0:00 db2tcpcm 0
+	system_u:system_r:db2adm_t      db2inst1 10787  0.0  0.4 341284 17224 pts/1    S    12:08   0:00 db2resync 0
+	system_u:system_r:db2adm_t      db2inst1 10789  0.0  0.7 345132 29036 pts/1    Sl   12:08   0:00 db2acd  ,0,0,0,1,0,0,0,897c7c,14,1e014,2,0,1,11fc0,0x210000000,0x210000000,1610000,30003,2,7000a
+	system_u:system_r:unconfined_t  db2inst1 10847  0.0  0.0  69140  1072 pts/1    R+   12:12   0:00 ps aux -Z
+	system_u:system_r:unconfined_t  db2inst1 10848  0.0  0.0  60236   724 pts/1    S+   12:12   0:00 grep db2inst1
+
+
+Troubleshooting
+
+A. Watch /var/log/messages for output like this:
+	setroubleshoot:      SELinux is preventing /opt/ibm/db2/V9.5/bin/db2fm (db2_t) "use" to /dev/null (init_t).      For complete SELinux messages. run sealert -l 0be517de-b797-4aec-b274-8b936d77cf95
+
+B. If any are found:
+     i) Run the sealert command with the parameters that were given in /var/log/messages:
+	sealert -l 0be517de-b797-4aec-b274-8b936d77cf95
+
+    ii) Cut and paste the Raw Audit Message into a file, and pass the file to "audit2allow"
+
+   iii) Add necessary the permission to db2.te, rebuild db2.pp, and reload it
+        (steps 2 and 3, above)
+
+3. The command "semanage fcontext -l" will list file contexts. Use with grep
+   to find contexts related to DB2.

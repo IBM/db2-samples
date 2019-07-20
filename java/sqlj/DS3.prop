@@ -1,0 +1,9 @@
+serverName=
+portNumber=
+databaseName=sample
+userName=
+password=
+dataSourceName=jdbc/DB2SimpleDataSource_ds2
+driverType=4
+securityMechanism=3
+kerberosPrincipal=null

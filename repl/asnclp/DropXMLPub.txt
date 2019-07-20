@@ -1,0 +1,45 @@
+/*********************************************************************/
+/*  IBM DB2 Q Replication                                            */
+/*                                                                   */
+/*     ASNCLP sample files                                           */
+/*                                                                   */
+/*     Licensed Materials - Property of IBM                          */
+/*                                                                   */
+/*     (C) Copyright IBM Corp. 2004 All Rights Reserved              */
+/*                                                                   */
+/*     US Government Users Restricted Rights - Use, duplication      */
+/*     or disclosure restricted by GSA ADP Schedule Contract         */
+/*     with IBM Corp.                                                */
+/*                                                                   */
+/*********************************************************************/
+/*********************************************************************/
+/*                                                                   */
+/*                                                                   */
+/*           NOTICE TO USERS OF THE SOURCE CODE EXAMPLE              */
+/*                                                                   */
+/* INTERNATIONAL BUSINESS MACHINES CORPORATION PROVIDES THE SOURCE   */
+/* CODE EXAMPLE "AS IS" WITHOUT WARRANTY OF ANY KIND, EITHER         */
+/* EXPRESSED OR IMPLIED, INCLUDING, BUT NOT LIMITED TO THE IMPLIED   */
+/* WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR        */
+/* PURPOSE. THE ENTIRE RISK AS TO THE QUALITY AND PERFORMANCE OF THE */
+/* SOURCE CODE EXAMPLE IS WITH YOU. SHOULD ANY PART OF THE SOURCE    */
+/* CODE EXAMPLE PROVES DEFECTIVE, YOU (AND NOT IBM) ASSUME THE       */
+/* ENTIRE COST OF ALL NECESSARY SERVICING, REPAIR OR CORRECTION.     */
+/*                                                                   */
+/*********************************************************************/
+
+ASNCLP SESSION SET TO Q REPLICATION;
+SET SERVER CAPTURE TO DB <DATABASE> id <USERID> password "<PASSWORD>";
+SET CAPTURE SCHEMA SOURCE TO DEFAULT;
+SET RUN SCRIPT NOW STOP ON SQL ERROR ON;
+
+DROP XML PUB (PUBNAME <XMLPUBNAME>);
+
+# Example:
+# ASNCLP SESSION SET TO Q REPLICATION;
+# SET SERVER CAPTURE TO DB SAMPLEDB id db2admin password "mypassword";
+# SET CAPTURE SCHEMA SOURCE MySchema;
+# SET RUN SCRIPT NOW STOP ON SQL ERROR ON;
+# DROP XML PUB (PUBNAME "MyXMLPub");
+# DROP XML PUB (PUBNAME PUB1), (PUBNAME PUB2),(PUBNAME PUB3),(PUBNAME PUB4),(PUBNAME PUB5),(PUBNAME PUB6);
+

@@ -1,0 +1,425 @@
+/****************************************************************************
+** (c) Copyright IBM Corp. 2007 All rights reserved.
+** 
+** The following sample of source code ("Sample") is owned by International 
+** Business Machines Corporation or one of its subsidiaries ("IBM") and is 
+** copyrighted and licensed, not sold. You may use, copy, modify, and 
+** distribute the Sample in any form without payment to IBM, for the purpose of 
+** assisting you in the development of your applications.
+** 
+** The Sample code is provided to you on an "AS IS" basis, without warranty of 
+** any kind. IBM HEREBY EXPRESSLY DISCLAIMS ALL WARRANTIES, EITHER EXPRESS OR 
+** IMPLIED, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED WARRANTIES OF 
+** MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE. Some jurisdictions do 
+** not allow for the exclusion or limitation of implied warranties, so the above 
+** limitations or exclusions may not apply to you. IBM shall not be liable for 
+** any damages you suffer as a result of using, copying, modifying or 
+** distributing the Sample, even if IBM has been advised of the possibility of 
+** such damages.
+*****************************************************************************
+**
+** SOURCE FILE NAME: xquery.sqc 
+**
+** SAMPLE: How to run a nested XQuery and shows how to pass parameters to
+**         sqlquery function.
+**
+** SQL/XML FUNCTIONS USED
+**                sqlquery
+**                xmlcolumn
+**
+** XQUERY EXPRESSION USED
+**           FLWOR Expression
+**
+**
+** OUTPUT FILE: xquery.out (available in the online documentation)
+*****************************************************************************
+**
+** For more information about the command line processor (CLP) scripts,
+** see the README file.
+**
+** For information on using XQUERY statements, see the XQUERY Reference.
+**
+** For the latest information on programming, building, and running DB2
+** applications, visit the DB2 application development website:
+**    http://www.software.ibm.com/data/db2/udb/ad
+*****************************************************************************/
+
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+#include <sqlenv.h>
+#include <sqlcodes.h>
+#include <sqlutil.h>
+#include "utilemb.h"
+
+EXEC SQL BEGIN DECLARE SECTION;
+  char stmt[16384];
+  SQL TYPE IS XML AS BLOB( 10K ) xmlblob;
+  char id[20];
+EXEC SQL END DECLARE SECTION;
+
+/* Functions used in the sample */
+
+/* The PO_orderbycity function restructures the purchaseorders according to the city. */
+int PO_orderbycity();
+
+/* The Customer_orderbyproduct restructures the purchaseorder according to the product */
+int Customer_orderbyproduct();
+
+/* The PO_orderbyProvCityStreet function restructures the purchaseorder data according to provience, city and street */
+int PO_orderbyProvCityStreet();
+
+/* This CustomerPO function combines the data from customer and product table to create a purchaseorder*/
+int CustomerPO();
+
+int main(int argc, char *argv[])
+{
+  int rc = 0;
+  char dbAlias[SQL_ALIAS_SZ + 1];
+  char user[USERID_SZ + 1];
+  char pswd[PSWD_SZ + 1];
+ 
+  /* check the command line arguments */
+  rc = CmdLineArgsCheck1(argc, argv, dbAlias, user, pswd);
+  if (rc != 0)
+  {
+    return rc;
+  }
+   /* connect to database */
+  rc = DbConn(dbAlias, user, pswd);
+  if (rc != 0)
+  {
+    return rc;
+  }
+
+  /* Order by city */
+  rc=PO_orderbycity();
+  
+  /* Order by product */
+  rc=Customer_orderbyproduct();
+  
+  /* Order by provience city and street */
+  rc=PO_orderbyProvCityStreet();
+  
+  /* Join data from customer and product tables */ 
+  rc=CustomerPO();
+}
+
+
+int PO_orderbycity()
+{
+  int rc = 0;
+  struct sqlca sqlca;
+  printf("\n-----------------------------------------------------------");
+  printf("\nUSE THE SQL STATEMENTS:\n");
+  printf("  DECLARE CURSOR\n");
+  printf("  OPEN\n");
+  printf("  FETCH\n");
+  printf("  CLOSE\n");
+  printf("TO SELECT CUSTOMER DETAILS CITY WISE USING NESTED XQUERY.\n");
+  sprintf( stmt,"XQUERY for $city in fn:distinct-values(db2-fn:xmlcolumn('CUSTOMER.INFO')/customerinfo/addr/city)"
+            " order by $city"
+             " return"
+               " <city name='{$city}'>"
+               "{"
+                 " for  $cust in db2-fn:xmlcolumn('CUSTOMER.INFO')/customerinfo[addr/city=$city]"
+                 " let $po:=db2-fn:sqlquery(\"SELECT XMLELEMENT( NAME \"\"pos\"\","
+                                              " (XMLCONCAT( XMLELEMENT(NAME \"\"custid\"\", c.custid),"
+                                                           "XMLELEMENT(NAME \"\"order\"\", c.porder)"
+                                                               "    ) ))"
+                                   " FROM purchaseorder AS c\")"
+         " let $id:=$cust/@Cid,"
+             " $order:=$po/pos[custid=$id]/order"
+         " order by $cust/@Cid"
+         " return"
+         " <customer id='{$id}'>"
+          " {$cust/name}"
+          " {$cust/addr}"
+          " {$order}"
+         " </customer>}"
+        " </city>");
+ 
+  printf("\n\n %s",stmt);
+  
+  EXEC SQL PREPARE s1 FROM :stmt;
+  EMB_SQL_CHECK("prepare -- statement");
+  EXEC SQL DECLARE c1 CURSOR FOR s1;
+  EMB_SQL_CHECK("declare -- cusrsor");
+  
+  /* Open cursor */
+  EXEC SQL OPEN c1;
+  EMB_SQL_CHECK("cursor -- open");
+  
+  /* Fetch the result */
+  EXEC SQL FETCH c1 INTO :xmlblob;
+  EMB_SQL_CHECK("cursor -- fetch");
+  
+  while( sqlca.sqlcode == SQL_RC_OK )
+  {
+
+    /* Display results */
+    xmlblob.data[xmlblob.length]='\0';
+    printf("\n\n\n%s",xmlblob.data);
+    
+    EXEC SQL FETCH c1 INTO :xmlblob;
+    EMB_SQL_CHECK("cursor -- fetch");
+  }
+
+  printf ("\n\nThe following query shows how to pass parameters to sqlquery function");
+  printf(" which is an enhancement in Viper2 ");
+  printf("\n-----------------------------------------------------------------------");
+
+  sprintf(stmt, "XQUERY "
+          "for $city in fn:distinct-values(db2-fn:xmlcolumn('CUSTOMER.INFO') /customerinfo/addr/city)"
+          " order by $city "
+          "return"
+             "<city name='{$city}'>"
+            "{"
+              "for  $cust in db2-fn:xmlcolumn('CUSTOMER.INFO')/customerinfo [addr/city=$city]"
+              "let $po:=db2-fn:sqlquery(\"SELECT porder FROM PURCHASEORDER WHERE custid=parameter(1)\",$cust/@Cid),"
+               " $order:=$po/order"
+              " order by $cust/@Cid"
+              " return"
+                " <customer id = '{$cust/@Cid}'>"
+                  " {$cust/name}"
+                  " {$cust/Addr}"
+                  " {$order}"
+                " </customer>}"
+             " </city>");
+  printf("\n\n%s\n", stmt);
+
+  EXEC SQL PREPARE st FROM :stmt;
+  EMB_SQL_CHECK("prepare -- statement");
+  EXEC SQL DECLARE cr CURSOR FOR st;
+  EMB_SQL_CHECK("declare -- cusrsor");
+
+  /* Open cursor */
+  EXEC SQL OPEN cr;
+  EMB_SQL_CHECK("cursor -- open");
+
+  /* Fetch the result */
+  EXEC SQL FETCH cr INTO :xmlblob;
+  EMB_SQL_CHECK("cursor -- fetch");
+
+  while( sqlca.sqlcode == SQL_RC_OK )
+  {
+
+    /* Display results */
+    xmlblob.data[xmlblob.length]='\0';
+    printf("\n\n\n%s",xmlblob.data);
+
+    EXEC SQL FETCH cr INTO :xmlblob;
+    EMB_SQL_CHECK("cursor -- fetch");
+  }
+
+  /* Close the cursor */
+  EXEC SQL CLOSE c1;
+  EMB_SQL_CHECK("cursor -- close");
+  EXEC SQL CLOSE cr;
+  EMB_SQL_CHECK("cursor -- close");
+  return 0;
+
+} /* PO_orderbycity */
+
+
+int Customer_orderbyproduct()
+{
+  int rc = 0;
+  struct sqlca sqlca;
+  printf("\n-----------------------------------------------------------");
+  printf("\nUSE THE SQL STATEMENTS:\n");
+  printf("  DECLARE CURSOR\n");
+  printf("  OPEN\n");
+  printf("  FETCH\n");
+  printf("  CLOSE\n");
+  printf("TO SELECT CUSTOMER DETAILS PRODUCT WISE USING NESTED XQUERY.\n");
+  sprintf( stmt,"XQUERY let $po:=db2-fn:sqlquery(\"SELECT XMLELEMENT( NAME \"\"pos\"\","
+                                                        "( XMLCONCAT( XMLELEMENT(NAME \"\"custid\"\", c.custid),"
+                                                                     "XMLELEMENT(NAME \"\"order\"\", c.porder)"
+                                                       " ) ))"
+                                     " FROM purchaseorder AS c\" )"
+                  " for $partid in fn:distinct-values(db2-fn:xmlcolumn('PURCHASEORDER.PORDER')/PurchaseOrder/item/partid)"
+                    " order by $partid"
+                    " return"
+                    " <Product name='{$partid}'>"
+                     " <Customers>"
+                       " {"
+                         " for  $id in fn:distinct-values($po[order/PurchaseOrder/item/partid=$partid]/custid)"
+                         " let  $order:=<quantity>"
+                         " {fn:sum($po[custid=$id]/order/PurchaseOrder/item[partid=$partid]/quantity)}"
+                         " </quantity>,"
+                       " $cust:=db2-fn:xmlcolumn('CUSTOMER.INFO')/customerinfo[@Cid=$id]"
+                     " order by $id"
+                     " return"
+                     " <customer id='{$id}'>"
+                       " {$order}"
+                       " {$cust}"
+                     " </customer>"
+                     " }"
+                  " </Customers>"
+                 "</Product>");
+
+  printf("\n\n %s",stmt);
+  EXEC SQL PREPARE s2 FROM :stmt;
+  EMB_SQL_CHECK("prepare -- statement");
+  EXEC SQL DECLARE c2 CURSOR FOR s2;
+  EMB_SQL_CHECK("declare -- cusrsor");
+  
+  /* Open Cursor */
+  EXEC SQL OPEN c2;
+  EMB_SQL_CHECK("cursor -- open");
+
+  /* Fetch the result */ 
+  EXEC SQL FETCH c2 INTO :xmlblob;
+  EMB_SQL_CHECK("cursor -- fetch");
+
+  while( sqlca.sqlcode == SQL_RC_OK )
+  {
+
+    /* Display results */
+    xmlblob.data[xmlblob.length]='\0';
+    printf("\n\n\n%s",xmlblob.data);
+
+    EXEC SQL FETCH c2 INTO :xmlblob;
+    EMB_SQL_CHECK("cursor -- fetch");
+  }
+
+  EXEC SQL CLOSE c2;
+  EMB_SQL_CHECK("cursor -- close");
+  return 0;
+
+} /* Customer_orderbyproduct */
+
+int PO_orderbyProvCityStreet()
+{
+  int rc = 0;
+  struct sqlca sqlca;
+  printf("\n-----------------------------------------------------------");
+  printf("\nUSE THE SQL STATEMENTS:\n");
+  printf("  DECLARE CURSOR\n");
+  printf("  OPEN\n");
+  printf("  FETCH\n");
+  printf("  CLOSE\n");
+  printf("TO SELECT CUSTOMER DETAILS PROVINCE CITY AND STREET WISE USING NESTED XQUERY.\n");
+  sprintf( stmt,"XQUERY let $po:=db2-fn:sqlquery(\"SELECT XMLELEMENT( NAME \"\"pos\"\","
+                                          "( XMLCONCAT( XMLELEMENT(NAME \"\"custid\"\", c.custid),"
+                                          "XMLELEMENT(NAME \"\"order\"\", c.porder)"
+                                                       ") ))"
+                                           " FROM PURCHASEORDER as c ORDER BY poid\"),"
+       " $addr:=db2-fn:xmlcolumn('CUSTOMER.INFO')/customerinfo/addr"
+       " for $prov in distinct-values($addr/prov-state)"
+       " return"
+       " <province name='{$prov}'>"
+       " {"
+         " for $city in fn:distinct-values($addr[prov-state=$prov]/city)"
+         " order by $city"
+         " return"
+         " <city name='{$city}'>"
+         " {"
+           " for $s in fn:distinct-values($addr/street) where $addr/city=$city"
+           " order by $s"
+           " return"
+           " <street name='{$s}'>"
+           " {"
+             " for $info in $addr[prov-state=$prov and city=$city and street=$s]/.."
+             " order by $info/@Cid"
+             " return"
+             " <customer id='{$info/@Cid}'>"
+             " {$info/name}"
+             " {"
+               " let $id:=$info/@Cid, $order:=$po[custid=$id]/order"
+               " return $order"
+             " }"
+            " </customer>"
+           " }"
+           " </street>"
+         " }"
+          " </city>"
+       " }"
+       " </province>");
+
+  printf("\n\n %s",stmt);
+  EXEC SQL PREPARE s3 FROM :stmt;
+  EMB_SQL_CHECK("prepare -- statement");
+  EXEC SQL DECLARE c3 CURSOR FOR s3;
+  EMB_SQL_CHECK("declare -- cusrsor");
+  
+  /* Open cursor */
+  EXEC SQL OPEN c3;
+  EMB_SQL_CHECK("cursor -- open");
+  
+  /* Fetch the result in a BLOB variale */
+  EXEC SQL FETCH c3 INTO :xmlblob;
+  EMB_SQL_CHECK("cursor -- fetch");
+  
+  /* Display results */
+  xmlblob.data[xmlblob.length]='\0';
+  printf("\n\n\n%s",xmlblob.data);
+ 
+  EXEC SQL CLOSE c3;
+  EMB_SQL_CHECK("cursor -- close");
+  return 0;
+
+} /* PO_orderbyProvCityStreet */
+
+int CustomerPO()
+{
+  int rc = 0;
+  struct sqlca sqlca;
+  printf("\n-----------------------------------------------------------");
+  printf("\nUSE THE SQL STATEMENTS:\n");
+  printf("  DECLARE CURSOR\n");
+  printf("  OPEN\n");
+  printf("  FETCH\n");
+  printf("  CLOSE\n");
+  printf("TO COMBINE THE DATA FROM PRODUCT AND CUSTOMER TABLE TO CREATE A PURCHASEORDER.\n");
+  sprintf( stmt,"XQUERY <PurchaseOrder>"
+                    "{"
+                        " for $ns1_customerinfo0 in db2-fn:xmlcolumn('CUSTOMER.INFO')/customerinfo"
+                        " where ($ns1_customerinfo0/@Cid=1001)"
+                        " return"
+                        " <customer customerid='{ fn:string( $ns1_customerinfo0/@Cid)}'>"
+                        " {$ns1_customerinfo0/name}"
+                            " <address>"
+                              " {$ns1_customerinfo0/addr/street}"
+                              " {$ns1_customerinfo0/addr/city}"
+                              " {"
+                                 " if($ns1_customerinfo0/addr/@country=\"US\")"
+                                 " then"
+                                  " $ns1_customerinfo0/addr/prov-state"
+                                  " else()"
+                              " }"
+                               " {"
+                   " fn:concat ($ns1_customerinfo0/addr/pcode-zip/text(),\",\",fn:upper-case($ns1_customerinfo0/addr/@country))}"
+                           " </address>"
+                          " </customer>"
+                        " }"
+                        " {"
+                         " for $ns2_product0 in db2-fn:xmlcolumn('PRODUCT.DESCRIPTION')/product"
+                         " where ($ns2_product0/@pid=\"100-100-01\")"
+                         " return"
+                         " $ns2_product0"
+                     " }"
+                   " </PurchaseOrder>");
+
+
+  printf("\n\n %s",stmt);
+  EXEC SQL PREPARE s4 FROM :stmt;
+  EMB_SQL_CHECK("prepare -- statement");
+  EXEC SQL DECLARE c4 CURSOR FOR s4;
+  EMB_SQL_CHECK("declare -- cusrsor");
+  EXEC SQL OPEN c4;
+  EMB_SQL_CHECK("cursor -- open");
+  EXEC SQL FETCH c4 INTO :xmlblob;
+  EMB_SQL_CHECK("cursor -- fetch");
+ 
+  /* Display results */
+  xmlblob.data[xmlblob.length]='\0';
+  printf("\n\n\n%s",xmlblob.data);
+
+  EXEC SQL CLOSE c4;
+  EMB_SQL_CHECK("cursor -- close");
+  return 0;
+
+} /* CustomerPO */
+

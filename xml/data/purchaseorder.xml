@@ -1,0 +1,43 @@
+<PurchaseOrders>
+                             <PurchaseOrder CustId = "10" PoNum="110" OrderDate="2004-01-29" Status="shipped">
+                               <name>Manoj K Sardana</name> 
+                                 <Address country="India">
+                                   <Street>Ring Road</Street>
+                                   <city>Bangalore</city>
+                                   <province>Karnataka</province>
+                                   <postalcode>560071</postalcode>
+                                </Address>
+                                <phone type="cell">9880471176</phone>
+                                 <History></History>
+                                <itemlist>
+                                        <item>
+                                                <partid>100-103-01</partid>
+                                                <name>Snow Shovel, Super Deluxe 26"</name>
+                                                <quantity>1</quantity>
+                                                <price>49.99</price>
+                                        </item>
+                                </itemlist>
+                            <comments></comments>
+                           </PurchaseOrder>
+                         <PurchaseOrder CustId = "11" PoNum="111" OrderDate="2004-01-29" Status="shipped">
+                                <name>Balunaini Prasad</name>
+                                   <Address country="India">
+                                   <Street>Ring Road</Street>
+                                   <city>Bangalore</city>
+                                   <province>Karnataka</province>
+                                   <postalcode>560071</postalcode>
+                                </Address>
+                               <phone type="cell">9886362610</phone> 
+                               <History></History>
+                                <itemlist>
+                                        <item>
+                                                <partid>100-201-01</partid>
+                                                <name>Ice Scraper, Windshield 4" Wide</name>
+                                                <quantity>1</quantity>
+                                                <price>3.99</price>
+                                        </item>
+                                </itemlist>
+                          <comments></comments>
+                          </PurchaseOrder>
+
+                        </PurchaseOrders>

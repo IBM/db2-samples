@@ -1,0 +1,10 @@
+<customerinfo Cid='1001'>
+<name>Kathy Smith</name>
+<addr country="Canada">
+<street>25 EastCreek</street>
+<city>Markham</city>
+<prov-state>Ontario</prov-state>
+<pcode-zip>N9C 3T6</pcode-zip>
+</addr>
+<phone type="work">905-555-7258</phone>
+</customerinfo>

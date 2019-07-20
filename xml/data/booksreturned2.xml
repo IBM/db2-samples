@@ -1,0 +1,17 @@
+<books>
+                                 <book isbn="111112-12" >
+                                      <book_title>Explore XML </book_title>
+                                      <author>Carl</author>
+                                      <authid>234</authid>
+                                      <price>900</price>
+                                      <no_of_copies>17</no_of_copies>
+                                 </book>
+                                 <book isbn="111112-29">
+                                      <book_title>Learn DB2 </book_title>
+                                      <author>Peter</author>
+                                      <authid>78</authid>
+                                      <price>800</price>
+                                      <no_of_copies>29</no_of_copies>
+                                 </book>
+                            </books>
+

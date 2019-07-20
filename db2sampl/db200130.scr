@@ -1,0 +1,86 @@
+:userdoc.
+:prolog.
+:docprof layout=1 pagenum=no style=ibmxagd.
+:eprolog.
+.*********************************
+:h3.Resume:  Delores M. Quintana
+.*********************************
+:h3.Personal Information
+:dl compact tsize=20 termhi=0 break=fit.
+:dt.Address:
+:dd.1150 Eglinton Ave
+.br
+Mellonville, Idaho 83725
+:dt.Phone:
+:dd.(208) 875-9933
+:dt.Birthdate:
+:dd.September 15, 1925
+:dt.Sex:
+:dd.Female
+:dt.Marital Status:
+:dd.Married
+:dt.Height:
+:dd.5'2"
+:dt.Weight:
+:dd.120 lbs.
+:edl.
+.*********************************
+:h3.Department Information
+:dl compact tsize=20 termhi=0 break=fit.
+:dt.Employee Number:
+:dd.000130
+:dt.Dept Number:
+:dd.C01
+:dt.Manager:
+:dd.Sally Kwan
+:dt.Position:
+:dd.Analyst
+:dt.Phone:
+:dd.(208) 385-4578
+:dt.Hire Date:
+:dd.1971-07-28
+:edl.
+.*********************************
+:h3.Education
+:dl tsize=20 termhi=0 break=fit.
+:dt.1965
+:dd.Math and English, B.A.
+.br
+Adelphi University
+.*********************************
+:dt.1960
+:dd.Dental Technician
+.br
+Florida Institute of Technology
+:edl.
+.*********************************
+:h3.Work History
+:dl tsize=20 termhi=0 break=none.
+.*********************************
+:dt.10/91 - present
+:dd.Advisory Systems Analyst
+.br
+Producing documentation tools for engineering department.
+.*********************************
+:dt.12/85 - 9/91
+:dd.Technical Writer
+.br
+Writer, text programmer, and planner.
+.*********************************
+:dt.1/79 - 11/85
+:dd.COBOL Payroll Programmer
+.br
+Writing payroll programs for a diesel fuel company.
+:edl.
+.*********************************
+:h3.Interests
+.*********************************
+:ul compact.
+:li.Cooking
+:li.Reading
+:li.Sewing
+:li.Remodeling
+:eul.
+.*********************************
+:euserdoc.
+.*********************************

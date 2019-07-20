@@ -1,0 +1,168 @@
+//***************************************************************************
+// (c) Copyright IBM Corp. 2007 All rights reserved.
+// 
+// The following sample of source code ("Sample") is owned by International 
+// Business Machines Corporation or one of its subsidiaries ("IBM") and is 
+// copyrighted and licensed, not sold. You may use, copy, modify, and 
+// distribute the Sample in any form without payment to IBM, for the purpose of 
+// assisting you in the development of your applications.
+// 
+// The Sample code is provided to you on an "AS IS" basis, without warranty of 
+// any kind. IBM HEREBY EXPRESSLY DISCLAIMS ALL WARRANTIES, EITHER EXPRESS OR 
+// IMPLIED, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED WARRANTIES OF 
+// MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE. Some jurisdictions do 
+// not allow for the exclusion or limitation of implied warranties, so the above 
+// limitations or exclusions may not apply to you. IBM shall not be liable for 
+// any damages you suffer as a result of using, copying, modifying or 
+// distributing the Sample, even if IBM has been advised of the possibility of 
+// such damages.
+//***************************************************************************
+//
+// SOURCE FILE NAME: BlobClobDemo.sqlj
+//
+// SAMPLE: How to access Blob or Clob fields in DB2 tables
+//
+//         This sample program shows how to access Blob or Clob fields in 
+//         DB2 tables. To access LOBs in S/390 DB2, additional auxilaiary 
+//         tables and indexes need to be created on server side.
+// 
+//         This sample program uses the DataSource jdbc/DB2SimpleDataSource_ds1 
+//         from JNDI. The DataSource is registered using createRegisterDS.java 
+//         and DS1.prop. Refer to the README file for details on how to run
+//         this sample. 
+//
+//
+// SQL Statements USED:
+//         SELECT
+//
+// Classes used from Util.sqlj are:
+//         Data
+//
+// OUTPUT FILE: BlobClobDemo.out (available in the online documentation)
+// Output will vary depending on the JDBC driver connectivity used.
+//***************************************************************************
+//
+// For more information on the sample programs, see the README file.
+//
+// For information on developing JDBC applications, see the Application
+// Development Guide.
+//
+// For information on using SQL statements, see the SQL Reference.
+//
+// For the latest information on programming, compiling, and running DB2
+// applications, visit the DB2 application development website at
+//     http://www.software.ibm.com/data/db2/udb/ad
+//**************************************************************************/
+
+
+import java.sql.*;
+import sqlj.runtime.*;
+import sqlj.runtime.ref.*;
+
+#sql context BlobClobCtx with (dataSource="jdbc/DB2SimpleDataSource_ds1");
+
+class BlobClobDemo 
+{
+  #sql public iterator lobIter(int id, java.sql.Blob blobcol, 
+                               java.sql.Clob clobcol); 
+
+  public static void main(String argv[]) 
+  {
+    System.out.println();
+    System.out.println(
+      "THIS SAMPLE SHOWS HOW TO ACCESS BLOB OR BLOB FIELDS IN DB2 TABLES.\n");
+      
+    BlobClobDemo bc_o  = new BlobClobDemo();
+    try
+    {
+      bc_o.runThis();
+    }
+    catch (Exception e)
+    {
+      e.printStackTrace();
+    }
+  }
+
+  static BlobClobCtx ctx1 = null;
+
+  public void runThis() throws SQLException
+  {
+    // Obtain Connection Context from DataSource jdbc/DB2SimpleDataSource_ds1
+    ctx1 = new BlobClobCtx();
+    
+    Connection conn = ctx1.getConnection();
+    conn.setAutoCommit(false);
+
+    try
+    {
+      lobIter n1 = null;
+      int col1 = 0;
+      Blob blob = null;
+      Clob clob = null;
+      int id1 = 100;
+      byte[] blobval1 = {(byte)0x0a, (byte)0x0b, (byte)0x0c};
+      String clobval1 = "Clob Text1";
+      int id2 = 200;
+      byte[] blobval2 = {(byte)0x0d, (byte)0x0e, (byte)0x0f};
+      String clobval2 = "Clob Text2";
+      System.out.println("  Insert 2 rows into the table BlobClob_Tab. \n");
+
+      #sql { INSERT INTO BlobClob_Tab(id, blobcol, clobcol) 
+               VALUES( :id1, :blobval1, :clobval1 ) };
+      System.out.println(
+        "    INSERT INTO BlobClob_Tab(id, blobcol, clobcol)\n"+
+        "      VALUES ( :id1, :blobval1, :clobval1 )\n");
+
+      #sql { INSERT INTO BlobClob_Tab(id, blobcol, clobcol) 
+               VALUES( :id2, :blobval2, :clobval2 ) };
+      System.out.println(
+        "    INSERT INTO BlobClob_Tab(id, blobcol, clobcol) \n"+
+        "      VALUES ( :id2, :blobval2, :clobval2 )\n");
+
+      System.out.println ("  Now Fetch From BlobClobTab.\n");
+      #sql n1 = { select id, blobcol, clobcol from  BlobClob_Tab };
+      System.out.println("    SELECT id, blobcol, clobcol FROM BlobClob_Tab\n");
+
+      String clob_str = null;
+      Clob temp_clob = null;
+      Blob temp_blob = null;
+          
+      while (n1.next())
+      {
+        temp_clob = n1.clobcol();
+        temp_blob = n1.blobcol();
+        byte[] barr = temp_blob.getBytes(1,(int)temp_blob.length());
+        clob_str = temp_clob.getSubString(1,(int)temp_clob.length());
+        System.out.print("    ID = " + n1.id() + ", Clob Value = " +
+                         clob_str + ", Blob Value: ");
+        for (int i=0; i<barr.length; i++) 
+        {
+          System.out.print(""+barr[i]);
+          if (i<barr.length-1) 
+              System.out.print(",");
+        }
+        System.out.println ("");
+        
+      }
+      System.out.println ("");
+
+      n1.close();
+      cleanup();
+    }
+    catch(Exception ex)
+    {
+      if (ex instanceof java.sql.SQLException)
+      {
+        System.out.println("error code: " +
+                ((java.sql.SQLException)(ex)).getErrorCode());
+        System.out.println("error message: " + ex.getMessage());
+      }
+      ex.printStackTrace();
+    }
+  }
+
+  private static void  cleanup() throws SQLException
+  {
+    #sql [ctx1] { DELETE  FROM BlobClob_Tab WHERE 1=1 };
+  }
+}

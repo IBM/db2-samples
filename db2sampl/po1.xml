@@ -1,0 +1,15 @@
+ <PurchaseOrder PoNum="5000" OrderDate="2006-02-18" Status="Unshipped" >
+   <item>
+    <partid>100-100-01</partid>
+    <name>Snow Shovel, Basic 22 inch</name>
+    <quantity>3</quantity>
+    <price>9.99</price>
+   </item>
+   <item>
+     <partid>100-103-01</partid>
+     <name>Snow Shovel, Super Deluxe 26 inch</name>
+     <quantity>5</quantity>
+     <price>49.99</price>
+   </item>
+</PurchaseOrder>
+

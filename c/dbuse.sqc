@@ -1,0 +1,486 @@
+/****************************************************************************
+** (c) Copyright IBM Corp. 2007 All rights reserved.
+** 
+** The following sample of source code ("Sample") is owned by International 
+** Business Machines Corporation or one of its subsidiaries ("IBM") and is 
+** copyrighted and licensed, not sold. You may use, copy, modify, and 
+** distribute the Sample in any form without payment to IBM, for the purpose of 
+** assisting you in the development of your applications.
+** 
+** The Sample code is provided to you on an "AS IS" basis, without warranty of 
+** any kind. IBM HEREBY EXPRESSLY DISCLAIMS ALL WARRANTIES, EITHER EXPRESS OR 
+** IMPLIED, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED WARRANTIES OF 
+** MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE. Some jurisdictions do 
+** not allow for the exclusion or limitation of implied warranties, so the above 
+** limitations or exclusions may not apply to you. IBM shall not be liable for 
+** any damages you suffer as a result of using, copying, modifying or 
+** distributing the Sample, even if IBM has been advised of the possibility of 
+** such damages.
+*****************************************************************************
+**
+** SOURCE FILE NAME: dbuse.sqc 
+**    
+** SAMPLE: How to use a database 
+**           
+** SQL STATEMENTS USED:
+**         CREATE TABLE
+**         DROP TABLE
+**         DELETE
+**         PREPARE
+**         EXECUTE
+**         EXECUTE IMMEDIATE
+**         COMPOUND SQL (EMBEDDED)
+**
+** OUTPUT FILE: dbuse.out (available in the online documentation)
+*****************************************************************************
+**
+** For more information on the sample programs, see the README file.
+**
+** For information on developing C applications, see the Application
+** Development Guide.
+**
+** For information on using SQL statements, see the SQL Reference.
+**
+** For the latest information on programming, building, and running DB2 
+** applications, visit the DB2 application development website: 
+**     http://www.software.ibm.com/data/db2/udb/ad
+****************************************************************************/
+
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+#include <sqlenv.h>
+#include <sqlutil.h>
+#include "utilemb.h"
+
+int StaticStmtInvoke(void);
+int StaticStmtWithHostVarsInvoke(void);
+int DynamicStmtEXECUTE_IMMEDIATE(void);
+int DynamicStmtEXECUTE(void);
+int DynamicStmtWithMarkersEXECUTEusingHostVars(void);
+int DynamicStmtWithMarkersEXECUTEusingSQLDA(void);
+int CompoundStmtInvoke(void);
+
+int main(int argc, char *argv[])
+{
+  int rc = 0;
+
+  char dbAlias[SQL_ALIAS_SZ + 1];
+  char user[USERID_SZ + 1];
+  char pswd[PSWD_SZ + 1];
+
+  /* check the command line arguments */
+  rc = CmdLineArgsCheck1(argc, argv, dbAlias, user, pswd);
+  if (rc != 0)
+  {
+    return rc;
+  }
+
+  printf("\nTHIS SAMPLE SHOWS HOW TO USE A DATABASE.\n");
+
+  /* connect to the database */
+  rc = DbConn(dbAlias, user, pswd);
+  if (rc != 0)
+  {
+    return rc;
+  }
+
+  rc = StaticStmtInvoke();
+  rc = StaticStmtWithHostVarsInvoke();
+  rc = DynamicStmtEXECUTE_IMMEDIATE();
+  rc = DynamicStmtEXECUTE();
+  rc = DynamicStmtWithMarkersEXECUTEusingHostVars();
+  rc = DynamicStmtWithMarkersEXECUTEusingSQLDA();
+  rc = CompoundStmtInvoke();
+
+  /* disconnect from the database */
+  rc = DbDisconn(dbAlias);
+  if (rc != 0)
+  {
+    return rc;
+  }
+
+  return 0;
+} /* end main */
+
+int StaticStmtInvoke(void)
+{
+  struct sqlca sqlca;
+
+  printf("\n-----------------------------------------------------------");
+  printf("\nUSE THE SQL STATEMENTS:\n");
+  printf("  CREATE TABLE\n");
+  printf("  DROP TABLE\n");
+  printf("TO SHOW HOW TO USE STATIC SQL STATEMENTS.\n");
+
+  /* create a table */
+  printf("\n  Execute the statement\n");
+  printf("    CREATE TABLE table1(col1 INTEGER)\n");
+
+  EXEC SQL CREATE TABLE table1(col1 INTEGER);
+  EMB_SQL_CHECK("CREATE TABLE -- Invoke");
+
+  /* commit the transaction */
+  printf("  Execute COMMIT.\n");
+
+  EXEC SQL COMMIT;
+  EMB_SQL_CHECK("CREATE TABLE -- Commit");
+
+  /* drop a table */
+  printf("\n  Execute the statement\n");
+  printf("    DROP TABLE table1\n");
+
+  EXEC SQL DROP TABLE table1;
+  EMB_SQL_CHECK("DROP TABLE -- Invoke");
+
+  /* commit the transaction */
+  printf("  Execute COMMIT.\n");
+
+  EXEC SQL COMMIT;
+  EMB_SQL_CHECK("DROP TABLE -- Commit");
+
+  return 0;
+} /* StaticStmtInvoke */
+
+int StaticStmtWithHostVarsInvoke(void)
+{
+  struct sqlca sqlca;
+
+  EXEC SQL BEGIN DECLARE SECTION;
+    short hostVar1;
+    char hostVar2[20];
+  EXEC SQL END DECLARE SECTION;
+
+  printf("\n-----------------------------------------------------------");
+  printf("\nUSE THE SQL STATEMENTS:\n");
+  printf("  DELETE\n");
+  printf("  ROLLBACK\n");
+  printf("TO SHOW HOW TO USE HOST VARIABLES.\n");
+
+  /* execute a statement with host variables */
+  printf("\n  Execute\n");
+  printf("    DELETE FROM org\n");
+  printf("      WHERE deptnumb = :hostVar1 AND\n");
+  printf("            division = :hostVar2\n");
+  printf("  for\n");
+  printf("    hostVar1 = 15\n");
+  printf("    hostVar2 = 'Eastern'\n");
+
+  hostVar1 = 15;
+  strcpy(hostVar2, "Eastern");
+
+  EXEC SQL DELETE FROM org
+    WHERE deptnumb = :hostVar1 AND
+          division = :hostVar2;
+  EMB_SQL_CHECK("Delete with host variables -- Execute");
+
+  /* rollback the transaction */
+  printf("\n  Rollback the transaction.\n");
+
+  EXEC SQL ROLLBACK;
+  EMB_SQL_CHECK("Transaction -- Rollback");
+
+  return 0;
+} /* StaticStmtWithHostVarsInvoke */
+
+int DynamicStmtEXECUTE_IMMEDIATE(void)
+{
+  struct sqlca sqlca;
+
+  EXEC SQL BEGIN DECLARE SECTION;
+    char stmt1[50];
+    char stmt2[50];
+  EXEC SQL END DECLARE SECTION;
+
+  printf("\n-----------------------------------------------------------");
+  printf("\nUSE THE SQL STATEMENT:\n");
+  printf("  EXECUTE IMMEDIATE\n");
+  printf("TO SHOW HOW TO USE SQL STATEMENTS WITH 'EXECUTE IMMEDIATE'.\n");
+
+  /* create a table */
+  strcpy(stmt1, "CREATE TABLE table1(col1 INTEGER)");
+  printf("\n  Execute the statement\n");
+  printf("    EXECUTE IMMEDIATE :stmt1\n");
+  printf("  for\n");
+  printf("    stmt1 = %s\n", stmt1);
+
+  EXEC SQL EXECUTE IMMEDIATE :stmt1;
+  EMB_SQL_CHECK("Stmt1 -- EXECUTE IMMEDIATE");
+
+  /* drop a table */
+  strcpy(stmt2, "DROP TABLE table1");
+  printf("\n  Execute the statement\n");
+  printf("    EXECUTE IMMEDIATE :stmt2\n");
+  printf("  for\n");
+  printf("    stmt2 = %s\n", stmt2);
+
+  EXEC SQL EXECUTE IMMEDIATE :stmt2;
+  EMB_SQL_CHECK("Stmt2 -- EXECUTE IMMEDIATE");
+
+  return 0;
+} /* DynamicStmtEXECUTE_IMMEDIATE */
+
+int DynamicStmtEXECUTE(void)
+{
+  struct sqlca sqlca;
+
+  EXEC SQL BEGIN DECLARE SECTION;
+    char hostVarStmt[50];
+  EXEC SQL END DECLARE SECTION;
+
+  printf("\n-----------------------------------------------------------");
+  printf("\nUSE THE SQL STATEMENTS:\n");
+  printf("  PREPARE\n");
+  printf("  EXECUTE\n");
+  printf("TO SHOW HOW TO USE SQL STATEMENTS WITH 'EXECUTE'.\n");
+
+  /* prepare the statement */
+  strcpy(hostVarStmt, "DELETE FROM org WHERE deptnumb = 15");
+  printf("\n  Execute the statement\n");
+  printf("    PREPARE Stmt FROM :hostVarStmt\n");
+  printf("  for\n");
+  printf("    hostVarStmt = %s\n", hostVarStmt);
+
+  EXEC SQL PREPARE Stmt FROM :hostVarStmt;
+  EMB_SQL_CHECK("Stmt -- Prepare");
+
+  /* execute the statement */
+  printf("\n  Execute the statement\n");
+  printf("    EXECUTE Stmt\n");
+
+  EXEC SQL EXECUTE Stmt;
+  EMB_SQL_CHECK("Stmt -- Execute");
+
+  /* ROLLBACK the transaction */
+  printf("\n  Rollback the transaction.\n");
+
+  EXEC SQL ROLLBACK;
+  EMB_SQL_CHECK("Transaction -- Rollback");
+
+  return 0;
+} /* DynamicStmtEXECUTE */
+
+int DynamicStmtWithMarkersEXECUTEusingHostVars(void)
+{
+  struct sqlca sqlca;
+
+  EXEC SQL BEGIN DECLARE SECTION;
+    char hostVarStmt1[50];
+    short hostVarDeptnumb;
+  EXEC SQL END DECLARE SECTION;
+
+  printf("\n-----------------------------------------------------------");
+  printf("\nUSE THE SQL STATEMENTS:\n");
+  printf("  PREPARE\n");
+  printf("  EXECUTE\n");
+  printf("TO SHOW SQL STATEMENTS WITH 'EXECUTE'" );
+  printf(" AND HOST VARIABLES.\n");
+
+  /* prepare the statement */
+  strcpy(hostVarStmt1, "DELETE FROM org WHERE deptnumb = :dept");
+  printf("\n  Execute the statement\n");
+  printf("    PREPARE Stmt1 FROM :hostVarStmt1\n");
+  printf("  for\n");
+  printf("    hostVarStmt1 = %s\n", hostVarStmt1);
+
+  EXEC SQL PREPARE Stmt1 FROM :hostVarStmt1;
+  EMB_SQL_CHECK("Stmt1 -- Prepare");
+
+  /* execute the statement for hostVarDeptnumb = 15 */
+  hostVarDeptnumb = 15;
+  printf("\n  Execute the statement\n");
+  printf("    EXECUTE Stmt1 USING :hostVarDeptnumb\n");
+  printf("  for\n");
+  printf("    hostVarDeptnumb = %d\n", hostVarDeptnumb);
+
+  EXEC SQL EXECUTE Stmt1 USING :hostVarDeptnumb;
+  EMB_SQL_CHECK("Stmt1 -- Execute with Host Variables 1");
+
+  /* execute the statement for hostVarDeptnumb = 84 */
+  hostVarDeptnumb = 84;
+  printf("\n  Execute the statement\n");
+  printf("    EXECUTE Stmt1 USING :hostVarDeptnumb\n");
+  printf("  for\n");
+  printf("    hostVarDeptnumb = %d\n", hostVarDeptnumb);
+
+  EXEC SQL EXECUTE Stmt1 USING :hostVarDeptnumb;
+  EMB_SQL_CHECK("Stmt1 -- Execute with Host Variables 2");
+
+  /* rollback the transaction */
+  printf("\n  Rollback the transaction.\n");
+
+  EXEC SQL ROLLBACK;
+  EMB_SQL_CHECK("Transaction -- Rollback");
+
+  return 0;
+} /* DynamicStmtWithMarkersEXECUTEusingHostVars */
+
+int DynamicStmtWithMarkersEXECUTEusingSQLDA(void)
+{
+  struct sqlca sqlca;
+  struct sqlda *pSqlda;
+  short deptnumb = 0;
+  short deptnumbInd = 0;
+
+  EXEC SQL BEGIN DECLARE SECTION;
+    char hostVarStmt2[50];
+  EXEC SQL END DECLARE SECTION;
+
+  printf("\n-----------------------------------------------------------");
+  printf("\nUSE THE SQL STATEMENTS:\n");
+  printf("  PREPARE\n");
+  printf("  EXECUTE USING DESCRIPTOR\n");
+  printf("TO SHOW SQL STATEMENTS WITH 'EXECUTE' AND THE SQLDA.\n");
+
+  /* prepare the statement */
+  strcpy(hostVarStmt2, "DELETE FROM org WHERE deptnumb = :dept");
+  printf("\n  Execute the statement\n");
+  printf("    PREPARE Stmt2 FROM :hostVarStmt2\n");
+  printf("  for\n");
+  printf("    hostVarStmt2 = DELETE FROM org WHERE deptnumb = :dept\n");
+
+  EXEC SQL PREPARE Stmt2 FROM :hostVarStmt2;
+  EMB_SQL_CHECK("Stmt2 -- Prepare");
+
+  /* initialize sqlda */
+  printf("\n  Initialize the SQLDA structure.\n");
+  pSqlda = (struct sqlda *)malloc(SQLDASIZE(1)); /* one marker */
+  strncpy(pSqlda->sqldaid, "SQLDA   ", sizeof(pSqlda->sqldaid));
+  pSqlda->sqldabc = (sqlint32)SQLDASIZE(1);
+  pSqlda->sqln = 1; /* one marker */
+  pSqlda->sqld = 1;
+
+  pSqlda->sqlvar[0].sqltype = SQL_TYP_NSMALL;
+  pSqlda->sqlvar[0].sqllen = sizeof(short);
+  pSqlda->sqlvar[0].sqldata = (char *)&deptnumb;
+  pSqlda->sqlvar[0].sqlind = (short *)&deptnumbInd;
+
+  /* execute the statement for deptnumb=15 */
+  deptnumb = 15;
+  printf("\n  Execute the statement\n");
+  printf("    EXECUTE THE STATEMENT Stmt2 USING DESCRIPTOR :*pSqlda\n");
+  printf("  for\n");
+  printf("    deptnumb = %d\n", deptnumb);
+
+  EXEC SQL EXECUTE Stmt2 USING DESCRIPTOR :*pSqlda;
+  EMB_SQL_CHECK("Stmt2 -- Execute with SQLDA");
+
+  /* execute the statement for deptnumb=84 */
+  deptnumb = 84;
+  printf("\n  Execute the statement\n");
+  printf("    EXECUTE THE STATEMENT Stmt2 USING DESCRIPTOR :*pSqlda\n");
+  printf("  for\n");
+  printf("    deptnumb = %d\n", deptnumb);
+
+  EXEC SQL EXECUTE Stmt2 USING DESCRIPTOR :*pSqlda;
+  EMB_SQL_CHECK("Stmt2 -- Execute with SQLDA");
+
+  /* ROLLBACK the transaction */
+  printf("\n  Rollback the transaction.\n");
+
+  EXEC SQL ROLLBACK;
+  EMB_SQL_CHECK("Transaction -- Rollback");
+
+  /* memory allocated -- free */
+  free(pSqlda);
+
+  return 0;
+} /* DynamicStmtWithMarkersEXECUTEusingSQLDA */
+
+int CompoundStmtInvoke(void)
+{
+  struct sqlca sqlca;
+
+  EXEC SQL BEGIN DECLARE SECTION;
+    char subStmt1[200];
+    char subStmt2[200];
+    char subStmt3[200];
+  EXEC SQL END DECLARE SECTION;
+
+  printf("\n-----------------------------------------------------------");
+  printf("\nUSE THE SQL STATEMENTS:\n");
+  printf("  CREATE TABLE\n");
+  printf("  PREPARE\n");
+  printf("  COMPOUND SQL (EMBEDDED)\n");
+  printf("  EXECUTE\n");
+  printf("  DROP TABLE\n");
+  printf("TO SHOW COMPOUND SQL STATEMENTS.\n");
+
+  /* create the table awards */
+  printf("\n  Execute the statement\n");
+  printf("    CREATE TABLE awards(id INTEGER, award CHAR(12)\n");
+
+  EXEC SQL CREATE TABLE awards(id INTEGER, award CHAR(12));
+  EMB_SQL_CHECK("awards TABLE -- Create");
+
+  /* prepare the substatements */
+  strcpy(subStmt1, "INSERT INTO awards(id, award) ");
+  strcat(subStmt1, "  SELECT id, 'Sales Merit' ");
+  strcat(subStmt1, "    FROM staff ");
+  strcat(subStmt1, "    WHERE job = 'Sales' AND (comm/100 > years)");
+  printf("\n  Prepare the substatement1\n");
+  printf("    INSERT INTO awards(id, award)\n");
+  printf("      SELECT id, 'Sales Merit'\n");
+  printf("        FROM staff\n");
+  printf("        WHERE job = 'Sales' AND (comm/100 > years)\n");
+
+  EXEC SQL PREPARE SubStmt1 FROM :subStmt1;
+  EMB_SQL_CHECK("Substatement1 -- Prepare");
+
+  strcpy(subStmt2, "INSERT INTO awards(id, award) ");
+  strcat(subStmt2, "  SELECT id, 'Clerk Merit' ");
+  strcat(subStmt2, "    FROM staff ");
+  strcat(subStmt2, "    WHERE job = 'Clerk' AND (comm/50 > years)");
+  printf("\n  Prepare the substatement2\n");
+  printf("    INSERT INTO awards(id, award)\n");
+  printf("      SELECT id, 'Clerk Merit'\n");
+  printf("        FROM staff\n");
+  printf("        WHERE job = 'Clerk' AND (comm/50 > years)\n");
+
+  EXEC SQL PREPARE SubStmt2 FROM :subStmt2;
+  EMB_SQL_CHECK("Substatement2 -- Prepare");
+
+  strcpy(subStmt3, "INSERT INTO awards(id, award) ");
+  strcat(subStmt3, "  SELECT id, 'Best' concat job ");
+  strcat(subStmt3, "    FROM staff ");
+  strcat(subStmt3, "    WHERE comm = (SELECT max(comm) ");
+  strcat(subStmt3, "                    FROM staff ");
+  strcat(subStmt3, "                    WHERE job = 'Clerk')");
+  printf("\n  Prepare the substatement3\n");
+  printf("    INSERT INTO awards(id, award)\n");
+  printf("      SELECT id, 'Best' concat job\n");
+  printf("        FROM staff\n");
+  printf("        WHERE comm = (SELECT max(comm)\n");
+  printf("                        FROM staff\n");
+  printf("                        WHERE job = 'Clerk')\n");
+
+  EXEC SQL PREPARE SubStmt3 FROM :subStmt3;
+  EMB_SQL_CHECK("Substatement3 -- Prepare");
+
+  /* execute the embedded compound statement */
+  printf("\n  Execute the statement\n");
+  printf("    BEGIN COMPOUND NOT ATOMIC STATIC\n");
+  printf("      EXECUTE SubStmt1;\n");
+  printf("      EXECUTE SubStmt2;\n");
+  printf("      EXECUTE SubStmt3;\n");
+  printf("      COMMIT;\n");
+  printf("    END COMPOUND;\n");
+
+  EXEC SQL BEGIN COMPOUND NOT ATOMIC STATIC
+    EXECUTE SubStmt1;
+    EXECUTE SubStmt2;
+    EXECUTE SubStmt3;
+    COMMIT;
+  END COMPOUND;
+  EMB_SQL_CHECK("Compound -- Invoke");
+
+  /* drop the table awards */
+  printf("\n  Execute the statement\n");
+  printf("    DROP TABLE awards\n");
+
+  EXEC SQL DROP TABLE awards;
+  EMB_SQL_CHECK("awards TABLE -- Drop");
+
+  return 0;
+} /* CompoundStmtInvoke */
+

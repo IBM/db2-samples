@@ -1,0 +1,341 @@
+/****************************************************************************
+** (c) Copyright IBM Corp. 2007 All rights reserved.
+** 
+** The following sample of source code ("Sample") is owned by International 
+** Business Machines Corporation or one of its subsidiaries ("IBM") and is 
+** copyrighted and licensed, not sold. You may use, copy, modify, and 
+** distribute the Sample in any form without payment to IBM, for the purpose of 
+** assisting you in the development of your applications.
+** 
+** The Sample code is provided to you on an "AS IS" basis, without warranty of 
+** any kind. IBM HEREBY EXPRESSLY DISCLAIMS ALL WARRANTIES, EITHER EXPRESS OR 
+** IMPLIED, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED WARRANTIES OF 
+** MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE. Some jurisdictions do 
+** not allow for the exclusion or limitation of implied warranties, so the above 
+** limitations or exclusions may not apply to you. IBM shall not be liable for 
+** any damages you suffer as a result of using, copying, modifying or 
+** distributing the Sample, even if IBM has been advised of the possibility of 
+** such damages.
+*****************************************************************************
+**
+** SOURCE FILE NAME: tscreate.sqc 
+**    
+** SAMPLE: How to create and drop buffer pools and table spaces 
+**           
+** DB2 API USED:
+**         db2CfgGet - Get Database Configuration 
+**
+** SQL STATEMENTS USED:
+**         CREATE BUFFERPOOL
+**         EXECUTE IMMEDIATE
+**         DROP
+**
+** OUTPUT FILE: tscreate.out (available in the online documentation)
+*****************************************************************************
+**
+** For more information on the sample programs, see the README file.
+**
+** For information on developing C applications, see the Application
+** Development Guide.
+**
+** For information on using SQL statements, see the SQL Reference.
+**
+** For information on DB2 APIs, see the Administrative API Reference.
+**
+** For the latest information on programming, building, and running DB2 
+** applications, visit the DB2 application development website: 
+**     http://www.software.ibm.com/data/db2/udb/ad
+****************************************************************************/
+
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+#include <sqlenv.h>
+#include <sqlutil.h>
+#include <db2ApiDf.h>
+#include "utilemb.h"
+
+int BufferpoolCreate(void);
+int SMSTablespaceCreate(char *);
+int DMSTablespaceCreate(char *);
+int TablespacesDrop(void);
+int BufferpoolDrop(void);
+int ServerWorkingPathGet(char *, char *); /* support function */
+
+EXEC SQL BEGIN DECLARE SECTION;
+  char strStmt[257];
+EXEC SQL END DECLARE SECTION;
+
+int main(int argc, char *argv[])
+{
+  int rc = 0;
+  char nodeName[SQL_INSTNAME_SZ + 1];
+  char serverWorkingPath[SQL_PATH_SZ + 1];
+  char dbAlias[SQL_ALIAS_SZ + 1];
+  char user[USERID_SZ + 1];
+  char pswd[PSWD_SZ + 1];
+
+  /* check the command line arguments */
+  rc = CmdLineArgsCheck3(argc, argv, dbAlias, nodeName, user, pswd);
+  if (rc != 0)
+  {
+    return rc;
+  }
+
+  printf("\nTHIS SAMPLE SHOWS ");
+  printf("HOW TO CREATE AND DROP BUFFER POOLS AND TABLE SPACES.\n");
+
+  /* attach to a local or remote instance */
+  rc = InstanceAttach(nodeName, user, pswd);
+  if (rc != 0)
+  {
+    return rc;
+  }
+
+  /* get a server working path */
+  rc = ServerWorkingPathGet(dbAlias, serverWorkingPath);
+  if (rc != 0)
+  {
+    return rc;
+  }
+
+  /* detach from the local or remote instance */
+  rc = InstanceDetach(nodeName);
+  if (rc != 0)
+  {
+    return rc;
+  }
+
+  /* connect to the database */
+  DbConn(dbAlias, user, pswd);
+  if (rc != 0)
+  {
+    return rc;
+  }
+
+  rc = BufferpoolCreate();
+  rc = SMSTablespaceCreate(serverWorkingPath);
+  rc = DMSTablespaceCreate(serverWorkingPath);
+
+  /* disconnect from the database */
+  DbDisconn(dbAlias);
+  if (rc != 0)
+  {
+    return rc;
+  }
+
+  /* conect to the database */
+  DbConn(dbAlias, user, pswd);
+  if (rc != 0)
+  {
+    return rc;
+  }
+
+  rc = TablespacesDrop();
+  rc = BufferpoolDrop();
+
+  /* disconnect from the database */
+  DbDisconn(dbAlias);
+  if (rc != 0)
+  {
+    return rc;
+  }
+
+  return 0;
+} /* main */
+
+int ServerWorkingPathGet(char dbAlias[], char serverWorkingPath[])
+{
+  int rc = 0;
+  struct sqlca sqlca;
+  db2CfgParam cfgParameters[1];
+  db2Cfg cfgStruct;
+  char serverLogPath[SQL_PATH_SZ + 1];
+  char dbAlias_upper[SQL_ALIAS_SZ + 1] = { 0 };
+  int ctr = 0;
+  int len;
+
+  /* initialize cfgParameters */
+  cfgParameters[0].flags = 0;
+  cfgParameters[0].token = SQLF_DBTN_LOGPATH;
+  cfgParameters[0].ptrvalue = 
+    (char *)malloc((SQL_PATH_SZ + 1) * sizeof(char));
+
+  /* initialize cfgStruct */
+  cfgStruct.numItems = 1;
+  cfgStruct.paramArray = cfgParameters;
+  cfgStruct.flags = db2CfgDatabase;
+  cfgStruct.dbname = dbAlias;
+
+  /* get database configuration */
+  db2CfgGet(db2Version1010, (void *)&cfgStruct, &sqlca);
+  DB2_API_CHECK("server log path -- get");
+
+  strcpy(serverLogPath, cfgParameters[0].ptrvalue);
+  free(cfgParameters[0].ptrvalue);
+
+  /* get server working path */
+  /* for example, if the serverLogPath = "C:\DB2\NODE0001\....". */
+  /* keep for serverWorkingPath "C:\DB2" only. */
+
+  for (ctr = 0; ctr < strlen (dbAlias); ctr++)
+  {
+    dbAlias_upper[ctr] = toupper (dbAlias[ctr]);
+  }
+  dbAlias_upper[ctr] = '\0';  /* terminate the constructed string */
+
+  len = (int)(strstr(serverLogPath, "NODE") - serverLogPath - 1);
+  memcpy(serverWorkingPath, serverLogPath, len);
+  serverWorkingPath[len] = '\0';
+
+  return 0;
+} /* ServerWorkingPathGet */
+
+int BufferpoolCreate(void)
+{
+  int rc = 0;
+  struct sqlca sqlca;
+
+  printf("\n-----------------------------------------------------------");
+  printf("\nUSE THE SQL STATEMENTS:\n");
+  printf("  CREATE BUFFERPOOL\n");
+  printf("  COMMIT\n");
+  printf("TO CREATE A BUFFER POOL.\n");
+
+  /* create buffer pool */
+  printf("\n  CREATE BUFFERPOOL new_bufpool SIZE 500 PAGESIZE 8K\n");
+
+  EXEC SQL CREATE BUFFERPOOL new_bufpool SIZE 500 PAGESIZE 8 K;
+  EMB_SQL_CHECK("bufferpool -- create");
+
+  /* commit transaction */
+  printf("  COMMIT\n");
+
+  EXEC SQL COMMIT;
+  EMB_SQL_CHECK("transaction -- commit");
+
+  return 0;
+} /* BufferpoolCreate */
+
+int SMSTablespaceCreate(char serverWorkingPath[])
+{
+  int rc = 0;
+  struct sqlca sqlca;
+  char containerPath[SQL_PATH_SZ + 1];
+
+  printf("\n-----------------------------------------------------------");
+  printf("\nUSE THE SQL STATEMENTS:\n");
+  printf("  CREATE TABLESPACE\n");
+  printf("  COMMIT\n");
+  printf("TO CREATE AN SMS TABLE SPACE.\n");
+
+  /* create SMS table space */
+  strcpy(containerPath, serverWorkingPath);
+  strcat(containerPath, PATH_SEP);
+  strcat(containerPath, "sms_cont1");
+
+  sprintf(strStmt, "create tablespace sms_tspace "
+                   "  BUFFERPOOL new_bufpool", containerPath);
+
+  printf("\n  CREATE TABLESPACE sms_tspace"
+         "\n    BUFFERPOOL new_bufpool\n", containerPath);
+
+  EXEC SQL EXECUTE IMMEDIATE :strStmt;
+  EMB_SQL_CHECK("SMS tablespace -- create");
+
+  /* commit transaction */
+  printf("  COMMIT\n");
+
+  EXEC SQL COMMIT;
+  EMB_SQL_CHECK("transaction -- commit");
+
+  return 0;
+} /* SMSTablespaceCreate */
+
+int DMSTablespaceCreate(char serverWorkingPath[])
+{
+  int rc = 0;
+  struct sqlca sqlca;
+  char containerFileName[SQL_PATH_SZ + 1];
+
+  printf("\n-----------------------------------------------------------");
+  printf("\nUSE THE SQL STATEMENTS:\n");
+  printf("  CREATE TABLESPACE\n");
+  printf("  COMMIT\n");
+  printf("TO CREATE A DMS TABLE SPACE.\n");
+
+  /* create DMS table space */
+  strcpy(containerFileName, serverWorkingPath);
+  strcat(containerFileName, PATH_SEP);
+  strcat(containerFileName, "dms_cont1.dat");
+
+  sprintf(strStmt, "CREATE TABLESPACE dms_tspace "
+                   "  BUFFERPOOL new_bufpool", containerFileName);
+
+  printf("\n  CREATE TABLESPACE dms_tspace"
+         "\n    BUFFERPOOL new_bufpool\n", containerFileName);
+
+  EXEC SQL EXECUTE IMMEDIATE :strStmt;
+  EMB_SQL_CHECK("DMS tablespace -- create");
+
+  /* commit transaction */
+  printf("  COMMIT\n");
+
+  EXEC SQL COMMIT;
+  EMB_SQL_CHECK("transaction -- commit");
+
+  return 0;
+} /* DMSTablespaceCreate */
+
+int TablespacesDrop(void)
+{
+  int rc = 0;
+  struct sqlca sqlca;
+
+  printf("\n-----------------------------------------------------------");
+  printf("\nUSE THE SQL STATEMENTS:\n");
+  printf("  DROP\n");
+  printf("  COMMIT\n");
+  printf("TO DROP TABLE SPACES.\n");
+
+  /* drop table spaces */
+  printf("\n  DROP TABLESPACES sms_tspace, dms_tspace\n");
+
+  EXEC SQL DROP TABLESPACES sms_tspace, dms_tspace;
+  EMB_SQL_CHECK("tablespaces -- drop");
+
+  /* commit transaction */
+  printf("  COMMIT\n");
+
+  EXEC SQL COMMIT;
+  EMB_SQL_CHECK("transaction -- commit");
+
+  return 0;
+} /* TablespacesDrop */
+
+int BufferpoolDrop(void)
+{
+  int rc = 0;
+  struct sqlca sqlca;
+
+  printf("\n-----------------------------------------------------------");
+  printf("\nUSE THE SQL STATEMENTS:\n");
+  printf("  DROP\n");
+  printf("  COMMIT\n");
+  printf("TO DROP A BUFFER POOL.\n");
+
+  /* drop buffer pool */
+  printf("\n  DROP BUFFERPOOL new_bufpool\n");
+
+  EXEC SQL DROP BUFFERPOOL new_bufpool;
+  EMB_SQL_CHECK("bufferpool -- drop");
+
+  /* commit transaction */
+  printf("  COMMIT\n");
+
+  EXEC SQL COMMIT;
+  EMB_SQL_CHECK("transaction -- commit");
+
+  return 0;
+} /* BufferpoolDrop */
+

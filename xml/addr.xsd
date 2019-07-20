@@ -1,0 +1,15 @@
+<?xml version="1.0"?>
+<xs:schema targetNamespace="http://posample.org" xmlns:xs="http://www.w3.org/2001/XMLSchema" elementFormDefault="qualified">
+ <xs:element name="addr" minOccurs="1" maxOccurs="unbounded">
+   <xs:complexType>
+    <xs:sequence>
+      <xs:element name="street" type="xs:string" minOccurs="1" />
+      <xs:element name="city" type="xs:string" minOccurs="1" />
+      <xs:element name="prov-state" type="xs:string" minOccurs="1" />
+      <xs:element name="pcode-zip" type="xs:string" minOccurs="1" />
+    </xs:sequence>
+    <xs:attribute name="country" type="xs:string" />
+    <xs:attribute name="ADRid" type="xs:string" use="required"/>
+   </xs:complexType>
+  </xs:element>      
+</xs:schema>

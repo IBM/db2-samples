@@ -1,0 +1,261 @@
+      ***********************************************************************
+      ** (c) Copyright IBM Corp. 2007 All rights reserved.
+      ** 
+      ** The following sample of source code ("Sample") is owned by International 
+      ** Business Machines Corporation or one of its subsidiaries ("IBM") and is 
+      ** copyrighted and licensed, not sold. You may use, copy, modify, and 
+      ** distribute the Sample in any form without payment to IBM, for the purpose of 
+      ** assisting you in the development of your applications.
+      ** 
+      ** The Sample code is provided to you on an "AS IS" basis, without warranty of 
+      ** any kind. IBM HEREBY EXPRESSLY DISCLAIMS ALL WARRANTIES, EITHER EXPRESS OR 
+      ** IMPLIED, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED WARRANTIES OF 
+      ** MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE. Some jurisdictions do 
+      ** not allow for the exclusion or limitation of implied warranties, so the above 
+      ** limitations or exclusions may not apply to you. IBM shall not be liable for 
+      ** any damages you suffer as a result of using, copying, modifying or 
+      ** distributing the Sample, even if IBM has been advised of the possibility of 
+      ** such damages.
+      ***********************************************************************
+      **
+      ** SOURCE FILE NAME: tabscont.sqb 
+      **
+      ** SAMPLE: How to get tablespace container information
+      **
+      **         This program shows how to 
+      **         - obtain tablespace container information using
+      **           lower level service APIs (OPEN, FETCH, CLOSE)
+      **         - obtain tablespace container information using
+      **           higher level APIs (TABLESPACE CONTAINER QUERY)
+      **
+      ** DB2 APIs USED:
+      **         sqlgtcq -- TABLESPACE CONTAINER QUERY
+      **         sqlgotcq -- OPEN TABLESPACE CONTAINER QUERY
+      **         sqlgftcq -- FETCH TABLESPACE CONTAINER QUERY
+      **         sqlgctcq -- CLOSE TABLESPACE CONATINER QUERY
+      **         sqlgfmem -- FREE MEMORY
+      **         sqlgdref -- DEREFERENCE ADDRESS
+      **
+      ** SQL STATEMENTS USED:
+      **         BEGIN DECLARE SECTION 
+      **         END DECLARE SECTION 
+      **         CONNECT
+      **
+      ** OUTPUT FILE: tabscont.out (available in the online documentation)
+      ***********************************************************************
+      **
+      ** For more information on the sample programs, see the README file. 
+      **
+      ** For information on developing COBOL applications, see the 
+      ** Application Development Guide.
+      **
+      ** For information on DB2 APIs, see the Administrative API Reference.
+      **
+      ** For information on using SQL statements, see the SQL Reference. 
+      **
+      ** For the latest information on programming, compiling, and running
+      ** DB2 applications, visit the DB2 application development website: 
+      **     http://www.software.ibm.com/data/db2/udb/ad
+      ***********************************************************************
+
+       Identification Division.
+       Program-ID. "tabscont".
+
+       Data Division.
+       Working-Storage Section.
+
+           copy "sqlutil.cbl".
+           copy "sql.cbl".
+           copy "sqlca.cbl".
+           copy "sqlutbcq.cbl".
+
+           EXEC SQL BEGIN DECLARE SECTION END-EXEC.
+       01 dbname            pic x(8).
+       01 userid            pic x(8).
+       01 passwd.
+         49 passwd-length   pic s9(4) comp-5 value 0.
+         49 passwd-name     pic x(18).
+           EXEC SQL END DECLARE SECTION END-EXEC.
+
+      * Local Variables
+       77 rc            pic s9(9) comp-5.
+       77 idx           pic s9(9) comp-5.
+       77 errloc        pic x(80).
+
+      * Variables for OPEN TABLESPACE CONTAINER QUERY API
+       77 tsc-id        pic s9(9) comp-5.
+       77 num-tsc       pic s9(9) comp-5.
+
+      * Variables for FETCH TABLESPACE CONTAINER API
+       77 tsc-count     pic s9(9) comp-5.
+       77 max-tsc       pic s9(9) comp-5.
+
+      * Variables for TABLESPACE CONTAINER QUERY API
+ 
+       $IF P64 SET
+          77 tcq-ptr        pic s9(18) comp-5.
+          77 tcq-ptr-save   pic s9(18) comp-5.
+       $ELSE 
+          77 tcq-ptr       pic s9(9) comp-5.
+          77 tcq-ptr-save  pic s9(9) comp-5.
+       $END
+
+       Procedure Division.
+       Main Section.
+           display "Sample COBOL program: TABSCONT.SQB".
+
+      * Get database connection information.
+           display "Enter in the database name : " with no advancing.
+           accept dbname.
+
+           display "Enter your user id (default none): " 
+                with no advancing.
+           accept userid.
+
+           if userid = spaces
+             EXEC SQL CONNECT TO sample END-EXEC
+           else
+             display "Enter your password : " with no advancing
+             accept passwd-name.
+
+      * Passwords in a CONNECT statement must be entered in a VARCHAR
+      * format with the length of the input string.
+           inspect passwd-name tallying passwd-length for characters
+              before initial " ".
+
+           EXEC SQL CONNECT TO :dbname USER :userid USING :passwd
+               END-EXEC.
+           move "CONNECT TO" to errloc.
+           call "checkerr" using SQLCA errloc.
+
+           display " ".
+           display "Using the following APIs:".
+           display "   OPEN TABLESPACE CONTAINER QUERY".
+           display "   FETCH TABLESPACE CONTAINER QUERY".
+           display "   CLOSE TABLESPACE CONTAINER QUERY".
+           display "=========================".
+
+      ***********************************
+      * OPEN TABLESPACE CONTAINER QUERY *
+      ***********************************
+
+           move SQLB-ALL-TABLESPACES to tsc-id.
+
+           call "sqlgotcq" using
+                                 by reference   sqlca
+                                 by value       tsc-id
+                                 by reference   num-tsc
+                           returning rc.
+
+           move "OPEN TABLESPACE CONTAINER QUERY" to errloc.
+           call "checkerr" using SQLCA errloc.
+
+           display "the number of tablespace containers " num-tsc.
+
+           move 1 to max-tsc.
+           move num-tsc to tsc-count.
+           move 0 to idx.
+
+           perform Fetch-Loop thru End-Fetch-Loop
+              until idx equal tsc-count.
+
+      ************************************
+      * CLOSE TABLESPACE CONTAINER QUERY *
+      ************************************
+           call "sqlgctcq" using
+                                 by reference   sqlca
+                           returning rc.
+           move "CLOSE TABLESPACE CONTAINER QUERY" to errloc.
+           call "checkerr" using SQLCA errloc.
+
+      ******************************
+      * TABLESPACE CONTAINER QUERY *
+      ******************************
+           display " ".
+           display "Using the following API:".
+           display "   TABLESPACE CONTAINER QUERY".
+           display "=========================".
+           call "sqlgtcq" using
+                                by reference    sqlca
+                                by value        tsc-id
+                                by reference    num-tsc
+                                by reference    tcq-ptr
+                          returning rc.
+           move "TABLESPACE CONTAINER QUERY" to errloc.
+           call "checkerr" using SQLCA errloc.
+
+           move num-tsc to tsc-count.
+           move 0 to idx.
+          
+           move tcq-ptr to tcq-ptr-save.
+
+           perform TCQ-Print-Loop 
+              until idx equal tsc-count.
+
+           call "sqlgfmem" using
+                                 by reference    sqlca
+                                 by value        tcq-ptr-save
+                          returning rc.
+           move "FREE TABLESPACE CONTAINER QUERY INFO" to errloc.
+           call "checkerr" using SQLCA errloc.
+
+           EXEC SQL CONNECT RESET END-EXEC.
+           move "CONNECT RESET" to errloc.
+           call "checkerr" using SQLCA errloc.
+
+       End-Main. stop run.
+
+      *****************************************
+      * Print TABLESPACE CONTAINER QUERY Info *
+      *****************************************
+       Print-Container-Info Section.
+           display "Tablespace    = " sql-tbs-id of SQLB-TBSCONTQRY-DATA.
+           display "Container ID  = " sql-id of SQLB-TBSCONTQRY-DATA.
+           display "Name          = " 
+             sql-name of SQLB-TBSCONTQRY-DATA
+               (1:sql-name-len of SQLB-TBSCONTQRY-DATA).
+           if sql-cont-type equal sqlb-cont-path then
+             display "Type          = path"
+           else if sql-cont-type equal sqlb-cont-disk then
+             display "Type          = raw"
+           else if sql-cont-type equal sqlb-cont-file then
+             display "Type          = file"
+           else if sql-cont-type equal sqlb-cont-striped-disk then
+             display "Type          = striped raw disk"
+           else if sql-cont-type equal sqlb-cont-striped-file then
+             display "Type          = striped file"
+           else
+             display "Type          = bad".  
+
+       TCQ-Print-Loop Section.
+      ******************************************
+      * Get TABLESPACE CONTAINER QUERY Results *
+      ******************************************
+           call "sqlgdref" using
+                                 by value     SQLB-TBSCONTQRY-DATA-SIZE
+                                 by reference SQLB-TBSCONTQRY-DATA
+                                 by reference tcq-ptr.
+
+
+           perform Print-Container-Info.
+           add 1 to idx.
+           add SQLB-TBSCONTQRY-DATA-SIZE to tcq-ptr.
+ 
+
+       Fetch-Loop Section.
+
+      ************************************
+      * FETCH TABLESPACE CONTAINER QUERY *
+      ************************************
+           call "sqlgftcq" using
+                                 by reference   sqlca
+                                 by value       max-tsc
+                                 by reference   SQLB-TBSCONTQRY-DATA
+                                 by reference   num-tsc
+                           returning rc.
+           move "FETCH TABLESPACE CONTAINER QUERY" to errloc.
+           call "checkerr" using SQLCA errloc.
+           perform Print-Container-Info.
+           add 1 to idx.
+       End-Fetch-Loop.
+

@@ -1,0 +1,14 @@
+<?xml version="1.0"?>
+<xs:schema targetNamespace="http://posample.org" xmlns:xs="http://www.w3.org/2001/XMLSchema" elementFormDefault="qualified">
+ <xs:element name="history" minOccurs="1" maxOccurs="1">
+   <xs:complexType>
+    <xs:sequence>
+      <xs:element name="first-order" type="xs:string" minOccurs="1" />
+      <xs:element name="total-orders-to-date" type="xs:integer" minOccurs="1" />
+      <xs:element name="avg-value-of-orders" type="xs:double" minOccurs="1" />
+      <xs:element name="discount" type="xs:double" minOccurs="1" />
+    </xs:sequence>
+    <xs:attribute name="Hid" type="xs:integer" />
+   </xs:complexType>
+  </xs:element>      
+</xs:schema>

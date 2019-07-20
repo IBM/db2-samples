@@ -1,0 +1,570 @@
+/*****************************************************************************
+** (c) Copyright IBM Corp. 2008 All rights reserved.
+** 
+** The following sample of source code ("Sample") is owned by International 
+** Business Machines Corporation or one of its subsidiaries ("IBM") and is 
+** copyrighted and licensed, not sold. You may use, copy, modify, and 
+** distribute the Sample in any form without payment to IBM, for the purpose of 
+** assisting you in the development of your applications.
+** 
+** The Sample code is provided to you on an "AS IS" basis, without warranty of 
+** any kind. IBM HEREBY EXPRESSLY DISCLAIMS ALL WARRANTIES, EITHER EXPRESS OR 
+** IMPLIED, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED WARRANTIES OF 
+** MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE. Some jurisdictions do 
+** not allow for the exclusion or limitation of implied warranties, so the above 
+** limitations or exclusions may not apply to you. IBM shall not be liable for 
+** any damages you suffer as a result of using, copying, modifying or 
+** distributing the Sample, even if IBM has been advised of the possibility of 
+** such damages.
+*****************************************************************************
+**
+** SOURCE FILE NAME: dbredirect.sqc
+** 
+** PURPOSE: This sample demonstrates how to perform redirected restore of
+**          a database
+**
+** PREREQUISITE: create 'test' database with AUTOMATIC STORAGE NO option
+**               "db2 CREATE DATABASE test AUTOMATIC STORAGE NO"
+** 
+** EXECUTION: bldapp dbredirect test
+**            dbredirect
+**
+** OUTPUT FILE: dbredirect.out
+** 
+** APIs used:
+**    db2Restore -- Restore database
+**    db2Backup -- Backup database
+**    db2CfgSet -- Set Configuration
+**    sqlbstsc - Set tablespace containers
+**
+****************************************************************************
+** For information on using SQL statements, see the SQL Reference.
+**
+** For the latest information on programming, building, and running DB2
+** applications, visit the DB2 application development website:
+**
+** http://www.ibm.com/software/data/db2/ad/ 
+**
+****************************************************************************
+**
+**  SAMPLE DESCRIPTION                                                      
+**
+****************************************************************************
+** This sample demonstrates how to perform redirected restore of a database
+** Following are the steps 
+**
+** 1. Backup 'test' database
+** 2. Get tablespace and container information of 'test' database
+** 3. Backup 'test' database
+** 4. Start restore operation
+** 5. set tablespace containers for redirected restored database
+** 6. Continue restore operation
+***************************************************************************/
+
+#include <stdlib.h>
+#include "utilrecov.c"
+#include "utilemb.h"
+#include <sqlutil.h>
+
+struct tsinfo
+{
+	int tbspid;
+	int cntid[5];
+	int numContainers;
+	char cntname[5][500];
+	char tbspname[500];
+      char cntype[5][500];
+	int totalpages[5];
+};
+
+struct tsinfo ts[10];
+
+/* local function prototypes */
+int DbBackupAndRedirectedRestore(char *, char *, char *, char *, char *, char *, char *);
+
+/* support function called by DbBackupAndRedirectedRestore() */
+int InaccessibleContainersRedefine(char serverWorkingPath[], int numTablespaces);
+
+EXEC SQL BEGIN DECLARE SECTION;
+char tbspname[100];
+char stmt[1000];
+short tbspid;
+char cntname[500];
+short cntid;
+char cntype[500];
+short tpages;
+EXEC SQL END DECLARE SECTION;
+
+int main(int argc, char *argv[])
+{
+  int rc = 0;
+  char nodeName[SQL_INSTNAME_SZ + 1] = { 0 };
+  char serverWorkingPath[SQL_PATH_SZ + 1] = { 0 };
+  sqluint16 savedLogRetainValue[252] = { 0 };
+  char redirectedRestoredDbAlias[SQL_ALIAS_SZ + 1] = { 0 };
+  char dbAlias[SQL_ALIAS_SZ + 1] = { 0 };
+  char user[USERID_SZ + 1] = { 0 };
+  char pswd[PSWD_SZ + 1] = { 0 };
+  char storPath1[SQL_PATH_SZ + 1] = { 0 };
+  char storPath2[SQL_PATH_SZ + 1] = { 0 };
+  char * home;
+  char cmd1[256]; 
+  char cmd2[256]; 
+  char cmd3[256]; 
+  char cmd4[256]; 
+
+  /* check the command line arguments */
+  rc = CmdLineArgsCheck3(argc, argv, dbAlias, nodeName, user, pswd);
+  CHECKRC(rc, "CmdLineArgsCheck3");
+
+  printf("\nTHIS SAMPLE SHOWS HOW TO PERFORM A REDIRECTED RESTORE\n");
+  printf("FROM A DATABASE BACKUP.\n");
+
+
+
+  strcpy(redirectedRestoredDbAlias, "RRDB");
+
+  /* create directory for restore database */
+  home = getenv("HOME");
+
+  #if (defined(DB2NT))
+    sprintf(storPath1, "%s\\restore1",home);
+    sprintf(storPath2, "%s\\restore2",home);
+    sprintf(cmd1, "rmdir /S /Q %s", storPath1);
+    sprintf(cmd2, "rmdir /S /Q %s", storPath2);
+
+  #else
+    sprintf(storPath1, "%s/restore1",home);
+    sprintf(storPath2, "%s/restore2",home);
+    sprintf(cmd1, "rm -rf %s", storPath1);
+    sprintf(cmd2, "rm -rf %s", storPath2);
+  #endif
+
+  sprintf(cmd3, "mkdir %s", storPath1);
+  sprintf(cmd4, "mkdir %s", storPath2);
+
+  rc = system(cmd1);
+  rc = system(cmd2);
+  rc = system(cmd3);
+  rc = system(cmd4);
+
+  /* attach to a local or remote instance */
+  rc = InstanceAttach(nodeName, user, pswd);
+  CHECKRC(rc, "Instance Attach");
+
+  strcpy(dbAlias, "test");
+
+  /* get the server working path */
+  rc = ServerWorkingPathGet(dbAlias, serverWorkingPath);
+  CHECKRC(rc, "ServerWorkingPathGet");
+
+  printf("\nNOTE: Backup images will be created on the server\n");
+  printf("      in the directory %s,\n", serverWorkingPath);
+  printf("      and will not be deleted by the program.\n");
+
+  /* save log retain value */
+  rc = DbLogRetainValueSave(dbAlias, savedLogRetainValue);
+  CHECKRC(rc, "DbLogRetainValueSave");
+
+  /* call the sample function */
+  rc = DbRecoveryHistoryFilePrune(dbAlias, user, pswd);
+  CHECKRC(rc, "DbRecoveryHistoryFilePrune");
+
+
+  rc = DbBackupAndRedirectedRestore(dbAlias,
+                                    redirectedRestoredDbAlias,
+                                    user, pswd, serverWorkingPath,
+                                    storPath1, storPath2);
+  CHECKRC(rc, "DbBackupAndRedirectedRestore");
+
+  /* restore logretain value */
+  rc = DbLogRetainValueRestore(dbAlias, savedLogRetainValue);
+  CHECKRC(rc, "DbLogRetainValueRestore");
+
+  /* detach from the local or remote instance */
+  rc = InstanceDetach(nodeName);
+  CHECKRC(rc, "InstanceDetach");
+
+  return 0;
+} /* end main */
+
+int DbBackupAndRedirectedRestore(char dbAlias[],
+                                 char restoredDbAlias[],
+                                 char user[],
+                                 char pswd[], 
+                                 char serverWorkingPath[],
+                                 char storPath1[],
+                                 char storPath2[])
+{
+  int rc = 0;
+  struct sqlca sqlca = { 0 };
+  db2CfgParam cfgParameters[1] = { 0 };
+  db2Cfg cfgStruct = { 0 };
+  
+  char restoreTimestamp[SQLU_TIME_STAMP_LEN + 1] = { 0 };
+
+  db2BackupStruct backupStruct = { 0 };
+  db2TablespaceStruct tablespaceStruct = { 0 };
+  db2MediaListStruct mediaListStruct = { 0 };
+  db2Uint32 backupImageSize = 0;
+  db2RestoreStruct restoreStruct = { 0 };
+  db2TablespaceStruct rtablespaceStruct = { 0 };
+  db2MediaListStruct rmediaListStruct = { 0 };
+  db2StoragePathsStruct storagePathsStruct = { 0 };
+  char * storagePaths[2];
+  int numTbsps = 0;
+
+  storagePaths[0]= (char *) malloc (sizeof(char)* (SQL_PATH_SZ + 1));
+  storagePaths[1]= (char *) malloc (sizeof(char)* (SQL_PATH_SZ + 1));
+
+  if (storagePaths[0] == NULL || storagePaths[1] == NULL)
+  {
+    printf("ERROR: Unable to allocate memory for storage paths.\n\n");
+    return (1);
+  }
+
+
+  printf("\n**************************\n");
+  printf("*** REDIRECTED RESTORE ***\n");
+  printf("**************************\n");
+  printf("\nUSE THE DB2 APIs:\n");
+  printf("  db2CfgSet -- Upate Configuration\n");
+  printf("  db2Backup -- Backup Database\n");
+  printf("  sqlecrea -- Create Database\n");
+  printf("  db2Restore -- Restore Database\n");
+  printf("  sqlbmtsq -- Tablespace Query\n");
+  printf("  sqlbtcq -- Tablespace Container Query\n");
+  printf("  sqlbstsc -- Set Tablespace Containers\n");
+  printf("  sqlefmem -- Free Memory\n");
+  printf("  sqledrpd -- Drop Database\n");
+  printf("TO BACK UP AND DO A REDIRECTED RESTORE OF A DATABASE.\n");
+
+  printf("\n  Update \'%s\' database configuration:\n", dbAlias);
+  printf("    - Disable the database configuration parameter LOGARCHMETH1\n");
+  printf("        i.e., set LOGARCHMETH1 = OFF\n");
+
+  /* initialize cfgParameters */
+  cfgParameters[0].flags = 0;
+  cfgParameters[0].token = SQLF_DBTN_LOGARCHMETH1;
+  cfgParameters[0].ptrvalue = "OFF";
+
+  /* initialize cfgStruct */
+  cfgStruct.numItems = 1;
+  cfgStruct.paramArray = cfgParameters;
+  cfgStruct.flags = db2CfgDatabase | db2CfgDelayed;
+  cfgStruct.dbname = dbAlias;
+
+  /* get database configuration */
+  db2CfgSet(db2Version1010, (void *)&cfgStruct, &sqlca);
+  DB2_API_CHECK("Db Log Retain -- Disable");
+
+  /*******************************/
+  /*  1. BACK UP THE DATABASE    */
+  /*******************************/
+  rc = sqle_deactivate_db (dbAlias,
+                           NULL,
+                           NULL,
+                           NULL,
+                           &sqlca);
+
+
+  printf("backup database %s\n", dbAlias);
+
+  /* Calling up the routine for database backup */
+  rc = DbBackup(dbAlias, user, pswd, serverWorkingPath, &backupStruct);
+  CHECKRC(rc, "DbBackup");
+
+  /*********************************************/
+  /*  2. GET TABLESPACE AND CONTAINER INFO      */
+  /*********************************************/
+
+  /* Get tablespaces and container info before starting restore operation */
+  numTbsps = getTablespaceInfo(dbAlias, user, pswd);
+
+
+  /***************************************/
+  /*  3. START RESTORING THE DATABASE    */
+  /***************************************/
+
+  strcpy(restoreTimestamp, backupStruct.oTimestamp);
+
+  /* The database is will be restored on new tablespace path 'tbspPath1'
+     and 'tbspPath1'. */
+
+  rtablespaceStruct.tablespaces = NULL;
+  rtablespaceStruct.numTablespaces = 0;
+
+
+  rmediaListStruct.locations = &serverWorkingPath;
+  rmediaListStruct.numLocations = 1;
+  rmediaListStruct.locationType = SQLU_LOCAL_MEDIA;
+
+  restoreStruct.piSourceDBAlias = dbAlias;
+  restoreStruct.piTargetDBAlias = restoredDbAlias;
+  restoreStruct.piTimestamp = restoreTimestamp;
+  restoreStruct.piTargetDBPath = NULL;
+  restoreStruct.piReportFile = NULL;
+  restoreStruct.piTablespaceList = &rtablespaceStruct;
+  restoreStruct.piMediaList = &rmediaListStruct;
+  restoreStruct.piUsername = user;
+  restoreStruct.piPassword = pswd;
+  restoreStruct.piNewLogPath = NULL;
+  restoreStruct.piVendorOptions = NULL;
+  restoreStruct.iVendorOptionsSize = 0;
+  restoreStruct.iParallelism = 1;
+  restoreStruct.iBufferSize = 1024;     /*  1024 x 4KB */
+  restoreStruct.iNumBuffers = 2;
+  restoreStruct.piTargetDBPath = storPath2 ;
+
+  /* The database will be restored on new storage paths 'storPath1'
+     and 'storPath2'. */
+  strcpy( storagePaths[0], storPath1 );
+  strcpy( storagePaths[1], storPath2 );
+
+  /*
+  storagePathsStruct.numStoragePaths = 2;
+  storagePathsStruct.storagePaths = storagePaths;
+  restoreStruct.piStoragePaths = &storagePathsStruct;
+
+  */
+
+  restoreStruct.iOptions = DB2RESTORE_OFFLINE | DB2RESTORE_DB | 
+	                   DB2RESTORE_NODATALINK | DB2RESTORE_NOROLLFWD;
+
+  printf("\n  Restoring a database ...\n");
+  printf("    - source image alias     : %s\n", dbAlias);
+  printf("    - source image time stamp: %s\n", restoreTimestamp);
+  printf("    - target database        : %s\n", restoredDbAlias);
+
+  restoreStruct.iCallerAction = DB2RESTORE_RESTORE_STORDEF;
+
+  /* The API db2Restore is used to restore a database that has been backed
+     up using the API db2Backup. */
+  db2Restore(db2Version1010, &restoreStruct, &sqlca);
+  
+  /* If restoring to a different database and restoreDbAlias already exists,
+     SQLCODE 2529 is expected. */
+  if (strcmp(dbAlias, restoredDbAlias))
+  {
+    printf("\n  SQLCODE 2529 is expected if target database '%s' already exists\n", 
+          restoredDbAlias);
+  }
+
+  EXPECTED_WARN_CHECK("database restore -- start");
+
+  while (sqlca.sqlcode != 0)
+  {
+    /* continue the restore operation */
+    printf("\n  Continuing the restore operation...\n");
+
+    /* depending on the sqlca.sqlcode value, user action may be
+       required, such as mounting a new tape */
+
+
+    /*********************************************************/
+    /*  4. SET CONTAINERS FOR REDIRECTED RESTORE DATABASE    */
+    /*********************************************************/
+
+    if (sqlca.sqlcode == SQLUD_INACCESSABLE_CONTAINER)
+    {
+      /* redefine the table space container layout */
+      printf("\n  Find and redefine inaccessable containers.\n");
+
+      rc = InaccessibleContainersRedefine(serverWorkingPath, numTbsps);
+      CHECKRC(rc, "InaccessibleContainersRedefine");
+    }
+
+    restoreStruct.iCallerAction = DB2RESTORE_CONTINUE;
+
+
+    /***************************************/
+    /*  5. CONTINUE RESTORE DATABASE       */
+    /***************************************/
+
+    /* restore the database */
+    db2Restore(db2Version1010, &restoreStruct, &sqlca);
+    DB2_API_CHECK("database restore -- continue");
+  }
+
+  printf("\n  Restore finished.\n");
+
+  /* Verify if tablespace container paths are set or not for  
+   * restored database */
+  numTbsps = getTablespaceInfo(restoredDbAlias, user, pswd);
+
+
+  /* drop the restored database */
+  rc = DbDrop(restoredDbAlias);
+  CHECKRC(rc, "DbDrop");
+
+  return 0;
+} /* DbBackupAndRedirectedRestore */
+
+
+int InaccessibleContainersRedefine(char serverWorkingPath[], int numTablespaces)
+{
+  struct sqlca sqlca = { 0 };
+  int tspNb = 0;
+  int contNb = 0;
+  char pathSep = '/';
+  char temp[500];
+  struct SQLB_TBSCONTQRY_DATA cnt = {0};
+
+
+  /* refedine the inaccessable containers */
+  for (tspNb = 0; tspNb < numTablespaces; tspNb++)
+  {
+
+    /* redefine inaccessable container  */
+    printf("\n    Redefine inaccessable container:\n");     
+    printf("      - table space name: %s\n", ts[tspNb].tbspname);
+  
+    for (contNb = 0; contNb < ts[tspNb].numContainers; contNb++)
+    {
+
+	if (strcmp(ts[tspNb].cntype[contNb], "PATH") == 0)
+	{
+         printf("      - default container name: %s\n", 
+			   ts[tspNb].cntname[contNb]); 		
+         sprintf(temp, "%s%cSQLTN%04d.%d", serverWorkingPath, 
+			   pathSep,ts[tspNb].tbspid, ts[tspNb].cntid[contNb]);
+	   cnt.contType = SQLB_CONT_PATH;
+	   cnt.id = ts[tspNb].cntid[contNb];
+	   cnt.nameLen = strlen(temp);
+	   cnt.totalPages = ts[tspNb].totalpages[contNb];
+	   strcpy(cnt.name, temp);
+
+	   printf("      - new container name: %s\n",cnt.name);
+    
+	   sqlbstsc(&sqlca,
+             SQLB_SET_CONT_FINAL_STATE,
+             ts[tspNb].tbspid, ts[tspNb].numContainers, &cnt);
+         DB2_API_CHECK("tablespace containers -- redefine");
+
+	}
+	else
+	{
+	   printf("Unknown container type\n");
+	}
+
+    }
+
+  } 
+
+  return 0;
+} /* InaccessibleContainersRedefine */
+
+
+int getTablespaceInfo(char dbAlias[], char user[], char pswd[])
+{
+  struct sqlca sqlca = { 0 };
+  int tspNb = 0;
+  int contNb = 0;
+  int numTablespaces = 0;
+  int rc = 0;
+  
+  /*****************************************************/
+  /*   Get tablespace and container information        */
+  /*****************************************************/
+
+  /* connect to database */
+  rc = DbConn(dbAlias, user, pswd);
+  if(rc != 0)
+  {
+    return rc;
+  }
+
+  memset(stmt, '\0', sizeof(stmt));
+  printf("\n\nGet tablespace information using MON_GET_TABLESPACE table function \n");
+  strcpy(stmt, "SELECT tbsp_name, tbsp_id from TABLE(MON_GET_TABLESPACE('', -1))");
+
+
+  EXEC SQL PREPARE st FROM :stmt;
+  EMB_SQL_CHECK("PREPARE stmt");
+
+  EXEC SQL DECLARE cur1 CURSOR FOR st;
+  EMB_SQL_CHECK("DECLARE CURSOR cur1");
+
+  EXEC SQL OPEN cur1;
+  EMB_SQL_CHECK("OPEN cur1");
+
+  EXEC SQL FETCH cur1 into :tbspname, :tbspid;
+  EMB_SQL_CHECK("FETCH cur1");
+
+  while(sqlca.sqlcode != 100)
+  {
+    ts[tspNb].tbspid = tbspid;     
+    strcpy(ts[tspNb].tbspname, tbspname); 
+
+    printf("\ntablespace id = %d\n", ts[tspNb].tbspid);
+    printf("tablespace name = %s\n", ts[tspNb].tbspname);
+
+    EXEC SQL FETCH cur1 into :tbspname, :tbspid;
+    EMB_SQL_CHECK("FETCH cur1");
+
+    tspNb++;
+    
+  }
+
+  EXEC SQL CLOSE cur1;
+  EMB_SQL_CHECK("CLOSE cursor");
+
+  numTablespaces = tspNb;
+  printf("\nNum of tablespaces = %d\n", numTablespaces);
+
+  /* For each tablespace, get containers information */
+  printf("\n\nGet containers information for each tablespace\n\n");
+  for (tspNb = 0; tspNb < numTablespaces; tspNb++)
+  {
+    contNb = 0;
+
+    strcpy(stmt, "SELECT tbsp_id, container_id,container_name,container_type, "
+		 " total_pages from TABLE(MON_GET_CONTAINER('', -1))"
+		 " WHERE tbsp_id = ?");
+
+    EXEC SQL PREPARE st1 FROM :stmt;
+    EMB_SQL_CHECK("PREPARE stmt");
+
+    EXEC SQL DECLARE cur2 CURSOR FOR st1;
+    EMB_SQL_CHECK("DECLARE CURSOR cur2");
+
+    tbspid = ts[tspNb].tbspid;
+
+    EXEC SQL OPEN cur2 using :tbspid;
+    EMB_SQL_CHECK("OPEN cur2") ;
+
+    EXEC SQL FETCH cur2 into :tbspid, :cntid, :cntname, :cntype, :tpages;
+    EMB_SQL_CHECK("FETCH cur2");
+
+
+    while(sqlca.sqlcode != 100)
+    {
+     
+      ts[tspNb].cntid[contNb] = cntid;
+
+      strcpy( ts[tspNb].cntname[contNb], cntname);
+      printf("Container name = %s\n", ts[tspNb].cntname[contNb]);
+      printf("Container id = %d\n", ts[tspNb].cntid[contNb]);
+
+      strcpy(ts[tspNb].cntype[contNb], cntype);
+      ts[tspNb].totalpages[contNb] = tpages;
+
+      EXEC SQL FETCH cur2 into :tbspid, :cntid, :cntname, :cntype, :tpages;
+      EMB_SQL_CHECK("FETCH cur1");
+
+      contNb++;	    
+    }
+
+    ts[tspNb].numContainers = contNb;
+    
+    EXEC SQL CLOSE cur2;
+    EMB_SQL_CHECK("CLOSE cursor");
+  
+  } 
+
+  EXEC SQL CONNECT RESET;
+  EMB_SQL_CHECK("CONNECT RESET");
+
+  return numTablespaces;
+
+}

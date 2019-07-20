@@ -1,0 +1,46 @@
+#*******************************************************************#
+#  IBM DB2 Q Replication                                            #
+#                                                                   #
+#     ASNCLP sample files                                           #
+#                                                                   #
+#     Licensed Materials - Property of IBM                          #
+#                                                                   #
+#     (C) Copyright IBM Corp. 2004 All Rights Reserved              #
+#                                                                   #
+#     US Government Users Restricted Rights - Use, duplication      #
+#     or disclosure restricted by GSA ADP Schedule Contract         #
+#     with IBM Corp.                                                #
+#                                                                   #
+#*******************************************************************#
+#*******************************************************************#
+#                                                                   #
+#                                                                   #
+#           NOTICE TO USERS OF THE SOURCE CODE EXAMPLE              #
+#                                                                   #
+# INTERNATIONAL BUSINESS MACHINES CORPORATION PROVIDES THE SOURCE   #
+# CODE EXAMPLE "AS IS" WITHOUT WARRANTY OF ANY KIND, EITHER         #
+# EXPRESSED OR IMPLIED, INCLUDING, BUT NOT LIMITED TO THE IMPLIED   #
+# WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR        #
+# PURPOSE. THE ENTIRE RISK AS TO THE QUALITY AND PERFORMANCE OF THE #
+# SOURCE CODE EXAMPLE IS WITH YOU. SHOULD ANY PART OF THE SOURCE    #
+# CODE EXAMPLE PROVES DEFECTIVE, YOU (AND NOT IBM) ASSUME THE       #
+# ENTIRE COST OF ALL NECESSARY SERVICING, REPAIR OR CORRECTION.     #
+#                                                                   #
+#*******************************************************************#
+
+# Load input file for creating a Bidirectional Replication Subgroup
+
+ASNCLP SESSION SET TO Q REPLICATION;
+SET RUN SCRIPT NOW STOP ON SQL ERROR ON;
+
+# Creates a single bidirectional subscription logical table.
+LOAD MULTIDIR REPL SCRIPT "bidir\Bidir0.in";
+
+# Creates a single bidirectional subscription logical table with custom parameters from one Node.
+#LOAD MULTIDIR REPL SCRIPT "bidir\Bidir1.in";
+
+# Creates a single bidirectional subscription logical table with custom parameters from both nodes.
+#LOAD MULTIDIR REPL SCRIPT "bidir\Bidir2.in";
+
+# Creates 2 bidirectional subscription logical tables in 1 subgroup.
+#LOAD MULTIDIR REPL SCRIPT "bidir\Bidir3.in";

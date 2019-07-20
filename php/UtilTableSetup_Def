@@ -1,0 +1,39 @@
+****************************************************************************
+*                             Licensed Materials 
+*                              Property of IBM
+*
+* Governed under the terms of the International
+* License Agreement for Non-Warranted Sample Code.
+*
+* © COPYRIGHT International Business Machines Corp. 2007
+* All Rights Reserved.
+*
+* US Government Users Restricted Rights - Use, duplication or
+* disclosure restricted by GSA ADP Schedule Contract with IBM Corp.
+*
+*****************************************************************************
+* 
+*                         CLASS DEFINITION
+*
+* UtilTableSetup_[Discription].php
+*
+*** Class  
+*
+*     Table_Setup_[Discription]
+*
+* 
+**** FUNCTIONS
+* 
+*    o Public static CREATE($SampleClass)
+*        - Creates a series of table and populates them with data using 
+*          the main database connection and the schema in the sample 
+*          class which was passed in. Note this is the whole sample class
+*          which extends the [Connection Type [DB2,PDO]]_Connection Class.
+*    o Public static DROP($SampleClass)
+*        - Drops a series of table using the main database connection and 
+*          the schema in the sample class which was passed in. Note this is 
+*          the whole sample class which extends the 
+*          [Connection Type [DB2,PDO]]_Connection Class.
+*
+*
+*****************************************************************************

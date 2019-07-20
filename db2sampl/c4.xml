@@ -1,0 +1,13 @@
+<customerinfo Cid='1003'>
+<name>Robert Shoemaker</name>
+<addr country="Canada">
+<street>1596 Baseline</street>
+<city>Aurora</city>
+<prov-state>Ontario</prov-state>
+<pcode-zip>N8X 7F8</pcode-zip>
+</addr>
+<phone type="work">905-555-7258</phone>
+<phone type="home">416-555-2937</phone>
+<phone type="cell">905-555-8743</phone>
+<phone type="cottage">613-555-3278</phone>
+</customerinfo>

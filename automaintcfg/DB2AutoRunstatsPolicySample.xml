@@ -1,0 +1,47 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<!--  IBM Corporation  version 1.0  -->
+
+<!-- Configuration file for automatic Runstats -->
+
+<!--
+
+The data access optimization maintenance activity automatically analyzes the data in tables to allow for applications to access the data as quickly as possible. 
+Use this file to specify the tables for which DB2 should automatically collect statistics.
+
+--> 
+
+<DB2AutoRunstatsPolicy  
+xmlns="http://www.ibm.com/xmlns/prod/db2/autonomic/config">
+
+<!--  Tables to include for automatic statistics collection  -->
+
+<!--
+Specify which tables to include for automatic statistics collection FilterCondition. Statistics will be run for the list of tables from the result of the below query
+    "select * from SYSCAT.TABLES".
+
+You can specify which tables to exclude from the automatic statistics collection by using an expression similar to an SQL-style "where clause" in the FilterCondition.  For example, the following specifies that all tables with names that match the pattern 'EMP%' should be excluded from the statistics collection:
+
+
+ <RunstatsTableScope>
+   <FilterCondition>TABSCHEMA NOT LIKE 'EMP%' </FilterCondition>
+ </RunstatsTableScope>
+
+You can specify <FilterCondition/> to select all the tables.
+For example, the following specifies that statistics should be collected for all tables, including system tables:
+
+ <RunstatsTableScope>
+   <FilterCondition/>
+ </RunstatsTableScope>
+
+For example, the following specifies that statistics should be collected for all tables except system tables:
+ <RunstatsTableScope>
+   <FilterCondition>TABNAME NOT LIKE 'SYS%' </FilterCondition>
+ </RunstatsTableScope>
+
+ -->
+ <RunstatsTableScope>
+  <FilterCondition/>
+ </RunstatsTableScope>
+</DB2AutoRunstatsPolicy>
+

@@ -1,0 +1,15 @@
+clear qlocal (ASN.ADMINQ)
+clear qlocal (ASN.RESTARTQ)
+clear qlocal (Q1)
+
+delete qlocal (ASN.ADMINQ)
+delete qlocal (ASN.RESTARTQ)
+delete qlocal (Q1)
+
+define qlocal (ASN.ADMINQ)
+define qlocal (ASN.RESTARTQ)
+define qlocal (Q1)
+
+delete chl(java.channel)
+define chl(java.channel) chltype(svrconn) trptype(tcp)
+

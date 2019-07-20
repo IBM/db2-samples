@@ -1,0 +1,157 @@
+#! /bin/sh
+
+#############################################################################
+# Licensed Materials - Property of IBM
+#
+# Governed under the terms of the International
+# License Agreement for Non-Warranted Sample Code.
+#
+# (C) COPYRIGHT International Business Machines Corp. 1995, 2002
+# All Rights Reserved.
+#
+# US Government Users Restricted Rights - Use, duplication or
+# disclosure restricted by GSA ADP Schedule Contract with IBM Corp.
+#############################################################################
+# SCRIPT: bldDemo.sh
+# Builds Spatial Extender sample program "runGseDemo" for  UNIX platforms 
+#         Supported platforms are:  AIX, Linux, HP-UX, SunOS
+#         32-bit or 64-bit installations
+# Usage: bldDemo.sh
+
+echo "This script will rebuild the runGseDemo program...  "
+echo "==> Do you wish to continue? (y/n)"
+read yesno
+if [ "$yesno" != "y" ] ; then
+  echo "bldDemo.sh: No changes made. Exiting at user request. "
+  exit
+fi
+
+# DB2PATH must be set to the path to sqllib in this instance.
+# If the user has it set in the environment, we use it
+if [ "$DB2PATH" = "" ] ; then
+  # We try our best to set the correct value and then ask the user to confirm
+  echo "DB2PATH is not set as an environment variable--we try to set it now..."
+  INSTHOME=`grep "^$DB2INSTANCE:" /etc/passwd | sed 's/.*:.*:.*.:\(.*\):.*/\1/'`
+  DB2PATH=$INSTHOME/sqllib
+  echo "DB2PATH: [$DB2PATH]"
+  echo "==> Is this the correct path to sqllib for this instance? (y/n)"
+  read yesno
+  if [ "$yesno" != "y" ] ; then
+    echo "Please set the environment variable DB2PATH and re-run this script."
+    echo " ==> DB2PATH must be the full path to sqllib in this instance."
+    echo "bldDemo.sh: No changes made. Exiting at user request. "
+    exit
+  fi
+else
+  echo "Using DB2PATH: [$DB2PATH]"
+fi
+
+# Set compile and link flags for 32-bit and 64-bit programs.
+LIB="lib"
+EXTRA_CFLAG=""
+EXTRA_LFLAG=""
+MTFLAG=""
+OS_UNAME=`uname`
+HARDWAREPLAT=`uname -m`
+bitwidth=`LANG=C db2level | awk '/bits/{print $5}'`
+if [ $bitwidth = "\"32\"" ]; then
+  WIDTH="32bit"
+else
+  WIDTH="64bit"
+fi
+
+# The linked-in runtime path is recommended for all applications 
+#    rather than LD_LIBRARY_PATH.  If you need to use LD_LIBRARY_PATH for
+#    some reason, comment out the next line and rebuild the program.
+RUNTIME=true
+
+#------------------------------------------------------------------------
+if [ $OS_UNAME = "AIX" ]; then
+  COMPILER=xlc
+  if [ $WIDTH = "32bit" ]; then
+    LIB=lib32
+    EXTRA_CFLAG="-qcpluscmt"
+  else
+    EXTRA_CFLAG="-q64 -qcpluscmt"
+  fi
+  LINK_FLAGS="-ldb2 -L$DB2PATH/$LIB"
+fi   # end of AIX section
+#------------------------------------------------------------------------
+if [ $OS_UNAME = "Linux" ]; then
+  COMPILER=gcc
+  if [ $WIDTH = "32bit" ]; then
+    LIB="lib32"
+    if [ "$HARDWAREPLAT" = "x86_64" ]; then
+       EXTRA_CFLAG="-m32"
+    fi
+  fi
+
+  if [ "$RUNTIME" != "" ] ; then
+    EXTRA_LFLAG="-Wl,-rpath,$DB2PATH/$LIB"
+  fi
+  LINK_FLAGS="-L$DB2PATH/$LIB $EXTRA_LFLAG -ldb2"
+fi   # end of Linux section
+#------------------------------------------------------------------------
+if [ $OS_UNAME = "HP-UX" ]; then
+  COMPILER=cc
+  if [ $HARDWAREPLAT = "ia64" ] ; then
+    if [ $WIDTH = "32bit" ]; then
+      EXTRA_CFLAG="+DD32"
+      LIB="lib32"
+    else
+      EXTRA_CFLAG="+DD64"
+    fi
+  else
+    if [ $WIDTH = "32bit" ]; then
+      EXTRA_CFLAG=
+      LIB="lib32"
+    else
+      EXTRA_CFLAG="+DA2.0W"
+    fi
+  fi
+  if [ "$RUNTIME" != "" ] ; then
+    EXTRA_LFLAG="-Wl,+b$DB2PATH/$LIB"
+  fi
+  LINK_FLAGS="$EXTRA_LFLAG -L$DB2PATH/$LIB -ldb2"
+fi   # end of HP-UX section
+#------------------------------------------------------------------------
+if [ $OS_UNAME = "SunOS" ] ; then
+  COMPILER=cc
+  MTFLAG="-mt"
+  if [ $WIDTH = "32bit" ]; then
+    EXTRA_CFLAG="-xarch=v8plusa"
+    LIB=lib32
+  else
+    EXTRA_CFLAG="-xarch=v9"
+  fi
+  if [ "$RUNTIME" != "" ] ; then
+    EXTRA_LFLAG="-R$DB2PATH/$LIB"
+  fi
+  LINK_FLAGS="-L$DB2PATH/$LIB $EXTRA_LFLAG -ldb2"
+fi   # end of SunOS section
+#------------------------------------------------------------------------
+
+echo "Rebuilding runGseDemo program for $WIDTH $OS_UNAME ..."
+rm -f runGseDemo.o samputil.o runGseDemo
+
+# Compile the program.
+$COMPILER $EXTRA_CFLAG -I$DB2PATH/include -c runGseDemo.c
+$COMPILER $EXTRA_CFLAG -I$DB2PATH/include -c samputil.c
+
+$COMPILER $EXTRA_CFLAG $MTFLAG -o runGseDemo runGseDemo.o samputil.o $LINK_FLAGS
+
+chmod 777 runGseDemo
+echo "==>Done building runGseDemo program"
+
+echo "  "
+echo "It is recommended to create a directory for temp files that"
+echo " are generated when runGseDemo executes. "
+echo "Then set the environment variable DEMO_TMPDIR to the "
+echo " full path to that directory."
+echo "EXAMPLE:  "
+echo "  rm -rf ./gsedemo_tmp"
+echo "  mkdir ./gsedemo_tmp"
+echo "  chmod 777 ./gsedemo_tmp"
+echo "  export DEMO_TMPDIR=$PWD/gsedemo_tmp"
+echo "  "
+

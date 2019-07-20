@@ -1,0 +1,1560 @@
+<html xmlns:v="urn:schemas-microsoft-com:vml"
+xmlns:o="urn:schemas-microsoft-com:office:office"
+xmlns:w="urn:schemas-microsoft-com:office:word"
+xmlns="http://www.w3.org/TR/REC-html40">
+
+<head>
+<meta http-equiv=Content-Type content="text/html; charset=windows-1252">
+<meta name=ProgId content=Word.Document>
+<meta name=Generator content="Microsoft Word 10">
+<meta name=Originator content="Microsoft Word 10">
+<link rel=File-List href="README_files/filelist.xml">
+<title>Stock Ticker - A Sample Web Application for Event Publishing</title>
+<!--[if gte mso 9]><xml>
+ <o:DocumentProperties>
+  <o:Author>Lab_User</o:Author>
+  <o:LastAuthor>Lab_User</o:LastAuthor>
+  <o:Revision>2</o:Revision>
+  <o:TotalTime>1</o:TotalTime>
+  <o:Created>2004-05-26T14:05:00Z</o:Created>
+  <o:LastSaved>2004-05-26T14:05:00Z</o:LastSaved>
+  <o:Pages>1</o:Pages>
+  <o:Words>1752</o:Words>
+  <o:Characters>9993</o:Characters>
+  <o:Company>IBM</o:Company>
+  <o:Lines>83</o:Lines>
+  <o:Paragraphs>23</o:Paragraphs>
+  <o:CharactersWithSpaces>11722</o:CharactersWithSpaces>
+  <o:Version>10.3501</o:Version>
+ </o:DocumentProperties>
+</xml><![endif]--><!--[if gte mso 9]><xml>
+ <w:WordDocument>
+  <w:SpellingState>Clean</w:SpellingState>
+  <w:GrammarState>Clean</w:GrammarState>
+  <w:Compatibility>
+   <w:BreakWrappedTables/>
+   <w:SnapToGridInCell/>
+   <w:WrapTextWithPunct/>
+   <w:UseAsianBreakRules/>
+  </w:Compatibility>
+  <w:BrowserLevel>MicrosoftInternetExplorer4</w:BrowserLevel>
+ </w:WordDocument>
+</xml><![endif]-->
+<style>
+<!--
+ /* Font Definitions */
+ @font-face
+	{font-family:Courier;
+	panose-1:2 7 4 9 2 2 5 2 4 4;
+	mso-font-charset:0;
+	mso-generic-font-family:modern;
+	mso-font-format:other;
+	mso-font-pitch:fixed;
+	mso-font-signature:3 0 0 0 1 0;}
+@font-face
+	{font-family:Wingdings;
+	panose-1:5 0 0 0 0 0 0 0 0 0;
+	mso-font-charset:2;
+	mso-generic-font-family:auto;
+	mso-font-pitch:variable;
+	mso-font-signature:0 268435456 0 0 -2147483648 0;}
+ /* Style Definitions */
+ p.MsoNormal, li.MsoNormal, div.MsoNormal
+	{mso-style-parent:"";
+	margin:0in;
+	margin-bottom:.0001pt;
+	mso-pagination:widow-orphan;
+	font-size:12.0pt;
+	font-family:"Times New Roman";
+	mso-fareast-font-family:"Times New Roman";}
+h4
+	{mso-style-next:Normal;
+	margin:0in;
+	margin-bottom:.0001pt;
+	mso-pagination:widow-orphan;
+	page-break-after:avoid;
+	mso-outline-level:4;
+	font-size:10.0pt;
+	font-family:Arial;}
+a:link, span.MsoHyperlink
+	{color:blue;
+	text-decoration:underline;
+	text-underline:single;}
+a:visited, span.MsoHyperlinkFollowed
+	{color:purple;
+	text-decoration:underline;
+	text-underline:single;}
+p.DefaultText1, li.DefaultText1, div.DefaultText1
+	{mso-style-name:"Default Text1";
+	margin:0in;
+	margin-bottom:.0001pt;
+	mso-pagination:widow-orphan;
+	font-size:12.0pt;
+	font-family:Arial;
+	mso-fareast-font-family:"Times New Roman";}
+span.SpellE
+	{mso-style-name:"";
+	mso-spl-e:yes;}
+span.GramE
+	{mso-style-name:"";
+	mso-gram-e:yes;}
+@page Section1
+	{size:8.5in 11.0in;
+	margin:1.0in 1.25in 1.0in 1.25in;
+	mso-header-margin:.5in;
+	mso-footer-margin:.5in;
+	mso-paper-source:0;}
+div.Section1
+	{page:Section1;}
+ /* List Definitions */
+ @list l0
+	{mso-list-id:65500718;
+	mso-list-type:hybrid;
+	mso-list-template-ids:948593094 67698703 67698713 67698715 67698703 67698713 67698715 67698703 67698713 67698715;}
+@list l0:level1
+	{mso-level-tab-stop:.5in;
+	mso-level-number-position:left;
+	text-indent:-.25in;}
+@list l0:level2
+	{mso-level-number-format:alpha-lower;
+	mso-level-tab-stop:1.0in;
+	mso-level-number-position:left;
+	text-indent:-.25in;}
+@list l1
+	{mso-list-id:244462280;
+	mso-list-type:hybrid;
+	mso-list-template-ids:-650981842 67698703 67698713 67698715 67698703 67698713 67698715 67698703 67698713 67698715;}
+@list l1:level1
+	{mso-level-tab-stop:39.0pt;
+	mso-level-number-position:left;
+	margin-left:39.0pt;
+	text-indent:-.25in;}
+@list l2
+	{mso-list-id:414326013;
+	mso-list-type:hybrid;
+	mso-list-template-ids:-1747008940 67698703 67698713 67698715 67698703 67698713 67698715 67698703 67698713 67698715;}
+@list l2:level1
+	{mso-level-tab-stop:39.0pt;
+	mso-level-number-position:left;
+	margin-left:39.0pt;
+	text-indent:-.25in;}
+@list l3
+	{mso-list-id:805049239;
+	mso-list-type:hybrid;
+	mso-list-template-ids:-1753722148 67698703 67698713 67698715 67698703 67698713 67698715 67698703 67698713 67698715;}
+@list l3:level1
+	{mso-level-tab-stop:.5in;
+	mso-level-number-position:left;
+	text-indent:-.25in;}
+@list l4
+	{mso-list-id:836728587;
+	mso-list-type:hybrid;
+	mso-list-template-ids:1081121840 67698703 67698713 67698715 67698703 67698713 67698715 67698703 67698713 67698715;}
+@list l4:level1
+	{mso-level-tab-stop:.5in;
+	mso-level-number-position:left;
+	text-indent:-.25in;}
+@list l4:level2
+	{mso-level-number-format:alpha-lower;
+	mso-level-tab-stop:1.0in;
+	mso-level-number-position:left;
+	text-indent:-.25in;}
+@list l5
+	{mso-list-id:910190070;
+	mso-list-type:hybrid;
+	mso-list-template-ids:-1047208182 67698689 67698691 67698693 67698689 67698691 67698693 67698689 67698691 67698693;}
+@list l5:level1
+	{mso-level-number-format:bullet;
+	mso-level-text:\F0B7;
+	mso-level-tab-stop:.5in;
+	mso-level-number-position:left;
+	text-indent:-.25in;
+	font-family:Symbol;}
+@list l6
+	{mso-list-id:1002395854;
+	mso-list-type:hybrid;
+	mso-list-template-ids:710859128 67698689 67698713 67698715 67698703 67698713 67698715 67698703 67698713 67698715;}
+@list l6:level1
+	{mso-level-number-format:bullet;
+	mso-level-text:\F0B7;
+	mso-level-tab-stop:.5in;
+	mso-level-number-position:left;
+	text-indent:-.25in;
+	font-family:Symbol;}
+@list l7
+	{mso-list-id:1009328666;
+	mso-list-type:hybrid;
+	mso-list-template-ids:-292803812 67698703 67698691 67698693 67698689 67698691 67698693 67698689 67698691 67698693;}
+@list l7:level1
+	{mso-level-tab-stop:.5in;
+	mso-level-number-position:left;
+	text-indent:-.25in;}
+@list l7:level2
+	{mso-level-number-format:bullet;
+	mso-level-text:o;
+	mso-level-tab-stop:1.0in;
+	mso-level-number-position:left;
+	text-indent:-.25in;
+	font-family:"Courier New";}
+@list l8
+	{mso-list-id:1032800218;
+	mso-list-type:hybrid;
+	mso-list-template-ids:-1177097248 67698689 67698691 67698693 67698689 67698691 67698693 67698689 67698691 67698693;}
+@list l8:level1
+	{mso-level-number-format:bullet;
+	mso-level-text:\F0B7;
+	mso-level-tab-stop:.5in;
+	mso-level-number-position:left;
+	text-indent:-.25in;
+	font-family:Symbol;}
+@list l8:level2
+	{mso-level-number-format:bullet;
+	mso-level-text:o;
+	mso-level-tab-stop:1.0in;
+	mso-level-number-position:left;
+	text-indent:-.25in;
+	font-family:"Courier New";}
+@list l9
+	{mso-list-id:1040587673;
+	mso-list-type:hybrid;
+	mso-list-template-ids:-175632188 67698703 67698691 67698693 67698689 67698691 67698693 67698689 67698691 67698693;}
+@list l9:level1
+	{mso-level-tab-stop:.5in;
+	mso-level-number-position:left;
+	text-indent:-.25in;}
+@list l9:level2
+	{mso-level-number-format:bullet;
+	mso-level-text:o;
+	mso-level-tab-stop:1.0in;
+	mso-level-number-position:left;
+	text-indent:-.25in;
+	font-family:"Courier New";}
+@list l10
+	{mso-list-id:1046494239;
+	mso-list-type:hybrid;
+	mso-list-template-ids:1536174846 67698703 67698691 67698693 67698689 67698691 67698693 67698689 67698691 67698693;}
+@list l10:level1
+	{mso-level-tab-stop:.5in;
+	mso-level-number-position:left;
+	text-indent:-.25in;}
+@list l10:level2
+	{mso-level-number-format:bullet;
+	mso-level-text:o;
+	mso-level-tab-stop:1.0in;
+	mso-level-number-position:left;
+	text-indent:-.25in;
+	font-family:"Courier New";}
+@list l11
+	{mso-list-id:1156414408;
+	mso-list-type:hybrid;
+	mso-list-template-ids:30997492 67698689 67698691 67698693 67698689 67698691 67698693 67698689 67698691 67698693;}
+@list l11:level1
+	{mso-level-number-format:bullet;
+	mso-level-text:\F0B7;
+	mso-level-tab-stop:.5in;
+	mso-level-number-position:left;
+	text-indent:-.25in;
+	font-family:Symbol;}
+@list l11:level2
+	{mso-level-number-format:bullet;
+	mso-level-text:o;
+	mso-level-tab-stop:1.0in;
+	mso-level-number-position:left;
+	text-indent:-.25in;
+	font-family:"Courier New";}
+@list l12
+	{mso-list-id:1262682882;
+	mso-list-type:hybrid;
+	mso-list-template-ids:501104626 67698703 67698713 67698715 67698703 67698713 67698715 67698703 67698713 67698715;}
+@list l12:level1
+	{mso-level-tab-stop:.5in;
+	mso-level-number-position:left;
+	text-indent:-.25in;}
+@list l13
+	{mso-list-id:1461071275;
+	mso-list-type:hybrid;
+	mso-list-template-ids:1893001664 67698703 67698713 67698715 67698703 67698713 67698715 67698703 67698713 67698715;}
+@list l13:level1
+	{mso-level-tab-stop:.5in;
+	mso-level-number-position:left;
+	text-indent:-.25in;}
+@list l13:level2
+	{mso-level-number-format:alpha-lower;
+	mso-level-tab-stop:1.0in;
+	mso-level-number-position:left;
+	text-indent:-.25in;}
+@list l14
+	{mso-list-id:1500925339;
+	mso-list-type:hybrid;
+	mso-list-template-ids:-23839048 67698689 67698691 67698693 67698689 67698691 67698693 67698689 67698691 67698693;}
+@list l14:level1
+	{mso-level-number-format:bullet;
+	mso-level-text:\F0B7;
+	mso-level-tab-stop:.5in;
+	mso-level-number-position:left;
+	text-indent:-.25in;
+	font-family:Symbol;}
+@list l15
+	{mso-list-id:1594319288;
+	mso-list-type:hybrid;
+	mso-list-template-ids:345769772 67698703 67698691 67698693 67698689 67698691 67698693 67698689 67698691 67698693;}
+@list l15:level1
+	{mso-level-tab-stop:.5in;
+	mso-level-number-position:left;
+	text-indent:-.25in;}
+@list l15:level2
+	{mso-level-number-format:bullet;
+	mso-level-text:o;
+	mso-level-tab-stop:1.0in;
+	mso-level-number-position:left;
+	text-indent:-.25in;
+	font-family:"Courier New";}
+@list l16
+	{mso-list-id:1618028016;
+	mso-list-type:hybrid;
+	mso-list-template-ids:947447074 67698703 67698713 67698715 67698703 67698713 67698715 67698703 67698713 67698715;}
+@list l16:level1
+	{mso-level-tab-stop:.5in;
+	mso-level-number-position:left;
+	text-indent:-.25in;}
+@list l17
+	{mso-list-id:1705903584;
+	mso-list-type:hybrid;
+	mso-list-template-ids:690895494 67698689 67698703 67698693 67698689 67698691 67698693 67698689 67698691 67698693;}
+@list l17:level1
+	{mso-level-number-format:bullet;
+	mso-level-text:\F0B7;
+	mso-level-tab-stop:.5in;
+	mso-level-number-position:left;
+	text-indent:-.25in;
+	font-family:Symbol;}
+@list l17:level2
+	{mso-level-tab-stop:1.0in;
+	mso-level-number-position:left;
+	text-indent:-.25in;}
+@list l18
+	{mso-list-id:1885365457;
+	mso-list-type:hybrid;
+	mso-list-template-ids:-709704768 67698703 67698713 67698715 67698703 67698713 67698715 67698703 67698713 67698715;}
+@list l18:level1
+	{mso-level-tab-stop:.5in;
+	mso-level-number-position:left;
+	text-indent:-.25in;}
+@list l19
+	{mso-list-id:1941797017;
+	mso-list-type:hybrid;
+	mso-list-template-ids:-1115805166 67698703 67698713 67698715 67698703 67698713 67698715 67698703 67698713 67698715;}
+@list l19:level1
+	{mso-level-tab-stop:.5in;
+	mso-level-number-position:left;
+	text-indent:-.25in;}
+@list l20
+	{mso-list-id:1994018083;
+	mso-list-type:hybrid;
+	mso-list-template-ids:1464094570 67698689 67698713 67698715 67698703 67698713 67698715 67698703 67698713 67698715;}
+@list l20:level1
+	{mso-level-number-format:bullet;
+	mso-level-text:\F0B7;
+	mso-level-tab-stop:.5in;
+	mso-level-number-position:left;
+	text-indent:-.25in;
+	font-family:Symbol;}
+@list l20:level2
+	{mso-level-number-format:alpha-lower;
+	mso-level-tab-stop:1.0in;
+	mso-level-number-position:left;
+	text-indent:-.25in;}
+@list l21
+	{mso-list-id:1997418626;
+	mso-list-type:hybrid;
+	mso-list-template-ids:764675792 67698703 67698691 67698693 67698689 67698691 67698693 67698689 67698691 67698693;}
+@list l21:level1
+	{mso-level-tab-stop:.5in;
+	mso-level-number-position:left;
+	text-indent:-.25in;}
+@list l21:level2
+	{mso-level-number-format:bullet;
+	mso-level-text:o;
+	mso-level-tab-stop:1.0in;
+	mso-level-number-position:left;
+	text-indent:-.25in;
+	font-family:"Courier New";}
+@list l22
+	{mso-list-id:1998027547;
+	mso-list-type:hybrid;
+	mso-list-template-ids:850930962 67698703 67698713 67698715 67698703 67698713 67698715 67698703 67698713 67698715;}
+@list l22:level1
+	{mso-level-tab-stop:.5in;
+	mso-level-number-position:left;
+	text-indent:-.25in;}
+@list l22:level2
+	{mso-level-number-format:alpha-lower;
+	mso-level-tab-stop:1.0in;
+	mso-level-number-position:left;
+	text-indent:-.25in;}
+@list l22:level3
+	{mso-level-number-format:roman-lower;
+	mso-level-tab-stop:1.5in;
+	mso-level-number-position:right;
+	text-indent:-9.0pt;}
+@list l23
+	{mso-list-id:2119639493;
+	mso-list-type:hybrid;
+	mso-list-template-ids:-1163918216 67698689 67698691 67698693 67698689 67698691 67698693 67698689 67698691 67698693;}
+@list l23:level1
+	{mso-level-number-format:bullet;
+	mso-level-text:\F0B7;
+	mso-level-tab-stop:.5in;
+	mso-level-number-position:left;
+	text-indent:-.25in;
+	font-family:Symbol;}
+@list l23:level2
+	{mso-level-number-format:bullet;
+	mso-level-text:o;
+	mso-level-tab-stop:1.0in;
+	mso-level-number-position:left;
+	text-indent:-.25in;
+	font-family:"Courier New";}
+ol
+	{margin-bottom:0in;}
+ul
+	{margin-bottom:0in;}
+-->
+</style>
+<!--[if gte mso 10]>
+<style>
+ /* Style Definitions */
+ table.MsoNormalTable
+	{mso-style-name:"Table Normal";
+	mso-tstyle-rowband-size:0;
+	mso-tstyle-colband-size:0;
+	mso-style-noshow:yes;
+	mso-style-parent:"";
+	mso-padding-alt:0in 5.4pt 0in 5.4pt;
+	mso-para-margin:0in;
+	mso-para-margin-bottom:.0001pt;
+	mso-pagination:widow-orphan;
+	font-size:10.0pt;
+	font-family:"Times New Roman";}
+</style>
+<![endif]--><!--[if gte mso 9]><xml>
+ <o:shapedefaults v:ext="edit" spidmax="2050">
+  <o:colormenu v:ext="edit" fillcolor="none"/>
+ </o:shapedefaults></xml><![endif]--><!--[if gte mso 9]><xml>
+ <o:shapelayout v:ext="edit">
+  <o:idmap v:ext="edit" data="1"/>
+  <o:regrouptable v:ext="edit">
+   <o:entry new="1" old="0"/>
+   <o:entry new="2" old="0"/>
+  </o:regrouptable>
+ </o:shapelayout></xml><![endif]-->
+</head>
+
+<body lang=EN-US link=blue vlink=purple style='tab-interval:.5in'>
+
+<div class=Section1>
+
+<p class=MsoNormal><span style='font-size:14.0pt;font-family:Arial'>Stock
+Ticker - A Sample Web Application for Event Publishing<o:p></o:p></span></p>
+
+<p class=MsoNormal><span style='font-size:11.0pt;font-family:Arial;mso-no-proof:
+yes'><o:p>&nbsp;</o:p></span></p>
+
+<p class=MsoNormal><span style='font-size:11.0pt;font-family:Arial;mso-no-proof:
+yes'><o:p>&nbsp;</o:p></span></p>
+
+<p class=MsoNormal><b style='mso-bidi-font-weight:normal'><span
+style='font-size:10.0pt;font-family:Arial'>Purpose<o:p></o:p></span></b></p>
+
+<p class=MsoNormal><span style='font-size:10.0pt;font-family:Arial'><o:p>&nbsp;</o:p></span></p>
+
+<p class=MsoNormal><span style='font-size:10.0pt;font-family:Arial'>The purpose
+of the Stock Ticker web application is to demonstrate the use of event
+publishing in a business scenario.<o:p></o:p></span></p>
+
+<p class=MsoNormal><span style='font-size:10.0pt;font-family:Arial'><o:p>&nbsp;</o:p></span></p>
+
+<p class=MsoNormal><b style='mso-bidi-font-weight:normal'><span
+style='font-size:10.0pt;font-family:Arial'><o:p>&nbsp;</o:p></span></b></p>
+
+<p class=MsoNormal><b style='mso-bidi-font-weight:normal'><span
+style='font-size:10.0pt;font-family:Arial'>Software Prerequisite<o:p></o:p></span></b></p>
+
+<p class=MsoNormal><b style='mso-bidi-font-weight:normal'><span
+style='font-size:10.0pt;font-family:Arial'><o:p>&nbsp;</o:p></span></b></p>
+
+<p class=MsoNormal><span style='font-size:10.0pt;font-family:Arial'>The
+following software is required for running the Stock Ticker web application:<b
+style='mso-bidi-font-weight:normal'><o:p></o:p></b></span></p>
+
+<ol style='margin-top:0in' start=1 type=1>
+ <li class=MsoNormal style='mso-list:l9 level1 lfo11;tab-stops:list .5in'><span
+     style='font-size:10.0pt;font-family:Arial'>Q Capture<o:p></o:p></span></li>
+ <li class=MsoNormal style='mso-list:l9 level1 lfo11;tab-stops:list .5in'><span
+     class=SpellE><span class=GramE><span style='font-size:10.0pt;font-family:
+     Arial'>xmlPubTk</span></span></span><span style='font-size:10.0pt;
+     font-family:Arial'><br>
+     This XML Publication Toolkit is shipped as a separate sample in the xmlpubtk 
+     directory.<o:p></o:p></span></li>
+ <li class=MsoNormal style='mso-list:l9 level1 lfo11;tab-stops:list .5in'><span
+     style='font-size:10.0pt;font-family:Arial'>DB2 UDB 7.2 or higher<o:p></o:p></span></li>
+ <li class=MsoNormal style='mso-list:l9 level1 lfo11;tab-stops:list .5in'><span
+     class=SpellE><span style='font-size:10.0pt;font-family:Arial'>WebSphere</span></span><span
+     style='font-size:10.0pt;font-family:Arial'> MQ 5.3 or higher<o:p></o:p></span></li>
+ <li class=MsoNormal style='mso-list:l9 level1 lfo11;tab-stops:list .5in'><span
+     style='font-size:10.0pt;font-family:Arial'>JDK 1.4 or higher<br>
+     <a href="http://java.sun.com/j2se/">http://java.sun.com/j2se/</a><o:p></o:p></span></li>
+ <li class=MsoNormal style='mso-list:l9 level1 lfo11;tab-stops:list .5in'><span
+     style='font-size:10.0pt;font-family:Arial'>Tomcat 5.0 or higher<br>
+     <a href="http://jakarta.apache.org/tomcat/">http://jakarta.apache.org/tomcat/</a><o:p></o:p></span></li>
+ <li class=MsoNormal style='mso-list:l9 level1 lfo11;tab-stops:list .5in'><span
+     style='font-size:10.0pt;font-family:Arial'>Ant 1.6 or higher<br>
+     <a href="http://ant.apache.org/">http://ant.apache.org/</a><o:p></o:p></span></li>
+ <li class=MsoNormal style='mso-list:l9 level1 lfo11;tab-stops:list .5in'><span
+     style='font-size:10.0pt;font-family:Arial'>Web browser<o:p></o:p></span></li>
+</ol>
+
+<p class=MsoNormal><span style='font-size:10.0pt;font-family:Arial'><o:p>&nbsp;</o:p></span></p>
+
+<p class=MsoNormal><span style='font-size:10.0pt;font-family:Arial'>For
+installation details of all software above please refer to their corresponding
+documentation.<o:p></o:p></span></p>
+
+<p class=MsoNormal><span style='font-size:10.0pt;font-family:Arial'><o:p>&nbsp;</o:p></span></p>
+
+<p class=MsoNormal><u><span style='font-size:10.0pt;font-family:Arial'>Tips</span></u><span
+style='font-size:10.0pt;font-family:Arial'>: <o:p></o:p></span></p>
+
+<ol style='margin-top:0in' start=1 type=1>
+ <li class=MsoNormal style='mso-list:l15 level1 lfo13;tab-stops:list .5in'><span
+     style='font-size:10.0pt;font-family:Arial'>When installing <span
+     class=SpellE>WebSphere</span> MQ on Windows please choose custom
+     installation and include the <span class=SpellE>MQSeries</span> classes
+     for Java and Java Message Service since the default installation does not
+     include those.<o:p></o:p></span></li>
+ <li class=MsoNormal style='mso-list:l15 level1 lfo13;tab-stops:list .5in'><span
+     style='font-size:10.0pt;font-family:Arial'>Please make sure that after the
+     installation of all Java-based software the </span><span style='font-size:
+     10.0pt;font-family:"Courier New"'>CLASSPATH</span><span style='font-size:
+     10.0pt;font-family:Arial'> and </span><span style='font-size:10.0pt;
+     font-family:"Courier New"'>PATH</span><span style='font-size:10.0pt;
+     font-family:Arial'> environment variable are updated accordingly.<o:p></o:p></span></li>
+</ol>
+
+<p class=MsoNormal><span style='font-size:10.0pt;font-family:Arial'><o:p>&nbsp;</o:p></span></p>
+
+<p class=MsoNormal><span style='font-size:10.0pt;font-family:Arial'><o:p>&nbsp;</o:p></span></p>
+
+<p class=MsoNormal><b style='mso-bidi-font-weight:normal'><span
+style='font-size:10.0pt;font-family:Arial'>One-Time Setup of <span
+class=SpellE>xmlPubTk</span>, Tomcat, <span class=SpellE>WebSphere</span> MQ,
+and Ant <o:p></o:p></span></b></p>
+
+<p class=MsoNormal><b style='mso-bidi-font-weight:normal'><span
+style='font-size:10.0pt;font-family:Arial'><o:p>&nbsp;</o:p></span></b></p>
+
+<p class=MsoNormal><span style='font-size:10.0pt;font-family:Arial'>The following
+tasks need to be done first before running the Stock Ticker web application:<br
+style='mso-special-character:line-break'>
+<![if !supportLineBreakNewLine]><br style='mso-special-character:line-break'>
+<![endif]><o:p></o:p></span></p>
+
+<ol style='margin-top:0in' start=1 type=1>
+ <li class=MsoNormal style='mso-list:l21 level1 lfo20;tab-stops:list .5in'><span
+     style='font-size:10.0pt;font-family:Arial'>After the installation of
+     Tomcat, add a username with a manager role into the </span><span
+     style='font-size:10.0pt;font-family:"Courier New"'>tomcat-<span
+     class=SpellE>users.xml</span></span><span style='font-size:10.0pt;
+     font-family:Arial'> file that is located under Tomcat’s </span><span
+     style='font-size:10.0pt;font-family:Courier;mso-bidi-font-family:Arial'>conf/</span><span
+     style='font-size:10.0pt;font-family:Arial'> directory.<br>
+     In the example below, the username tomcat with the password tomcat and
+     manager role has been added to file (marked in <span style='color:blue'>blue</span>)
+     and the file content looks as below:<br>
+     <br>
+     </span><span style='font-size:10.0pt;font-family:"Courier New"'>&lt;?xml
+     version='1.0' encoding='utf-8'?&gt;<br>
+     &lt;tomcat-users&gt;<br>
+     <span style='mso-spacerun:yes'>  </span>&lt;role <span class=SpellE>rolename</span>=&quot;tomcat&quot;/&gt;<br>
+     <span style='mso-spacerun:yes'>  </span>&lt;role <span class=SpellE>rolename</span>=&quot;role1&quot;/&gt;<br>
+     <span style='mso-spacerun:yes'>  </span>&lt;role <span class=SpellE>rolename</span>=&quot;manager&quot;/&gt;<br>
+     <span style='color:blue'><span style='mso-spacerun:yes'>  </span>&lt;user username=&quot;tomcat&quot;
+     password=&quot;tomcat&quot; roles=&quot;manager&quot;/&gt;<br>
+     </span><span style='mso-spacerun:yes'>  </span>&lt;user
+     username=&quot;role1&quot; password=&quot;tomcat&quot;
+     roles=&quot;role1&quot;/&gt;<br>
+     <span style='mso-spacerun:yes'>  </span>&lt;user username=&quot;both&quot;
+     password=&quot;tomcat&quot; roles=&quot;tomcat,role1&quot;/&gt;<br>
+     &lt;/tomcat-users&gt;</span><span style='font-size:10.0pt;font-family:
+     Arial'><br style='mso-special-character:line-break'>
+     <![if !supportLineBreakNewLine]><br style='mso-special-character:line-break'>
+     <![endif]><o:p></o:p></span></li>
+ <li class=MsoNormal style='mso-list:l21 level1 lfo20;tab-stops:list .5in'><span
+     style='font-size:10.0pt;font-family:Arial'>After the installation of <span
+     class=SpellE>xmlPubTk</span>, copy the <span class=SpellE>xmlPubTk.jar</span>
+     file from to Tomcat’s </span><span style='font-size:10.0pt;font-family:
+     "Courier New"'>shared/lib/</span><span style='font-size:10.0pt;font-family:
+     Arial'> directory.<br style='mso-special-character:line-break'>
+     <![if !supportLineBreakNewLine]><br style='mso-special-character:line-break'>
+     <![endif]><o:p></o:p></span></li>
+ <li class=MsoNormal style='mso-list:l21 level1 lfo20;tab-stops:list .5in'><span
+     style='font-size:10.0pt;font-family:Arial'>After the installation of <span
+     class=SpellE>WebSphere</span> MQ, copy all JAR (Java Archive) files from
+     its </span><span style='font-size:10.0pt;font-family:"Courier New"'>Java/lib/</span><span
+     style='font-size:10.0pt;font-family:Arial'> directory to Tomcat’s </span><span
+     style='font-size:10.0pt;font-family:"Courier New"'>shared/lib/</span><span
+     style='font-size:10.0pt;font-family:Arial'> directory.<br
+     style='mso-special-character:line-break'>
+     <![if !supportLineBreakNewLine]><br style='mso-special-character:line-break'>
+     <![endif]><o:p></o:p></span></li>
+ <li class=MsoNormal style='mso-list:l21 level1 lfo20;tab-stops:list .5in'><span
+     style='font-size:10.0pt;font-family:Arial'>After the Ant installation,
+     copy the </span><span class=SpellE><span style='font-size:10.0pt;
+     font-family:"Courier New"'>catalina-ant.jar</span></span><span
+     style='font-size:10.0pt;font-family:Arial'> file from Tomcat’s </span><span
+     style='font-size:10.0pt;font-family:"Courier New"'>server/lib/</span><span
+     style='font-size:10.0pt;font-family:Arial'> directory to Ant’s </span><span
+     style='font-size:10.0pt;font-family:"Courier New"'>lib/</span><span
+     style='font-size:10.0pt;font-family:Arial'> directory. <o:p></o:p></span></li>
+</ol>
+
+<p class=MsoNormal><span style='font-size:10.0pt;font-family:Arial'><o:p>&nbsp;</o:p></span></p>
+
+<p class=MsoNormal><span style='font-size:10.0pt;font-family:Arial'><o:p>&nbsp;</o:p></span></p>
+
+<p class=MsoNormal><b style='mso-bidi-font-weight:normal'><span
+style='font-size:10.0pt;font-family:Arial'>Preparing Q Capture <o:p></o:p></span></b></p>
+
+<p class=MsoNormal><b style='mso-bidi-font-weight:normal'><span
+style='font-size:10.0pt;font-family:Arial'><o:p>&nbsp;</o:p></span></b></p>
+
+<p class=MsoNormal><span style='font-size:10.0pt;font-family:Arial'>After Q
+Capture’s installation the following tasks need to be completed. The script
+files used below are located under Stock Ticker’s </span><span
+style='font-size:10.0pt;font-family:"Courier New"'>script/</span><span
+style='font-size:10.0pt;font-family:Arial'> directory.<o:p></o:p></span></p>
+
+<p class=MsoNormal><span style='font-size:10.0pt;font-family:Arial'><o:p>&nbsp;</o:p></span></p>
+
+<ol style='margin-top:0in' start=1 type=1>
+ <li class=MsoNormal style='mso-list:l22 level1 lfo16;tab-stops:list .5in'><span
+     style='font-size:10.0pt;font-family:Arial'>Create the QCAPSAMP database<br
+     style='mso-special-character:line-break'>
+     <![if !supportLineBreakNewLine]><br style='mso-special-character:line-break'>
+     <![endif]><o:p></o:p></span></li>
+ <ol style='margin-top:0in' start=1 type=a>
+  <li class=MsoNormal style='mso-list:l22 level2 lfo16;tab-stops:list 1.0in'><span
+      style='font-size:10.0pt;font-family:Arial'>Make sure DB2 UDB has been
+      started<br style='mso-special-character:line-break'>
+      <![if !supportLineBreakNewLine]><br style='mso-special-character:line-break'>
+      <![endif]><o:p></o:p></span></li>
+  <li class=MsoNormal style='mso-list:l22 level2 lfo16;tab-stops:list 1.0in'><span
+      style='font-size:10.0pt;font-family:Arial'>Create the database with:<br>
+      <br>
+      </span><span style='font-size:10.0pt;font-family:"Courier New"'>db2 –<span
+      class=SpellE>tvf</span> <span class=SpellE>createdb.sql</span><br
+      style='mso-special-character:line-break'>
+      <![if !supportLineBreakNewLine]><br style='mso-special-character:line-break'>
+      <![endif]></span><span style='font-size:10.0pt;font-family:Arial'><o:p></o:p></span></li>
+ </ol>
+ <li class=MsoNormal style='mso-list:l22 level1 lfo16;tab-stops:list .5in'><span
+     style='font-size:10.0pt;font-family:Arial'>Create the control tables<br
+     style='mso-special-character:line-break'>
+     <![if !supportLineBreakNewLine]><br style='mso-special-character:line-break'>
+     <![endif]><o:p></o:p></span></li>
+ <ol style='margin-top:0in' start=1 type=a>
+  <li class=MsoNormal style='mso-list:l22 level2 lfo16;tab-stops:list 1.0in'><span
+      style='font-size:10.0pt;font-family:Arial'>If you are not connected to
+      QCAPSAMP database, connect to it with:<br>
+      <span style='mso-spacerun:yes'> </span><br>
+      <span style='mso-spacerun:yes'>    </span></span><span style='font-size:
+      10.0pt;font-family:"Courier New"'>db2 connect to QCAPSAMP<br
+      style='mso-special-character:line-break'>
+      <![if !supportLineBreakNewLine]><br style='mso-special-character:line-break'>
+      <![endif]></span><span style='font-size:10.0pt;font-family:Arial'><o:p></o:p></span></li>
+  <li class=MsoNormal style='mso-list:l22 level2 lfo16;tab-stops:list 1.0in'><span
+      style='font-size:10.0pt;font-family:Arial'>Create the control tables with:<br>
+      <br>
+      <span style='mso-spacerun:yes'>    </span></span><span style='font-size:
+      10.0pt;font-family:"Courier New"'>db2 –<span class=SpellE>tvf</span> <span
+      class=SpellE>asnqcap.udb</span><br>
+      </span><span style='font-size:10.0pt;font-family:Arial'><br>
+      <span class=GramE>The</span> control tables’ schema name is </span><span
+      style='font-size:10.0pt;font-family:"Courier New"'>ASN</span><span
+      style='font-size:10.0pt;font-family:Arial'>.<br>
+      <br>
+      Note: <br>
+      The </span><span class=SpellE><span style='font-size:10.0pt;font-family:
+      "Courier New"'>asnqcap.udb</span></span><span style='font-size:10.0pt;
+      font-family:Arial'> file is shipped as a sample script file.<br
+      style='mso-special-character:line-break'>
+      <![if !supportLineBreakNewLine]><br style='mso-special-character:line-break'>
+      <![endif]><o:p></o:p></span></li>
+  <li class=MsoNormal style='mso-list:l22 level2 lfo16;tab-stops:list 1.0in'><span
+      style='font-size:10.0pt;font-family:Arial'>Add Q Capture parameter to the
+      </span><span style='font-size:10.0pt;font-family:"Courier New"'>CAPPARMS</span><span
+      style='font-size:10.0pt;font-family:Arial'> control table with:<br>
+      <br>
+      <span style='mso-spacerun:yes'>    </span></span><span style='font-size:
+      10.0pt;font-family:"Courier New"'>db2 –<span class=SpellE>tvf</span> <span
+      class=SpellE>capparms.sql</span></span><span style='font-size:10.0pt;
+      font-family:Arial'><br>
+      <br>
+      <span class=GramE>The</span> queue manager name is </span><span
+      style='font-size:10.0pt;font-family:"Courier New"'>QMSAMP</span><span
+      style='font-size:10.0pt;font-family:Arial'>, administration queue name is
+      </span><span style='font-size:10.0pt;font-family:"Courier New"'>ASN.ADMINQ</span><span
+      style='font-size:10.0pt;font-family:Arial'> and the restart queue name is
+      </span><span style='font-size:10.0pt;font-family:"Courier New"'>ASN.RESTARTQ</span><span
+      style='font-size:10.0pt;font-family:Arial'>.<br style='mso-special-character:
+      line-break'>
+      <![if !supportLineBreakNewLine]><br style='mso-special-character:line-break'>
+      <![endif]><o:p></o:p></span></li>
+ </ol>
+ <li class=MsoNormal style='mso-list:l22 level1 lfo16;tab-stops:list .5in'><span
+     style='font-size:10.0pt;font-family:Arial'>Create Stock Ticker’s
+     application tables<br style='mso-special-character:line-break'>
+     <![if !supportLineBreakNewLine]><br style='mso-special-character:line-break'>
+     <![endif]><o:p></o:p></span></li>
+ <ol style='margin-top:0in' start=1 type=a>
+  <li class=MsoNormal style='mso-list:l22 level2 lfo16;tab-stops:list 1.0in'><span
+      style='font-size:10.0pt;font-family:Arial'>If you are not connected to
+      QCAPSAMP database, connect to it with:<br>
+      <span style='mso-spacerun:yes'> </span><br>
+      <span style='mso-spacerun:yes'>    </span></span><span style='font-size:
+      10.0pt;font-family:"Courier New"'>db2 connect to QCAPSAMP<br
+      style='mso-special-character:line-break'>
+      <![if !supportLineBreakNewLine]><br style='mso-special-character:line-break'>
+      <![endif]></span><span style='font-size:10.0pt;font-family:Arial'><o:p></o:p></span></li>
+  <li class=MsoNormal style='mso-list:l22 level2 lfo16;tab-stops:list 1.0in'><span
+      style='font-size:10.0pt;font-family:Arial'>Create the application tables
+      with:<br>
+      <br>
+      <span style='mso-spacerun:yes'>    </span></span><span style='font-size:
+      10.0pt;font-family:"Courier New"'>db2 –<span class=SpellE>tvf</span> <span
+      class=SpellE>stocks.sql</span></span><span style='font-size:10.0pt;
+      font-family:Arial'><br>
+      <br>
+      <span class=GramE>Three</span> tables with the schema </span><span
+      style='font-size:10.0pt;font-family:"Courier New"'>ASN</span><span
+      style='font-size:10.0pt;font-family:Arial'> will be created. They are the
+      </span><span style='font-size:10.0pt;font-family:"Courier New"'>CURRENCIES</span><span
+      style='font-size:10.0pt;font-family:Arial'>, </span><span
+      style='font-size:10.0pt;font-family:"Courier New"'>STOCKS</span><span
+      style='font-size:10.0pt;font-family:Arial'>, and </span><span
+      style='font-size:10.0pt;font-family:"Courier New"'>STOCK_PRICES</span><span
+      style='font-size:10.0pt;font-family:Arial'> table.<br style='mso-special-character:
+      line-break'>
+      <![if !supportLineBreakNewLine]><br style='mso-special-character:line-break'>
+      <![endif]><o:p></o:p></span></li>
+ </ol>
+ <li class=MsoNormal style='mso-list:l22 level1 lfo16;tab-stops:list .5in'><span
+     style='font-size:10.0pt;font-family:Arial'>Create the publication queue
+     and the XML publication<br style='mso-special-character:line-break'>
+     <![if !supportLineBreakNewLine]><br style='mso-special-character:line-break'>
+     <![endif]><o:p></o:p></span></li>
+ <ol style='margin-top:0in' start=1 type=a>
+  <li class=MsoNormal style='mso-list:l22 level2 lfo16;tab-stops:list 1.0in'><span
+      style='font-size:10.0pt;font-family:Arial'>If you are not connected to
+      QCAPSAMP database, connect to it with:<br>
+      <span style='mso-spacerun:yes'> </span><br>
+      <span style='mso-spacerun:yes'>    </span></span><span style='font-size:
+      10.0pt;font-family:"Courier New"'>db2 connect to QCAPSAMP<br
+      style='mso-special-character:line-break'>
+      <![if !supportLineBreakNewLine]><br style='mso-special-character:line-break'>
+      <![endif]></span><span style='font-size:10.0pt;font-family:Arial'><o:p></o:p></span></li>
+  <li class=MsoNormal style='mso-list:l22 level2 lfo16;tab-stops:list 1.0in'><span
+      style='font-size:10.0pt;font-family:Arial'>Create the publication queue
+      and XML publication with:<br>
+      <br>
+      <span style='mso-spacerun:yes'>    </span></span><span style='font-size:
+      10.0pt;font-family:"Courier New"'>db2 –<span class=SpellE>tvf</span> <span
+      class=SpellE>stockxpub.sql</span></span><span style='font-size:10.0pt;
+      font-family:Arial'><br>
+      <br>
+      <span class=GramE>A</span> publication queue </span><span
+      style='font-size:10.0pt;font-family:"Courier New"'>PUBQ1</span><span
+      style='font-size:10.0pt;font-family:Arial'> with the send queue </span><span
+      style='font-size:10.0pt;font-family:"Courier New"'>Q1</span><span
+      style='font-size:10.0pt;font-family:Arial'> and an XML publication </span><span
+      style='font-size:10.0pt;font-family:"Courier New"'>STOCK_PRICES_SUB</span><span
+      style='font-size:10.0pt;font-family:Arial'> will be created. The source
+      table of the XML publication is the </span><span style='font-size:10.0pt;
+      font-family:"Courier New"'>STOCK_PRICES</span><span style='font-size:
+      10.0pt;font-family:Arial'> table and only a subset of this table’s
+      columns will be published. This should demonstrate Q Capture’s column
+      sub-setting feature. Also a search condition will be specified in the XML
+      publication. Only stock prices whose opening and last trading price that differ
+      more than one unit of currency will be published. This should show Q
+      Capture’s row sub-setting feature.<br style='mso-special-character:line-break'>
+      <![if !supportLineBreakNewLine]><br style='mso-special-character:line-break'>
+      <![endif]><o:p></o:p></span></li>
+ </ol>
+</ol>
+
+<p class=MsoNormal><b style='mso-bidi-font-weight:normal'><span
+style='font-size:10.0pt;font-family:Arial'><o:p>&nbsp;</o:p></span></b></p>
+
+<p class=MsoNormal><b style='mso-bidi-font-weight:normal'><span
+style='font-size:10.0pt;font-family:Arial'><o:p>&nbsp;</o:p></span></b></p>
+
+<p class=MsoNormal><b style='mso-bidi-font-weight:normal'><span
+style='font-size:10.0pt;font-family:Arial'>Preparing <span class=SpellE>WebSphere</span>
+MQ <o:p></o:p></span></b></p>
+
+<p class=MsoNormal><b style='mso-bidi-font-weight:normal'><span
+style='font-size:10.0pt;font-family:Arial'><o:p>&nbsp;</o:p></span></b></p>
+
+<p class=MsoNormal><span style='font-size:10.0pt;font-family:Arial'>The step
+below need to be done:<br style='mso-special-character:line-break'>
+<![if !supportLineBreakNewLine]><br style='mso-special-character:line-break'>
+<![endif]><o:p></o:p></span></p>
+
+<ul style='margin-top:0in' type=disc>
+ <li class=MsoNormal style='mso-list:l20 level1 lfo18;tab-stops:list .5in'><span
+     style='font-size:10.0pt;font-family:Arial'>Create the QMSAMP queue manager,
+     a local queue, and a server connection channel<br style='mso-special-character:
+     line-break'>
+     <![if !supportLineBreakNewLine]><br style='mso-special-character:line-break'>
+     <![endif]><o:p></o:p></span></li>
+ <ol style='margin-top:0in' start=1 type=a>
+  <li class=MsoNormal style='mso-list:l20 level2 lfo18;tab-stops:list 1.0in'><span
+      style='font-size:10.0pt;font-family:Arial'>Create the queue manager with:<br>
+      <br>
+      <span style='mso-spacerun:yes'>    </span></span><span class=SpellE><span
+      style='font-size:10.0pt;font-family:"Courier New"'>crtmqm</span></span><span
+      style='font-size:10.0pt;font-family:"Courier New"'> QMSAMP</span><span
+      style='font-size:10.0pt;font-family:Arial'><o:p></o:p></span></li>
+ </ol>
+</ul>
+
+<p class=MsoNormal style='margin-left:.75in'><span style='font-size:10.0pt;
+font-family:Arial'><o:p>&nbsp;</o:p></span></p>
+
+<ul style='margin-top:0in' type=disc>
+ <ol style='margin-top:0in' start=2 type=a>
+  <li class=MsoNormal style='mso-list:l20 level2 lfo18;tab-stops:list 1.0in'><span
+      style='font-size:10.0pt;font-family:Arial'>Start the queue manager with:<br>
+      <br>
+      <span style='mso-spacerun:yes'>    </span></span><span class=SpellE><span
+      style='font-size:10.0pt;font-family:"Courier New"'>strmqm</span></span><span
+      style='font-size:10.0pt;font-family:"Courier New"'> QMSAMP</span><span
+      style='font-size:10.0pt;font-family:Arial'><o:p></o:p></span></li>
+ </ol>
+</ul>
+
+<p class=MsoNormal style='margin-left:.75in'><span style='font-size:10.0pt;
+font-family:Arial'><o:p>&nbsp;</o:p></span></p>
+
+<ul style='margin-top:0in' type=disc>
+ <ol style='margin-top:0in' start=3 type=a>
+  <li class=MsoNormal style='mso-list:l20 level2 lfo18;tab-stops:list 1.0in'><span
+      style='font-size:10.0pt;font-family:Arial'>Create a local queue and a
+      server connection channel with:<br>
+      <br>
+      <span style='mso-spacerun:yes'>    </span></span><span class=SpellE><span
+      style='font-size:10.0pt;font-family:"Courier New"'>runmqcs</span></span><span
+      style='font-size:10.0pt;font-family:"Courier New"'> QMSAMP &lt; <span
+      class=SpellE>stocks.mq</span></span><span style='font-size:10.0pt;
+      font-family:Arial'><br>
+      <br>
+      <span class=GramE>The</span> local queue name is </span><span
+      style='font-size:10.0pt;font-family:"Courier New"'>Q1</span><span
+      style='font-size:10.0pt;font-family:Arial'> and the server connection
+      channel name is </span><span style='font-size:10.0pt;font-family:"Courier New"'>JAVA.CHANNEL</span><span
+      style='font-size:10.0pt;font-family:Arial'>.<o:p></o:p></span></li>
+ </ol>
+</ul>
+
+<p class=MsoNormal><b style='mso-bidi-font-weight:normal'><span
+style='font-size:10.0pt;font-family:Arial'><o:p>&nbsp;</o:p></span></b></p>
+
+<p class=MsoNormal><b style='mso-bidi-font-weight:normal'><span
+style='font-size:10.0pt;font-family:Arial'><o:p>&nbsp;</o:p></span></b></p>
+
+<p class=MsoNormal><b style='mso-bidi-font-weight:normal'><span
+style='font-size:10.0pt;font-family:Arial'>Content of <span class=SpellE>asnqwxml.zip</span>
+<o:p></o:p></span></b></p>
+
+<p class=MsoNormal><b style='mso-bidi-font-weight:normal'><span
+style='font-size:10.0pt;font-family:Arial'><o:p>&nbsp;</o:p></span></b></p>
+
+<p class=MsoNormal><span style='font-size:10.0pt;font-family:Arial'>The Stock
+Ticker’s script files, source and binary code, as well as the XML Publication
+Toolkit are compressed in </span><span class=SpellE><span style='font-size:
+10.0pt;font-family:"Courier New"'>asnqwxml.zip</span></span><span
+style='font-size:10.0pt;font-family:Arial'>. You need to uncompress it using
+compression software such as WinZip or <span class=SpellE>PkZip</span>. The content
+of </span><span class=SpellE><span style='font-size:10.0pt;font-family:"Courier New"'>asnqwxml.zip</span></span><span
+style='font-size:10.0pt;font-family:Arial'> is organized as follows:<o:p></o:p></span></p>
+
+<p class=MsoNormal><span style='font-size:10.0pt;font-family:Arial'><o:p>&nbsp;</o:p></span></p>
+
+<p class=MsoNormal style='tab-stops:.25in .5in .75in 1.0in'><span class=SpellE><span
+class=GramE><span style='font-size:10.0pt;font-family:"Courier New"'>stockticker</span></span></span><span
+style='font-size:10.0pt;font-family:"Courier New"'>/<br>
+<span style='mso-tab-count:1'>   </span>dist/<o:p></o:p></span></p>
+
+<p class=MsoNormal style='tab-stops:.25in .5in .75in 1.0in'><span
+style='font-size:10.0pt;font-family:"Courier New"'><span style='mso-tab-count:
+2'>      </span><span class=SpellE>stockticker.war</span><o:p></o:p></span></p>
+
+<p class=MsoNormal style='tab-stops:.25in .5in .75in 1.0in'><span
+style='font-size:10.0pt;font-family:"Courier New"'><span style='mso-tab-count:
+1'>   </span><span class=GramE>scripts</span>/<br>
+<span style='mso-tab-count:2'>      </span><span class=SpellE>capparms.sql</span><o:p></o:p></span></p>
+
+<p class=MsoNormal style='tab-stops:.25in .5in .75in 1.0in'><span
+style='font-size:10.0pt;font-family:"Courier New"'><span style='mso-tab-count:
+2'>      </span><span class=SpellE>createdb.sql</span><o:p></o:p></span></p>
+
+<p class=MsoNormal style='tab-stops:.25in .5in .75in 1.0in'><span
+style='font-size:10.0pt;font-family:"Courier New"'><span style='mso-tab-count:
+2'>      </span><span class=SpellE>stockdata_dlt.sql</span><o:p></o:p></span></p>
+
+<p class=MsoNormal style='tab-stops:.25in .5in .75in 1.0in'><span
+style='font-size:10.0pt;font-family:"Courier New"'><span style='mso-tab-count:
+2'>      </span><span class=SpellE>stockdata_init.sql</span><o:p></o:p></span></p>
+
+<p class=MsoNormal style='tab-stops:.25in .5in .75in 1.0in'><span
+style='font-size:10.0pt;font-family:"Courier New"'><span style='mso-tab-count:
+2'>      </span><span class=SpellE>stockdata_ins.sql</span><o:p></o:p></span></p>
+
+<p class=MsoNormal style='tab-stops:.25in .5in .75in 1.0in'><span
+style='font-size:10.0pt;font-family:"Courier New"'><span style='mso-tab-count:
+2'>      </span><span class=SpellE>stockdata_upd.sql</span><o:p></o:p></span></p>
+
+<p class=MsoNormal style='tab-stops:.25in .5in .75in 1.0in'><span
+style='font-size:10.0pt;font-family:"Courier New"'><span style='mso-tab-count:
+2'>      </span><span class=SpellE>stocks.mq</span><o:p></o:p></span></p>
+
+<p class=MsoNormal style='tab-stops:.25in .5in .75in 1.0in'><span
+style='font-size:10.0pt;font-family:"Courier New"'><span style='mso-tab-count:
+2'>      </span><span class=SpellE>stocks.sql</span><o:p></o:p></span></p>
+
+<p class=MsoNormal style='tab-stops:.25in .5in .75in 1.0in'><span
+style='font-size:10.0pt;font-family:"Courier New"'><span style='mso-tab-count:
+2'>      </span><span class=SpellE>stockxpub.sql</span><o:p></o:p></span></p>
+
+<p class=MsoNormal style='tab-stops:.25in .5in .75in 1.0in'><span
+style='font-size:10.0pt;font-family:"Courier New"'><span style='mso-tab-count:
+1'>   </span><span class=SpellE><span class=GramE>src</span></span>/<o:p></o:p></span></p>
+
+<p class=MsoNormal style='tab-stops:.25in .5in .75in 1.0in 1.25in 1.5in'><span
+style='font-size:10.0pt;font-family:"Courier New"'><span style='mso-tab-count:
+2'>      </span><span class=GramE>com</span>/<o:p></o:p></span></p>
+
+<p class=MsoNormal style='tab-stops:.25in .5in .75in 1.0in 1.25in 1.5in'><span
+style='font-size:10.0pt;font-family:"Courier New"'><span style='mso-tab-count:
+3'>         </span><span class=SpellE><span class=GramE>ibm</span></span>/<o:p></o:p></span></p>
+
+<p class=MsoNormal style='tab-stops:.25in .5in .75in 1.0in 1.25in 1.5in 1.75in 2.0in 2.25in'><span
+style='font-size:10.0pt;font-family:"Courier New"'><span style='mso-tab-count:
+4'>            </span>db2/<o:p></o:p></span></p>
+
+<p class=MsoNormal style='tab-stops:.25in .5in .75in 1.0in 1.25in 1.5in 1.75in 2.0in 2.25in'><span
+style='font-size:10.0pt;font-family:"Courier New"'><span style='mso-tab-count:
+5'>               </span><span class=GramE>samples</span>/<o:p></o:p></span></p>
+
+<p class=MsoNormal style='tab-stops:.25in .5in .75in 1.0in 1.25in 1.5in 1.75in 2.0in 2.25in'><span
+style='font-size:10.0pt;font-family:"Courier New"'><span style='mso-tab-count:
+6'>                  </span><span class=SpellE><span class=GramE>repl</span></span>/<o:p></o:p></span></p>
+
+<p class=MsoNormal style='tab-stops:.25in .5in .75in 1.0in 1.25in 1.5in 1.75in 2.0in 2.25in'><span
+style='font-size:10.0pt;font-family:"Courier New"'><span style='mso-tab-count:
+7'>                     </span><span class=GramE>publication</span>/<o:p></o:p></span></p>
+
+<p class=MsoNormal style='tab-stops:.25in .5in .75in 1.0in 1.25in 1.5in 1.75in 2.0in 2.25in'><span
+style='font-size:10.0pt;font-family:"Courier New"'><span style='mso-tab-count:
+3'>         </span><span style='mso-tab-count:5'>               </span><span
+class=SpellE>StockPrice.java</span><o:p></o:p></span></p>
+
+<p class=MsoNormal style='tab-stops:.25in .5in .75in 1.0in 1.25in 1.5in 1.75in 2.0in 2.25in'><span
+style='font-size:10.0pt;font-family:"Courier New"'><span style='mso-tab-count:
+3'>         </span><span style='mso-tab-count:3'>         </span><span
+style='mso-tab-count:2'>      </span><span class=SpellE>StockPriceListener.java</span><o:p></o:p></span></p>
+
+<p class=MsoNormal style='tab-stops:.25in .5in .75in 1.0in'><span
+style='font-size:10.0pt;font-family:"Courier New"'><span style='mso-tab-count:
+1'>   </span><span class=GramE>web</span>/<o:p></o:p></span></p>
+
+<p class=MsoNormal style='tab-stops:.25in .5in .75in 1.0in'><span
+style='font-size:10.0pt;font-family:"Courier New"'><span style='mso-tab-count:
+2'>      </span>WEB-INF/<o:p></o:p></span></p>
+
+<p class=MsoNormal style='tab-stops:.25in .5in .75in 1.0in'><span
+style='font-size:10.0pt;font-family:"Courier New"'><span style='mso-tab-count:
+3'>         </span><span class=SpellE>web.xml</span><o:p></o:p></span></p>
+
+<p class=MsoNormal style='tab-stops:.25in .5in .75in 1.0in'><span
+style='font-size:10.0pt;font-family:"Courier New"'><span style='mso-tab-count:
+2'>      </span><span class=SpellE>stockticker.jsp</span><o:p></o:p></span></p>
+
+<p class=MsoNormal style='tab-stops:.25in .5in .75in 1.0in'><span
+style='font-size:10.0pt;font-family:"Courier New"'><span style='mso-tab-count:
+1'>   </span><span class=SpellE>build.xml</span><o:p></o:p></span></p>
+
+<p class=MsoNormal style='tab-stops:.25in .5in .75in 1.0in'><span
+style='font-size:10.0pt;font-family:"Courier New"'><span style='mso-tab-count:
+1'>   </span><span class=SpellE>README.htm</span><o:p></o:p></span></p>
+
+<p class=MsoNormal><span style='font-size:10.0pt;font-family:Arial'><o:p>&nbsp;</o:p></span></p>
+
+<p class=MsoNormal><span style='font-size:10.0pt;font-family:Arial'><o:p>&nbsp;</o:p></span></p>
+
+<p class=MsoNormal><b style='mso-bidi-font-weight:normal'><span
+style='font-size:10.0pt;font-family:Arial'>Deploying Stock Ticker to Tomcat <o:p></o:p></span></b></p>
+
+<p class=MsoNormal><b style='mso-bidi-font-weight:normal'><span
+style='font-size:10.0pt;font-family:Arial'><o:p>&nbsp;</o:p></span></b></p>
+
+<p class=MsoNormal><span style='font-size:10.0pt;font-family:Arial'>You need to
+install the Stock Ticker’s binary files to Tomcat before running it. Its binary
+files are archived in the WAR (Web Archive) file </span><span class=SpellE><span
+style='font-size:10.0pt;font-family:"Courier New"'>stockticker.war</span></span><span
+style='font-size:10.0pt;font-family:Arial'> under Stock Ticker’s </span><span
+style='font-size:10.0pt;font-family:"Courier New"'>dist/</span><span
+style='font-size:10.0pt;font-family:Arial'> directory.<o:p></o:p></span></p>
+
+<p class=MsoNormal><span style='font-size:10.0pt;font-family:Arial'><o:p>&nbsp;</o:p></span></p>
+
+<p class=MsoNormal><span style='font-size:10.0pt;font-family:Arial'>The installation
+steps are:<o:p></o:p></span></p>
+
+<p class=MsoNormal><span style='font-size:10.0pt;font-family:Arial'><o:p>&nbsp;</o:p></span></p>
+
+<ol style='margin-top:0in' start=1 type=1>
+ <li class=MsoNormal style='mso-list:l4 level1 lfo21;tab-stops:list .5in'><span
+     style='font-size:10.0pt;font-family:Arial'>Start Tomcat<span
+     style='mso-spacerun:yes'>  </span>with:<br style='mso-special-character:
+     line-break'>
+     <![if !supportLineBreakNewLine]><br style='mso-special-character:line-break'>
+     <![endif]><o:p></o:p></span></li>
+ <ol style='margin-top:0in' start=1 type=a>
+  <li class=MsoNormal style='mso-list:l4 level2 lfo21;tab-stops:list 1.0in'><span
+      style='font-size:10.0pt;font-family:Arial'>Change directory to Tomcat’s </span><span
+      style='font-size:10.0pt;font-family:"Courier New"'>bin/</span><span
+      style='font-size:10.0pt;font-family:Arial'> directory.<br>
+      This step is not required if you have included the Tomcat’s </span><span
+      style='font-size:10.0pt;font-family:"Courier New"'>bin/</span><span
+      style='font-size:10.0pt;font-family:Arial'> directory in your </span><span
+      style='font-size:10.0pt;font-family:"Courier New"'>PATH</span><span
+      style='font-size:10.0pt;font-family:Arial'> environment variable.<br
+      style='mso-special-character:line-break'>
+      <![if !supportLineBreakNewLine]><br style='mso-special-character:line-break'>
+      <![endif]><o:p></o:p></span></li>
+  <li class=MsoNormal style='mso-list:l4 level2 lfo21;tab-stops:list 1.0in'><span
+      style='font-size:10.0pt;font-family:Arial'>Run<br>
+      <br>
+      </span><span style='font-size:10.0pt;font-family:"Courier New"'><span
+      style='mso-spacerun:yes'>    </span>startup<br style='mso-special-character:
+      line-break'>
+      <![if !supportLineBreakNewLine]><br style='mso-special-character:line-break'>
+      <![endif]></span><span style='font-size:10.0pt;font-family:Arial'><o:p></o:p></span></li>
+ </ol>
+ <li class=MsoNormal style='mso-list:l4 level1 lfo21;tab-stops:list .5in'><span
+     style='font-size:10.0pt;font-family:Arial'>Install Stock Ticker<br
+     style='mso-special-character:line-break'>
+     <![if !supportLineBreakNewLine]><br style='mso-special-character:line-break'>
+     <![endif]><o:p></o:p></span></li>
+ <ol style='margin-top:0in' start=1 type=a>
+  <li class=MsoNormal style='mso-list:l4 level2 lfo21;tab-stops:list 1.0in'><span
+      style='font-size:10.0pt;font-family:Arial'>Change directory to <span
+      class=SpellE>StockTicker’s</span> directory.<br style='mso-special-character:
+      line-break'>
+      <![if !supportLineBreakNewLine]><br style='mso-special-character:line-break'>
+      <![endif]><o:p></o:p></span></li>
+  <li class=MsoNormal style='mso-list:l4 level2 lfo21;tab-stops:list 1.0in'><span
+      style='font-size:10.0pt;font-family:Arial'>Run<br>
+      <br>
+      </span><span style='font-size:10.0pt;font-family:"Courier New"'><span
+      style='mso-spacerun:yes'>   </span>ant deploy<br style='mso-special-character:
+      line-break'>
+      <![if !supportLineBreakNewLine]><br style='mso-special-character:line-break'>
+      <![endif]></span><span style='font-size:10.0pt;font-family:Arial'><o:p></o:p></span></li>
+ </ol>
+</ol>
+
+<p class=MsoNormal><b style='mso-bidi-font-weight:normal'><span
+style='font-size:10.0pt;font-family:Arial'><o:p>&nbsp;</o:p></span></b></p>
+
+<p class=MsoNormal><b style='mso-bidi-font-weight:normal'><span
+style='font-size:10.0pt;font-family:Arial'>Initializing Stock Price<o:p></o:p></span></b></p>
+
+<p class=MsoNormal><b style='mso-bidi-font-weight:normal'><span
+style='font-size:10.0pt;font-family:Arial'><o:p>&nbsp;</o:p></span></b></p>
+
+<p class=MsoNormal><span style='font-size:10.0pt;font-family:Arial'>Before you
+run Stock Ticker web application you need to initialize the Stock Ticker’s
+application tables with:<o:p></o:p></span></p>
+
+<p class=MsoNormal><span style='font-size:10.0pt;font-family:Arial'><o:p>&nbsp;</o:p></span></p>
+
+<p class=MsoNormal><span style='font-size:10.0pt;font-family:"Courier New"'><span
+style='mso-spacerun:yes'>    </span>db2 –<span class=SpellE>tvf</span> <span
+class=SpellE>stockdata_init.sql</span><o:p></o:p></span></p>
+
+<p class=MsoNormal><span style='font-size:10.0pt;font-family:Arial'><o:p>&nbsp;</o:p></span></p>
+
+<p class=MsoNormal><span style='font-size:10.0pt;font-family:Arial'>The script
+file is located under Stock Ticker’s </span><span style='font-size:10.0pt;
+font-family:"Courier New"'>scripts/</span><span style='font-size:10.0pt;
+font-family:Arial'> directory and contains database transactions that populate
+the CURRENCIES and STOCKS table with initial data and clean the STOCK_PRICES
+table content.<o:p></o:p></span></p>
+
+<p class=MsoNormal><b style='mso-bidi-font-weight:normal'><span
+style='font-size:10.0pt;font-family:Arial'><o:p>&nbsp;</o:p></span></b></p>
+
+<p class=MsoNormal><b style='mso-bidi-font-weight:normal'><span
+style='font-size:10.0pt;font-family:Arial'><o:p>&nbsp;</o:p></span></b></p>
+
+<p class=MsoNormal><b style='mso-bidi-font-weight:normal'><span
+style='font-size:10.0pt;font-family:Arial'>Running Stock Ticker<o:p></o:p></span></b></p>
+
+<p class=MsoNormal><b style='mso-bidi-font-weight:normal'><span
+style='font-size:10.0pt;font-family:Arial'><o:p>&nbsp;</o:p></span></b></p>
+
+<p class=MsoNormal><span style='font-size:10.0pt;font-family:Arial'>Follow the
+steps below to run the Stock Ticker web application:<o:p></o:p></span></p>
+
+<p class=MsoNormal><span style='font-size:10.0pt;font-family:Arial'><o:p>&nbsp;</o:p></span></p>
+
+<ol style='margin-top:0in' start=1 type=1>
+ <li class=MsoNormal style='mso-list:l18 level1 lfo19;tab-stops:list .5in'><span
+     style='font-size:10.0pt;font-family:Arial'>Start DB2 UDB if it has not
+     been started with:<br>
+     <br>
+     <span style='mso-spacerun:yes'>    </span></span><span style='font-size:
+     10.0pt;font-family:"Courier New"'>db2start</span><span style='font-size:
+     10.0pt;font-family:Arial'><br style='mso-special-character:line-break'>
+     <![if !supportLineBreakNewLine]><br style='mso-special-character:line-break'>
+     <![endif]><o:p></o:p></span></li>
+ <li class=MsoNormal style='mso-list:l18 level1 lfo19;tab-stops:list .5in'><span
+     style='font-size:10.0pt;font-family:Arial'>Start the queue manager QMSAMP if
+     it has not been started with:<br>
+     <br>
+     <span style='mso-spacerun:yes'>   </span></span><span class=SpellE><span
+     style='font-size:10.0pt;font-family:"Courier New"'>strmqm</span></span><span
+     style='font-size:10.0pt;font-family:"Courier New"'> QMSAMP</span><span
+     style='font-size:10.0pt;font-family:Arial'><br style='mso-special-character:
+     line-break'>
+     <![if !supportLineBreakNewLine]><br style='mso-special-character:line-break'>
+     <![endif]><o:p></o:p></span></li>
+ <li class=MsoNormal style='mso-list:l18 level1 lfo19;tab-stops:list .5in'><span
+     style='font-size:10.0pt;font-family:Arial'>Start MQ listener on QMSAMP on
+     the default port 1414 if it has not been started with:<br>
+     <br>
+     <span style='mso-spacerun:yes'>   </span></span><span class=SpellE><span
+     style='font-size:10.0pt;font-family:"Courier New"'>runmqlsr</span></span><span
+     style='font-size:10.0pt;font-family:"Courier New"'> –m QMSAMP –t <span
+     class=SpellE>tcp</span> –p 1414</span><span style='font-size:10.0pt;
+     font-family:Arial'><br style='mso-special-character:line-break'>
+     <![if !supportLineBreakNewLine]><br style='mso-special-character:line-break'>
+     <![endif]><o:p></o:p></span></li>
+ <li class=MsoNormal style='mso-list:l18 level1 lfo19;tab-stops:list .5in'><span
+     style='font-size:10.0pt;font-family:Arial'>Start Q Capture if it has not
+     been started with:<br>
+     <br>
+     <span style='mso-spacerun:yes'>   </span></span><span class=SpellE><span
+     style='font-size:10.0pt;font-family:"Courier New"'>asnqcap</span></span><span
+     style='font-size:10.0pt;font-family:"Courier New"'> QCAPSAMP <span
+     class=SpellE>capture_schema</span>=ASN <span class=SpellE>startmode</span>=cold</span><span
+     style='font-size:10.0pt;font-family:Arial'><br style='mso-special-character:
+     line-break'>
+     <![if !supportLineBreakNewLine]><br style='mso-special-character:line-break'>
+     <![endif]><o:p></o:p></span></li>
+ <li class=MsoNormal style='mso-list:l18 level1 lfo19;tab-stops:list .5in'><span
+     style='font-size:10.0pt;font-family:Arial'>Start Tomcat if it has not been
+     started with<br>
+     <br>
+     <span style='mso-spacerun:yes'>   </span></span><span style='font-size:
+     10.0pt;font-family:"Courier New"'>startup</span><span style='font-size:
+     10.0pt;font-family:Arial'><br style='mso-special-character:line-break'>
+     <![if !supportLineBreakNewLine]><br style='mso-special-character:line-break'>
+     <![endif]><o:p></o:p></span></li>
+ <li class=MsoNormal style='mso-list:l18 level1 lfo19;tab-stops:list .5in'><span
+     style='font-size:10.0pt;font-family:Arial'>Install Stock Ticker if it has
+     not been installed. See previous section “Installing Stock Ticker”.<br
+     style='mso-special-character:line-break'>
+     <![if !supportLineBreakNewLine]><br style='mso-special-character:line-break'>
+     <![endif]><o:p></o:p></span></li>
+ <li class=MsoNormal style='mso-list:l18 level1 lfo19;tab-stops:list .5in'><span
+     style='font-size:10.0pt;font-family:Arial'>Open a web browser.<br
+     style='mso-special-character:line-break'>
+     <![if !supportLineBreakNewLine]><br style='mso-special-character:line-break'>
+     <![endif]><o:p></o:p></span></li>
+ <li class=MsoNormal style='mso-list:l18 level1 lfo19;tab-stops:list .5in'><span
+     style='font-size:10.0pt;font-family:Arial'>Enter the following address:<br>
+     <br>
+     <span style='mso-spacerun:yes'>   </span></span><span style='font-size:
+     10.0pt;font-family:"Courier New"'><a
+     href="http://localhost:8080/stockticker/stockticker.jsp">http://localhost:8080/stockticker/stockticker.jsp</a></span><span
+     style='font-size:10.0pt;font-family:Arial'><o:p></o:p></span></li>
+</ol>
+
+<p class=MsoNormal style='margin-left:.5in'><span style='font-size:10.0pt;
+font-family:Arial'><br>
+The Stock Ticker’s web page will be displayed. No stock price information will
+be shown because no stock price data has been entered yet.<o:p></o:p></span></p>
+
+<p class=MsoNormal><span style='font-size:10.0pt;font-family:Arial'><o:p>&nbsp;</o:p></span></p>
+
+<p class=MsoNormal><span style='font-size:10.0pt;font-family:Arial'><o:p>&nbsp;</o:p></span></p>
+
+<p class=MsoNormal><b style='mso-bidi-font-weight:normal'><span
+style='font-size:10.0pt;font-family:Arial'>Activating and Deactivating the
+Stock Price XML Publication<o:p></o:p></span></b></p>
+
+<p class=MsoNormal><b style='mso-bidi-font-weight:normal'><span
+style='font-size:10.0pt;font-family:Arial'><o:p>&nbsp;</o:p></span></b></p>
+
+<p class=MsoNormal><span style='font-size:10.0pt;font-family:Arial'>On the
+bottom part of the Stock Ticker’s web page there are two buttons labeled with
+“Activating XML Publication” and “Deactivating XML Publication”<o:p></o:p></span></p>
+
+<p class=MsoNormal><span style='font-size:10.0pt;font-family:Arial'><o:p>&nbsp;</o:p></span></p>
+
+<p class=MsoNormal><span style='font-size:10.0pt;font-family:Arial'>The
+activation or deactivation of the stock price XML publication will be carried
+out by selecting the corresponding button.<o:p></o:p></span></p>
+
+<p class=MsoNormal><span style='font-size:10.0pt;font-family:Arial'><o:p>&nbsp;</o:p></span></p>
+
+<p class=MsoNormal><span style='font-size:10.0pt;font-family:Arial'>Below the
+two buttons there is a message that tells the status of the stock price XML
+publication. The status can be either ‘Active’ or ‘Inactive’.<o:p></o:p></span></p>
+
+<p class=MsoNormal><span style='font-size:10.0pt;font-family:Arial'><o:p>&nbsp;</o:p></span></p>
+
+<p class=MsoNormal><span style='font-size:10.0pt;font-family:Arial'>The
+activation/deactivation of the stock price XML publication work as follows:<br
+style='mso-special-character:line-break'>
+<![if !supportLineBreakNewLine]><br style='mso-special-character:line-break'>
+<![endif]><o:p></o:p></span></p>
+
+<ol style='margin-top:0in' start=1 type=1>
+ <li class=MsoNormal style='mso-list:l0 level1 lfo22;tab-stops:list .5in'><span
+     style='font-size:10.0pt;font-family:Arial'>When the activation or
+     deactivation button has been selected, Stock Ticker will process this
+     request by generating an Activate Subscription or Deactivate Subscription
+     message and put it onto the Q Capture’s administration queue.<br
+     style='mso-special-character:line-break'>
+     <![if !supportLineBreakNewLine]><br style='mso-special-character:line-break'>
+     <![endif]><o:p></o:p></span></li>
+ <li class=MsoNormal style='mso-list:l0 level1 lfo22;tab-stops:list .5in'><span
+     style='font-size:10.0pt;font-family:Arial'>Stock Ticker will wait for five
+     seconds to give Q Capture the chance to process its request.<br
+     style='mso-special-character:line-break'>
+     <![if !supportLineBreakNewLine]><br style='mso-special-character:line-break'>
+     <![endif]><o:p></o:p></span></li>
+ <li class=MsoNormal style='mso-list:l0 level1 lfo22;tab-stops:list .5in'><span
+     style='font-size:10.0pt;font-family:Arial'>Stock Ticker will retrieve
+     messages from the receive queue:<br style='mso-special-character:line-break'>
+     <![if !supportLineBreakNewLine]><br style='mso-special-character:line-break'>
+     <![endif]><o:p></o:p></span></li>
+ <ol style='margin-top:0in' start=1 type=a>
+  <li class=MsoNormal style='mso-list:l0 level2 lfo22;tab-stops:list 1.0in'><span
+      style='font-size:10.0pt;font-family:Arial'>If a Subscription Schema
+      message has been found then the stock price XML publication status will
+      be set to ‘Active’.<br style='mso-special-character:line-break'>
+      <![if !supportLineBreakNewLine]><br style='mso-special-character:line-break'>
+      <![endif]><o:p></o:p></span></li>
+  <li class=MsoNormal style='mso-list:l0 level2 lfo22;tab-stops:list 1.0in'><span
+      style='font-size:10.0pt;font-family:Arial'>If a Subscription Deactivated
+      message has been found then the stock price XML publication status will
+      be set to ‘Active’.<br style='mso-special-character:line-break'>
+      <![if !supportLineBreakNewLine]><br style='mso-special-character:line-break'>
+      <![endif]><o:p></o:p></span></li>
+  <li class=MsoNormal style='mso-list:l0 level2 lfo22;tab-stops:list 1.0in'><span
+      style='font-size:10.0pt;font-family:Arial'>If no message has been found
+      the stock price XML publication status remains unchanged. Wait a couple
+      second and simply refresh the Stock Ticker’s web page by pressing F5. <br
+      style='mso-special-character:line-break'>
+      <![if !supportLineBreakNewLine]><br style='mso-special-character:line-break'>
+      <![endif]><o:p></o:p></span></li>
+ </ol>
+</ol>
+
+<p class=MsoNormal style='margin-left:.25in'><span style='font-size:10.0pt;
+font-family:Arial'><o:p>&nbsp;</o:p></span></p>
+
+<p class=MsoNormal><b style='mso-bidi-font-weight:normal'><span
+style='font-size:10.0pt;font-family:Arial'>Publishing Stock Price Data<o:p></o:p></span></b></p>
+
+<p class=MsoNormal><b style='mso-bidi-font-weight:normal'><span
+style='font-size:10.0pt;font-family:Arial'><o:p>&nbsp;</o:p></span></b></p>
+
+<p class=MsoNormal><span style='font-size:10.0pt;font-family:Arial'>In order to
+publish stock price data we need to do the following:<br style='mso-special-character:
+line-break'>
+<![if !supportLineBreakNewLine]><br style='mso-special-character:line-break'>
+<![endif]><o:p></o:p></span></p>
+
+<p class=MsoNormal style='margin-left:39.0pt;text-indent:-.25in;mso-list:l1 level1 lfo23;
+tab-stops:list 39.0pt'><![if !supportLists]><span style='font-size:10.0pt;
+font-family:Arial;mso-fareast-font-family:Arial'><span style='mso-list:Ignore'>1.<span
+style='font:7.0pt "Times New Roman"'>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; </span></span></span><![endif]><span
+style='font-size:10.0pt;font-family:Arial'>Activate the stock price XML
+publication if it is not active and make sure that the XML publication is in
+active state.<br style='mso-special-character:line-break'>
+<![if !supportLineBreakNewLine]><br style='mso-special-character:line-break'>
+<![endif]><o:p></o:p></span></p>
+
+<p class=MsoNormal style='margin-left:39.0pt;text-indent:-.25in;mso-list:l1 level1 lfo23;
+tab-stops:list 39.0pt'><![if !supportLists]><span style='font-size:10.0pt;
+font-family:Arial;mso-fareast-font-family:Arial'><span style='mso-list:Ignore'>2.<span
+style='font:7.0pt "Times New Roman"'>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; </span></span></span><![endif]><span
+style='font-size:10.0pt;font-family:Arial'>Execute database transactions
+against the STOCK_PRICES table. There are sample script files </span><span
+class=SpellE><span style='font-size:10.0pt;font-family:"Courier New"'>stockdata_ins.sql</span></span><span
+style='font-size:10.0pt;font-family:Arial'>, </span><span class=SpellE><span
+style='font-size:10.0pt;font-family:"Courier New"'>stockdata_ins.sql</span></span><span
+style='font-size:10.0pt;font-family:Arial'>, and </span><span class=SpellE><span
+style='font-size:10.0pt;font-family:"Courier New"'>stockdata_<span class=GramE>ins.sql</span></span></span><span
+class=GramE><span style='font-size:10.0pt;font-family:"Courier New"'> </span><span
+style='font-size:10.0pt;font-family:Arial'><span
+style='mso-spacerun:yes'> </span>that</span></span><span style='font-size:10.0pt;
+font-family:Arial'> contains such database transactions.<br>
+Insert first some stock price data with<br>
+<br>
+</span><span style='font-size:10.0pt;font-family:"Courier New"'><span
+style='mso-spacerun:yes'>   </span>db2 –<span class=SpellE>tvf</span> <span
+class=SpellE>stockdata_ins.sql</span></span><span style='font-size:10.0pt;
+font-family:Arial'> <br style='mso-special-character:line-break'>
+<![if !supportLineBreakNewLine]><br style='mso-special-character:line-break'>
+<![endif]><o:p></o:p></span></p>
+
+<p class=MsoNormal style='margin-left:39.0pt;text-indent:-.25in;mso-list:l1 level1 lfo23;
+tab-stops:list 39.0pt'><![if !supportLists]><span style='font-size:10.0pt;
+font-family:Arial;mso-fareast-font-family:Arial'><span style='mso-list:Ignore'>3.<span
+style='font:7.0pt "Times New Roman"'>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; </span></span></span><![endif]><span
+style='font-size:10.0pt;font-family:Arial'>The Stock Ticker’s web page will
+automatically be refreshed every 5 seconds. You will see then the stock price
+information displayed on the web page. Please note that only stocks that have
+price change greater than 1 unit of currency will be displayed.<br
+style='mso-special-character:line-break'>
+<![if !supportLineBreakNewLine]><br style='mso-special-character:line-break'>
+<![endif]><o:p></o:p></span></p>
+
+<p class=MsoNormal style='margin-left:39.0pt;text-indent:-.25in;mso-list:l1 level1 lfo23;
+tab-stops:list 39.0pt'><![if !supportLists]><span style='font-size:10.0pt;
+font-family:Arial;mso-fareast-font-family:Arial'><span style='mso-list:Ignore'>4.<span
+style='font:7.0pt "Times New Roman"'>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; </span></span></span><![endif]><span
+style='font-size:10.0pt;font-family:Arial'>Make some updates on the stock price
+data inserted previously with:<br>
+<br>
+</span><span style='font-size:10.0pt;font-family:"Courier New"'><span
+style='mso-spacerun:yes'>   </span>db2 –<span class=SpellE>tvf</span> <span
+class=SpellE>stockdata_upd.sql</span></span><span style='font-size:10.0pt;
+font-family:Arial'> <br>
+<br>
+<span class=GramE>The</span> displayed stock price information will be updated
+automatically.<br style='mso-special-character:line-break'>
+<![if !supportLineBreakNewLine]><br style='mso-special-character:line-break'>
+<![endif]><o:p></o:p></span></p>
+
+<p class=MsoNormal style='margin-left:39.0pt;text-indent:-.25in;mso-list:l1 level1 lfo23;
+tab-stops:list 39.0pt'><![if !supportLists]><span style='font-size:10.0pt;
+font-family:Arial;mso-fareast-font-family:Arial'><span style='mso-list:Ignore'>5.<span
+style='font:7.0pt "Times New Roman"'>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; </span></span></span><![endif]><span
+style='font-size:10.0pt;font-family:Arial'>Delete stock price data with:<br>
+<br>
+</span><span style='font-size:10.0pt;font-family:"Courier New"'><span
+style='mso-spacerun:yes'>   </span>db2 –<span class=SpellE>tvf</span> <span
+class=SpellE>stockdata_dlt.sql</span></span><span style='font-size:10.0pt;
+font-family:Arial'> <br>
+<br>
+<span style='mso-spacerun:yes'> </span>The displayed stock <span class=GramE>price<span
+style='mso-spacerun:yes'>  </span>information</span> will be updated automatically.<br
+style='mso-special-character:line-break'>
+<![if !supportLineBreakNewLine]><br style='mso-special-character:line-break'>
+<![endif]><o:p></o:p></span></p>
+
+<p class=MsoNormal><span style='font-size:10.0pt;font-family:Arial'>You also
+can try to deactivate the XML publication and make sure that the XML
+publication’s state becomes inactive. Then execute some database transactions
+that update the stock price data. The stock price data should remain unchanged.
+This is because no Transaction messages were published by Q Capture since the
+XML publication had been deactivated.<o:p></o:p></span></p>
+
+<p class=MsoNormal><span style='font-size:10.0pt;font-family:Arial'><o:p>&nbsp;</o:p></span></p>
+
+<p class=MsoNormal><span style='font-size:10.0pt;font-family:Arial'><o:p>&nbsp;</o:p></span></p>
+
+<p class=MsoNormal><b style='mso-bidi-font-weight:normal'><span
+style='font-size:10.0pt;font-family:Arial'>Other Tasks<o:p></o:p></span></b></p>
+
+<p class=MsoNormal><b style='mso-bidi-font-weight:normal'><span
+style='font-size:10.0pt;font-family:Arial'><o:p>&nbsp;</o:p></span></b></p>
+
+<ul style='margin-top:0in' type=disc>
+ <li class=MsoNormal style='mso-list:l20 level1 lfo18;tab-stops:list .5in'><span
+     style='font-size:10.0pt;font-family:Arial'>Stop Tomcat with:<br>
+     <br>
+     </span><span style='font-size:10.0pt;font-family:"Courier New"'><span
+     style='mso-spacerun:yes'>    </span>shutdown<br style='mso-special-character:
+     line-break'>
+     <![if !supportLineBreakNewLine]><br style='mso-special-character:line-break'>
+     <![endif]></span><span style='font-size:10.0pt;font-family:Arial'><o:p></o:p></span></li>
+ <li class=MsoNormal style='mso-list:l20 level1 lfo18;tab-stops:list .5in'><span
+     style='font-size:10.0pt;font-family:Arial'>Stop Q Capture with:<br>
+     <br>
+     </span><span style='font-size:10.0pt;font-family:"Courier New"'><span
+     style='mso-spacerun:yes'>    </span><span class=SpellE>asnqccmd</span>
+     QMSAMP <span class=SpellE>capture_schema</span>=ASN stop<br
+     style='mso-special-character:line-break'>
+     <![if !supportLineBreakNewLine]><br style='mso-special-character:line-break'>
+     <![endif]></span><span style='font-size:10.0pt;font-family:Arial'><o:p></o:p></span></li>
+ <li class=MsoNormal style='mso-list:l20 level1 lfo18;tab-stops:list .5in'><span
+     style='font-size:10.0pt;font-family:Arial'>End QMSAMP queue manager immediately
+     with:<br>
+     <br>
+     </span><span style='font-size:10.0pt;font-family:"Courier New"'><span
+     style='mso-spacerun:yes'>    </span><span class=SpellE>endmqm</span> -<span
+     class=SpellE>i</span> QMSAMP<o:p></o:p></span></li>
+</ul>
+
+<p class=MsoNormal><span style='font-size:10.0pt;font-family:Arial'><o:p>&nbsp;</o:p></span></p>
+
+<p class=MsoNormal><span style='font-size:10.0pt;font-family:Arial'><o:p>&nbsp;</o:p></span></p>
+
+<p class=MsoNormal><b style='mso-bidi-font-weight:normal'><span
+style='font-size:10.0pt;font-family:Arial'>Working with Ant<o:p></o:p></span></b></p>
+
+<p class=MsoNormal><b style='mso-bidi-font-weight:normal'><span
+style='font-size:10.0pt;font-family:Arial'><o:p>&nbsp;</o:p></span></b></p>
+
+<p class=MsoNormal><span style='font-size:10.0pt;font-family:Arial'>With Ant
+and the delivered sample build file </span><span class=SpellE><span
+style='font-size:10.0pt;font-family:"Courier New"'>build.xml</span></span><span
+style='font-size:10.0pt;font-family:Arial'> located under Stock Ticker home
+directory you can accomplish other tasks such as:<o:p></o:p></span></p>
+
+<p class=MsoNormal><span style='font-size:10.0pt;font-family:Arial'><o:p>&nbsp;</o:p></span></p>
+
+<p class=MsoNormal style='margin-left:39.0pt;text-indent:-.25in;mso-list:l2 level1 lfo24;
+tab-stops:list 39.0pt'><![if !supportLists]><span style='font-size:10.0pt;
+font-family:Arial;mso-fareast-font-family:Arial'><span style='mso-list:Ignore'>1.<span
+style='font:7.0pt "Times New Roman"'>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; </span></span></span><![endif]><span
+style='font-size:10.0pt;font-family:Arial'>Building Stock Ticker web
+application. Let suppose you want to modify the Stock Ticker web application by
+updating the Java source files. After you made your changes you can re-compile
+them Stock Ticker by simply running:<br>
+<br>
+</span><span style='font-size:10.0pt;font-family:"Courier New"'><span
+style='mso-spacerun:yes'>   </span>ant compile<br>
+<br>
+</span><span class=GramE><span style='font-size:10.0pt;font-family:Arial'>The</span></span><span
+style='font-size:10.0pt;font-family:Arial'> binary files will be then put under
+Stock Ticker’s </span><span style='font-size:10.0pt;font-family:Courier;
+mso-bidi-font-family:Arial'>build/</span><span style='font-size:10.0pt;
+font-family:Arial'> directory.<br style='mso-special-character:line-break'>
+<![if !supportLineBreakNewLine]><br style='mso-special-character:line-break'>
+<![endif]><o:p></o:p></span></p>
+
+<p class=MsoNormal style='margin-left:39.0pt;text-indent:-.25in;mso-list:l2 level1 lfo24;
+tab-stops:list 39.0pt'><![if !supportLists]><span style='font-size:10.0pt;
+font-family:Arial;mso-fareast-font-family:Arial'><span style='mso-list:Ignore'>2.<span
+style='font:7.0pt "Times New Roman"'>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; </span></span></span><![endif]><span
+style='font-size:10.0pt;font-family:Arial'>Once you are ready to distribute the
+updated Stock Ticker web application you can create its binary distribution
+with:<br>
+<br>
+</span><span style='font-size:10.0pt;font-family:"Courier New"'><span
+style='mso-spacerun:yes'>   </span>ant dist<br>
+<br>
+</span><span style='font-size:10.0pt;font-family:Arial'>Ant will create the WAR
+file </span><span class=SpellE><span style='font-size:10.0pt;font-family:"Courier New"'>stockticker.war</span></span><span
+style='font-size:10.0pt;font-family:Arial'> that will be put under </span><span
+style='font-size:10.0pt;font-family:"Courier New"'>dist/</span><span
+style='font-size:10.0pt;font-family:Arial'> directory.<br style='mso-special-character:
+line-break'>
+<![if !supportLineBreakNewLine]><br style='mso-special-character:line-break'>
+<![endif]><o:p></o:p></span></p>
+
+<p class=MsoNormal style='margin-left:39.0pt;text-indent:-.25in;mso-list:l2 level1 lfo24;
+tab-stops:list 39.0pt'><![if !supportLists]><span style='font-size:10.0pt;
+font-family:Arial;mso-fareast-font-family:Arial'><span style='mso-list:Ignore'>3.<span
+style='font:7.0pt "Times New Roman"'>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; </span></span></span><![endif]><span
+style='font-size:10.0pt;font-family:Arial'>If a clean build is desired then run:<br>
+<br>
+<br>
+</span><span style='font-size:10.0pt;font-family:"Courier New"'><span
+style='mso-spacerun:yes'>   </span>ant <span class=SpellE>cbuild</span><br>
+<br>
+</span><span style='font-size:10.0pt;font-family:Arial'>Ant will remove old </span><span
+style='font-size:10.0pt;font-family:"Courier New"'>build/</span><span
+style='font-size:10.0pt;font-family:Arial'> and </span><span style='font-size:
+10.0pt;font-family:"Courier New"'>dist/</span><span style='font-size:10.0pt;
+font-family:Arial'> directory, compile the source codes, put the newly
+generated object files into the </span><span style='font-size:10.0pt;
+font-family:"Courier New"'>build/</span><span style='font-size:10.0pt;
+font-family:Arial'> directory, re-create the binary distribution and put it to
+the </span><span style='font-size:10.0pt;font-family:"Courier New"'>dist/</span><span
+style='font-size:10.0pt;font-family:Arial'> directory.<br style='mso-special-character:
+line-break'>
+<![if !supportLineBreakNewLine]><br style='mso-special-character:line-break'>
+<![endif]><o:p></o:p></span></p>
+
+<p class=MsoNormal style='margin-left:39.0pt;text-indent:-.25in;mso-list:l2 level1 lfo24;
+tab-stops:list 39.0pt'><![if !supportLists]><span style='font-size:10.0pt;
+font-family:Arial;mso-fareast-font-family:Arial'><span style='mso-list:Ignore'>4.<span
+style='font:7.0pt "Times New Roman"'>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; </span></span></span><![endif]><span
+style='font-size:10.0pt;font-family:Arial'>If you want to install/remove the
+Stock Ticker web application to/from Tomcat then run:<br>
+<br>
+<br>
+</span><span style='font-size:10.0pt;font-family:"Courier New"'><span
+style='mso-spacerun:yes'>   </span>ant [deploy | <span class=SpellE>undeploy</span>]<br
+style='mso-special-character:line-break'>
+<![if !supportLineBreakNewLine]><br style='mso-special-character:line-break'>
+<![endif]></span><span style='font-size:10.0pt;font-family:Arial'><o:p></o:p></span></p>
+
+<p class=MsoNormal style='margin-left:39.0pt;text-indent:-.25in;mso-list:l2 level1 lfo24;
+tab-stops:list 39.0pt'><![if !supportLists]><span style='font-size:10.0pt;
+font-family:Arial;mso-fareast-font-family:Arial'><span style='mso-list:Ignore'>5.<span
+style='font:7.0pt "Times New Roman"'>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; </span></span></span><![endif]><span
+style='font-size:10.0pt;font-family:Arial'>If you want to have a clean
+installation of the Stock Ticker web application to then run:<br>
+<br>
+</span><span style='font-size:10.0pt;font-family:"Courier New"'><span
+style='mso-spacerun:yes'>   </span>ant <span class=SpellE>cdeploy</span><br>
+</span><span style='font-size:10.0pt;font-family:Arial'><br>
+Ant will make a clean build, a new distribution file, and finally install the
+distribution file on Tomcat.<br style='mso-special-character:line-break'>
+<![if !supportLineBreakNewLine]><br style='mso-special-character:line-break'>
+<![endif]><o:p></o:p></span></p>
+
+<p class=MsoNormal style='margin-left:39.0pt;text-indent:-.25in;mso-list:l2 level1 lfo24;
+tab-stops:list 39.0pt'><![if !supportLists]><span style='font-size:10.0pt;
+font-family:Arial;mso-fareast-font-family:Arial'><span style='mso-list:Ignore'>6.<span
+style='font:7.0pt "Times New Roman"'>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; </span></span></span><![endif]><span
+style='font-size:10.0pt;font-family:Arial'>If you have installed Stock Ticker
+and simply want Tomcat to recognize that you have updated Java classes then
+run:<br>
+<br>
+</span><span style='font-size:10.0pt;font-family:"Courier New"'><span
+style='mso-spacerun:yes'>   </span>ant reload<br style='mso-special-character:
+line-break'>
+<![if !supportLineBreakNewLine]><br style='mso-special-character:line-break'>
+<![endif]></span><span style='font-size:10.0pt;font-family:Arial'><o:p></o:p></span></p>
+
+<p class=MsoNormal style='margin-left:39.0pt;text-indent:-.25in;mso-list:l2 level1 lfo24;
+tab-stops:list 39.0pt'><![if !supportLists]><span style='font-size:10.0pt;
+font-family:Arial;mso-fareast-font-family:Arial'><span style='mso-list:Ignore'>7.<span
+style='font:7.0pt "Times New Roman"'>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; </span></span></span><![endif]><span
+style='font-size:10.0pt;font-family:Arial'>If you want Tomcat to list all
+installed web applications then run:<br>
+<br>
+</span><span style='font-size:10.0pt;font-family:"Courier New"'><span
+style='mso-spacerun:yes'>   </span>ant reload<br>
+</span><span style='font-size:10.0pt;font-family:Arial'><br>
+<span class=GramE>This</span> use useful to determine whether the Stock Ticker
+has been installed on Tomcat or not. <o:p></o:p></span></p>
+
+</div>
+
+</body>
+
+</html>

@@ -1,0 +1,15 @@
+<customerinfo Cid='1004'>
+<name>Matt Foreman</name>
+<addr country="Canada">
+<street>1596 Baseline</street>
+<city>Toronto</city>
+<prov-state>Ontario</prov-state>
+<pcode-zip>M3Z 5H9</pcode-zip>
+</addr>
+<phone type="work">905-555-4789</phone>
+<phone type="home">416-555-3376</phone>
+<assistant>
+<name>Gopher Runner</name>
+<phone type="home">416-555-3426</phone>
+</assistant>
+</customerinfo>

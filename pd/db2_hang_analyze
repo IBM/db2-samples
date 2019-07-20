@@ -1,0 +1,2621 @@
+#!/usr/bin/perl
+
+# -*-Perl-*-
+# vim: ft=perl
+
+eval 'exec perl5 -w -S $0 ${1+"$@"}'
+   if 0 ;
+
+#############################################################################
+#
+# (C) COPYRIGHT International Business Machines Corp. 1994, 2002
+# All Rights Reserved
+#
+# US Government Users Restricted Rights - Use, duplication or
+# disclosure restricted by GSA ADP Schedule Contract with IBM Corp.
+#
+################################ db2_hang_analyze ############################
+#
+# db2_hang_analyze is a Perl script that is used to detect possible hangs on DB2 by
+# checking various metrics gathered from db2pd. For example, an active database
+# might unexpectedly crash without exiting or generating any error messages,
+# causing an application level hang. While this is happening, a user executes a
+# query to the database but the execution does not complete because of the hang.
+# The user might suspect that a hang has occurred but it might as well be that
+# the query just takes a long time to execute, which is the case with queries
+# that involve Cartesian products on large tables. Now, the user is faced with
+# the decision of either restarting the database, which will bring down the
+# system, or waiting for the execution to complete, which might take hours in
+# some cases. In either case, this decision is more complex when it comes to
+# more complicated system where clients are accessing the database around the
+# clock and when the system is executing more than just simple queries.
+#
+# With the db2_hang_analyze script, possible hangs are flagged and the database
+# administrator can make better decisions in how to remediate the system. When
+# the script is running in the background, metrics on each active applications
+# are gathered in each iterations, which the database administrator can set to
+# a particular time interval sleeptime.
+#
+# To get the help screen, run: db2_hang_analyze -h
+#
+#   DESCRIPTION
+#   The db2_hang_analyze script is used to detect possible application hanging in
+#   DB2. It runs in a loop until a hang is detected, upon which the list of
+#   possible applications hanging is dumped into report file.
+#
+#   SYNOPSIS
+#   db2_hang_analyze [-h]
+#   db2_hang_analyze [-list]
+#   db2_hang_analyze -db DBNAME [-member MEMBERNUMBER] [-timerlimit SECONDS]
+#                    [-sleeptime SECONDS] [-retrylimit ATTEMPTS] [-path PATH]
+#                    [-cputhreshold PERCENTAGE] [-exec PATH] [-log] [-sql]
+#
+#   REQUIRED:
+#    -db <DB>
+#            Specifies the database for which to detect hangs.
+#
+#   OPTIONAL:
+#    -member <member number>
+#            The member partition number of the database. This option is ignored
+#            if the instance is configured as serial mode.
+#            Default: If defined, the value of environment variable DB2NODE,
+#                     else use the db2pd default
+#
+#    -timerlimit <seconds>
+#            Time limit an application can be idle (no change in the counters)
+#            Default: 300 (seconds)
+#
+#    -sleeptime <seconds>
+#            The sleeptime between each iteration of hang detect.
+#            Default: 60 (seconds)
+#
+#    -retrylimit <attempts>
+#            Retry limit for any db2pd timeout or failures.
+#            Default: 3
+#
+#    -path <directory>
+#            Path where the report file and logfile will be stored.
+#            Default: DIAGPATH
+#
+#    -cputhreshold <percentage>
+#            Set the threshold of the percentage change in the application
+#            CPU time. If an application exceeds such threshold, then it is
+#            flagged as active.
+#            Default: 0.1 (= 0.1%)
+#
+#    -exec <script path>
+#            Specify the path of a script that will be ran after a hang is
+#            detected. The output of the script is redirected to the *.exec
+#            file.
+#            Default: Off
+#
+#   -log
+#            Print notifications, warnings, and errors to the logfile.
+#            Default: Off
+#
+#   -sql
+#            If data exists, print the current and last SQL statement executed
+#            by an application.
+#            Default: Off
+#
+#   -list
+#            Generate the list of db2_hang_analyze process running and allow user to
+#            specify a process to kill.
+#
+#   -h
+#            Display this help screen.
+#
+#  Note: Applications in the Lock-Waiting state are not considered by this
+#        script
+#
+#  Dependencies:       Perl v5.6.0+
+#
+#  Operating System:   Linux and UNIX
+#
+###############################################################################
+
+use strict ;
+use Carp ;
+use Getopt::Long ;
+use POSIX ":sys_wait_h" ;
+
+# Set STDOUT and STDERR to unbuffered
+select STDERR ; $| = 1 ;
+select STDOUT ; $| = 1 ;
+
+# List of return code
+use constant UNKNOWN_OPTION          => -20 ;
+use constant EXEC_SCRIPT_NON_EXECUT  => -19 ;
+use constant EXEC_SCRIPT_NOT_EXIST   => -18 ;
+use constant RAH_ERR                 => -17 ;
+use constant EXEC_MISSING_PATH_ERR   => -16 ;
+use constant INVLD_CPU_THRESHOLD_ERR => -15 ;
+use constant APPL_RTRYLMT_INVLD_ERR  => -14 ;
+use constant DB2PD_APP_ERR           => -13 ;
+use constant DB2PD_AGENTS_ERR        => -12 ;
+use constant DB2PD_EDUS_ERR          => -11 ;
+use constant LOGFILE_PATH_W_ERR      => -10 ;
+use constant LOGFILE_PATH_E_ERR      => -9 ;
+use constant INVLD_MEM_NUM_ERR       => -8 ;
+use constant DATABASE_INACTIVE_ERR   => -7 ;
+use constant NO_START_INST_ERR       => -6 ;
+use constant DB2PD_ERR               => -5 ;
+use constant INST_SLP_ERR            => -4 ;
+use constant SLPTM_INVLD_ERR         => -3 ;
+use constant TLIMIT_INVLD_ERR        => -2 ;
+use constant DBNAME_MISSING_ERR      => -1 ;
+use constant NO_HANG                 => 0 ;
+use constant APPL_HANG               => 1 ;
+
+
+# Description of each return code
+# note: after the constant, "()" is added
+#       this will avoid the constant being translated as string when used as
+#       a key to the hash
+my %rcDescription = (
+   UNKNOWN_OPTION()          => "Unknown option",
+   EXEC_SCRIPT_NON_EXECUT()  => "-exec script is non-executable",
+   EXEC_SCRIPT_NOT_EXIST()   => "-exec script does not exist",
+   RAH_ERR()                 => "\"rah date\" failed to execute",
+   EXEC_MISSING_PATH_ERR()   => "-exec should be followed by a filename",
+   INVLD_CPU_THRESHOLD_ERR() => "cpu threshold should be between 0 to 100",
+   APPL_RTRYLMT_INVLD_ERR()  => "retrylimit should be a positive integer",
+   DB2PD_APP_ERR()           => "\"db2pd -app\" failed or timed out",
+   DB2PD_AGENTS_ERR()        => "\"db2pd -agent\" failed or timed out",
+   DB2PD_EDUS_ERR()          => "\"db2pd -edus\" failed or timed out",
+   LOGFILE_PATH_W_ERR()      => "can not write to logfile path",
+   LOGFILE_PATH_E_ERR()      => "logfile path specified does not exist",
+   INVLD_MEM_NUM_ERR()       => "member number specified is invalid",
+   DATABASE_INACTIVE_ERR()   => "database specified is inactive",
+   NO_START_INST_ERR()       => "instance has not been started",
+   DB2PD_ERR()               => "db2pd failed to execute or timed out",
+   INST_SLP_ERR()            => "instance is sleeping",
+   SLPTM_INVLD_ERR()         => "sleeptime should be a postive integer",
+   TLIMIT_INVLD_ERR()        => "timerlimit should be a postive integer",
+   DBNAME_MISSING_ERR()      => "database name missing, required parameter" ,
+   NO_HANG()                 => "no hang detected" ,
+   APPL_HANG()               => "application level hang detected"
+) ;
+
+# Application hang detection
+# Application with the following status are monitored with their rows-read
+# count, rows-written count, system CPU usage, and user CPU usage.
+# Using a hash for better search performance
+# Note: Applications in the "Lock-Waiting" state are not considered
+#       by this script.
+my %activeAppsStatus = (    "CommitActive" => "",
+                           "UOW-Executing" => "",
+                          "RollbackActive" => "",
+                               "Compiling" => ""
+                       ) ;
+
+############ Setup Global variables ############
+my $opt_dbName = "" ; # required parameter
+my $opt_member = -1 ; # -1 denotes undefined
+my $opt_sleepTime = 60 ;
+my $opt_retryLimit = 3 ;
+my $opt_log = 0 ;
+my $opt_sql = 0 ;
+my $opt_exec = "" ;
+my $opt_timerLimit = 300 ;
+my $opt_cpuThreshold = 0.1 ; # in percentage
+my $opt_path = "" ;
+my $opt_help = "" ;
+my $opt_list = 0 ;
+
+my $host = "" ;
+my $localHostname = "" ;
+my $g_isLocalHost = 0 ;
+my $sqllibPath = "" ;
+my $mode = "" ;
+my $hangingAppsHashRef = 0 ;
+my @pids ;
+my $scriptStartTime = "" ;
+
+my $logFilename = "" ;
+my $reportFilename = "" ;
+my $postExecOutputFilename = "" ; # Post-detection execution
+my $reportText = "" ; # Variable that contains the report info
+
+my $timeout = 500 ;
+my $db2pdNodeOption = "-member" ;
+my $hangDetectInvocation = "" ;
+my $g_CPU = 1 ;
+
+############ Setup global variables ############
+$localHostname = $ENV{HOSTNAME} ;
+
+if( $localHostname eq "" )
+{
+   $localHostname = `hostname` ;
+}
+# Determine the $sqllibPath
+if ( defined $ENV{DB2PATH} && $ENV{DB2PATH} ne "" )
+{
+   $sqllibPath = $ENV{DB2PATH} ;
+}
+else
+{
+   $sqllibPath = "$ENV{HOME}/sqllib" ;
+}
+
+# Get DIAGPATH and set $opt_path equal to DIAGPATH by default
+# Default will be overwritten if -path is specified
+$opt_path = "$sqllibPath/db2dump" ;
+open( GETDBMCFG, "db2pd -dbmcfg | " ) or
+ die( "Failed to run db2pd -dbmcfg: $!\n" ) ;
+while ( <GETDBMCFG> )
+{
+   chomp ;
+   if ( /^\s*DIAGPATH_RESOLVED\s+\(memory\)\s+(\S.*)\// )
+   {
+      $opt_path = $1 ;
+      $opt_path =~ s/\s+$// ;
+   }
+}
+$mode = findMode() ;
+
+# $opt_member is set to $DB2NODE if that's set in customer environment.
+if ( defined $ENV{'DB2NODE'} )
+{
+   $opt_member = $ENV{'DB2NODE'} ;
+}
+
+############ Main subroutines ############
+checkParams() ;
+checkSetup() ;
+hangDetect() ;
+
+##
+# Function: Parse user parameters and check if they are valid. The script is
+#           terminated if at least one parameter is invalid.
+#
+# Input:    None
+#
+# Return:   None
+##
+sub checkParams
+{
+   my $argnum ;
+   my $option ;
+   my $rc = 0 ;
+   my $has_db = 0 ;
+
+   # Printing command invocation
+   $hangDetectInvocation = join( ' ', @ARGV ) ;
+   $hangDetectInvocation = "$0 $hangDetectInvocation" ;
+
+   print "Invoked: $hangDetectInvocation\n" ;
+
+   # keep a record before being parsed
+   GetOptions(
+      'db=s'               => \$opt_dbName,
+      'member=i'           => \$opt_member,
+      'sleeptime=i'        => \$opt_sleepTime,
+      'retrylimit=i'       => \$opt_retryLimit,
+      'timerlimit=i'       => \$opt_timerLimit,
+      'path=s'             => \$opt_path,
+      'cputhreshold=f'     => \$opt_cpuThreshold,
+      'exec=s'             => \$opt_exec,
+      'log'                => \$opt_log,
+      'sql'                => \$opt_sql,
+      'h'                  => \$opt_help,
+      'list'               => \$opt_list
+   ) or exit ( UNKNOWN_OPTION ) ;
+
+   Usage() if $opt_help ;
+   runListManager() if $opt_list ;
+
+   if ( $opt_dbName eq "" )
+   {
+      $rc = DBNAME_MISSING_ERR ;
+      goto cleanup ;
+   }
+
+   if ( ( 1 == $mode ) && ( -1 != $opt_member ) )
+   {
+      print "WARNING: -member option specified while instance is in serial mode. ".
+            "Option ignored.\n" ;
+
+      $opt_member = -1 ;
+   }
+
+   # sleeptime must be a non-negative integer
+   if ( 0 > $opt_sleepTime )
+   {
+      $rc = SLPTM_INVLD_ERR ;
+      goto cleanup ;
+   }
+
+   # retry limit must be a positive integer
+   if ( 1 > $opt_retryLimit )
+   {
+      $rc = APPL_RTRYLMT_INVLD_ERR ;
+      goto cleanup ;
+   }
+
+   # timer limit must be a positive integer
+   if ( 1 > $opt_timerLimit )
+   {
+      $rc = TLIMIT_INVLD_ERR ;
+      goto cleanup ;
+   }
+
+   if ( $opt_path ne "" )
+   {
+      # removing any tailing "/" from the path to keep it consistent
+      $opt_path =~ s/^(\S+)\/$/$1/ ;
+
+      unless ( -e $opt_path )
+      {
+         $rc = LOGFILE_PATH_E_ERR ;
+         goto cleanup ;
+      }
+      unless ( -W $opt_path )
+      {
+         $rc = LOGFILE_PATH_W_ERR ;
+         goto cleanup ;
+      }
+   }
+
+   # Test whether the given threshold is a valid range
+   if ( ( $opt_cpuThreshold < 0 ) || ( $opt_cpuThreshold > 100 ) )
+   {
+      $rc = INVLD_CPU_THRESHOLD_ERR ;
+      goto cleanup ;
+   }
+
+   if ( $opt_exec ne "" )
+   {
+      if ( not ( -e "$opt_exec" ) )
+      {
+         # file does not exist
+         $rc = EXEC_SCRIPT_NOT_EXIST ;
+         goto cleanup ;
+      }
+
+      if ( not ( -x "$opt_exec" ) )
+      {
+         # file is not executable
+         $rc = EXEC_SCRIPT_NON_EXECUT ;
+         goto cleanup ;
+      }
+   }
+
+   #### Generate the logfile and report file filename ####
+   ( my $sec, my $min, my $hour, my $day, my $mon, my $year )
+      = localtime( time ) ;
+   $scriptStartTime = `date` ;
+   chomp( $scriptStartTime ) ;
+   $year += 1900 ;
+   $mon += 1 ;
+
+   # Generate the logfile filename
+   # Add the pid of the process to the file name, to make it unique
+   $logFilename =
+      sprintf( "db2_hang_analyze.%04d%02d%02d.%02d.%02d.%02d.%d.log",
+               $year, $mon, $day, $hour, $min, $sec, $$ ) ;
+   # Generate the report file filename
+   # Add the pid of the process to the file name, to make it unique
+   $reportFilename =
+      sprintf( "db2_hang_analyze.%04d%02d%02d.%02d.%02d.%02d.%d.report",
+               $year, $mon, $day, $hour, $min, $sec, $$ ) ;
+   #### logfile and report filename now defined, can now use plog and pRep ####
+
+   # Generate filename of where to direct output of
+   # post hangdetection execution
+   if ( $opt_exec ne "" )
+   {
+       $postExecOutputFilename =
+         sprintf( "db2_hang_analyze.%04d%02d%02d.%02d.%02d.%02d.%d.exec",
+                  $year, $mon, $day, $hour, $min, $sec, $$ ) ;
+   }
+
+   plog( "Invoked: $hangDetectInvocation\n" ) ;
+
+   # Get all the pids for the member partition specified
+   @pids = getPid( $opt_member ) ;
+
+   # Convert from percentage to decimal
+   $opt_cpuThreshold /= 100 ;
+
+   cleanup:
+   if ( $rc < 0 )
+   {
+      my $rcDescription ;
+      $rcDescription = translateRC( $rc ) ;
+      print "ERROR: $rcDescription\n" ;
+      exit $rc ;
+   }
+}
+
+##
+# Function: Check if setup such as checking if instance is up, if database is
+#           active
+#
+# Input:    None
+#
+# Return:   None
+##
+sub checkSetup
+{
+   my $rc = 0 ;
+
+   $host = getHostname ( $opt_member ) ;
+   if ( ( 1 != $mode ) && ( $host eq "" ) )
+   {
+      $rc = INVLD_MEM_NUM_ERR ;
+      print "ERROR: Invalid member number: $opt_member\n" ;
+      plog( "ERROR: Invalid member number: $opt_member\n" ) ;
+
+      goto cleanup ;
+   }
+   else
+   {
+      # Check whether $host is local or remote
+      $rc = isLocalHost( $host ) ;
+      if( 0 != $rc )
+      {
+         $rc = INVLD_MEM_NUM_ERR ;
+         print "ERROR: Invalid host name: $host\n" ;
+         plog( "ERROR: Invalid host name: $host\n" ) ;
+
+         goto cleanup ;
+      }
+   }
+
+   # Check if the instance has started
+   if ( not isInstanceUp( $opt_member ) )
+   {
+      $rc = NO_START_INST_ERR ;
+      goto cleanup ;
+   }
+
+   # Check if the database is active
+   if ( not isDatabaseActive( $opt_dbName, $opt_member ) )
+   {
+      $rc = DATABASE_INACTIVE_ERR ;
+      goto cleanup ;
+   }
+
+   # Printing DB2 mode: Serial, MPP, SD, local, remote
+   if ( 1 == $mode )
+   {
+      # Serial mode
+      plog( "DB2 Mode: serial mode\n" ) ;
+   }
+   elsif ( 2 == $mode )
+   {
+      # MPP mode
+      if( ! $g_isLocalHost )
+      {
+         # remote host
+         plog( "DB2 Mode: MPP mode with remote host\n" ) ;
+      }
+      else
+      {
+         # local host
+         plog( "DB2 Mode: MPP mode with local host\n" ) ;
+      }
+   }
+   elsif ( 3 == $mode )
+   {
+      # SD mode
+      if ( ! $g_isLocalHost )
+      {
+         # remote host
+         plog( "DB2 Mode: SD mode with remote host\n" ) ;
+      }
+      else
+      {
+         # local host
+         plog( "DB2 Mode: SD mode with local host\n" ) ;
+      }
+   }
+   cleanup:
+   if ( $rc < 0 )
+   {
+      my $rcDescription ;
+      $rcDescription = translateRC( $rc ) ;
+      print "ERROR: $rcDescription\n" ;
+      exit $rc ;
+   }
+
+}
+
+##
+# Function: Retrieves the hostname from the db2nodes.cfg (for SD and MPP mode)
+#           or from the $HOST environment variable (for SE mode); if returned
+#           string is empty, flag an error
+#
+# Input:    $member - member number (node number)
+#
+# Return:   Hostname (empty string for invalid $member number)
+##
+sub getHostname
+{
+   croak "getHostname() requires 1 parameter" if ( 1 != @_ ) ;
+   my $member = shift ;
+
+   my $host = "" ;
+   my $db2nodesPath = "$sqllibPath/db2nodes.cfg" ;
+
+   # if $member is undefined, or if in non-serial mode and $member is not a
+   # number, return an empty string - error should be flagged
+   if ( ( not defined $member ) ||
+        ( ( 1 != $mode ) && ( not ( $member =~ /^(\+|\-)?\d+$/ ) ) ) )
+   {
+      goto cleanup ;
+   }
+   # if MPP or SD mode, and $member is defined
+   # get hostname from db2nodes.cfg
+   if ( ( 1 != $mode ) && ( -1 != $member ) )
+   {
+      open ( CFG, "<$db2nodesPath" ) or
+       die( "Failed to open $db2nodesPath: $!\n" ) ;
+      while ( <CFG> )
+      {
+         $host = $2 if ( /^(\d+)\s+(\S+)\s+/ && ( $1 == $member ) ) ;
+      }
+      close( CFG ) ;
+   }
+   # if SE mode, or if MPP/SD mode and $member is not defined,
+   # get hostname from environment variable
+   elsif ( ( 1 == $mode ) || ( 1 != $mode && -1 == $member ) )
+   {
+      $host = $ENV{HOSTNAME} ;
+   }
+
+   if( ! $host )
+   {
+      # hostname is still empty, use $localHostname
+     $host = $localHostname ;
+   }
+   cleanup:
+
+   return $host ;
+}
+
+##
+# Function: Determine what mode the instance is: serial, MPP, or SD mode
+#
+# Input:    None
+#
+# Return:   1 - serial mode
+#           2 - MPP mode
+#           3 - SD mode
+##
+sub findMode
+{
+   croak "findMode() requires 0 parameters" if ( 0 != @_ ) ;
+
+   my $db2nodesPath = "$sqllibPath/db2nodes.cfg" ;
+   my $rc = 0 ;
+
+   if ( -e $db2nodesPath )
+   {
+      open ( NODES, "<$db2nodesPath" ) or
+       die( "Failed to open $db2nodesPath: $!\n" ) ;
+      while ( <NODES> )
+      {
+         # SD mode has the "CF" string in db2nodes.cfg
+         # if found, flag as SD mode
+         if ( /^\d+\s+\S+\s+\d+\s+\S+\s+\S+\s+(\S+)$/ )
+         {
+            if ( $1 eq "CF" )
+            {
+               $rc = 3 ;
+               goto cleanup ;
+            }
+         }
+      }
+      # no "CF" string found, flag as MPP mode
+      $rc = 2 ;
+   }
+   else
+   {
+      $rc = 1 ;
+   }
+
+   cleanup:
+   return $rc ;
+}
+
+
+##
+# Function: Returns a string with the description of the return code specified
+#
+# Input:    $rc - return code to translate
+#
+# Return:   String containing the description of the return code
+##
+sub translateRC
+{
+   croak "translateRC() requires 1 parameter" if ( 1 != @_ ) ;
+   my $rc = shift ;
+
+   if ( defined $rcDescription{ $rc } )
+   {
+      return $rcDescription{ $rc } ;
+   }
+   else
+   {
+      return "unknown return code" ;
+   }
+}
+
+##
+# Function: PrintLog function prints the given string to the logfile if -log
+#           option is set
+#
+# Input:    $string - string to print into file
+#
+# Return:   None
+##
+sub plog
+{
+   croak "plog() requires 1 parameter" if ( 1 != @_ ) ;
+   my $string = shift ;
+
+   my $timestamp = "" ;
+
+   return if not $opt_log ;
+   open( LOGFILE, ">>", "$opt_path/$logFilename" ) or
+    die( "Failed to open $opt_path/$logFilename: $!\n" ) ;
+
+   # Generate timestamp
+   ( my $sec, my $min, my $hour, my $day, my $mon, my $year )
+      = localtime( time ) ;
+   $year += 1900 ;
+   $mon += 1 ;
+   $timestamp = sprintf( "%04d-%02d-%02d-%02d.%02d.%02d", $year, $mon, $day,
+                  $hour, $min, $sec) ;
+
+   print LOGFILE "$timestamp: $string" ;
+
+   close( LOGFILE ) ;
+}
+
+##
+# Function: PrintErrorLog function prints the passed string to the logfile
+#           if -log function is set, else it prints error to the the standard
+#           output. This function is generally used for error reporting
+#
+# Input:    $string - string to print into file
+#
+# Return:   None
+##
+sub pErrLog
+{
+   croak "pErrLog() requires 1 parameter" if ( 1 != @_ ) ;
+   my $string = shift ;
+
+   if ( $opt_log )
+   {
+      plog( $string ) ;
+   }
+   else
+   {
+      print $string ;
+   }
+}
+
+sub hangDetect
+{
+   my $rc = 0 ;
+   my $iteration = 1 ;
+   my $tempString = "" ;
+   my $hangDetected = 0 ;
+   my %currAppsHash = () ;
+   my %prevAppsHash = () ;
+   my $hangCount = 0 ;
+
+   my $cpuThresholdPercent = $opt_cpuThreshold * 100 ;
+
+   my $format = "\%-25.25s:  \%s\n" ;
+   my $timeLeft = 0 ;
+   my $hangDetectEndTime = 0 ;
+
+   # mapping CTRL-C and CTRL-Z signals exitHandler subroutinte
+   $SIG{'INT'} = \&exitHandler ;
+   $SIG{'TSTP'} = \&exitHandler ;
+
+   createRunListFile() ;
+
+   plog( "========== HANG DETECTION SCRIPT - STARTING ==========\n" ) ;
+   plog( "========= Pre-loop setup =========\n" ) ;
+   sRep( "APPLICATION HANG DETECTION: Started on $scriptStartTime\n" ) ;
+   print "APPLICATION HANG DETECTION: Started on $scriptStartTime\n" ;
+
+   printParam( "Sleeptime", "$opt_sleepTime seconds" ) ;
+   printParam( "Timer Limit", "$opt_timerLimit seconds" ) ;
+   printParam( "Node Member", ( -1 ==$opt_member ) ? "default" : $opt_member ) ;
+   printParam( "Retry Limit", $opt_retryLimit ) ;
+   printParam( "Log", ( $opt_log ) ? "yes" : "no" ) ;
+   printParam( "SQL", ( $opt_sql ) ? "yes" : "no" ) ;
+   printParam( "Logfile", ( $opt_log ) ? $logFilename : "none" ) ;
+   printParam( "Script PID", $$ ) ;
+   printParam( "CPU Threshold", "$cpuThresholdPercent%" ) ;
+   printParam( "Post Detection Script",
+      ( $opt_exec ne "" ) ? $opt_exec : "none" ) ;
+   printParam( "Path", $opt_path ) ;
+
+   sRep( "\n" ) ;
+   print "\nPress CTRL-C or CTRL-Z to terminate script\n" ;
+   print "Pre-loop setup...\n" ;
+
+   foreach ( @pids )
+   {
+      plog( "$_\n" ) ;
+   }
+
+   goto cleanup if ( 0 > ( $rc = getAppMetrics( \%prevAppsHash, $host,
+      $opt_member, $opt_dbName, $timeout, $opt_retryLimit ) ) ) ;
+   
+   while ( 1 )
+   {
+      $timeLeft = $opt_sleepTime ;
+      while( $timeLeft )
+      {
+         print "\rIteration $iteration: $timeLeft seconds left...    " ;
+         sleep( 1 ) ;
+         $timeLeft-- ;
+      }
+
+      plog("======= ITERATION $iteration - BEGIN =======\n") ;
+
+      goto cleanup if ( 0 > ( $rc = getAppMetrics( \%currAppsHash, $host,
+         $opt_member, $opt_dbName, $timeout, $opt_retryLimit ) ) ) ;
+
+      # if previous hash is non-empty, compare previous and current hashes
+      $hangCount = isApplicationHanging( \%prevAppsHash, \%currAppsHash,
+         $opt_timerLimit, $opt_sleepTime, $opt_cpuThreshold) ;
+
+      if( $hangCount )
+      {
+         # At least, one application is marked as possibly hanging, print
+         print "\rIteration $iteration: POSSIBLE HANG DETECTED!            \n" ;
+
+         if ( $opt_sql )
+         {
+            # get SQL statements
+            plog( "Getting application SQL statements...\n" ) ;
+
+            if ( execDB2PDSubroutine( $opt_retryLimit,$timeout,"db2pd -dynamic",
+                \&getSQLStatements, \%currAppsHash, $opt_member, $opt_dbName ) )
+            {
+               print "WARNING: \"db2pd -dynamic\" failed; ".
+                  "ignoring SQL option.\n" ;
+               $opt_sql = 0 ;
+            }
+         }
+         printHangingApps( \%currAppsHash, $hangCount, $opt_sql ) ;
+
+         my $date = `date` ;
+         chomp( $date ) ;
+         sRep( "\nAPPLICATION HANG DETECTION: Ended on $date\n" ) ;
+         plog( "======= ITERATION $iteration - END =======\n" ) ;
+
+         $rc = APPL_HANG ;
+         goto cleanup ;
+      }
+
+      plog( "No application inactive for at least $opt_timerLimit " .
+            "seconds\n" ) ;
+
+      plog( "======= ITERATION $iteration - END =======\n" ) ;
+
+      # Print a message to screen after each iteration
+      print "\rIteration $iteration: No hang found.                        \n" ;
+
+      %prevAppsHash = %currAppsHash ;
+      $iteration++ ;
+   }
+
+cleanup:
+
+   if ( $rc < 0 )
+   {
+      my $rcDescription ;
+      $rcDescription = translateRC( $rc ) ;
+      pErrLog( "ERORR: $rcDescription\n" ) ;
+      print "ERROR: error detected, please see $opt_path/$logFilename" .
+            " for more details \n" if ( $opt_log ) ;
+   }
+   elsif ( $rc > 0 )
+   {
+      # Possible hang detected
+
+      # Execute post detection script if specified as an option
+      if ( $opt_exec ne "" )
+      {
+         my $execRC = 0 ;
+
+         my $date = `date` ;
+         chomp( $date ) ;
+         sRep( "\nPOST DETECTION EXECUTION: Started on $date\n" ) ;
+
+         $execRC = postDetectionExecution() ;
+         sRep( "Executed script $opt_exec and completed with " .
+            "rc=$execRC\n" ) ;
+         sRep( "Output in: $postExecOutputFilename\n" ) ;
+
+         $date = `date` ;
+         chomp( $date ) ;
+         sRep( "POST DETECTION EXECUTION: Ended on $date\n" ) ;
+
+      }
+
+      #### prints ####
+
+      # Print report file
+      pRep() ; # print to report file once finished storing output to string
+
+      # Print to logfile
+      plog( "Refer to report file for results: $reportFilename\n" ) ;
+
+      # Print to STDOUT
+      printf( $format, "Logfile", "$opt_path/$logFilename" ) if ( $opt_log ) ;
+      printf( $format, "Post Execution Output",
+         "$opt_path/$postExecOutputFilename" ) if ( $opt_exec ne "" ) ;
+      printf( $format, "VIEW REPORT AT", "$opt_path/$reportFilename" ) ;
+
+      $hangDetectEndTime = `date` ;
+      chomp( $hangDetectEndTime ) ;
+      print "APPLICATION HANG DETECTION: Ended on $hangDetectEndTime\n" ;
+
+   }
+
+   plog( "========== HANG DETECTION SCRIPT - ENDING ==========\n" ) ;
+
+   deleteRunListFile() ;
+   return $rc ;
+}
+
+
+##
+# Function: Calls the functions that gather the active applications, the row
+#           counters, and the CPU counters info.
+#
+# Input: $currAppsHash  - Reference to a 2D hash in the form:
+#                         %hash{app_hdl}{app_info}
+#                       - 2D hash will be populated with the application's
+#                         current state
+#                       - The app_info can be the following and the info can be
+#                         obtained from the corresponding subroutine:
+#                          appStatus - getActiveApps()
+#                          agentEDUID - getRowAndEvtCounters()
+#                          rowsRead - getRowAndEvtCounters()
+#                          rowsWritten - getRowAndEvtCounters()
+#                          agentStateUpdateTime - getRowAndEvtCounters()
+#                          usrCPU - getAgentCPUUsage()
+#                          sysCPU - getAgentCPUUsage()
+#        $host          - Host name
+#        $member        - Node number
+#        $dbName        - Database name
+#        $timeout       - Timeout for all the db2pd instruction as a single
+#                         group
+#        $retryLimit    - The limit of retries allowed for the db2pd
+#                         instructions (in getActiveApps, getRowAndEvtCounters,
+#                         getAgentCPUUsage); if retry limit is exceeded, a
+#                         timeout is then finally flagged
+#
+# Return:   0           - All db2pd instruction passed and there is no change
+#                         in the rows-read and rows-written counter, and the
+#                         system and user CPU time
+#          -1           - "db2pd -app" exceed the timeout/failure limit
+#          -2           - "db2pd -agents event" exceed the timeout/failure limit
+#          -3           - "db2pd -edus" exceed the timeout/failure limit
+##
+sub getAppMetrics
+{
+   croak "getAppMetrics() requires 6 parameters" if ( 6 != @_ ) ;
+   my $currAppsHash = shift ;
+   my $host = shift ;
+   my $member = shift ;
+   my $dbName = shift ;
+   my $timeout = shift ;
+   my $retryLimit = shift ;
+
+   my $mainRC = 0 ;
+
+   my $retryCount = 0 ;
+   my $db2pdPass = 0 ;
+   my $rc = 0 ;
+
+   %$currAppsHash = () ;
+
+   # %currAppsHash is populated
+   # %currAppsHashes hashes of hashes with the
+   # form: %hash{<app handler number>}{<app info>}
+
+   ############# check: db2pd -apps ###################
+   plog( "Gathering applications with active status...\n" ) ;
+   # if db2pd fails, return, else continue
+   if ( execDB2PDSubroutine( $retryLimit, $timeout, "db2pd -app",
+            \&getActiveApps, $currAppsHash, $member, $dbName ) )
+   {
+      $mainRC = DB2PD_APP_ERR ;
+      goto cleanup ;
+   }
+
+   ############# check: db2pd -agents event ###################
+   plog( "Gathering row and event counters...\n" ) ;
+   # if db2pd fails, return, else continue
+   if ( execDB2PDSubroutine( $retryLimit, $timeout, "db2pd -agents event",
+            \&getRowAndEvtCounters, $currAppsHash, $member ) )
+   {
+      $mainRC = DB2PD_AGENTS_ERR ;
+      goto cleanup ;
+   }
+
+   ############# check: db2pd -edus ###################
+   plog( "Gathering CPU usage info...\n" ) ;
+   # If db2pd fails, return, else continue with checking results
+   if ( execDB2PDSubroutine( $retryLimit, $timeout, "db2pd -edus",
+            \&getAgentCPUUsage, $currAppsHash, $member ) )
+   {
+      $mainRC = DB2PD_EDUS_ERR ;
+      goto cleanup ;
+   }
+
+   # Mark the current results with a timestamp
+   addTimestamp( $currAppsHash ) ;
+
+   cleanup:
+   return $mainRC ;
+}
+
+##
+# Function: Finds all active applications. An application is considered
+#           active if it's status is in the $activeAppsStatus array
+#
+# Input: $appHashRef - Reference to a hash that maps the Application
+#                          handler to the status of the application
+#        $member         - Node number
+#        $dbName         - Database name
+#
+# Return: 0         - "db2pd -app" passes execution
+#         Otherwise - "db2pd -app" fails execution
+##
+sub getActiveApps
+{
+   croak "getActiveApps() requires 3 parameters" if ( 3 != @_ ) ;
+   my $appHashRef = shift ;
+   my $member = shift ;
+   my $dbName = shift ;
+
+   my $rc = 0 ;
+
+   my %appHash = () ;
+   my @splitTemp = '' ;
+   my $apphdl = '' ;
+   my $appStatus = '' ;
+
+   my @cmdOutput = () ;
+   my $cmdRC = '' ;
+   my $line = '' ;
+   my $command = "" ;
+   my $pattern = "" ;
+   my $cAnchSUID = 0 ;
+   my $lAnchSUID = 0 ;
+
+   # Read applications and their status
+   # until we hit section "External Connection Attributes"
+   # which is detected by a change in the 6th column from "status" to
+   # "SystemAuthID".
+
+   # if instance is in SD or MPP mode
+   if ( ( 1 != $mode ) && ( ! $g_isLocalHost ) && ( -1 != $member ) )
+   {
+      # SD or MPP mode with a remote host, $member defined
+      $command = "db2pd -applications -db $dbName $db2pdNodeOption " ;
+      $command .= "$member 2> /dev/null" ;
+      plog( "Running \"$command\".\n" ) ; # Dump to log file for debugging
+      @cmdOutput = `$command` ;
+      $cmdRC = findRahRC( $cmdOutput[-1] ) ;
+   }
+   elsif ( ( 1 != $mode ) && ( $g_isLocalHost ) && ( -1 != $member ) )
+   {
+      # SD or MPP mode with a local host, $member defined
+      $command = "db2pd -applications -db $dbName $db2pdNodeOption " ;
+      $command .= "$member 2> /dev/null" ;
+      plog( "Running \"$command\".\n" ) ; # Dump to log file for debugging
+      @cmdOutput = `$command` ;
+      $cmdRC = $? ;
+   }
+   else
+   {
+      # Serial mode, or SD/MPP mode with undefined $member
+      $command = "db2pd -applications -db $dbName 2> /dev/null" ;
+      plog( "Running \"$command\".\n" ) ; # Dump to log file for debugging
+      @cmdOutput = `$command` ;
+      $cmdRC = $? ;
+   }
+
+   # if an error occurred on db2pd, return with error code
+   if ( 0 != $cmdRC )
+   {
+      $rc = $cmdRC ;
+      goto cleanup ;
+   }
+
+   $pattern = '^(Address|0x\S+)\s+(\S+)\s+\S+\s+\S+\s+\S+\s+(\S+)\s+(\d+)\s+'.
+      '(\d+)\s+(\d+)\s+(\d+)' ;
+
+   foreach $line ( @cmdOutput )
+   {
+      if ( ( $line =~ /$pattern/ ) )
+      {
+         # $1 - Applications Address 
+         # $2 - application handle
+         # $3 - application status
+         # $4 - C-AnchID
+         # $5 - C-StmtUID
+         # $6 - L-AnchID
+         # $7 - L-StmtUID
+         if ( ( $2 eq "AppHandl" ) && ( $3 eq "Status" ) )
+         {
+            next ;
+         }
+         if ( ( $2 eq "AppHandl" ) && ( $3 eq "SystemAuthID" ) )
+         {
+            last ;
+         }
+
+         $apphdl = $2 ;
+         $appStatus = $3 ;
+
+         $cAnchSUID = join( "-", $4, $5 ) ;
+         $lAnchSUID = join( "-", $6, $7 ) ;
+         # Add application with status to the hash
+         # Initialize hanging to 0 - no hang
+         # Add
+         if ( defined $activeAppsStatus{$appStatus} )
+         {
+            $$appHashRef{ $apphdl }{ "appStatus" } = $appStatus ;
+            $$appHashRef{ $apphdl }{ "hanging" } = 0 ;
+            $$appHashRef{ $apphdl }{ "cAnchSUID" } = $cAnchSUID ;
+            $$appHashRef{ $apphdl }{ "lAnchSUID" } = $lAnchSUID ;
+         }
+      }
+   }
+   cleanup:
+   return $rc ;
+}
+
+##
+# Function: Populates the application hash with the rows-read, rows-written
+#           and the last update time of the agent state counters.
+#
+# Input: $appHashRef       - Reference to hash of hashes (2D hash), the main
+#                            list of applications
+#        $member           - Node number
+#
+# Return: 0                - "db2pd -agents event" passes execution
+#         otherwise        - "db2pd -agents event" fails execution
+##
+sub getRowAndEvtCounters
+{
+   croak "getRowAndEvtCounters() requires 2 parameters" if ( 2 != @_ ) ;
+   my $appHashRef = shift ;
+   my $member = shift ;
+
+   my $rc = 0 ;
+
+   my $line = "" ;
+   my @cmdOutput = () ;
+   my $command = "" ;
+   my $cmdRC = 0 ;
+   my $pattern = '^0x\S+\s+(\S+)\s+\S+\s+(\S+)\s+\S+\s+\S+\s+\S+\s+\S+\s+\S+' .
+                 '\s+\S+\s+(\S+)\s+(\S+).*\((\d+)\s*\)' ;
+
+   if ( ( 1 != $mode ) && ( ! $g_isLocalHost ) && ( -1 != $member ) )
+   {
+      # SD or MPP mode with a remote host, $member defined
+      $command = "db2pd -agents event $db2pdNodeOption $member 2> /dev/null" ;
+      plog( "Running \"$command\".\n" ) ; # Dump to log file for debugging
+      @cmdOutput = `$command` ;
+      $cmdRC = findRahRC ( $cmdOutput[-1] ) ;
+   }
+   elsif ( ( 1 != $mode ) && ( $g_isLocalHost ) && ( -1 != $member ) )
+   {
+      # SD or MPP mode with a local host, $member defined
+      $command = "db2pd -agents event $db2pdNodeOption $member 2> /dev/null" ;
+      plog( "Running \"$command\".\n" ) ; # Dump to log file for debugging
+      @cmdOutput = `$command` ;
+      $cmdRC = $? ;
+   }
+   else
+   {
+      # Serial mode, or SD/MPP mode with undefined $member
+      $command = "db2pd -agents event 2> /dev/null" ;
+      plog( "Running \"$command\".\n" ) ; # Dump to log file for debugging
+      @cmdOutput = `$command` ;
+      $cmdRC = $? ;
+   }
+
+   # if an error occurred on db2pd, return with error code
+   if ( 0 != $cmdRC )
+   {
+      $rc = $cmdRC ;
+      goto cleanup ;
+   }
+
+   foreach $line ( @cmdOutput )
+   {
+      if ( ( $line =~ /$pattern/ ) )
+      {
+         my $appHandl = $1 ;
+         my $agentEDUID = $2 ;
+         my $rowsRead = $3 ;
+         my $rowsWritten = $4 ;
+         my $agentStateUpdateTime = $5 ;
+
+         if ( defined ( $$appHashRef{ $1 } ) )
+         {
+            # Instantiate new application and add it to the hash
+            $$appHashRef{ $appHandl }{ "agentEDUID" } = $agentEDUID ;
+            $$appHashRef{ $appHandl }{ "rowsRead" } = $rowsRead ;
+            $$appHashRef{ $appHandl }{ "rowsWritten" } = $rowsWritten ;
+            $$appHashRef{ $appHandl }{ "agentStateUpdateTime" }
+                                        = $agentStateUpdateTime ;
+          }
+      }
+   }
+
+   cleanup:
+   return $rc ;
+}
+
+##
+# Function: Populates the application hash with the system and user CPU usage
+#
+# Input: $appHashRef -  Reference to hash of hashes (2D hash), the main
+#                       application list
+#        $member     -  Node number
+#
+# Return: 0          -  "db2pd -edu" passed without error
+#         otherwise  -  "db2pd -edu" failed to execute
+##
+sub getAgentCPUUsage
+{
+   croak "getAgentCPUUsage() requires 2 parameters" if ( 2 != @_ ) ;
+   my $appHashRef = shift ;
+   my $member = shift ;
+
+   my $rc = 0 ;
+
+   my $command = "" ;
+   my @cmdOutput = () ;
+   my $cmdRC = "" ;
+   my $line = "" ;
+
+   my $apphdl = "" ;
+   my $eduID = "" ;
+   my $sysCPU = "" ;
+   my $usrCPU = "" ;
+
+   # Generate a hash that has the Agent EDU ID as key and Agent Apphdl as value
+   my %EDUHash = () ;
+   while ( ( $apphdl, my $valueHash ) = ( each %$appHashRef ) )
+   {
+      $EDUHash{ $eduID } = $apphdl
+         if ( defined ( $eduID = $$valueHash{ "agentEDUID" } ) ) ;
+   }
+
+   # if instance is in SD or MPP mode
+   if ( ( 1 != $mode ) && ( ! $g_isLocalHost ) && ( -1 != $member ) )
+   {
+      # SD or MPP mode with a remote host, $member defined
+      $command = "db2pd -edus $db2pdNodeOption $member 2> /dev/null" ;
+      plog( "Running \"$command\".\n" ) ; # Dump to log file for debugging
+      @cmdOutput = `$command` ;
+      $cmdRC = findRahRC ( $cmdOutput[-1] ) ;
+   }
+   elsif ( ( 1 != $mode ) && ( $g_isLocalHost )  && ( -1 != $member ) )
+   {
+      # SD or MPP mode with a local host, $member defined
+      $command = "db2pd -edus $db2pdNodeOption $member 2> /dev/null" ;
+      plog( "Running \"$command\".\n" ) ; # Dump to log file for debugging
+      @cmdOutput = `$command` ;
+      $cmdRC = $? ;
+   }
+   else
+   {
+      # Serial mode, or SD/MPP mode with undefined $member
+      $command = "db2pd -edus 2> /dev/null" ;
+      plog( "Running \"$command\".\n" ) ; # Dump to log file for debugging
+      @cmdOutput = `$command` ;
+      $cmdRC = $? ;
+   }
+   if ( 0 != $cmdRC )
+   {
+      $rc = $cmdRC ;
+      goto cleanup ;
+   }
+
+   foreach $line ( @cmdOutput )
+   {
+      if ( ( $line =~ /^([\d\s]{10}).*\s+(\d+\.\d+)\s+(\d+\.\d+)/ ) )
+      {
+         $eduID = $1 ;
+         $usrCPU = $2 ;
+         $sysCPU = $3 ;
+
+         # removing trailing whitespace
+         $eduID =~ s/\s*$// ;
+
+         $apphdl = $EDUHash{ $eduID } ;
+         if ( defined ( $apphdl ) && defined ( $$appHashRef{ $apphdl } ) )
+         {
+            if( defined( $usrCPU ) && defined( $sysCPU ) )
+            {
+               $g_CPU = 1 ;
+               $$appHashRef{ $apphdl }{ "usrCPU" } = $usrCPU ;
+               $$appHashRef{ $apphdl }{ "sysCPU" } = $sysCPU ;
+            }
+            else
+            {
+               # usrCPU and sysCPU are not displayed on this platform
+               plog( "usrCPU=$usrCPU  sysCPU=$sysCPU\n" ) ;
+               $g_CPU = 0 ;
+            }
+         }
+
+      }
+   }
+
+   cleanup:
+   return $rc ;
+}
+
+
+##
+# Function: Populates the application with the current and last SQL statements
+#
+# Input:    $appHashRef - Reference to hash of hashes (2D hash), the main
+#                         application list
+#           $member     - Node number
+#           $dbName     - Database name
+#
+# Return:   Return code of "db2pd -dynamic"
+##
+sub getSQLStatements()
+{
+   croak "getSQLStatements() requires 3 parameters" if ( 3 != @_ ) ;
+   my $appHashRef = shift ;
+   my $member = shift ;
+   my $dbName = shift ;
+
+   my $cmdRC = 0 ;
+   my $command = "" ;
+   my @cmdOutput = () ;
+   my $patternHeader = "" ;
+   my $pattern = "" ;
+
+   my $line = "" ;
+   my %sqlHash = () ;
+
+   # anchor ID and statment unique ID merged to use as
+   # composite unique keys for SQL statements
+   my $anchSUID = "" ;
+   my $sql = "" ;
+   my $foundTable = 0 ;
+
+   my $apphdl = "" ;
+   my $valueHash = "" ;
+
+   # if instance is in SD or MPP mode
+   if ( ( 1 != $mode ) && ( ! $g_isLocalHost ) && ( -1 != $member ) )
+   {
+      # SD or MPP mode with a remote host, $member defined
+      $command = "db2pd -dynamic -db $dbName $db2pdNodeOption " ;
+      $command .= "$member 2> /dev/null" ;
+      plog( "Running \"$command\".\n" ) ; # Dump to log file for debugging
+      @cmdOutput = `$command` ;
+      $cmdRC = findRahRC( $cmdOutput[-1] ) ;
+   }
+   elsif ( ( 1 != $mode ) && ( $g_isLocalHost ) && ( -1 != $member ) )
+   {
+      # SD or MPP mode with a local host, $member defined
+      $command = "db2pd -dynamic -db $dbName $db2pdNodeOption " ;
+      $command .= "$member 2> /dev/null" ;
+      plog( "Running \"$command\".\n" ) ; # Dump to log file for debugging
+      @cmdOutput = `$command` ;
+      $cmdRC = $? ;
+   }
+   else
+   {
+      # Serial mode, or SD/MPP mode with undefined $member
+      $command = "db2pd -dynamic -db $dbName 2> /dev/null" ;
+      plog( "Running \"$command\".\n" ) ; # Dump to log file for debugging
+      @cmdOutput = `$command` ;
+      $cmdRC = $? ;
+   }
+
+   # if an error occurred on db2pd, return with error code
+   goto cleanup if ( 0 != $cmdRC ) ;
+
+   $patternHeader = '^Address\s+AnchID\s+StmtUID\s+NumEnv\s+NumVar\s+NumRef'.
+      '\s+NumExe\s+Text\s*$' ;
+   $pattern = '^0x\S+\s+(\d+)\s+(\d+)\s+\d+\s+\d+\s+\d+\s+\d+\s+(.*)$' ;
+
+   # populate hash with anchorID-statementUniqueID as key and the SQL statement
+   # as the value
+   foreach $line ( @cmdOutput )
+   {
+      if ( $line =~ /^Dynamic SQL Statements:$/ )
+      {
+         $foundTable = 1 ;
+         next ;
+      }
+
+      next unless $foundTable ;
+      next if ( $line =~ /$patternHeader/ ) ;
+
+      last if ( $line =~ /^Dynamic SQL Environments:$/ ) ;
+
+      if ( $line =~ /$pattern/ )
+      {
+         $anchSUID = join( "-", $1, $2) ;
+         $sql = $3 ;
+
+         chomp( $sql ) ;
+         $sql =~ s/\s+/ /g ;
+
+         $sqlHash{ $anchSUID } = $sql ;
+      }
+      elsif ( $line =~ /^\s+(.+?)\s*$/ )
+      {
+         $sql = $1 ;
+         chomp( $sql ) ;
+         $sql =~ s/\s+/ /g ;
+         $sqlHash{ $anchSUID } .= " $sql" ;
+      }
+   }
+
+   # populate the application hash with the SQL statements
+   while ( ( $apphdl, $valueHash ) = ( each %$appHashRef ) )
+   {
+      # store current SQL statement if existent
+      if ( defined ( $$valueHash{ "cAnchSUID" } ) )
+      {
+         if ( defined ( $sqlHash{ $$valueHash{ "cAnchSUID" } } ) )
+         {
+            $$valueHash{ "cSQL" } = $sqlHash{ $$valueHash{ "cAnchSUID" } } ;
+         }
+         else
+         {
+            $$valueHash{ "cSQL" } = "none" ;
+         }
+      }
+
+      # store last SQL statement if existent
+      if ( defined ( $$valueHash{ "lAnchSUID" } ) )
+      {
+         if ( defined ( $sqlHash{ $$valueHash{ "lAnchSUID" } } ) )
+         {
+            $$valueHash{ "lSQL" } = $sqlHash{ $$valueHash{ "lAnchSUID" } } ;
+         }
+         else
+         {
+            $$valueHash{ "lSQL" } = "none" ;
+         }
+      }
+   }
+
+   cleanup:
+   return $cmdRC ;
+}
+
+##
+# Function: Populates hash with a timestamp on each applications in the list.
+#
+# Input: $appHashRef - Reference to the hash containing the hanging
+#                      applications.
+#
+# Return: None
+##
+sub addTimestamp
+{
+   croak "addTimestamp() requires 1 parameter" if ( 1 != @_ ) ;
+   my $appHashRef = shift ;
+
+   my $timestamp = time ;
+
+   while ( ( my $apphdl, my $infoHash ) = ( each %$appHashRef ) )
+   {
+      $$infoHash{ "timestamp" } = $timestamp ;
+   }
+}
+
+##
+# Function: Compares the counters of the previous and current iterations ;
+#           if no change is detected on the application, the timer stays the
+#           same - current timestamp inherits the previous timestamp ;
+#           if an application is inactive for more than the timer limit, then
+#           flag a potential hang
+#
+# Input: $preApps - Reference to hash containing the application information
+#                   in the previous iteration.
+#        $curApps - Reference to hash containing the application information
+#                   in the current iteration
+#        $timerLimit
+#                 - if an application is inactive for more than $timerLimit,
+#                   then flag a potential hang
+#
+# Return: # of possible hanging applications
+##
+sub isApplicationHanging
+{
+   croak "isApplicationHanging() requires 5 parameters" if ( 5 != @_ ) ;
+   my $preApps = shift ;
+   my $curApps = shift ;
+   my $timerLimit = shift ;
+   my $sleepTime = shift ;
+   my $cpuThreshold = shift ;
+
+   my $usrCPUChange = 0 ;
+   my $sysCPUChange = 0 ;
+
+   # populated with the list of inactive apphdl for this iteration
+   my @inactiveApphdl = () ;
+   my $inactiveList = "" ;
+   my $currentTime = 0 ;
+   my $hangCount = 0 ;
+
+   # NC = no change
+   # To simplify boolean expression, assign variable
+   # to conditions
+   my $appStatusNC = 0 ;
+   my $rowsReadNC = 0 ;
+   my $rowsWrittenNC = 0 ;
+   my $usrCPUChangeNC = 0 ;
+   my $sysCPUChangeNC = 0 ;
+   my $agentStateUpdateTimeNC = 0 ;
+   my $bInactive = 0 ;
+
+   plog( "Comparing current iteration data from previous iteration data.\n" ) ;
+
+   # Iterate through application list.
+   # If the status did not change, the number of rows read/written did not
+   # change, the CPU usage is within the threshold, and (if agent event data
+   # was collected) the time agent state was update did not change flag the
+   # application as non-active for this iteration
+   while ( ( my $apphdl, my $preH ) = ( each %$preApps ) )
+   {
+      if ( defined ( $$curApps{$apphdl} ) )
+      {
+         my $curH = $$curApps{$apphdl} ;
+
+         # check if the fields are defined, if not then skip this entry
+         next unless ( defined( $$preH{ "appStatus" } ) &&
+                       defined( $$curH{ "appStatus" } ) &&
+                       defined( $$preH{ "rowsRead" } ) &&
+                       defined( $$curH{ "rowsRead" } ) &&
+                       defined( $$preH{ "rowsWritten" } ) &&
+                       defined( $$curH{ "rowsWritten" } ) &&
+                       defined( $$preH{ "agentStateUpdateTime" } ) &&
+                       defined( $$curH{ "agentStateUpdateTime" } ) ) ;
+
+         # assigning variables to conditions
+         $appStatusNC = $$preH{"appStatus"} eq $$curH{"appStatus"} ;
+         $rowsReadNC = $$preH{"rowsRead"}  eq $$curH{"rowsRead"} ;
+         $rowsWrittenNC = $$preH{"rowsWritten"} eq $$curH{"rowsWritten"} ;
+         $agentStateUpdateTimeNC = $$preH{"agentStateUpdateTime"} eq
+                                   $$curH{"agentStateUpdateTime"} ;
+
+         # Skip CPU usage condition if it is not available on this platform
+         if( $g_CPU )
+         {
+            # change: difference
+            $usrCPUChange = abs( $$preH{"usrCPU"} - $$curH{"usrCPU"} ) ;
+            $sysCPUChange = abs( $$preH{"sysCPU"} - $$curH{"sysCPU"} ) ;
+
+            # change: percentage
+            $usrCPUChange = ( $usrCPUChange )/$sleepTime ;
+            $sysCPUChange = ( $sysCPUChange )/$sleepTime ;
+
+            # Change detected between the two iterations are within the threshold
+            $usrCPUChangeNC = $usrCPUChange <= $cpuThreshold ;
+            $sysCPUChangeNC = $sysCPUChange <= $cpuThreshold ;
+
+            if(    $appStatusNC && $rowsReadNC && $rowsWrittenNC && $usrCPUChangeNC
+                && $sysCPUChangeNC && $agentStateUpdateTimeNC )
+            {
+               $bInactive = 1 ;
+            }
+         }
+         else
+         {
+            if(    $appStatusNC && $rowsReadNC && $rowsWrittenNC
+                && $agentStateUpdateTimeNC )
+            {
+               $bInactive = 1 ;
+            }
+         }
+
+         if( $bInactive )
+         {
+            # the current application inherits the previou application's
+            # timestamp; flag apphdl inactive for this iteration.
+            push( @inactiveApphdl, $apphdl ) ;
+            $$curH{ "timestamp" } = $$preH{ "timestamp" } ;
+
+            # check if we have a potential hang:
+            # if application has be in-active for more than the timer limit,
+            # flag a hang
+            $currentTime = time ;
+            if ( ( $currentTime - $$curH{ "timestamp" } ) > $timerLimit )
+            {
+               # potential hang detected, raise flag
+               $$curH{ "hanging" } = 1 ;
+               $hangCount++ ;
+            }
+         }
+         # else, change in application counters detected, keep updated timestamp
+      }
+   }
+
+   # if at least one apphdl is flagged as inactive for this iteration, print
+   # list to log
+   if ( @inactiveApphdl )
+   {
+      $inactiveList = join( ', ', @inactiveApphdl ) ;
+      plog( "apphdl flagged inactive for this iteration: $inactiveList\n" ) ;
+   }
+
+   return $hangCount ;
+}
+
+##
+# Function: Prints hanging apps
+#
+# Input: $haningAppsRef
+#                    - reference to hash of hashes (2D hash) containing the
+#                      application information
+#
+#        $hangCount  - the number of potentially hanging apps
+#
+# Return:   None
+##
+sub printHangingApps
+{
+   croak "printHangingApps() requires 3 parameters" if ( 3 != @_ ) ;
+   my $hangingAppsRef = shift ;
+   my $hangCount = shift ;
+   my $sql = shift ;
+
+   my $fmtString = "" ;
+
+   my $appStatus = "" ;
+   my $agentEDUID = "" ;
+   my $cSQL = "" ;
+   my $lSQL = "" ;
+
+   my $format = "\%-20.20s:  \%s\n" ;
+
+   if ( 0 == $hangCount )
+   {
+      plog( "POTENTIAL APPLICATIONS HANGING: 0 applications.\n\n" ) ;
+      sRep( "POTENTIAL APPLICATIONS HANGING: 0 applications.\n\n" ) ;
+      goto cleanup ;
+   }
+
+   plog( "POTENTIAL APPLICATIONS HANGING: $hangCount application(s).\n" ) ;
+   sRep( "POTENTIAL APPLICATIONS HANGING: $hangCount application(s).\n" ) ;
+
+   while ( ( my $apphdl, my $hashRef ) = each %{ $hangingAppsRef } )
+   {
+
+      if ( $$hashRef{ "hanging" } )
+      {
+
+         $appStatus = $$hashRef{ "appStatus" } ;
+         $agentEDUID = $$hashRef{ "agentEDUID" } ;
+         $cSQL = $$hashRef{ "cSQL" } ;
+         $lSQL = $$hashRef{ "lSQL" } ;
+
+         #$fmtString = sprintf( "%-10.10s %-20.20s %-10.10s\n",
+         #                     $apphdl, $appStatus, $agentEDUID ) ;
+         $fmtString = "" ;
+         $fmtString .= sprintf( $format, "Apphdl", $apphdl ) ;
+         $fmtString .= sprintf( $format, "Status", $appStatus ) ;
+         $fmtString .= sprintf( $format, "AgentEDUID", $agentEDUID ) ;
+
+         if ( $sql )
+         {
+            $fmtString .= sprintf( $format, "Current query", $cSQL ) ;
+            $fmtString .= sprintf( $format, "Last query:", $lSQL ) ;
+         }
+
+         $fmtString .= "\n" ;
+
+         sRep( $fmtString ) ;
+      }
+   }
+
+cleanup:
+   return ;
+}
+
+
+##
+# Function: isInstanceUp determines if instance has been started
+#
+# Input: $member - member number (node number)
+#
+# Return:   1 - instance is up
+#           0 - instance is down
+##
+sub isInstanceUp
+{
+   croak "isInstanceUp() requires 1 parameter" if ( 1 != @_ ) ;
+   my $member = shift ;
+
+   my @cmdOutput = () ;
+   my $cmdRC = 0 ;
+   my $command = "" ;
+   my $rc = 0 ;
+
+   plog( "Checking if instance is up...\n" ) ;
+   if ( ( 1 != $mode ) && ( ! $g_isLocalHost ) && ( -1 != $member ) )
+   {
+      # SD or MPP mode with a remote host, $member is defined
+      $command = "db2pd - $db2pdNodeOption $member 2> /dev/null" ;
+      plog( "Running \"$command\"...\n" ) ; # Dump to log file for debugging
+      @cmdOutput = `$command` ;
+      $cmdRC = findRahRC( $cmdOutput[-1] ) ;
+   }
+   elsif ( ( 1 != $mode ) && ( $g_isLocalHost ) && ( -1 != $member ) )
+   {
+      # SD or MPP mode with a local host, $member is defined
+      $command = "db2pd - $db2pdNodeOption $member 2> /dev/null" ;
+      plog( "Running \"$command\"...\n" ) ; # Dump to log file for debugging
+      @cmdOutput = `$command` ;
+      $cmdRC = $? ;
+   }
+   else
+   {
+      # Serial mode, or SD/MPP mode wtih undefined $member
+      $command = "db2pd - 2> /dev/null" ;
+      plog( "Running \"$command\"...\n" ) ; # Dump to log file for debugging
+      @cmdOutput = `$command` ;
+      $cmdRC = $? ;
+   }
+
+   if ( $cmdRC == 0 )
+   {
+      plog( "DB2 instance is up.\n" ) ;
+      $rc = 1 ;
+   }
+   else
+   {
+      plog( "DB2 instance is down.\n" ) ;
+      plog( "ERROR: db2 instance needs to be up, make sure db2start was " .
+         "executed\n" ) ;
+      $rc = 0 ;
+   }
+
+   return $rc ;
+}
+
+##
+# Function: Checks if the $dbName is active
+#
+# Input:    $dbName - database name to check if it is active
+#           $member - member number
+#
+# Return:   0 - database is not active
+#           1 - database is active
+##
+sub isDatabaseActive
+{
+   croak "isDatabaseActive() requires 2 parameters" if ( 2 != @_ ) ;
+   my $dbName = shift ;
+   my $member = shift ;
+   print @_ ;
+
+   my $command = "" ;
+   my $rc = 1 ;
+
+   # If dbName begins with '-' , it will confuse db2pd command ( a bug )
+   my $firstChar = substr( $dbName, 0, 1 ) ;
+   if( '-' eq $firstChar )
+   {
+      plog( "Invalid database name: $dbName\n" ) ;
+      $rc = 0 ;
+      goto cleanup ;
+   }
+
+   # Check if database is up
+   plog( "Checking if database $dbName is active...\n" ) ;
+   sleep 1 ;
+   if ( ( 1 != $mode ) && ( ! $g_isLocalHost ) && ( -1 != $member ) )
+   {
+      # SD or MPP mode with a remote host, defined $member
+      $command = "db2pd -db $dbName $db2pdNodeOption $member " ;
+      $command .= "2> /dev/null"  ;
+      plog( "Running \"$command\"...\n" ) ; # Dump to log file for debugging
+      open( CHECKDATABASE, "$command - |" ) or
+       die( "Failed to run $command: $!\n" ) ;
+   }
+   elsif ( ( 1 != $mode ) && ( $g_isLocalHost ) && ( -1 != $member ) )
+   {
+      # SD or MPP mode with a local host, defined $member
+      $command = "db2pd -db $dbName $db2pdNodeOption $member 2> /dev/null" ;
+      plog( "Running \"$command\"...\n" ) ; # Dump to log file for debugging
+      open( CHECKDATABASE, "$command - |" ) or
+       die( "Failed to run $command: $!\n" ) ;
+   }
+   else
+   {
+      # Serial mode, or SD/MPP mode with undefined $member
+      $command = "db2pd -db $dbName" ;
+      plog( "Running \"$command\"...\n" ) ; # Dump to log file for debugging
+      open( CHECKDATABASE, "$command - |" ) or
+       die( "Failed to run $command: $!\n" ) ;
+   }
+
+   while( <CHECKDATABASE> )
+   {
+      if ( /^Database .* not activated on database/ )
+      {
+         plog( "Database is inactive.\n" ) ;
+         plog( "ERROR: ${_}" ) ;
+         plog( "ERROR: Please ensure that database $dbName is active\n") ;
+         $rc = 0 ;
+         goto cleanup ;
+      }
+      elsif ( /Option \- requires \-db <database> or \-alldbs option/ )
+      {
+         plog("ERROR: Please ensure that there are active databases on " .
+            "your system\n") ;
+         $rc = 0 ;
+         goto cleanup ;
+      }
+   }
+   plog( "Database is active.\n" ) ;
+
+   cleanup:
+   return $rc ;
+}
+
+##
+# Function: Determines what the return code is from the command ran with rah
+#
+# Input:    $string - A single line string containing the rc; the last line
+#                     string of the return output of rah
+#
+# Return:   Return code from the rah string:
+#           0         - Command passed to rah passed execution
+#           Otherwise - Command passed to rah failed
+##
+sub findRahRC
+{
+   croak "findRahRC() requires 1 parameter" if ( 1 != @_ ) ;
+   my $string = shift ;
+
+   if ( $string =~ /completed rc=(\d+)/ )
+   {
+      return $1 ;
+   }
+   elsif ( $string =~ /completed ok/ )
+   {
+      return 0 ;
+   }
+   else
+   {
+      die "\nFAIL: unknown return format from rah \"$string\"\n" ;
+   }
+
+}
+
+##
+# Function: Print out the usage for the help option
+#
+# Input:    None
+#
+# Return:   None
+##
+sub Usage
+{
+   my $pdoc ;
+   $pdoc = `command -v perldoc 2> /dev/null` ;
+   if ( $pdoc eq "")
+   {
+      printHelp() ;
+   }
+   else
+   {
+      my $rc = 0 ;
+      $rc = system ("perldoc -t $0") ;
+      if( 0 != $rc )
+      {
+         printHelp() ;
+      }
+   }
+   exit 0 ;
+}
+
+##
+# Function: Get the list of PIDs
+#
+# Input:    $member  - member number
+#
+# Return:   Array containing the list of PIDs
+##
+sub getPid
+{
+   croak "getPid() requires 1 parameter" if ( 1 != @_ ) ;
+   my $member = shift ;
+
+   if ( -1 != $member )
+   {
+      open( PID, "db2pd -edus -dbp $member | " ) or
+       die( "Failed to run db2pd -edus -dbp $member: $!\n" ) ;
+   }
+   else
+   {
+      open( PID, "db2pd -edus | " ) or
+       die( "Failed to run db2pd -edus -dbp $member: $!\n" ) ;
+   }
+
+   while ( <PID> )
+   {
+      if ( /(\S+ PID: \d+)/ )
+      {
+         push( @pids, $1 ) ;
+      }
+   }
+   close( PID ) ;
+
+   return @pids ;
+}
+
+##
+# Function: SaveReport function saves the passed string, which will be added to
+#           the final report generated when a hang is found
+#
+# Input:    String to append to the report file
+#
+# Return:   None
+##
+sub sRep
+{
+   croak "sRep() requires 1 parameter" if ( 1 != @_ ) ;
+   $reportText .= shift ;
+}
+
+##
+# Function: PrintReport function prints the final report as stored in
+#           $reportText
+#
+# Input:    None
+#
+# Return:   None
+##
+sub pRep
+{
+   croak "pRep() requires 0 parameters" if ( 0 != @_ ) ;
+   open( RFILE, ">>", "$opt_path/$reportFilename" ) or
+    die( "Failed to open $opt_path/$reportFilename: $!\n" ) ;
+   print RFILE $reportText ;
+   close( RFILE ) ;
+}
+
+##
+# Function: Executes the script specified in $opt_exec
+#
+# Input:    None
+#
+# Return:   The return code of the executed application
+##
+sub postDetectionExecution
+{
+   croak "postDetectionExecution() requires 0 parameters" if ( 0 != @_ ) ;
+   my $command = "" ;
+   my $junk = "" ;
+   my $cmdRC = 0 ;
+
+   $command = "$opt_exec > $opt_path/$postExecOutputFilename 2>&1" ;
+   plog( "Post-hang-detection execution started\n" ) ;
+   plog( "Running \"$command\"...\n" ) ;
+   print "Running \"$opt_exec\"...\n" ;
+   $junk = `$command` ;
+   $cmdRC = $? ;
+   plog( "Post-hang-detection execution completed with rc=$cmdRC\n" ) ;
+   plog( "Output in: $postExecOutputFilename\n" ) ;
+   print "Post-hang-detection execution completed with rc=$cmdRC\n" ;
+
+   return $cmdRC ;
+}
+
+
+##
+# Function: Function prints the name and value of the parameters into the
+#           logfile, report file, and STDOUT
+#
+# Input: $name    - name of the parameter to print
+#        $value   - value of the parameter to print
+#
+# Return: none
+##
+sub printParam ()
+{
+   croak "printParam() requires 2 parameters" if ( 2 != @_ ) ;
+   my $name = shift ;
+   my $value = shift ;
+
+   my $format = "\%-25.25s:  \%s\n" ;
+   my $fmtString = "" ;
+
+   $fmtString = sprintf ( $format, $name, $value ) ;
+
+   plog( $fmtString ) ; # print to logfile
+   sRep( $fmtString ) ; # print to report file
+   print "$fmtString" ; # print to STDOUT
+}
+
+##
+# Function: Wrapper function for functions calling db2pd. This function checks
+#           timeouts and execution failures. It retries execution until the
+#           the function passes or the retry limit is exceeded.
+#
+# Input: $retryLimit - retry limit for the db2pd-calling function
+#        $timeout    - in seconds; if the given function to does not return
+#                      after $timeout seconds, retry execution unless the
+#                      function has exceeded its retry limit
+#        $commandName- the name of the db2pd command being executed
+#        $functionRef- reference to the function to execute
+#        @param      - array containing the parameters of the given function
+#
+# Output: 0          - execution passed
+#         1          - execution failed
+##
+sub execDB2PDSubroutine()
+{
+   croak "execDB2PDSubroutine() requires at least 4 parameters" if ( 4 > @_ ) ;
+   ( my $retryLimit, my $timeout, my $commandName, my $functionRef, my @param )
+      = @_ ;
+
+   my $rc = 0 ;
+   my $db2pdPass = 0 ;
+   my $retryCount = 0 ;
+
+   while ( ( $retryCount < $retryLimit ) && ( not $db2pdPass ) )
+   {
+      eval
+      {
+         local $SIG { ALRM } = sub { die "Program timed out" } ;
+         alarm( $timeout ) ;
+
+         # get all active applications
+         $rc = $functionRef->( @param ) ;
+         alarm( 0 ) ;
+      } ;
+
+      if ( $@ )
+      {
+         if ( $@ =~ /Program timedout/ )
+         {
+            # db2pd timed out, retry again
+            plog( "WARNING: \"$commandName\" timed out, retry again\n" ) ;
+            $retryCount++ ;
+         }
+         else
+         {  print $@ ;
+            die "FAIL: Unknown signal from \"$commandName\"\n" ;
+         }
+      }
+      elsif ( 0 != $rc )
+      {
+         $retryCount++ ;
+         plog( "WARNING: \"$commandName\" failed, retry again\n" ) ;
+      }
+      else
+      {
+         $db2pdPass = 1 ;
+      }
+   }
+
+   return ( not $db2pdPass ) ;
+}
+
+##
+# Function: Subroutine is attached to CTRL-C and CTRL-Z signals; this funtion
+#           is called when those keys are pressed performing a clean exit
+#
+# Input:    none
+#
+# Return:   none
+##
+sub exitHandler
+{
+   my $format = "\n\%s: \%s\n" ;
+   my $scriptEndTime = `date` ;
+   chomp( $scriptEndTime ) ;
+
+   plog( "INT(CTRL-C) or TSTP(CTRL-Z) signal detected.\n" ) ;
+   plog( "NO HANG DETECTED\n" ) ;
+   plog( "========== HANG DETECTION SCRIPT - ENDING ==========\n" ) ;
+
+   if ( $opt_log )
+   {
+      printf( $format, "Logfile", "$opt_path/$logFilename" ) ;
+      print "APPLICATION HANG DETECTION: Ended on $scriptEndTime\n" ;
+   }
+   else
+   {
+      print "\nAPPLICATION HANG DETECTION: Ended on $scriptEndTime\n" ;
+   }
+
+   deleteRunListFile() ;
+   exit ;
+}
+
+##
+# Function: Create a file in the runList directory to keep track that this
+#           db2_hang_analyze process is runing
+#
+# Input:    None
+#
+# Return:   None
+##
+sub createRunListFile
+{
+   my $runListDir = "$sqllibPath/ctrl/db2_hang_analyze_runningList" ;
+   my $runListFile = "db2_hang_analyze.$$.$host" ;
+   my $invocation = $hangDetectInvocation ;
+
+   # if run list directory does not exist, create directory and if I can't, die
+   mkdir( $runListDir ) or die "ERROR: Cannot create directory $runListDir\n"
+      unless ( -d $runListDir ) ;
+
+   die "ERROR: runListFile $runListDir/$runListFile already exists"
+      if ( -e "$runListDir/$runListFile" ) ;
+
+   open( RUNFILE, ">", "$runListDir/$runListFile" ) or
+    die( "Failed to open $runListDir/$runListFile: $!\n" ) ;
+   print RUNFILE "$invocation" ;
+
+   close( RUNFILE ) ;
+}
+
+##
+# Function: Remove the runList file created from this db2_hang_analyze process
+#
+# Input:    None
+#
+# Return:   None
+##
+sub deleteRunListFile
+{
+   my $runListDir = "$sqllibPath/ctrl/db2_hang_analyze_runningList" ;
+   my $runListFile = "db2_hang_analyze.$$.$host" ;
+
+   unlink( "$runListDir/$runListFile" ) ;
+}
+
+##
+# Function: Generates a list of the db2_hang_analyze processes running and gives
+#           users the option of killing a process
+#
+# Input:    None
+#
+# Return:   None
+##
+sub runListManager
+{
+   my $runListDir = "$sqllibPath/ctrl/db2_hang_analyze_runningList" ;
+   my $lsCmd = "ls -l $runListDir" ;
+   my @lsOutput = () ;
+   my $pattern = '(\S+\s+){5}(.+)\s+(db2_hang_analyze\.\d+\.\S+)$' ;
+   my @runListArray = () ;
+   my $hangDetectCmd = "" ;
+   my $instanceHRef = 0 ;
+   my $usrChoice ;
+   my $format = " \%-4.4s \%-20.20s \%-10.10s \%-20.20s \%-s\n" ;
+   my $key = 0 ;
+
+   print "HANG DETECTION: list of running db2_hang_analyze processes\n" ;
+
+   unless ( -d $runListDir )
+   {
+      # runListDir does not exist, no db2_hang_analyze instances running
+      print "No running db2_hang_analyze instance detected\n" ;
+      goto cleanup ;
+   }
+   @lsOutput = `$lsCmd` ;
+   die "ERROR: \"$lsCmd\" failed to execute.\n" if ( 0 != $? ) ;
+
+   # parse each entries in the runList
+   foreach my $line ( @lsOutput )
+   {
+      chomp( $line ) ;
+      if ( $line =~ /$pattern/ )
+      {
+         my $date = $2 ;
+         my $filename = $3 ;
+         my %tempHash = () ;
+
+         ( my $temp, my $pid, my $hostname ) = split( /\./,  $filename ) ;
+
+         # gettting invocation command
+         open( FILE, "<", "$runListDir/$filename" ) or die $! ;
+         $hangDetectCmd = <FILE> ;
+         $hangDetectCmd = "" unless ( defined $hangDetectCmd ) ;
+         chomp( $hangDetectCmd ) ;
+         close( FILE ) ;
+
+         %tempHash = (
+            "date"      => $date,
+            "filename"  => $filename,
+            "pid"       => $pid,
+            "hostname"  => $hostname,
+            "command"   => $hangDetectCmd
+            ) ;
+
+         push( @runListArray, \%tempHash ) ;
+      }
+   }
+
+
+   if ( scalar( @runListArray ) == 0 )
+   {
+      print "No running db2_hang_analyze instance detected\n" ;
+      goto cleanup ;
+   }
+
+
+   do
+   {
+
+      # if user made a choice; skipped during first loop
+      if ( defined $usrChoice && $usrChoice =~ /^q/ )
+      {
+         # valid choice - quit, exiting
+         goto cleanup ;
+      }
+      elsif ( defined $usrChoice && $usrChoice =~ /^a/ )
+      {
+         # valid choice - kill all
+         for $key ( 0 .. ( scalar( @runListArray ) - 1 ) )
+         {
+            $instanceHRef = $runListArray[ $key ] ;
+
+            # remove runList file
+            unlink( "$runListDir/$$instanceHRef{ filename }" )
+               or die $! ;
+
+            # sanity check - check if given PID is indeed owned by a
+            # db2_hang_analyze process
+            die "Specified PID is not owned by a db2_hang_analyze process\n"
+               unless ( isPIDValid( $$instanceHRef{ "pid" } ) ) ;
+
+            kill( 'INT', $$instanceHRef{ "pid" } ) or
+               die "Cannot kill PID $$instanceHRef{ pid }\n" ;
+            print "Killed PID: $$instanceHRef{ pid }\n" ;
+         }
+         goto cleanup ;
+      }
+      elsif ( defined $usrChoice && $usrChoice =~ /^[+-]?\d+$/
+              && $usrChoice >= 0 && $usrChoice < scalar( @runListArray ) )
+      {
+         # valid choice, sending INT (CTRL-C) signal to script
+         chomp( $usrChoice ) ;
+         $instanceHRef = $runListArray[ $usrChoice ] ;
+
+         # remove runList file
+         unlink( "$runListDir/$$instanceHRef{ filename }" )
+            or die $! ;
+
+         # sanity check - check if given PID is indeed owned by a
+         # db2_hang_analyze process
+         die "Specified PID is not owned by a db2_hang_analyze process\n"
+            unless ( isPIDValid( $$instanceHRef{ "pid" } ) ) ;
+
+         kill( 'INT', $$instanceHRef{ "pid" } ) or
+            die "Cannot kill PID $$instanceHRef{ pid }\n" ;
+
+         print "Killed PID: $$instanceHRef{ pid }\n" ;
+         goto cleanup ;
+      }
+
+      # print list of running instances
+      print "Choose the number of the process to kill: 0-".
+         ( scalar( @runListArray )-1 ).
+         " (enter \"q\" to quit or \"a\" to kill all)\n\n" ;
+      printf( $format, "#", "Date Started", "PID", "Hostname", "Command" ) ;
+      print " ---- ", "-" x 20, " ", "-" x 10, " ", "-" x 20, " ",
+         "-" x 50, "\n" ;
+      for $key ( 0 .. ( scalar( @runListArray ) - 1 ) )
+      {
+         # valid choice, killing db2_hang_analyze
+         $instanceHRef = $runListArray[ $key ] ;
+         printf( $format, $key, $$instanceHRef{ date }, $$instanceHRef{ pid },
+            $$instanceHRef{ hostname }, $$instanceHRef{ command } ) ;
+      }
+
+      print "command>" ;
+
+   } while ($usrChoice = <> ) ;
+
+   cleanup:
+   exit ;
+}
+
+##
+# Function: the subroutine checks if the given PID belongs to a
+# db2_hang_analyze script
+#
+# Input: PID - process ID
+#
+# Return:   0 - PID does not belong to a db2_hang_analyze script
+#           1 - PID belongs to a db2_hang_analyze script
+##
+sub isPIDValid
+{
+   my $pid = shift ;
+   my $rc = 0 ;
+   my $command = "ps -eaf" ;
+   my @psOutput = () ;
+   my $pattern = "" ;
+
+   chomp( $pid ) ;
+   $pattern = '^\s*\S+\s+'.$pid.
+      '\s+\S+\s+\S+.*\s+\S+\s+\S+\s+\S*perl.+db2_hang_analyze.*$' ;
+
+   # running ps command
+   @psOutput = `$command` ;
+   foreach my $line ( @psOutput )
+   {
+      if ( $line =~ /$pattern/ )
+      {
+         $rc = 1 ;
+      }
+   }
+
+   if ( $rc )
+   {
+      $rc = kill( 'INT', $pid ) ;
+      die "cannot kill $pid\n" unless ( $rc == 1 ) ;
+   }
+
+   cleanup:
+   return $rc ;
+}
+
+##
+# Function: Check whether the given host is local or remote
+#           by comparing its ip address with local host's ip address
+#
+# Input:    $host: Given host name
+# Output:   $g_isLocalHost: 0 means given host is not local
+#                           1 means given host is local
+#
+# Return:   0 Function succeeded.
+#           1 Function failed or other return code from command host
+##
+sub isLocalHost
+{
+   my $givenHost = shift ;
+   my @cmdOutput = () ;
+   my $command1 = "" ;
+   my $command2 = "" ;
+   my $cmdOutput1 = "" ;
+   my $cmdOutput2 = "" ;
+   my $cmdRC = 0 ;
+   my $ipAdd1 = "" ;
+   my $ipAdd2 = "" ;
+
+   if( $givenHost eq "" )
+   {
+      print "Host is not given\n" ;
+      plog( "Host is not given\n" ) ;
+      $cmdRC = 1 ;
+      goto clearup ;
+   }
+
+   if( $localHostname eq "" )
+   {
+      print "\$localHostname is not defined\n" ;
+      plog( "\$localHostname is not defined\n" ) ;
+      $cmdRC = 1 ;
+      goto clearup ;
+   }
+
+   if( $givenHost eq $localHostname )
+   {
+      $g_isLocalHost = 1 ;
+      goto clearup ;
+   }
+
+   # Get the ip iddresses of given host and local host
+   my $os = `uname` ;
+   chomp ( $os ) ;
+   if ( "SunOS" eq $os )
+   {
+      $command1 = "/usr/sbin/host $givenHost 2> /dev/null" ;
+      $command2 = "/usr/sbin/host $localHostname 2> /dev/null" ;
+   }
+   else
+   {
+      $command1 = "host $givenHost 2> /dev/null" ;
+      $command2 = "host $localHostname 2> /dev/null" ;
+   }
+   plog( "Running \"$command1\"...\n" ) ;
+   $cmdOutput1 = `$command1` ;
+   $cmdRC = $? ;
+   if( 0 != $cmdRC )
+   {
+      plog( "\"$command1\" failed with error message: " .
+            "\"$cmdOutput1\"\n" ) ;
+
+      goto clearup ;
+   }
+
+   plog( "Running \"$command2\"...\n" ) ;
+   $cmdOutput2 = `$command2` ;
+   $cmdRC = $? ;
+   if( 0 != $cmdRC )
+   {
+      plog( "\"$command2\" failed with error message: " .
+            "\"$cmdOutput2\"\n" ) ;
+
+      goto clearup ;
+   }
+
+   # E.g. host myhost
+   # myhost.domain1.com has address 9.27.62.58
+   # Compare their IP address to see if they are the same host
+   $cmdOutput1 =~ /(\d+\.\d+\.\d+\.\d+)/ ;
+   $ipAdd1 = $1 ;
+   $cmdOutput2 =~ /(\d+\.\d+\.\d+\.\d+)/ ;
+   $ipAdd2 = $1 ;
+   if( $ipAdd1 eq $ipAdd2 )
+   {
+      # Two hosts are the same
+      plog( "\"$givenHost\" with IP \"$ipAdd1\" and " .
+            "\"$localHostname\" with IP \"$ipAdd2\" " .
+            "are the same host\n" ) ;
+
+      $g_isLocalHost = 1 ;
+   }
+   else
+   {
+      # Two different hosts
+      plog( "\"$givenHost\" with IP \"$ipAdd1\" and " .
+            "\"$localHostname\" with IP \"$ipAdd2\" " .
+            "are two different hosts\n" ) ;
+
+      $g_isLocalHost = 0 ;
+   }
+
+clearup:
+   return $cmdRC ;
+}
+
+##
+# Function: Print out the usage for the help option
+#
+# Input:    None
+#
+# Return:   None
+##
+sub printHelp()
+{
+    print "NAME\n\tdb2_hang_analyze - detects possible application hang in DB2\n" ;
+    print "\nSYNOPSIS\n\t\tdb2_hang_analyze [-h]\n\t\tdb2_hang_analyze [-list]\n\t" ;
+    print "\tdb2_hang_analyze -db DBNAME [-member MEMBERNUMBER] [-timerlimit SECONDS]" ;
+    print "\n\t\t[-sleeptime SECONDS] [-retrylimit ATTEMPTS] [-path PATH]\n\t" ;
+    print "\t[-cputhreshold PERCENTAGE] [-exec PATH] [-log] [-sql]\n" ;
+    print "\nDESCRIPTION\n\t" ;
+    print "The db2_hang_analyze script is used to detect possible application\n\t" ;
+    print "hanging in DB2. It runs in a loop until a hang is detected, upon which\n\t" ;
+    print "the list of possible applications hanging is dumped into report file.\n\n" ;
+    print "REQUIRED\n\t -db DBNAME\n\n\t\t" ;
+    print "Specifies the database for which to detect hangs.\n\n" ;
+    print "OPTIONAL\n\t" ;
+    print "-member MEMBERNUMBER\n\n\t\t" ;
+    print "The member partition number of the database. This option is ignored\n\t\t" ;
+    print "if the instance is configured as serial mode. Default: If defined,\n\t\t" ;
+    print "the value of environment variable DB2NODE, else use the db2pd\n\t\t" ;
+    print "default\n\n\t" ;
+    print "-timerlimit SECONDS\n\n\t\t" ;
+    print "Time limit an application can be idle (no change in the counters)\n\t\t" ;
+    print "Default: 300 (seconds)\n\n\t" ;
+    print "-sleeptime SECONDS\n\n\t\t" ;
+    print "The sleeptime between each iteration of hang detect. Default: 60\n\t\t" ;
+    print "(seconds)\n\n\t" ;
+    print "-retrylimit ATTEMPTS\n\n\t\t" ;
+    print "Retry limit for any db2pd timeout or failures. Default: 3\n\n\t" ;
+    print "-path PATH\n\n\t\t" ;
+    print "Path where the report file and logfile will be stored. Default:\n\t\t" ;
+    print "DIAGPATH\n\n\t" ;
+    print "-cputhreshold PERCENTAGE\n\n\t\t" ;
+    print "Set the threshold of the percentage change in the application CPU\n\t\t" ;
+    print "time. If an application exceeds such threshold, then it is flagged\n\t\t" ;
+    print "as active. Default: 0.1 (= 0.1%)\n\n\t" ;
+    print "-exec PATH\n\n\t\t" ;
+    print "Specify the path of a script that will be ran after a hang is\n\t\t" ;
+    print "detected. The output of the script is redirected to the *.exec file.\n\t\t" ;
+    print "Default: Off\n\n\t" ;
+    print "-log\n\n\t\t" ;
+    print "Print notifications, warnings, and errors to the logfile. Default:\n\t\t" ;
+    print "Off\n\n\t\t" ;
+    print "-sql\n\n\t\t" ;
+    print "If data exists, print the current and last SQL statement executed by\n\t\t" ;
+    print "an application. Default: Off\n\n\t" ;
+    print "-list\n\n\t\t" ;
+    print "Generate the list of db2_hang_analyze instances running and allow\n\t\t" ;
+    print "user to specify an instance to kill.\n\n\t" ;
+    print "-h\n\n\t\t" ;
+    print "Display this help screen.\n\n" ;
+    print "DEPENDENCIES\n\t" ;
+    print "Perl v5.6.0+\n\n" ;
+    print "NOTE\n\t" ;
+    print "Applications in the Lock-Waiting state are not considered by this script\n\n" ;
+
+}
+__END__
+
+#------------------------------------------------------------------------------
+# POD Format Documentation.  Read "perldoc perlpod" or see the lclient
+# command for an example.
+
+=head1 NAME
+
+db2_hang_analyze - detects possible application hang in DB2
+
+=head1 SYNOPSIS
+
+   db2_hang_analyze [-h]
+   db2_hang_analyze [-list]
+   db2_hang_analyze -db DBNAME [-member MEMBERNUMBER] [-timerlimit SECONDS]
+                    [-sleeptime SECONDS] [-retrylimit ATTEMPTS] [-path PATH]
+                    [-cputhreshold PERCENTAGE] [-exec PATH] [-log] [-sql]
+
+=head1 DESCRIPTION
+
+The db2_hang_analyze script is used to detect possible application hanging in
+DB2. It runs in a loop until a hang is detected, upon which the list of
+possible applications hanging is dumped into report file.
+
+=head1 REQUIRED
+
+=item -db DBNAME
+
+=over
+
+Specifies the database for which to detect hangs.
+
+=back
+
+=head1 OPTIONAL
+
+=item -member MEMBERNUMBER
+
+=over
+
+The member partition number of the database. This option is ignored
+if the instance is configured as serial mode.
+Default: If defined, the value of environment variable DB2NODE,
+         else use the db2pd default
+
+=back
+
+=item -timerlimit SECONDS
+
+=over
+
+Time limit an application can be idle (no change in the counters)
+Default: 300 (seconds)
+
+=back
+
+=item -sleeptime SECONDS
+
+=over
+
+The sleeptime between each iteration of hang detect.
+Default: 60 (seconds)
+
+=back
+
+=item -retrylimit ATTEMPTS 
+
+=over
+
+Retry limit for any db2pd timeout or failures.
+Default: 3
+
+=back
+
+=item -path PATH
+
+=over
+
+Path where the report file and logfile will be stored.
+Default: DIAGPATH
+
+=back
+
+=item -cputhreshold PERCENTAGE
+
+=over
+
+Set the threshold of the percentage change in the application
+CPU time. If an application exceeds such threshold, then it is
+flagged as active.
+Default: 0.1 (= 0.1%)
+
+=back
+
+=item -exec PATH
+
+=over
+
+Specify the path of a script that will be ran after a hang is
+detected. The output of the script is redirected to the *.exec file.
+Default: Off
+
+=back
+
+=item -log
+
+=over
+
+Print notifications, warnings, and errors to the logfile.
+Default: Off
+
+=back
+
+=item -sql
+
+=over
+
+If data exists, print the current and last SQL statement executed
+by an application.
+Default: Off
+
+=back
+
+=item -list
+
+=over
+
+Generate the list of db2_hang_analyze instances running and allow user to specify
+an instance to kill.
+
+=back
+
+=item -h
+
+=over
+
+Display this help screen.
+
+=back
+
+=head1 DEPENDENCIES
+
+=item Perl v5.6.0+
+
+=over
+
+=back
+
+=head1 NOTE 
+
+=item Applications in the Lock-Waiting state are not considered by this script
+
+=over
+
+=back
+
+
+=cut
+
+#------------------------------------------------------------------------------

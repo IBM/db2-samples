@@ -1,0 +1,330 @@
+/****************************************************************************
+** (c) Copyright IBM Corp. 2007 All rights reserved.
+** 
+** The following sample of source code ("Sample") is owned by International 
+** Business Machines Corporation or one of its subsidiaries ("IBM") and is 
+** copyrighted and licensed, not sold. You may use, copy, modify, and 
+** distribute the Sample in any form without payment to IBM, for the purpose of 
+** assisting you in the development of your applications.
+** 
+** The Sample code is provided to you on an "AS IS" basis, without warranty of 
+** any kind. IBM HEREBY EXPRESSLY DISCLAIMS ALL WARRANTIES, EITHER EXPRESS OR 
+** IMPLIED, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED WARRANTIES OF 
+** MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE. Some jurisdictions do 
+** not allow for the exclusion or limitation of implied warranties, so the above 
+** limitations or exclusions may not apply to you. IBM shall not be liable for 
+** any damages you suffer as a result of using, copying, modifying or 
+** distributing the Sample, even if IBM has been advised of the possibility of 
+** such damages.
+*****************************************************************************
+**
+** SOURCE FILE NAME: flwor.sqc
+**
+** SAMPLE:  How to use XQuery FLWOR expression 
+**
+** SQL/XML FUNCTIONS USED
+**                xmlcolumn
+**                xmlquery
+**
+** XQuery functions used
+**                data
+**                string
+**
+**
+** OUTPUT FILE: flwor.out (available in the online documentation)
+*****************************************************************************
+**
+** For more information about the command line processor (CLP) scripts,
+** see the README file.
+**
+** For information on using XQUERY statements, see the XQUERY Reference.
+**
+** For the latest information on programming, building, and running DB2
+** applications, visit the DB2 application development website:
+**    http://www.software.ibm.com/data/db2/udb/ad
+*****************************************************************************/
+
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+#include <sqlenv.h>
+#include <sqlcodes.h>
+#include <sqlutil.h>
+#include "utilemb.h"
+
+EXEC SQL BEGIN DECLARE SECTION;
+  char stmt[16384];
+  SQL TYPE IS XML AS BLOB( 10K ) xmlblob;
+  sqlint32 cid;
+  char country[10];
+  float price;
+EXEC SQL END DECLARE SECTION;
+
+/* The orderCustDetails method returns customer information in alphabetical order by customer name */
+int OrderCustDetails(void);
+
+/* The conditionalCustDetails1 returns information for customers whose customer ID is greater than
+   the cid value passed as an argument */
+int conditionalCustDetails1(sqlint32 cid);
+
+/* The conditionalCustDetails2 method returns information for customers whose customer ID is greater than
+   the cid value passed to the function and who dont live in the country passed as an argument */
+int conditionalCustDetails2(int cid, char *country);
+
+/* The maxpriceproduct function returns the product details with maximun price */
+int maxpriceproduct(void);
+
+/* The basicproduct function returns the product with basic attribute value true
+   if the price is less then price parameter otherwiese false */
+int basicproduct(float price);
+
+int main(int argc, char *argv[])
+{
+  int rc = 0;
+  char dbAlias[SQL_ALIAS_SZ + 1];
+  char user[USERID_SZ + 1];
+  char pswd[PSWD_SZ + 1];
+
+  printf("THIS SAMPLE WILL DEMONSTRATE");
+  printf("1. FLWOR expression for XQuery");
+  printf("2. How to use parameter markers in XQuery");
+ 
+  /* check the command line arguments */
+  rc = CmdLineArgsCheck1(argc, argv, dbAlias, user, pswd);
+  if (rc != 0)
+  {
+    return rc;
+  }
+   /* connect to database */
+  rc = DbConn(dbAlias, user, pswd);
+  if (rc != 0)
+  {
+    return rc;
+  }
+  
+  /* The follwing functions will use the dynamic sql statements to  declare cursor 
+     for the xquery */ 
+  rc=OrderCustDetails();
+  rc=maxpriceproduct(); 
+  
+  /* These functions will make use of parameter marker to pass the value to XQuery 
+     passing by clause of xmlquery function will be used to pass the value */ 
+  cid=1002;
+  rc=conditionalCustDetails1(cid);
+  strcpy(country,"US");
+  cid=1002;
+  rc=conditionalCustDetails2(cid,country);
+  price=10;
+  basicproduct(price);
+  return 0;
+} /* main */
+
+int OrderCustDetails()
+{
+  int rc = 0;
+  struct sqlca sqlca;
+  printf("\n*******************************************************************************");
+  printf("\nUSE THE SQL STATEMENTS:\n");
+  printf("  DECLARE CURSOR\n");
+  printf("  OPEN\n");
+  printf("  FETCH\n");
+  printf("  CLOSE\n");
+  printf("TO SELECT CUSTOMER DETAILS IN ALPHABETICAL ORDER USING ORDER BY CLAUSE\n");
+  printf("OF FLWOR EXPRESSION");
+  sprintf( stmt, "XQUERY for $custinfo in db2-fn:xmlcolumn('CUSTOMER.INFO')"
+                 "/customerinfo[addr/@country=\"Canada\"]"
+                 " order by $custinfo/name,fn:number($custinfo/@Cid)"
+                 " return $custinfo");    
+
+  printf("\n%s",stmt);
+  EXEC SQL PREPARE s1 FROM :stmt;
+  EMB_SQL_CHECK("prepare -- statement");
+  EXEC SQL DECLARE c1 CURSOR FOR s1;
+  EMB_SQL_CHECK("declare -- cusrsor");
+  EXEC SQL OPEN c1;
+  EMB_SQL_CHECK("cursor -- open");
+  EXEC SQL FETCH c1 INTO :xmlblob;
+  EMB_SQL_CHECK("cursor -- fetch");
+  while( sqlca.sqlcode == SQL_RC_OK )
+  {
+    xmlblob.data[xmlblob.length]='\0';
+    printf("\n\n\n%s",xmlblob.data);
+    EXEC SQL FETCH c1 INTO :xmlblob;
+    EMB_SQL_CHECK("cursor -- fetch");
+  }
+  EXEC SQL CLOSE c1;
+  EXEC SQL COMMIT;
+  EMB_SQL_CHECK("cursor -- close");
+  return 0;
+} /* OrderCustDetails */ 
+
+int conditionalCustDetails1(sqlint32 cid)
+{
+  int rc = 0;
+  struct sqlca sqlca;
+  printf("\n*******************************************************************************");
+  printf("\nUSE THE SQL STATEMENTS:\n");
+  printf("  DECLARE CURSOR\n");
+  printf("  OPEN\n");
+  printf("  FETCH\n");
+  printf("  CLOSE\n");
+  printf("TO SELECT CUSTOMER DETAILS BASED ON A CONDITION\n");
+  printf(" CUSTOMER ID GREATER THEN A %d \n", cid);
+  printf("USING WHERE CLAUSE OF FLWOR EXPRESSION");
+  printf("\n VALUE=%d",cid);
+  sprintf( stmt, "SELECT XMLQUERY('for $customer in $cust/customerinfo"
+                  " where ($customer/@Cid > $id)"
+                  " order by $customer/@Cid "
+                  " return <customer id=\"{$customer/@Cid}\">"
+                  " {$customer/name} {$customer/addr} </customer>'"
+                  " passing by ref customer.info as \"cust\", cast(? as integer) as \"id\")"
+                  " FROM customer ORDER BY cid");
+
+  printf("\n%s",stmt);
+  EXEC SQL PREPARE s2 FROM :stmt;
+  EMB_SQL_CHECK("prepare -- statement");
+  EXEC SQL DECLARE c2 CURSOR FOR s2;
+  EMB_SQL_CHECK("declare -- cusrsor");
+  EXEC SQL OPEN c2 USING :cid;
+  EMB_SQL_CHECK("cursor -- open");
+  EXEC SQL FETCH c2 INTO :xmlblob;
+  EMB_SQL_CHECK("cursor -- fetch");
+  while( sqlca.sqlcode == SQL_RC_OK )
+  {
+    xmlblob.data[xmlblob.length]='\0';
+    printf("\n\n\n%s",xmlblob.data);
+    EXEC SQL FETCH c2 INTO :xmlblob;
+    EMB_SQL_CHECK("cursor -- fetch");
+  }
+  EXEC SQL CLOSE c2;
+  EXEC SQL COMMIT;
+  EMB_SQL_CHECK("cursor -- close");
+  return 0;
+} /* conditionalCustDetails1 */
+
+int conditionalCustDetails2(int cid, char* country)
+{
+  int rc = 0;
+  struct sqlca sqlca;
+  printf("\n*******************************************************************************");
+  printf("\nUSE THE SQL STATEMENTS:\n");
+  printf("  DECLARE CURSOR\n");
+  printf("  OPEN\n");
+  printf("  FETCH\n");
+  printf("  CLOSE\n");
+  printf("TO SELECT CUSTOMER DETAILS BASED ON CONDITIONS\n");
+  printf(" CUSTOMER ID GREATER THEN %d", cid);
+  printf("\nAND COUNTRY NOT EQUAL TO %s\n", country);
+  printf("USING WHERE CLAUSE OF FLWOR EXPRESSION");
+  printf("\n ID VALUE=%d COUNTRY VALUE=%s",cid,country);
+  sprintf( stmt, "SELECT XMLQUERY('"
+                  "for $customer in db2-fn:xmlcolumn(\"CUSTOMER.INFO\")/customerinfo"
+                  " where ($customer/@Cid > $id) and ($customer/addr/@country !=$c)"
+                  " order by $customer/@Cid"
+                  " return <customer id=\"{fn:string($customer/@Cid)}\">"
+                  " {$customer/name}" 
+                  "<address>{$customer/addr/street}"
+                  " {$customer/addr/city} </address></customer>'"
+                  " passing by ref cast(? as integer) as \"id\","
+                  "  cast(? as varchar(10)) as \"c\")"
+                  " FROM  SYSIBM.SYSDUMMY1");
+
+  printf("\n%s",stmt);
+  EXEC SQL PREPARE s3 FROM :stmt;
+  EMB_SQL_CHECK("prepare -- statement");
+  EXEC SQL DECLARE c3 CURSOR FOR s3;
+  EMB_SQL_CHECK("declare -- cusrsor");
+  EXEC SQL OPEN c3 USING :cid, :country;
+  EMB_SQL_CHECK("cursor -- open");
+  EXEC SQL FETCH c3 INTO :xmlblob;
+  EMB_SQL_CHECK("cursor -- fetch");
+
+  while( sqlca.sqlcode == SQL_RC_OK )
+  {
+    xmlblob.data[xmlblob.length]='\0';
+    printf("\n\n\n%s",xmlblob.data);
+    EXEC SQL FETCH c3 INTO :xmlblob;
+    EMB_SQL_CHECK("cursor -- fetch");
+  }
+  EXEC SQL CLOSE c3;
+  EXEC SQL COMMIT;
+  EMB_SQL_CHECK("cursor -- close");
+  return 0;
+} /* conditionalCustDetails2 */
+
+int maxpriceproduct()
+{
+  int rc = 0;
+  struct sqlca sqlca;
+  printf("\n*******************************************************************************");
+  printf("\nUSE THE SQL STATEMENTS:\n");
+  printf("  DECLARE CURSOR\n");
+  printf("  OPEN\n");
+  printf("  FETCH\n");
+  printf("  CLOSE\n");
+  printf("TO RETURN THE PRODUCT WITH MAXIMUM PRICE USING ORDER BY CLAUSE\n");
+  printf("OF FLWOR EXPRESSION");
+  sprintf( stmt, "XQUERY "
+                 " let $prod := for $product in db2-fn:xmlcolumn('PRODUCT.DESCRIPTION')/product/description"
+                 " order by fn:number($product/price) descending return $product"
+                 " return <product> {$prod[1]/name} </product>");
+
+  printf("\n %s", stmt);
+  EXEC SQL PREPARE s4 FROM :stmt;
+  EMB_SQL_CHECK("prepare -- statement");
+  EXEC SQL DECLARE c4 CURSOR FOR s4;
+  EMB_SQL_CHECK("declare -- cusrsor");
+  EXEC SQL OPEN c4;
+  EMB_SQL_CHECK("cursor -- open");
+  EXEC SQL FETCH c4 INTO :xmlblob;
+  EMB_SQL_CHECK("cursor -- fetch");
+  xmlblob.data[xmlblob.length]='\0';
+  printf("\n\n\n%s",xmlblob.data);
+
+  EXEC SQL CLOSE c4;
+  EXEC SQL COMMIT;
+  EMB_SQL_CHECK("cursor -- close");
+  return 0;
+} /* maxpriceproduct */
+
+int basicproduct(float price)
+{
+  int rc = 0;
+  struct sqlca sqlca;
+  printf("\n*******************************************************************************");
+  printf("\nUSE THE SQL STATEMENTS:\n");
+  printf("  DECLARE CURSOR\n");
+  printf("  OPEN\n");
+  printf("  FETCH\n");
+  printf("  CLOSE\n");
+  printf("TO RETURN THE  PRODUCT WITH BASIC ATTRIBUTE VALUE TRUE IF THE PRICE IS LESS THEN %f\n", price);
+  sprintf( stmt, "SELECT XMLQUERY('"
+                 "for $prod in db2-fn:xmlcolumn(\"PRODUCT.DESCRIPTION\")/product/description"
+                 " order by $prod/name "
+                 " return ( if ($prod/price < $price)"
+                 " then <product basic = \"true\">{fn:data($prod/name)}</product>"
+                 " else <product basic = \"false\">{fn:data($prod/name)}</product>)'"
+                 " passing by ref cast(? as float) as \"price\")"
+                 " FROM SYSIBM.SYSDUMMY1");
+      
+  printf("\n%s",stmt);
+  EXEC SQL PREPARE s5 FROM :stmt;
+  EMB_SQL_CHECK("prepare -- statement");
+  EXEC SQL DECLARE c5 CURSOR FOR s5;
+  EMB_SQL_CHECK("declare -- cusrsor");
+  EXEC SQL OPEN c5 USING :price;
+  EMB_SQL_CHECK("cursor -- open");
+  EXEC SQL FETCH c5 INTO :xmlblob;
+  EMB_SQL_CHECK("cursor -- fetch");
+  while( sqlca.sqlcode == SQL_RC_OK )
+  {
+    xmlblob.data[xmlblob.length]='\0';
+    printf("\n\n\n%s",xmlblob.data);
+    EXEC SQL FETCH c5 INTO :xmlblob;
+    EMB_SQL_CHECK("cursor -- fetch");
+  }
+  EXEC SQL CLOSE c5;
+  EXEC SQL COMMIT;
+  EMB_SQL_CHECK("cursor -- close");
+  return 0;
+} /* basicproduct */

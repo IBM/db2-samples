@@ -1,0 +1,352 @@
+/****************************************************************************
+** (c) Copyright IBM Corp. 2007 All rights reserved.
+**
+** The following sample of source code ("Sample") is owned by International
+** Business Machines Corporation or one of its subsidiaries ("IBM") and is
+** copyrighted and licensed, not sold. You may use, copy, modify, and
+** distribute the Sample in any form without payment to IBM, for the purpose of
+** assisting you in the development of your applications.
+**
+** The Sample code is provided to you on an "AS IS" basis, without warranty of
+** any kind. IBM HEREBY EXPRESSLY DISCLAIMS ALL WARRANTIES, EITHER EXPRESS OR
+** IMPLIED, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED WARRANTIES OF
+** MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE. Some jurisdictions do
+** not allow for the exclusion or limitation of implied warranties, so the above
+** limitations or exclusions may not apply to you. IBM shall not be liable for
+** any damages you suffer as a result of using, copying, modifying or
+** distributing the Sample, even if IBM has been advised of the possibility of
+** such damages.
+*****************************************************************************
+**
+** SOURCE FILE NAME: dblognoconn.sqC
+**
+** SAMPLE: How to read no database connection read log
+**
+** Archive logging needs to be enabled to read database logs when there is
+** no connection to the database. The database logs are archived and read
+** from the archive location.
+**
+** PREREQUISITES : Update the db cfg parameter to enable archive logging :
+**
+**    db2 UPDATE DB CFG FOR SAMPLE USING LOGARCHMETH1 DISK:<archive log path>
+**         <archive log path> : path with write permission where the
+**                              database logs can be archived
+**    db2 TERMINATE
+**    db2 BACKUP DB SAMPLE
+**
+**    Note : You must be disconnected from the sample database to run this
+**           program. To ensure you are, enter 'db2 CONNECT RESET' on the
+**           command line prior to running the sample.
+**
+** EXECUTION : dblognoconn <db name> <nodename> <username> <pswd>
+**
+** Note : Perform 'db2 RESET DB CFG FOR SAMPLE' after running the sample
+**
+** DB2 APIs USED:
+**         db2CfgGet -- Get db configuration parameters
+**         db2ArchiveLog  -- Archive the active log files
+**         db2ReadLogNoConn -- Read the database logs without a db connection
+**         db2ReadLogNoConnInit -- Initialize reading the database logs
+**                                 without a db connection
+**         db2ReadLogNoConnTerm -- Terminate reading the database logs
+**                                 without a db connection
+**
+** OUTPUT FILE: dblognoconn.out (available in the online documentation)
+*****************************************************************************
+**
+** For more information on the sample programs, see the README file.
+**
+** For information on developing C++ applications, see the Application
+** Development Guide.
+**
+** For information on using SQL statements, see the SQL Reference.
+**
+** For information on DB2 APIs, see the Administrative API Reference.
+**
+** For the latest information on programming, building, and running DB2
+** applications, visit the DB2 application development website:
+**     http://www.software.ibm.com/data/db2/udb/ad
+****************************************************************************/
+#ifdef DB2NT
+#include "utilrecov.cxx"
+#else
+#include "utilrecov.C"
+#endif
+
+class DbLognoconn: public UtilRecov, public UtilLog
+{
+  public:
+    int DbReadLogRecordsNoConn(DbEmb *, Instance *, char *, char *);
+};
+
+int DbLognoconn::DbReadLogRecordsNoConn(DbEmb *db, Instance *inst, char user[], char pswd[])
+{
+  int rc = 0;
+  struct sqlca sqlca = { 0 };
+  char logPath[SQL_PATH_SZ + 1] = { 0 };
+  db2CfgParam cfgParameters[1] = { 0 };
+  db2Cfg cfgStruct = { 0 };
+
+  char nodeName[] = "NODE0000\0";
+  db2Uint32 readLogMemSize = 16 * 4096;
+  char *readLogMemory = NULL;
+  struct db2ArchiveLogStruct archiveLogInput = { 0 };
+  struct db2ReadLogNoConnInitStruct readLogInit = { 0 };
+  struct db2ReadLogNoConnInfoStruct readLogInfo = { 0 };
+  struct db2ReadLogNoConnStruct readLogInput = { 0 };
+  db2LSN startLSN;
+  db2LSN endLSN;
+  char *logBuffer = NULL;
+  db2Uint32 logBufferSize = 0;
+  struct db2ReadLogNoConnTermStruct readLogTerm = { 0 };
+
+  cout << "\n*********************************" << endl;
+  cout << "*** NO DB CONNECTION READ LOG ***" << endl;
+  cout << "*********************************" << endl;
+  cout << "\n-----------------------------------------------------------";
+  cout << "\nUSE THE DB2 APIs:" << endl;
+  cout << " db2ArchiveLog  -- Archive the active log files" << endl;
+  cout << " db2ReadLogNoConnInit -- Initialize reading the database";
+  cout << " logs without a db connection" << endl;
+  cout << " db2ReadLogNoConn -- Read the database logs without a db";
+  cout << " connection" <<  endl;
+  cout << " db2ReadLogNoConnTerm -- Terminate reading the database logs";
+  cout << " without a db connection" <<
+    endl;
+  cout << "TO READ LOG RECORDS FROM THE ARCHIVED LOG DIRECTORY." << endl;
+
+  // Determine the logpath to read log files from
+  cfgParameters[0].flags = 0;
+  cfgParameters[0].token = SQLF_DBTN_LOGARCHMETH1;
+  cfgParameters[0].ptrvalue = new char[SQL_PATH_SZ + 1];
+
+  // Initialize cfgStruct
+  cfgStruct.numItems = 1;
+  cfgStruct.paramArray = cfgParameters;
+  cfgStruct.flags = db2CfgDatabase;
+  cfgStruct.dbname = db->getAlias();
+
+  db2CfgGet(db2Version970, (void *)&cfgStruct, &sqlca);
+  DB2_API_CHECK("log path -- get");
+
+  strcpy(logPath, cfgParameters[0].ptrvalue + 5);
+  strcat(logPath, inst->getNode());
+  strcat(logPath, "/SAMPLE/NODE0000/C0000000/");
+
+  delete [] (cfgParameters[0].ptrvalue);
+
+  // Connect to the database
+  rc = db->Connect();
+  CHECKRC(rc, "db->Connect");
+
+  // Invoke the SQL statements for filling database log
+  cout << "\n  Invoke the following SQL statements:\n"
+    "    ALTER TABLE emp_resume DATA CAPTURE CHANGES;\n"
+    "    COMMIT;\n"
+    "    INSERT INTO emp_resume\n"
+    "      VALUES('000120', 'ascii', 'This is a new resume');\n"
+    "            ('000030', 'ascii', 'This is another new resume');\n"
+    "    COMMIT;\n"
+    "    DELETE FROM emp_resume WHERE empno = '000120';\n"
+    "    DELETE FROM emp_resume WHERE empno = '000030';\n"
+    "    COMMIT;\n"
+    "    DELETE FROM emp_resume WHERE empno = '000140';\n"
+    "    ROLLBACK;\n"
+    "    ALTER TABLE emp_resume DATA CAPTURE NONE;\n" "    COMMIT;" << endl;
+
+  EXEC SQL ALTER TABLE emp_resume DATA CAPTURE CHANGES;
+  EMB_SQL_CHECK("SQL statement 1 -- invoke");
+
+  EXEC SQL COMMIT;
+  EMB_SQL_CHECK("SQL statement 2 -- invoke");
+
+  EXEC SQL INSERT INTO emp_resume
+    VALUES('000120', 'ascii', 'This is a new resume'),
+    ('000030', 'ascii', 'This is another new resume');
+  EMB_SQL_CHECK("SQL statement 3 -- invoke");
+
+  EXEC SQL COMMIT;
+  EMB_SQL_CHECK("SQL statement 4 -- invoke");
+
+  EXEC SQL DELETE FROM emp_resume WHERE empno = '000120';
+  EMB_SQL_CHECK("SQL statement 5 -- invoke");
+
+  EXEC SQL DELETE FROM emp_resume WHERE empno = '000030';
+  EMB_SQL_CHECK("SQL statement 6 -- invoke");
+
+  EXEC SQL COMMIT;
+  EMB_SQL_CHECK("SQL statement 7 -- invoke");
+
+  EXEC SQL DELETE FROM emp_resume WHERE empno = '000140';
+  EMB_SQL_CHECK("SQL statement 8 -- invoke");
+
+  EXEC SQL ROLLBACK;
+  EMB_SQL_CHECK("SQL statement 9 -- invoke");
+
+  EXEC SQL ALTER TABLE emp_resume DATA CAPTURE NONE;
+  EMB_SQL_CHECK("SQL statement 10 -- invoke");
+
+  EXEC SQL COMMIT;
+  EMB_SQL_CHECK("SQL statement 11 -- invoke");
+
+  // disconnect from the database
+  rc = db->Disconnect();
+  CHECKRC(rc, "db->Disconnect");
+
+  // detach from the local or remote instance before reading log information
+  rc = inst->Detach();
+  CHECKRC(rc, "inst->Detach");
+
+  // Invoke the db2ArchiveLog API to archive the active logs
+  archiveLogInput.piDatabaseAlias = db->getAlias();
+  archiveLogInput.piUserName = user;
+  archiveLogInput.piPassword = pswd;
+  archiveLogInput.iAllNodeFlag = (int)NULL;
+  archiveLogInput.iNumNodes = (int)NULL;
+  archiveLogInput.piNodeList = NULL;
+  archiveLogInput.iOptions =(int)NULL;
+
+  rc = db2ArchiveLog(db2Version970, &archiveLogInput, &sqlca);
+  if (sqlca.sqlcode != 0)
+  {
+    DB2_API_CHECK("database archive -- archive logs");
+  }
+
+  // Allocate memory for the API's control blocks and log buffer
+  readLogMemory = new char[readLogMemSize];
+
+  // Invoke the initialization API to set up the control blocks
+  readLogInit.iFilterOption = DB2READLOG_FILTER_ON;
+  readLogInit.piLogFilePath = logPath;
+  readLogInit.piOverflowLogPath = NULL;
+  readLogInit.iRetrieveLogs = DB2READLOG_RETRIEVE_OFF;
+  readLogInit.piDatabaseName = db->getAlias();
+  readLogInit.piDbPartitionName = nodeName;
+  readLogInit.iReadLogMemoryLimit = readLogMemSize;
+  readLogInit.poReadLogMemPtr = &readLogMemory;
+
+  rc = db2ReadLogNoConnInit(db2Version970, &readLogInit, &sqlca);
+  if (sqlca.sqlcode != SQLU_RLOG_LSNS_REUSED)
+  {
+    DB2_API_CHECK("database logs no db conn -- initialization");
+  }
+
+  // Invoke the db2ReadLogNoConn API to query the current log information
+  readLogInput.iCallerAction = DB2READLOG_QUERY;
+  readLogInput.piStartLSN = NULL;
+  readLogInput.piEndLSN = NULL;
+  readLogInput.poLogBuffer = NULL;
+  readLogInput.iLogBufferSize = 0;
+  readLogInput.piReadLogMemPtr = readLogMemory;
+  readLogInput.poReadLogInfo = &readLogInfo;
+
+  rc = db2ReadLogNoConn(db2Version970, &readLogInput, &sqlca);
+  if (sqlca.sqlcode != 0)
+  {
+    DB2_API_CHECK("database logs no db conn -- query");
+  }
+
+  // Read some log records
+  logBufferSize = 64 * 1024;
+  logBuffer = new char[logBufferSize];
+
+  memcpy(&startLSN, &(readLogInfo.nextStartLSN), sizeof(startLSN));
+  endLSN.lsnU64 = 0xffffffffffffffff;
+
+  readLogInput.iCallerAction = DB2READLOG_READ;
+  readLogInput.piStartLSN = &startLSN;
+  readLogInput.piEndLSN = &endLSN;
+  readLogInput.poLogBuffer = logBuffer;
+  readLogInput.iLogBufferSize = logBufferSize;
+  readLogInput.piReadLogMemPtr = readLogMemory;
+  readLogInput.poReadLogInfo = &readLogInfo;
+
+  rc = db2ReadLogNoConn(db2Version970, &readLogInput, &sqlca);
+  if (sqlca.sqlcode != SQLU_RLOG_READ_TO_CURRENT)
+  {
+    DB2_API_CHECK("database logs no db conn -- read");
+  }
+  else
+  {
+    if (readLogInfo.logRecsWritten == 0)
+    {
+      cout << "\n  Database log empty.\n" << endl;
+    }
+  }
+
+  // Display the log records
+  rc = LogBufferDisplay(logBuffer, readLogInfo.logRecsWritten, 0);
+  CHECKRC(rc, "LogBufferDisplay");
+
+  while (sqlca.sqlcode != SQLU_RLOG_READ_TO_CURRENT)
+  {
+    // read the next log sequence
+    memcpy(&startLSN, &(readLogInfo.nextStartLSN), sizeof(startLSN));
+
+    // Extract a log record from the database logs, and
+    // read the next log sequence asynchronously.
+    rc = db2ReadLogNoConn(db2Version970, &readLogInput, &sqlca);
+    if (sqlca.sqlcode != SQLU_RLOG_READ_TO_CURRENT)
+    {
+      DB2_API_CHECK("database logs no db conn -- read");
+    }
+
+    // display log buffer
+    rc = LogBufferDisplay(logBuffer, readLogInfo.logRecsWritten, 0);
+    CHECKRC(rc, "LogBufferDisplay");
+  }
+
+  cout << "\nRead to end of logs.\n\n" << endl;
+  delete [] logBuffer;
+
+  // Invoke the db2ReadLogNoConnTerm API to terminate reading the logs
+  readLogTerm.poReadLogMemPtr = &readLogMemory;
+
+  rc = db2ReadLogNoConnTerm(db2Version970, &readLogTerm, &sqlca);
+  if (sqlca.sqlcode != 0)
+  {
+    DB2_API_CHECK("database logs no db conn -- terminate");
+  }
+
+  return 0;
+} // DbLognoconn::DbReadLogRecordsNoConn
+
+int main(int argc, char *argv[])
+{
+  int rc = 0;
+  CmdLineArgs check;
+  char serverWorkingPath[SQL_PATH_SZ + 1] = { 0 };
+  sqluint16 savedLogRetainValue = 0;
+  Instance inst;
+  DbEmb db;
+  char user[USERID_SZ + 1] = {0};
+  char pswd[PSWD_SZ + 1] = {0};
+  strcpy(user, argv[3]);
+  strcpy(pswd, argv[4]);
+  DbLognoconn dblognoconn;
+
+  // check the command line arguments
+  rc = check.CmdLineArgsCheck3(argc, argv, db, inst);
+  CHECKRC(rc, "check.CmdLineArgsCheck3");
+
+  cout << "\nTHIS SAMPLE SHOWS HOW TO READ DATABASE LOGS ASYNCHRONOUSLY" << endl;
+  cout << "WITH NO DATABASE CONNECTION." << endl;
+
+  // attach to a local or remote instance
+  rc = inst.Attach();
+  CHECKRC(rc, "inst.Attach");
+
+  // get a server working path
+  rc = dblognoconn.ServerWorkingPathGet(&db, serverWorkingPath);
+  CHECKRC(rc, "dblognoconn.ServerWorkingPathGet");
+
+  // Call the function to prune the history files
+  rc = dblognoconn.DbRecoveryHistoryFilePrune(&db);
+  CHECKRC(rc, "restore.DbRecoveryHistoryFilePrune");
+
+  // Call the routine to read the log records for no db connection.
+  rc = dblognoconn.DbReadLogRecordsNoConn(&db, &inst, user, pswd);
+  CHECKRC(rc, "dblognoconn.DbReadLogRecordsNoConn");
+
+  return 0;
+} // main

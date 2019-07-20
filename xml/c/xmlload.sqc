@@ -1,0 +1,394 @@
+/* *************************************************************************
+**   (c) Copyright IBM Corp. 2007 All rights reserved.
+**   
+**   The following sample of source code ("Sample") is owned by International 
+**   Business Machines Corporation or one of its subsidiaries ("IBM") and is 
+**   copyrighted and licensed, not sold. You may use, copy, modify, and 
+**   distribute the Sample in any form without payment to IBM, for the purpose of 
+**   assisting you in the development of your applications.
+**   
+**   The Sample code is provided to you on an "AS IS" basis, without warranty of 
+**   any kind. IBM HEREBY EXPRESSLY DISCLAIMS ALL WARRANTIES, EITHER EXPRESS OR 
+**   IMPLIED, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED WARRANTIES OF 
+**   MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE. Some jurisdictions do 
+**   not allow for the exclusion or limitation of implied warranties, so the above 
+**   limitations or exclusions may not apply to you. IBM shall not be liable for 
+**   any damages you suffer as a result of using, copying, modifying or 
+**   distributing the Sample, even if IBM has been advised of the possibility of 
+**   such damages.
+** *************************************************************************
+**                                                                          
+**  SAMPLE FILE NAME: xmlload.sqc                                          
+**                                                                          
+**  PURPOSE:  To demonstrate how to load XML content into a table using 
+**            different options of LOAD command.
+**                                                                          
+**  USAGE SCENARIO: A store manager wants to load bulk of purchase order
+**                  documents into an XML column of a table.
+**                                                                          
+**  PREREQUISITE: 
+**        The data file and XML documents must exist in the DB2 install path.
+**        Copy loaddata2.del from directory 
+**        <install_path>/sqllib/samples/xml/data in UNIX and
+**        <install_path>\sqllib\samples\xml\data in Windows to the install path. 
+**        Create a new directory "xmldatadir" in the install path and copy 
+**        loadfile1.xml and loadfile2.xml from directory
+**        <install_path>/sqllib/samples/xml/data in UNIX and
+**        <install_path>\sqllib\samples\xml\data in Windows to the newly created
+**        xmldatadir directory.                     
+**                                                                          
+**  EXECUTION:    bldapp xmlload   (Build the sample)
+**                xmlload          (Run the sample)  
+**                                                                          
+**  INPUTS:       NONE
+**                                                                          
+**  OUTPUTS:      Successful loading of XML purchase orders.                                             
+**                                                                          
+**  OUTPUT FILE:  xmlload.out (available in the online documentation)      
+**                                     
+** SQL STATEMENTS USED:
+**         PREPARE
+**         DECLARE CURSOR
+**         OPEN
+**         FETCH
+**         CLOSE
+**         CREATE TABLE
+**         DROP
+**
+** DB2 APIs USED:
+**         sqluvqdp -- Quiesce Table Spaces for Table
+**         db2Load -- Load                                        
+**                                                                          
+*****************************************************************************
+**
+** For more information on the sample programs, see the README file.
+**
+** For information on developing C applications, see the Application
+** Development Guide.
+**
+** For information on using SQL statements, see the SQL Reference.
+**
+** For information on DB2 APIs, see the Administrative API Reference.
+**
+** For the latest information on programming, building, and running DB2
+** applications, visit the DB2 application development website:
+**     http://www.software.ibm.com/data/db2/udb/ad
+****************************************************************************
+**
+**  SAMPLE DESCRIPTION                                                      
+**
+** *************************************************************************
+**  1. LOAD data into the table using XMLVALIDATE USING XDS clause. 
+** *************************************************************************/
+
+/* **************************************************************************
+**    SETUP                                                                 
+** **************************************************************************/
+
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+#include <sqlenv.h>
+#include <sqlutil.h>
+#include <db2ApiDf.h>
+#include "utilemb.h"
+
+#include <limits.h>
+#include "sql.h"
+#include "sqlcodes.h"
+#include "sqlstate.h"
+
+
+int TbXMLLoad(char *);
+int LoadedDataDisplay(void);
+
+EXEC SQL BEGIN DECLARE SECTION;
+  char strStmt[256];
+  short poid;
+  SQL TYPE IS XML AS CLOB(50K) porder;
+EXEC SQL END DECLARE SECTION;
+
+int main(int argc, char *argv[])
+{
+  int rc = 0;
+  char dbAlias[SQL_ALIAS_SZ + 1];
+  char user[USERID_SZ + 1];
+  char pswd[PSWD_SZ + 1];
+  char loadDataFileName[256];
+
+  /* check the command line arguments */
+  rc = CmdLineArgsCheck1(argc, argv, dbAlias, user, pswd);
+  if (rc != 0)
+  {
+    return rc;
+  }
+
+  printf("\nTHIS SAMPLE SHOWS HOW TO LOAD XML DATA USING LOAD UTILITY.\n");
+
+  /* connect to database */
+  rc = DbConn(dbAlias, user, pswd);
+  if (rc != 0)
+  {
+    return rc;
+  }
+  
+  #if(defined(DB2NT))
+  sprintf(loadDataFileName, "%s%sloaddata2.del", getenv("DB2PATH"), PATH_SEP);
+  #else /* UNIX */
+  sprintf(loadDataFileName, "%s%sloaddata2.del", getenv("HOME"), PATH_SEP);
+  #endif
+
+  rc = TbXMLLoad(loadDataFileName);
+ 
+  /* disconnect from the database */
+  rc = DbDisconn(dbAlias);
+  if (rc != 0)
+  {
+    return rc;
+  }
+
+  return 0;
+} /* main */
+
+
+int LoadedDataDisplay(void)
+{
+  struct sqlca sqlca = {0};
+
+  printf("\n  SELECT * FROM POtable\n");
+  printf("    POID      PORDER      \n");
+  printf("    -------- --------------\n");
+
+  strcpy(strStmt, "SELECT * FROM POtable");
+
+  EXEC SQL PREPARE stmt FROM :strStmt;
+  EMB_SQL_CHECK("statement -- prepare");
+
+  EXEC SQL DECLARE c0 CURSOR FOR stmt;
+
+  EXEC SQL OPEN c0;
+  EMB_SQL_CHECK("cursor -- open");
+
+  EXEC SQL FETCH c0 INTO :poid, :porder;
+  EMB_SQL_CHECK("cursor -- fetch");
+
+  while (sqlca.sqlcode != 100)
+  {
+    printf("    %8d %-s\n", poid, porder.data);
+
+    EXEC SQL FETCH c0 INTO :poid, :porder;
+    EMB_SQL_CHECK("cursor -- fetch");
+  }
+
+  EXEC SQL CLOSE c0;
+
+  return 0;
+} /* LoadedDataDisplay */
+
+int TbXMLLoad(char *dataFileName)
+{
+   int rc = 0;
+   int totalLength = 0;
+   struct sqlca sqlca;
+   struct sqldcol dataDescriptor = {0};
+   char actionString[256];
+   struct sqlchar *pAction = {0};
+   struct sqllob *pAction1 = {0};
+   struct sqllob *piLongActionString = {0};
+   char msgFileName[128];
+   struct db2LoadStruct paramStruct = {0};
+   struct db2LoadIn inputInfoStruct = {0};
+   struct db2LoadOut outputInfoStruct = {0};
+   int commitcount = 10;
+   int whiteSpace = 1;
+   unsigned short xmlParse = whiteSpace;
+   struct sqlchar *fileTypeMod = NULL;
+   struct sqlu_media_list mediaList = {0};
+   struct sqlu_media_entry *pPathList;
+   union sqlu_media_list_targets listTargetsXmlPath;
+   struct sqlu_media_list mediaListXmlPath = {0};
+   struct db2DMUXmlValidate xmlValidate = {0};
+   struct db2DMUXmlValidateXds xdsArgs = {0};
+   struct db2Char defaultSchema = {0}, ignoreSchemas = {0};
+   struct db2DMUXmlMapSchema mapSchemas = {0};
+   struct db2Char mapFromSchema = {0};
+   struct db2Char mapToSchema = {0};
+   char temp[20];
+ 
+
+  sprintf(strStmt," CREATE TABLE POtable(POid INT NOT NULL PRIMARY KEY,porder XML)");
+  printf("\n%s\n", strStmt);
+
+  EXEC SQL EXECUTE IMMEDIATE :strStmt;
+   EMB_SQL_CHECK("POtable -- create");
+   
+   printf("\n-----------------------------------------------------------");
+   printf("\nUSE THE DB2 API:\n");
+   printf("  sqluvqdp -- Quiesce Table Spaces for Table\n");
+   printf("  db2Load -- Load\n");
+   printf("TO LOAD XML DATA INTO A TABLE.\n");  
+
+   /* quiesce table spaces for table */
+   printf("\n  Quiesce the table spaces for 'POtable'.\n");
+
+   EXEC SQL COMMIT;
+   EMB_SQL_CHECK("transaction -- commit");
+   /* quiesce table spaces for table */
+   sqluvqdp("POtable", SQLU_QUIESCEMODE_RESET_OWNED, NULL, &sqlca);
+   DB2_API_CHECK("tablespaces for table -- quiesce");
+
+   /* load table */
+   dataDescriptor.dcolmeth = SQL_METH_D;
+   strcpy(actionString, "INSERT INTO POtable");
+   pAction = (struct sqlchar *)malloc(sizeof(short) + sizeof(actionString) + 1);
+   pAction->length = strlen(actionString);
+   strcpy(pAction->data, actionString);
+   strcpy(msgFileName, "tbload.MSG");
+
+   /* Setup the input information structure */
+   inputInfoStruct.piUseTablespace     = NULL;
+   inputInfoStruct.iSavecount          =  0; /* consistency points
+                                               as infrequently as possible */
+   inputInfoStruct.iRestartcount       =  0; /* start at row 1 */
+   inputInfoStruct.iRowcount           =  0; /* load all rows */
+   inputInfoStruct.iWarningcount       =  0; /* don't stop for warnings */
+   inputInfoStruct.iDataBufferSize     =  0; /* default data buffer size */
+   inputInfoStruct.iSortBufferSize     =  0; /* def. warning buffer size */
+   inputInfoStruct.iHoldQuiesce        =  0; /* don't hold the quiesce */
+   inputInfoStruct.iRestartphase       =  ' ';   /* ignored anyway */
+   inputInfoStruct.iStatsOpt           = SQLU_STATS_NONE;
+                                                /* don't bother with them */
+   inputInfoStruct.iIndexingMode       = SQLU_INX_AUTOSELECT;/* let load choose */
+                                                            /* indexing mode */
+   inputInfoStruct.iCpuParallelism      =  0;
+   inputInfoStruct.iNonrecoverable      =  SQLU_NON_RECOVERABLE_LOAD;
+   inputInfoStruct.iAccessLevel         =  SQLU_ALLOW_NO_ACCESS;
+   inputInfoStruct.iLockWithForce       =  SQLU_NO_FORCE;
+
+   /* From V9.0 onwards, the structure member iCheckPending is                 */
+   /* deprecated and replaced with iSetIntegrityPending. Also the              */
+   /* possible value to set this  variable SQLU_CHECK_PENDING_CASCADE_DEFERRED */
+   /* has been replaced with SQLU_SI_PENDING_CASCADE_DEFERRED.                 */
+   inputInfoStruct.iSetIntegrityPending =  SQLU_SI_PENDING_CASCADE_DEFERRED;
+   
+   /* XML data Path setup */
+   pPathList=(struct sqlu_media_entry *)malloc(sizeof(struct sqlu_media_entry));
+   #if(defined(DB2NT))
+   sprintf(pPathList->media_entry, "%s%sxmldatadir", getenv("DB2PATH"), PATH_SEP);
+   #else /* UNIX */
+   sprintf(pPathList->media_entry, "%s%sxmldatadir", getenv("HOME"), PATH_SEP);
+   #endif
+
+   listTargetsXmlPath.media = pPathList;
+   mediaListXmlPath.media_type = 'L';
+   mediaListXmlPath.sessions = 1;
+   mediaListXmlPath.target = listTargetsXmlPath;
+
+   /* File Type Modifier for LOAD utility*/
+   strcpy(temp,"XMLCHAR");
+   fileTypeMod = (struct sqlchar *) malloc(sizeof(short) + sizeof (temp) + 1);
+   fileTypeMod->length = strlen(temp);
+   strcpy(fileTypeMod->data,temp);
+
+   /* XML validate using XDS set up */
+   defaultSchema.iLength = 6;
+   defaultSchema.pioData=malloc(7);
+   strcpy(defaultSchema.pioData,"porder");
+   ignoreSchemas.iLength = 8;
+   ignoreSchemas.pioData=malloc(9);
+   strcpy(ignoreSchemas.pioData,"supplier");
+   mapFromSchema.iLength = 7;
+   mapFromSchema.pioData=malloc(8);
+   strcpy(mapFromSchema.pioData,"product");
+   mapToSchema.iLength = 6;
+   mapToSchema.pioData=malloc(7);
+   strcpy(mapToSchema.pioData,"porder");
+   mapSchemas.iMapFromSchema = mapFromSchema;
+   mapSchemas.iMapToSchema = mapToSchema;
+   xdsArgs.piDefaultSchema = &defaultSchema;
+   xdsArgs.iNumIgnoreSchemas = 1;
+   xdsArgs.piIgnoreSchemas =&ignoreSchemas;
+   xdsArgs.iNumMapSchemas = 1;
+   xdsArgs.piMapSchemas = &mapSchemas;
+   xmlValidate.iUsing = DB2DMU_XMLVAL_XDS;
+   xmlValidate.piXdsArgs =&xdsArgs;
+
+   /* load table -- validate the XML documents */
+   inputInfoStruct.piXmlParse = &xmlParse;
+   inputInfoStruct.piXmlValidate = &xmlValidate;
+ 
+   /* load table -- source file */
+   mediaList.media_type = SQLU_CLIENT_LOCATION;
+   mediaList.sessions = 1;
+   mediaList.target.location =
+   (struct sqlu_location_entry *)malloc(sizeof(struct sqlu_location_entry) *
+                                         mediaList.sessions);
+   strcpy(mediaList.target.location->location_entry, dataFileName);
+
+    /* Setup the parameter structure */
+   paramStruct.piSourceList          = &mediaList;
+   paramStruct.piLobPathList         = NULL;
+   paramStruct.piDataDescriptor      = &dataDescriptor;
+   paramStruct.piActionString        = pAction; 
+
+   paramStruct.piFileType            = SQL_DEL;
+   paramStruct.piFileTypeMod         = fileTypeMod;
+   paramStruct.piLocalMsgFileName    = msgFileName;
+   paramStruct.piTempFilesPath       = NULL;
+   paramStruct.piVendorSortWorkPaths = NULL;
+   paramStruct.piCopyTargetList      = NULL;
+   paramStruct.piNullIndicators      = NULL;
+   paramStruct.piLoadInfoIn          = &inputInfoStruct;
+   paramStruct.poLoadInfoOut         = &outputInfoStruct;
+   paramStruct.piPartLoadInfoIn      = NULL;
+   paramStruct.poPartLoadInfoOut     = NULL;
+   paramStruct.iCallerAction         = SQLU_INITIAL;
+   paramStruct.piXmlPathList         = &mediaListXmlPath;
+
+   printf("\n  Load table.\n");
+   printf("    client source file name : %s\n", dataFileName);
+   printf("    action                  : %s\n", actionString);
+   printf("    client message file name: %s\n", msgFileName);
+
+   /* import table */
+   printf("\n LOAD FROM loaddata2.del OF DEL XML FROM xmldatadir\n");
+   printf("   MODIFIED BY XMLCHAR XMLVALIDATE USING XDS DEFAULT porder \n");
+   printf("   IGNORE (supplier) MAP((product,porder))\n");
+   printf("   INSERT INTO POtable \n");
+
+   /* load table */
+   rc = db2Load (db2Version950,            /* Database version number   */
+            &paramStruct,             /* In/out parameters         */
+            &sqlca);                  /* SQLCA                     */
+
+   EXEC SQL COMMIT;
+
+   /* free memory allocated */
+   free(pAction);
+   free(pPathList);
+   free(fileTypeMod);
+   free(defaultSchema.pioData);
+   free(ignoreSchemas.pioData);
+   free(mapFromSchema.pioData);
+   free(mapToSchema.pioData);
+
+   /* display load info */
+   printf("\n  Load info.\n");
+   printf("    rows read     : %d\n", (int)outputInfoStruct.oRowsRead);
+   printf("    rows skipped  : %d\n", (int)outputInfoStruct.oRowsSkipped);
+   printf("    rows loaded   : %d\n", (int)outputInfoStruct.oRowsLoaded);
+   printf("    rows deleted  : %d\n", (int)outputInfoStruct.oRowsDeleted);
+   printf("    rows rejected : %d\n", (int)outputInfoStruct.oRowsRejected);
+   printf("    rows committed: %d\n", (int)outputInfoStruct.oRowsCommitted);
+
+   /* display content of the new table */
+   rc = LoadedDataDisplay();
+    
+   /* drop new table  */
+   printf("\n  DROP TABLE POtable\n"); 
+
+   EXEC SQL DROP TABLE POtable; 
+   EMB_SQL_CHECK("POtable -- drop");
+
+   return 0;
+} /* TbXMLLoad */

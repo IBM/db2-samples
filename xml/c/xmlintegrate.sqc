@@ -1,0 +1,525 @@
+/***************************************************************************
+**   (c) Copyright IBM Corp. 2007 All rights reserved.
+**   
+**   The following sample of source code ("Sample") is owned by International 
+**   Business Machines Corporation or one of its subsidiaries ("IBM") and is 
+**   copyrighted and licensed, not sold. You may use, copy, modify, and 
+**   distribute the Sample in any form without payment to IBM, for the purpose of 
+**   assisting you in the development of your applications.
+**   
+**   The Sample code is provided to you on an "AS IS" basis, without warranty of 
+**   any kind. IBM HEREBY EXPRESSLY DISCLAIMS ALL WARRANTIES, EITHER EXPRESS OR 
+**   IMPLIED, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED WARRANTIES OF 
+**   MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE. Some jurisdictions do 
+**   not allow for the exclusion or limitation of implied warranties, so the above 
+**   limitations or exclusions may not apply to you. IBM shall not be liable for 
+**   any damages you suffer as a result of using, copying, modifying or 
+**   distributing the Sample, even if IBM has been advised of the possibility of 
+**   such damages.
+*****************************************************************************
+**
+** SAMPLE FILE NAME: xmlintegrate.sqc
+**
+** PURPOSE: To show how to use XMLROW and XMLGROUP functions to publish
+**          relational information as XML.
+**          To show XMLQuery default passing mechanism.
+**          To show default column specification for XMLTABLE.
+**
+** USAGE SCENARIO: The super marker manager maintains a database to store
+**                 all customer's addresses in a relational table called
+**                 "addr" so that whenever a customer places an order for
+**                 any item, he can use this "addr" table to deliver the
+**                 item. As the number of customers grew year after
+**                 year,there was a need to change the table structure 
+**                 to have one single XML column for address and maintain
+**                 the data in a new table called "customerinfo_new".
+**
+** PREREQUISITE: NONE
+**
+** EXECUTION: bldapp xmlintegrate; 
+**            xmlintegrate
+**
+** INPUTS: NONE
+**
+** OUTPUTS: Shows comparison of XML documents created using different
+**          SQLXML functions and using XMLROW, XMLGROUP functions
+**
+** OUTPUT FILE: xmlintegrate.out (available in the online documentation)
+**
+** SQL STATEMENTS USED:
+**               CREATE TABLE
+**               INSERT
+**               SELECT
+**
+** SQL/XML FUNCTIONS USED:
+**               XMLROW
+**               XMLGROUP
+**               XMLDOCUMENT
+**               XMLELEMENT
+**               XMLCONCAT
+**               XMLATTRIBUTES
+**
+**************************************************************************
+** For more information about the command line processor (CLP) scripts,
+** see the README file.
+** For information on using SQL statements, see the SQL Reference.
+**
+** For the latest information on programming, building, and running DB2
+** applications, visit the DB2 application development website:
+** http://www.software.ibm.com/data/db2/udb/ad
+**
+**************************************************************************
+**
+** SAMPLE DESCRIPTION
+**
+**************************************************************************
+**
+** 1. Shows comparison of publishing XML documents using different
+**    SQL/XML functions and XMLROW function.
+**
+**  1.1 Element centric mapping comparison.
+**
+**  1.2 Attribute centric mapping comparison.
+**
+** 2. Shows the comparison of publishing XML documents using different 
+**    SQL/XML publishing functions and XMLGROUP function.
+**
+** 3. Shows XMLQuery default parameter passing mechanism.
+**
+** 4. Shows default column specification for XMLTABLE.
+**
+***************************************************************************
+**
+**  INCLUDE ALL HEADER FILES
+**
+**************************************************************************/
+
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+#include <sqlenv.h>
+#include <sqlutil.h>
+#include <sqlcodes.h>
+#include "utilemb.h"
+
+EXEC SQL INCLUDE SQLCA;
+
+/**************************************************************************
+*                   DECLARATION SECTION
+*  
+***************************************************************************/
+
+EXEC SQL BEGIN DECLARE SECTION; /* start of declaration section */
+  char dbAlias[700];
+  char user[700];
+  char pswd[700];
+  char stmt[1000];
+  sqlint32 custid;
+  short empno;
+  SQL TYPE IS XML AS BLOB( 10K ) address;
+  SQL TYPE IS XML AS BLOB( 10K ) address1;
+  SQL TYPE IS XML AS BLOB( 10K ) address2;
+EXEC SQL END DECLARE SECTION; /* end of declaration section */
+
+int main(int argc, char *argv[])
+{
+
+  int rc = 0;
+  struct sqlca sqlca;
+  int len;
+
+  /* check the command line arguments */
+  rc = CmdLineArgsCheck1(argc, argv, dbAlias, user, pswd);
+  if (rc != 0)
+  {
+    return rc;
+  }
+ 
+  printf("\n--------------------------------------------------");
+  printf("\nThis sample shows  "
+         "1. How to use XMLROW and XMLGROUP functions to publish"
+         " relational information as XML.");
+  printf("\n2. Shows XMLQuery default passing mechanism");
+  printf("\n3. Shows default column specification for XMLTABLE");
+  printf("\n--------------------------------------------------");
+  printf("\n");
+
+
+
+  /**********************************************************************/
+  /*                       Connect to SAMPLE database                   */
+  /**********************************************************************/
+
+  rc = DbConn(dbAlias, user, pswd);
+  if (rc != 0)
+  {
+    return rc;
+  }
+
+
+  /*********************************************************************/
+  /*  1. Shows comparison of publishing XML documents using different  */
+  /*     SQL/XML functions and XMLROW function.                        */
+  /*                                                                   */    
+  /*********************************************************************/
+
+  strcpy(stmt, "CREATE TABLE addr (custid int, name varchar(20),"); 
+  strcat(stmt, "street varchar(20), city varchar(20), province varchar(20),");
+  strcat(stmt, "postalcode BIGINT)");
+
+  EXEC SQL EXECUTE IMMEDIATE :stmt;
+  EMB_SQL_CHECK("create table addr");
+
+
+  strcpy(stmt, "CREATE TABLE customerinfo_new (custid smallint, "
+               "address XML)");
+  EXEC SQL EXECUTE IMMEDIATE :stmt;
+  EMB_SQL_CHECK("CREATE TABLE customerinfo_new");
+
+
+  /*********************************************************************/
+  /*  1.1 Element centric mapping comparison                           */
+  /*********************************************************************/
+
+  strcpy(stmt, "INSERT INTO addr "
+               "VALUES (1000, 'madhavi', 'madivala', "
+                        "'Bangalore', 'Karnataka', 500056)"); 
+
+  EXEC SQL EXECUTE IMMEDIATE :stmt;
+  EMB_SQL_CHECK("INSERT INTO addr");
+
+  strcpy(stmt, "INSERT INTO customerinfo_new (Custid, Address)"
+               "SELECT Custid, XMLDOCUMENT("
+               "XMLElement(NAME \"row\", XMLCONCAT("
+               "XMLElement(NAME \"name\", name OPTION NULL ON NULL),"
+               "XMLElement(NAME \"street\", street OPTION NULL ON NULL),"
+               "XMLElement(NAME \"city\", city OPTION NULL ON NULL),"
+               "XMLElement(NAME \"province\", province OPTION NULL ON NULL),"
+               "XMLElement(NAME \"postalcode\",postalcode OPTION NULL ON NULL))"
+               " OPTION NULL ON NULL ))"
+               " FROM addr ");
+  EXEC SQL EXECUTE IMMEDIATE :stmt;
+  EMB_SQL_CHECK("INSERT INTO customerinfo_new");
+
+  strcpy(stmt, "INSERT INTO customerinfo_new (Custid, Address)"
+               "(SELECT Custid, XMLROW(C.name, C.street, C.city, "
+               "                       C.province,C.postalcode)"
+               " FROM addr C) ");
+  EXEC SQL EXECUTE IMMEDIATE :stmt;
+  EMB_SQL_CHECK("INSERT INTO customerinfo_new");
+
+  printf("\n\n");
+  printf("----------------------------------------------------");
+  printf("\nCheck if both the documents created using different ");
+  printf("SQL/XML publishing functions and the one created using");
+  printf(" XMLROW are same");
+  printf("\n----------------------------------------------------");
+  printf("\n\n");
+
+  strcpy(stmt, "SELECT * FROM customerinfo_new");
+ 
+  EXEC SQL PREPARE s1 FROM :stmt;
+  EMB_SQL_CHECK("PREPARE s1");
+
+  EXEC SQL DECLARE cur1 CURSOR FOR s1;
+  EMB_SQL_CHECK("DECLARE CURSOR CUR1");
+
+  EXEC SQL OPEN cur1;
+  EMB_SQL_CHECK("OPEN cur1");
+
+  EXEC SQL FETCH cur1 INTO :custid, :address;
+  EMB_SQL_CHECK("FETCH cursor");
+
+  while(sqlca.sqlcode == SQL_RC_OK)
+  {
+    printf("\n\n\n%d,      %s\n",custid, address.data);
+
+    EXEC SQL FETCH cur1 INTO :custid, :address;
+    EMB_SQL_CHECK("FETCH cursor");
+  }
+
+  EXEC SQL CLOSE cur1;
+  EMB_SQL_CHECK("CLOSE cursor");
+    
+
+  /************************************************************************/
+  /*  1.2 Attribute Centric mapping comparison                            */
+  /************************************************************************/
+  printf("\n\n");
+  printf("--------------------------------------------------------");
+  printf("\n Attribute centric mapping using SQL/XML functions      ");
+  printf("\n--------------------------------------------------------");
+  printf("\n\n");
+
+  strcpy(stmt, "SELECT Custid, CASE WHEN C.name is NULL and "
+               "C.street is NULL and C.City is NULL and "
+               "C.province is NULL and C.postalcode is NULL "
+               "THEN cast(NULL as XML) "
+               "ELSE XMLDOCUMENT("
+               " XMLElement(name \"row\", XMLAttributes(C.name,"
+               " C.street,C.city, C.province, C.postalcode)))"
+               " END FROM addr C");
+
+ 
+  EXEC SQL PREPARE s2 FROM :stmt;
+  EMB_SQL_CHECK("PREPARE stmt s2");
+
+  EXEC SQL DECLARE cur2 CURSOR FOR s2;
+  EMB_SQL_CHECK("DECLARE CURSOR cur2");
+
+  EXEC SQL OPEN cur2;
+  EMB_SQL_CHECK("OPEN cur2");
+
+  EXEC SQL FETCH cur2 INTO :custid, :address;
+  EMB_SQL_CHECK("FETCH cursor");
+
+  while(sqlca.sqlcode == SQL_RC_OK)
+  {
+    printf("\n\n\n%d,      %s\n",custid, address.data);
+ 
+    EXEC SQL FETCH cur2 INTO :custid, :address;
+    EMB_SQL_CHECK("FETCH cursor");
+  }
+
+  EXEC SQL CLOSE cur2;
+  EMB_SQL_CHECK("CLOSE cur2");
+
+  printf("\n\n");
+  printf("--------------------------------------------------------");
+  printf("\n     Attribute centric mapping using XMLROW             ");
+  printf("\n--------------------------------------------------------");
+  printf("\n\n");
+
+  strcpy(stmt, "SELECT Custid, XMLROW(C.name, C.street, C.city, "
+               "C.province,C.postalcode OPTION AS ATTRIBUTES) "
+               "FROM addr as C");
+
+  EXEC SQL PREPARE s3 FROM :stmt;
+  EMB_SQL_CHECK("PREPARE STMT s3");
+
+  EXEC SQL DECLARE cur3 CURSOR FOR s3;
+  EMB_SQL_CHECK("DECLARE CURSOR cur3");
+
+  EXEC SQL OPEN cur3;
+  EMB_SQL_CHECK("OPEN cur3");
+
+  EXEC SQL FETCH cur3 INTO :custid, :address;
+  EMB_SQL_CHECK("FETCH cur3");
+
+  while(sqlca.sqlcode == SQL_RC_OK)
+  {
+    printf("\n\n\n%d,      %s\n",custid, address.data);
+
+    EXEC SQL FETCH cur3 INTO :custid, :address;
+    EMB_SQL_CHECK("FETCH cur3");
+  }
+
+  EXEC SQL CLOSE cur3;
+  EMB_SQL_CHECK("cursor -- close");
+
+
+  /************************************************************************/
+  /* 2. Shows the comparison of publishing XML documents using different  */
+  /*    SQL/XML publishing functions and XMLGROUP function                */
+  /************************************************************************/
+
+  printf("\n\n");
+  printf("-----------------------------------------------------------");
+  printf("\nCreate an XML document using SQL/XML publishing functions");
+  printf("\n---------------------------------------------------------");
+  printf("\n\n");
+
+  strcpy(stmt, "SELECT XMLDOCUMENT(XMLElement(NAME \"rowset\", "
+               "XMLAgg(XMLElement(NAME \"row\", "
+               "XMLElement(NAME \"orderdate\",p.orderdate OPTION NULL ON NULL),"
+               " XMLElement(NAME \"porder\", p.porder OPTION NULL ON NULL)"
+               " OPTION NULL ON NULL)ORDER BY p.orderdate)"
+               " OPTION NULL ON NULL))"
+               " FROM purchaseorder p, customer c "
+               "WHERE p.custid=c.Cid");
+
+  EXEC SQL PREPARE s4 FROM :stmt;
+  EMB_SQL_CHECK("PREPARE STMT s4");
+
+  EXEC SQL DECLARE cur4 CURSOR FOR s4;
+  EMB_SQL_CHECK("DECLARE CURSOR cur4");
+
+  EXEC SQL OPEN cur4;
+  EMB_SQL_CHECK("OPEN cur4");
+
+  EXEC SQL FETCH cur4 INTO :address;
+  EMB_SQL_CHECK("FETCH cur4");
+
+  while(sqlca.sqlcode == SQL_RC_OK)
+  {
+    printf("\n\n\n%s\n",address.data);
+
+    EXEC SQL FETCH cur4 INTO :address;
+    EMB_SQL_CHECK("FETCH cur4");
+  }
+
+  EXEC SQL CLOSE cur4;
+  EMB_SQL_CHECK("CLOSE cursor");
+
+
+  printf("\n\n");
+  printf("----------------------------------------------------");
+  printf("\nCreate an XML document using XMLGROUP function");
+  printf("\n----------------------------------------------------");
+  printf("\n\n");
+
+  strcpy(stmt, "SELECT  XMLGroup(p.orderdate, p.porder ORDER BY p.orderdate) "
+               "FROM purchaseorder p, customer c "
+               "WHERE p.custid=c.Cid");
+
+  EXEC SQL PREPARE s5 FROM :stmt;
+  EMB_SQL_CHECK("PREPARE STMT s5");
+
+  EXEC SQL DECLARE cur5 CURSOR FOR s5;
+  EMB_SQL_CHECK("DECLARE CURSOR cur5");
+
+  EXEC SQL OPEN cur5;
+  EMB_SQL_CHECK("OPEN CURSOR cur5");
+
+  EXEC SQL FETCH cur5 INTO :address;
+  EMB_SQL_CHECK("FETCH CURSOR cur5");
+
+  while(sqlca.sqlcode == SQL_RC_OK)
+  {
+    printf("\n\n\n%s\n",address.data);
+
+    EXEC SQL FETCH cur5 INTO :address;
+    EMB_SQL_CHECK("FETCH CURSOR cur5");
+  }
+
+  EXEC SQL CLOSE cur5;
+  EMB_SQL_CHECK("CLOSE cur5");
+  
+  /********************************************************************/
+  /*                                                                  */
+  /*  Shows XMLQuery default parameter passing mechanism              */
+  /*                                                                  */
+  /********************************************************************/
+
+  printf("\n\n");
+  printf("CREATE TABLE EMPLOYEES (empno int,lastname varchar(20), ");
+  printf("firstname varchar(20), workdept varchar(20), ");
+  printf("phoneno varchar(20), hiredate DATE)");
+
+  printf("\n\n");
+  strcpy(stmt, "CREATE TABLE EMPLOYEES (empno int,lastname varchar(20), "
+               "firstname varchar(20), workdept varchar(20), "
+               "phoneno varchar(20), hiredate DATE)");
+
+  EXEC SQL EXECUTE IMMEDIATE :stmt;
+  EMB_SQL_CHECK("CREATE TABLE employees");
+
+  strcpy(stmt, "INSERT INTO employees "
+               "VALUES (100, 'latha', 'suma'," 
+                        "'Informix', '5114', '03/01/2006')");
+  EXEC SQL EXECUTE IMMEDIATE :stmt;
+  EMB_SQL_CHECK("INSERT INTO employees");
+
+  printf("\n\n");
+  printf("-------------------------------------------------------");
+  printf("\nSELECT empno, XMLQuery('<Emp lastname=\"{$LASTNAME}\"");
+  printf(" firstname=\"{$FIRSTNAME}\">");
+  printf(" <department>{$WORKDEPT}</department>");
+  printf(" <phone_ext>{$PHONENO}</phone_ext>");
+  printf(" <hire_date>{$HIREDATE}</hire_date></Emp>')");
+  printf(" FROM employees");
+  printf("\n-------------------------------------------------------");
+  printf("\n\n");
+
+  strcpy(stmt, "SELECT empno, XMLQuery('<Emp lastname=\"{$LASTNAME}\""
+               " firstname=\"{$FIRSTNAME}\">"
+               "<department>{$WORKDEPT}</department>"
+               "<phone_ext>{$PHONENO}</phone_ext>"
+               "<hire_date>{$HIREDATE}</hire_date></Emp>')"
+               " FROM employees");
+
+  EXEC SQL PREPARE s6 FROM :stmt;
+  EMB_SQL_CHECK("PREPARE STMT s6");
+
+  EXEC SQL DECLARE cur6 CURSOR FOR s6;
+  EMB_SQL_CHECK("DECLARE CURSOR cur6");
+
+  EXEC SQL OPEN cur6;
+  EMB_SQL_CHECK("OPEN CURSOR cur6");
+
+  EXEC SQL FETCH cur6 INTO :empno, :address1;
+  EMB_SQL_CHECK("FETCH CURSOR cur6");
+
+  while(sqlca.sqlcode == SQL_RC_OK)
+  {
+    printf("\n\n\n%d,     %s\n",empno, address1.data);
+
+    EXEC SQL FETCH cur6 INTO :empno, :address1;
+    EMB_SQL_CHECK("FETCH CURSOR cur6");
+  }
+
+  EXEC SQL CLOSE cur6;
+  EMB_SQL_CHECK("CLOSE cur6");
+
+
+  /*************************************************************************/
+  /*                                                                       */
+  /*      4. Shows the default column specification of XMLTABLE            */ 
+  /*                                                                       */
+  /*************************************************************************/
+
+  printf("\n\n");
+  printf("--------------------------------------------------");
+  printf("\nShows the default column specification of XMLTABLE");
+  printf("\n--------------------------------------------------");
+  printf("\n\n");
+
+  printf("--------------------------------------------------");
+  printf("\nSELECT X.* FROM XMLTABLE ('db2-fn:xmlcolumn");
+  printf("(\"CUSTOMER.INFO\")/customerinfo/phone') as X");
+  printf("\n--------------------------------------------------");
+  printf("\n\n");
+
+  strcpy(stmt, "XQuery for $plist in db2-fn:sqlquery(\"SELECT X.phone FROM customer," 
+	       "XMLTABLE('$INFO/customerinfo/phone') AS X(phone)\")"
+               "order by $plist/@type, $plist/text() return $plist");
+
+  EXEC SQL PREPARE s7 FROM :stmt;
+  EMB_SQL_CHECK("PREPARE STMT s7");
+
+  EXEC SQL DECLARE cur7 CURSOR FOR s7;
+  EMB_SQL_CHECK("DECLARE CURSOR cur7");
+
+  EXEC SQL OPEN cur7;
+  EMB_SQL_CHECK("OPEN cur7");
+
+  EXEC SQL FETCH cur7 INTO :address2;
+  EMB_SQL_CHECK("FETCH CURSOR cur7");
+
+  while(sqlca.sqlcode == SQL_RC_OK)
+  {
+    printf("\n\n\n%s\n",address2.data);
+
+    EXEC SQL FETCH cur7 INTO :address2;
+    EMB_SQL_CHECK("FETCH CURSOR cur7");
+  }
+
+  EXEC SQL CLOSE cur7;
+  EMB_SQL_CHECK("CLSOE cur7");
+
+  /**************************************************************/
+  /*                       CLEANUP                              */
+  /**************************************************************/
+
+  EXEC SQL DROP TABLE addr;
+  EMB_SQL_CHECK("DROP TABLE addr");
+
+  EXEC SQL DROP TABLE customerinfo_new;
+  EMB_SQL_CHECK("DROP TAABLE customerinfo_new");
+
+  EXEC SQL DROP TABLE employees;
+  EMB_SQL_CHECK("DROP TABLE employees");
+
+  EXEC SQL CONNECT RESET;
+  EMB_SQL_CHECK("CONNECT RESET");
+}

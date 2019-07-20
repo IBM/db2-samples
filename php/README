@@ -1,0 +1,423 @@
+******************************************************************************
+*                             Licensed Materials 
+*                              Property of IBM
+*
+* Governed under the terms of the International
+* License Agreement for Non-Warranted Sample Code.
+*
+* © COPYRIGHT International Business Machines Corp. 2007
+* All Rights Reserved.
+*
+* US Government Users Restricted Rights - Use, duplication or
+* disclosure restricted by GSA ADP Schedule Contract with IBM Corp.
+*
+******************************************************************************
+*
+*                         README for PHP Samples
+*
+* This README file describes the PHP sample files. It is recommended that 
+* you copy the files into a working directory prior to running the 
+* sample scripts.
+*
+* DB2 specific samples are writen for and tested on a DB2 v9+.
+*
+* There are samples with in this set which have been designed, written for
+* and tested with both DB2 v9+ and Informix 10+. These generic samples are
+* denoted by "_generic" tagged on the end of the file name before the file
+* type denotation. 
+*
+* WARNING: Some of these samples may change your database or database manager
+*          configuration.  Execute the samples against a test database 
+*          only, such as the DB2 SAMPLE database.
+*
+******************************************************************************
+*
+*                                 Setup
+*
+*  1) Copy the files into your working directory.
+*       These samples can be run from:
+*         - A command line on a computer that has PHP cli installed
+*         - Called as a webpage from a HTTP/web server capable of interpreting 
+*           PHP server-side scripts
+*
+*       The latest version of PHP can be downloaded from here:
+*         http://www.php.net/downloads.php
+*       Most any commonly used HTTP/web server can be configured to use PHP 
+*       server-side scripts. See the PHP installation instruction under you 
+*       operating system for instructions on how to do this on more common 
+*       HTTP/web server:
+*         http://www.php.net/manual/install.php
+*
+*  2) Ensure you have the appropriate database driver for the samples you wish
+*     to run. Database driver are available to be installed with the DB2 Data 
+*     Server Client if PHP is installed before the instillation of the DB2
+*     Data Server Client also you can download the drivers directly.
+*       
+*         - "*_DB2.php" samples require the IBM_DB2 driver to be installed
+*               The latest version of the driver is available here:
+*                 http://pecl.php.net/package/ibm_db2
+*               The latest compiled version for windows is available here:
+*                 http://pecl4win.php.net/ext.php/php_pdo_ibm.dll
+*
+*         - "*_PDO.php" samples require the PDO and PDO_IBM drivers to be 
+*            installed
+*               The latest version of the driver is available here:
+*                  ::PDO
+*                      http://pecl.php.net/package/PDO
+*                  ::PDO_IBM
+*                      http://pecl.php.net/package/PDO_IBM
+*               The latest compiled version for windows is available here:
+*                  ::PDO
+*                      http://pecl4win.php.net/ext.php/php_pdo.dll
+*                  ::PDO_IBM
+*                      http://pecl4win.php.net/ext.php/php_pdo_ibm.dll
+*
+*     For PHP install and setup information see:
+*       http://www.php.net/manual/
+*
+*     To build PHP and extension from scratch on Windows see:
+*         http://www.php.net/manual/install.windows.building.php
+*
+*  3) Create a working database 
+*        - For Xml DB2 samples you need to use the Xml sample
+*          database which can be created using the following
+*          command:
+*
+*              db2sampl -xml
+*
+*          WARNINGS
+*            1. These steps gives an overview of building and running the
+*               samples. Please read the README in corresponding directory
+*               for any specific considerations.
+*
+*          On a Windows system this command needs to be run from a 
+*          db2 command window:
+*                - From the Start Menu click Start --> Programs --> 
+*                  IBM DB2 --> <DB2 copy name> --> Command Line Tools 
+*                  --> Command Window.
+*
+*        - Other non-Xml samples just require a database to run against this
+*          could be created using ether of the following command:
+*
+*              db2sampl
+*
+*                 or
+*
+*              db2 create database <Database Name>
+*                     Where <Database Name> is the name of the database. 
+*                     These samples use the database of the name "SAMPLE"
+*                     by default if you chose another name it is recommended
+*                     that you update the "PHPSampleConfig.cfg" file.
+*
+*          On a Windows system this command needs to be run from a 
+*          db2 command window:
+*                - From the Start Menu click Start --> Programs --> 
+*                  IBM DB2 --> <DB2 copy name> --> Command Line Tools 
+*                  --> Command Window.
+*
+*  (Optional)
+*  3) Configure the file "PHPSampleConfig.cfg"
+*        By configuring this file ahead of time each individual sample will
+*        have the general information it needs to run. These setting can be 
+*        overridden at any time while running any sample. 
+*
+*      Options
+*          db="<Database Connection String>"
+*          u="<User Name>"
+*          p="<User Password>"
+*          Schema="<The Schema to run under>"
+*
+******************************************************************************
+*
+* For information on developing PHP applications, see the Application
+* Development Guide.
+*
+* For information on using SQL statements, see the SQL Reference.
+*
+* For information on obtaining the latest version of PHP, visit: 
+*     http://www.php.net
+*
+******************************************************************************
+*
+*                              Code Notes 
+*                   -- Thing you might want to know --
+*
+*  UtilIOHelper.php
+*                 - This File and the IO_Helper class parses any Input
+*                   that the sample is feed in and sanitises any output
+*                   that need to be sent to the screen. Below are the most
+*                   common element of the IO_Helper that you will see outside
+*                   of the class. Please see the ‘UtilIOHelper_Def’
+*                   for a complete class definition.
+*
+*                   '{$this->schema}'
+*                                 - This is how you will most often see this
+*                                   variable embedded with in an SQL statement.
+*                                   It will contain a Schema Name followed by a
+*                                   period or It will contain nothing. The
+*                                   Schema Name is parsed from the values of
+*                                   the schema option flag that can be passed
+*                                   in through the command line, web
+*                                   browsers GET, POST or the PHPSampleConfig
+*                                   file.
+*
+*                   display_Xml_Parsed_Struct 
+*                                 - This will take a string containing an 
+*                                   unformatted XML document and format it
+*                                   in to a XML based tree which is returned
+*                                   as a string. This function also has the
+*                                   ability to add a Start of line character
+*                                   to the beginning of each line. 
+*
+*                   format_Output 
+*                                 - This function is used to output any
+*                                   information to the screen. If the program
+*                                   is running in a console the output is
+*                                   passed directly to the screen otherwise
+*                                   the output is sanitized for display with
+*                                   in a web browser.
+*
+*  UtilConnection_DB2.php 
+*  UtilConnection_PDO.php 
+*                 - These files and the DB2_Connection and PDO_Connection
+*                   classes will be extended by most Samples and use some of
+*                   the basic functionality inside. These classes take care
+*                   of basic operation such as forming connections and commit
+*                   and rollback of transactions.
+*                   Please see:
+*                      'UtilConnection_DB2_Def'
+*                   or
+*                      'UtilConnection_PDO_Def'
+*                   for a complete classes definition.
+*
+*
+******************************************************************************
+*
+*                        Common file Descriptions
+* 
+* The following are the common files for PHP samples. For more
+* information on these files, refer to the program source files.
+*
+******************************************************************************
+*
+*                            Common files
+*
+* README                     - this file
+*
+* UtilConnection_DB2_Def     - A class definition for UtilConnection_DB2.php
+*
+* UtilConnection_PDO_Def     - A class definition for UtilConnection_PDO.php
+*
+* UtilIOHelper_Def           - A class definition for UtilIOHelper.php 
+* 
+* PHPSampleConfig.cfg        - A configuration file that lets you set 
+*                              commonly used connection parameters that 
+*                              will be parsed by the IO_Helper class in 
+*                              util_IO_Helper.php for use in the samples. 
+*                              All information in here can be overridden 
+*                              when running the samples. 
+*
+******************************************************************************
+*
+*                             Data files
+* 
+* photo.gif
+* resume.txt
+*
+******************************************************************************
+*                            Samples Files
+*
+* The PHP sample programs form an object-based design reflecting the 
+* component nature of DB2. Related samples demonstrate a specific level of 
+* database programming. 
+*    
+*  PHP Sample File Naming Schema
+*                                                    .-'_generic'-.
+* >>--| Identifier || Short Sample Name |+----------++------------+.php
+*                                        +--'_DB2'--+
+*                                        '--'_PDO'--'
+*
+* Identifier       - denotes the group that this sample or file is
+*                    classified under
+* 
+*       Posible
+*     Identifiers    Definition
+*    
+*         Db        A Database Level sample
+*        Tbl        A Table Level sample
+*         Dt        Data Types Level sample
+*        Xml        XML samples
+*       Util        A Utility file used by the PHP samples
+*
+* Short Sample Name - A short descriptive name to identify the sample 
+*
+* Database Driver   - This denotes what driver if any the sample is using.
+*                   - The IBM_DB2 driver is identified by '_DB2' 
+*                   - The PDO_IBM driver is identified by '_PDO'
+*
+* Generic Sample    - This specifies a sample which is generic and can be 
+*                     run on both DB2 databases and Informix Databases.  
+*
+******************************************************************************
+*
+*                            Utility files 
+*
+*
+* UtilConnection_DB2.php           - Handles General IBM_DB2 Connection
+*                                    for IBM_DB2 driver samples
+*                                     - See UtilConnection_DB2_Def
+*                                       for Class definition details
+*                                       and overview.
+*
+* UtilConnection_PDO.php           - Handles General PDO Connection
+*                                    for PDO driver samples
+*                                     - See UtilConnection_PDO_Def
+*                                       for Class definition details
+*                                       and overview.
+*   
+* UtilIOHelper.php                 - Handles General IO 
+*                                     - See UtilIOHelper_Def
+*                                       for Class definition details
+*                                       and overview.
+*
+*            ***   Sample Level Table Setup   ***
+*
+*   These utility files are used by some sample to create table and 
+*   populate them with information used when running the sample and 
+*   then to remove those table when complete.
+*
+*      - See README_UtilTableSetup_deff for Class definition details and
+*        overview.
+*
+*
+* UtilTableSetup_Xml.php         - Sets up tables used in XML Samples
+*
+* UtilTableSetup_XmlDecomposition.php  
+*                                - Sets up tables used in the
+*                                  XML_Decomposition sample
+* 
+* UtilTableSetup_LOB.php
+* 
+* UtilTableSetup_Staff.php
+*
+******************************************************************************
+*
+*                         Database Level.
+*
+* DbAuthorities_DB2.php
+* DbAuthorities_PDO.php           - How to grant/display/revoke authorities
+*                                   at the database level
+* 
+******************************************************************************
+*
+*                         Data Type Level.
+*
+* DtInfo_DB2.php
+* DtInfo_PDO.php                 - How to get information about data types.
+* 
+* DtLOB_DB2.php
+* DtLOB_PDO_generic.php          - How to read and write LOB data
+* 
+* DtUDT_DB2.php
+* DtUDT_PDO.php                  - How to create, use, and drop user-defined 
+*                                   distinct types.
+* 
+******************************************************************************
+*
+*                           Table Level.
+* 
+* TblIdentity_Columns_DB2.php
+* TblIdentity_Columns_PDO.php      - How to use identity columns
+* 
+* TblSelect_DB2.php 
+* TblSelect_PDO.php                - How to select from each of: insert,
+*                                    update, delete.
+* 
+* TblConstraints_DB2.php
+* TblConstraints_PDO.php           - How to work with table constraints
+* 
+* TblTrigger_DB2.php.
+* TblTrigger_PDO.php               - How to use a trigger on a table
+* 
+* TblUnion_DB2.php
+* TblUnion_PDO.php                 - How to insert through a UNION ALL view.
+* 
+******************************************************************************
+*
+*                            XML samples
+*
+*
+* ****************************************************************************
+* *                                                                          *
+* *                          PDO and XQuery                                  *
+* *                                                                          *
+* * PDO v1.0.3 and earlier contain a documented parsing bug which interferes *
+* * with XQuery statement. This is in relation to how PDO uses ':<name>' in  *
+* * SQL statement to act as a  binding point, which is equivalent to '?'     *
+* * character also used in PDO and  most other database drivers. If you      *
+* * require or wish to use XQuery statements it is recommended that you use  *
+* * the IBM_DB2 PHP Driver or upgrade your version of PDO.                   *
+* *                                                                          *
+* ****************************************************************************
+*
+* XmlDecomposition_DB2.php       - Decompose data stored in an XML file and 
+*                                  insert the data into tables
+*                         PREREQUISITE:This sample require bookdetail.xml,
+*                         bookdetail.xsd files at run time. Copy these files
+*                         to your working directory before running the sample.
+*                         These file can be found in
+*                         <install_path>\sqllib/samples/xml/data directory.
+* 
+* XmlFlwor_DB2.php               - Use the XQuery FLWOR expression
+* 
+* XmlIndex_DB2.php               - Create an index and use it in an XQuery
+* 
+* XmlInsert_DB2.php              - Insert an XML document into a column of 
+*                                  XML data type
+*                          PREREQUISITE: copy the files cust1023.xml to working 
+*                          directory before running the sample. This file can be 
+*                          found in xml/data directory.
+* 
+* XmlRead_DB2.php                - Read XML data stored in tables
+* 
+* XmlRelToXmlDOC_DB2.php         - Create and XML document directly from data
+*                                  stored in relational tables using SQL/XML 
+*                                  publishing sunctions
+* 
+* XmlRelToXmlType_DB2.php        - Create an XML document from relational and 
+*                                  XML data using SQL/XML publishing functions
+* 
+* XmlRunstats.php                - How to perform RUNSTATS on a table 
+*                                  containing XML type columns.
+* 
+* XmlSchemas_DB2.php             - Register the XML schema to the database 
+*                                  and use the registered schema to validate 
+*                                  and insert and XML document
+*                         PREREQUISITE: copy product.xsd, order.xsd,
+*                         customer.xsd, header.xsd Schema files, order.xml XML
+*                         document from <install_path>\sqllib/samples/xml/data
+*                         directory to working directory.
+* 
+* XmlSQLXQuery_DB2.php           - Use SQL/XML queries
+*
+* XmlUniqueIndexes_DB2.php       - Create and index with UNIQUE and VARCHAR 
+*                                  length constraints 
+* 
+* XmlUpAndDel_DB2.php            - Update and delete XML documents in the 
+*                                  tables
+*                         PREREQUISITE: copy the files cust1021.xml, cust1022.xml and
+*                         cust1023.xml to working directory before running the
+*                         sample. These files can be found in
+*                         <install_path>\sqllib/samples/xml/data directory.
+* 
+* XmltoTable_DB2.php             - Insert the data from an XML document into
+*                                  relational tables using SQL/XML
+*                         PREREQUISITE: copy purchaseorder.xml XML document
+*                         from <install_path>\sqllib/samples/xml/data
+*                         directory to the working directory.
+* 
+* XmlXPath_DB2.php               - Run simple XPath queries
+*
+* XmlXQuery_DB2.php              - Executing nested XQuery FLWOR expression
+*
+******************************************************************************

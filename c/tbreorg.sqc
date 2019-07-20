@@ -1,0 +1,200 @@
+/****************************************************************************
+** (c) Copyright IBM Corp. 2007 All rights reserved.
+** 
+** The following sample of source code ("Sample") is owned by International 
+** Business Machines Corporation or one of its subsidiaries ("IBM") and is 
+** copyrighted and licensed, not sold. You may use, copy, modify, and 
+** distribute the Sample in any form without payment to IBM, for the purpose of 
+** assisting you in the development of your applications.
+** 
+** The Sample code is provided to you on an "AS IS" basis, without warranty of 
+** any kind. IBM HEREBY EXPRESSLY DISCLAIMS ALL WARRANTIES, EITHER EXPRESS OR 
+** IMPLIED, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED WARRANTIES OF 
+** MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE. Some jurisdictions do 
+** not allow for the exclusion or limitation of implied warranties, so the above 
+** limitations or exclusions may not apply to you. IBM shall not be liable for 
+** any damages you suffer as a result of using, copying, modifying or 
+** distributing the Sample, even if IBM has been advised of the possibility of 
+** such damages.
+*****************************************************************************
+**
+** SOURCE FILE NAME: tbreorg.sqc
+**
+** SAMPLE: How to reorganize a table and update its statistics
+**
+** DB2 APIs USED:
+**         db2Reorg -- Reorganize a Table or Index
+**         db2Runstats -- Runstats
+**
+** SQL STATEMENT USED:
+**         SELECT
+**
+** OUTPUT FILE: tbreorg.out (available in the online documentation)
+*****************************************************************************
+**
+** For more information on the sample programs, see the README file.
+**
+** For information on developing C applications, see the Application
+** Development Guide.
+**
+** For information on using SQL statements, see the SQL Reference.
+**
+** For information on DB2 APIs, see the Administrative API Reference.
+**
+** For the latest information on programming, building, and running DB2 
+** applications, visit the DB2 application development website: 
+**     http://www.software.ibm.com/data/db2/udb/ad
+****************************************************************************/
+
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+#include <sqlenv.h>
+#include <sqlutil.h>
+#include <db2ApiDf.h>
+#include "utilemb.h"
+
+int TbReorganize(void);
+int SchemaNameGet(void); /* support function */
+
+EXEC SQL BEGIN DECLARE SECTION;
+  char dbAlias[15];
+  char user[129];
+  char pswd[15];
+  char tableName[129];
+  char schemaName[129];
+EXEC SQL END DECLARE SECTION;
+
+int main(int argc, char *argv[])
+{
+  int rc = 0;
+  char dbAlias[SQL_ALIAS_SZ + 1];
+  char user[USERID_SZ + 1];
+  char pswd[PSWD_SZ + 1];
+
+  /* check the command line arguments */
+  rc = CmdLineArgsCheck1(argc, argv, dbAlias, user, pswd);
+  if (rc != 0)
+  {
+    return rc;
+  }
+
+   printf("\nTHIS SAMPLE SHOWS ");
+   printf("HOW TO REORGANIZE A TABLE AND UPDATE ITS STATISTICS.\n");
+
+  /* connect to database */
+  rc = DbConn(dbAlias, user, pswd);
+  if (rc != 0)
+  {
+    return rc;
+  }
+
+  rc = TbReorganize();
+
+  /* disconnect from the database */
+  rc = DbDisconn(dbAlias);
+  if (rc != 0)
+  {
+    return rc;
+  }
+
+  return 0;
+} /* main */
+
+int SchemaNameGet(void)
+{
+  struct sqlca sqlca;
+
+  /* get table schema name */
+  EXEC SQL SELECT tabschema INTO :schemaName
+    FROM syscat.tables
+    WHERE tabname = :tableName;
+  EMB_SQL_CHECK("table schema name -- get");
+
+  /* get rid of spaces from the end of schemaName */
+  strtok(schemaName, " ");
+
+  return 0;
+} /* SchemaNameGet */
+
+int TbReorganize(void)
+{
+  int rc = 0;
+  struct sqlca sqlca;
+  char fullTableName[258];
+  db2ReorgStruct paramStruct;
+  db2Uint32 versionNumber = db2Version1010;
+  db2RunstatsData runStatData = {0};
+
+  printf("\n-----------------------------------------------------------");
+  printf("\nUSE THE DB2 APIs:\n");
+  printf("  db2Reorg -- Reorganize a Table or Index\n");
+  printf("  db2Runstats -- Runstats\n");
+  printf("TO REORGANIZE A TABLE AND UPDATE ITS STATISTICS.\n");
+
+  /* get fully qualified name of the table */
+  strcpy(tableName, "EMP_RESUME");
+  rc = SchemaNameGet();
+  if (rc != 0)
+  {
+    return rc;
+  }
+
+  strcpy(fullTableName, schemaName);
+  strcat(fullTableName, ".");
+  strcat(fullTableName, tableName);
+
+  printf("  Reorganize the table: %s\n", fullTableName);
+
+  /* setup parameters */
+  memset(&paramStruct, '\0', sizeof(paramStruct));
+  paramStruct.reorgObject.tableStruct.pTableName = fullTableName;
+  paramStruct.reorgObject.tableStruct.pOrderByIndex = NULL;
+  paramStruct.reorgObject.tableStruct.pSysTempSpace = NULL;
+  paramStruct.reorgType = DB2REORG_OBJ_TABLE_OFFLINE;
+  paramStruct.reorgFlags = DB2REORG_LONGLOB;
+  paramStruct.nodeListFlag = DB2_ALL_NODES;
+  paramStruct.numNodes = 0;
+  paramStruct.pNodeList = NULL;
+
+  /* reorganize table */
+  rc = db2Reorg(versionNumber, &paramStruct, &sqlca);
+  DB2_API_CHECK("table -- reorganize");
+
+  printf("  Update statistics for the table: %s\n", fullTableName);
+
+  /* runstats table */
+  runStatData.iIndexSamplingOption = 0;
+  runStatData.iSamplingOption = 0;
+  runStatData.piTablename = ( unsigned char *) fullTableName;
+  runStatData.piColumnList = NULL;
+  runStatData.piColumnDistributionList = NULL;
+  runStatData.piColumnGroupList = NULL;
+  runStatData.piIndexList = NULL;
+  runStatData.iRunstatsFlags = DB2RUNSTATS_ALL_INDEXES;
+
+  runStatData.iRunstatsFlags |= DB2RUNSTATS_SAMPLING_SYSTEM;
+  runStatData.iSamplingOption = 20; /* each page has a 20% chance of being 
+                                       included in the sample */
+  
+  runStatData.iRunstatsFlags |= DB2RUNSTATS_SAMPLING_REPEAT;
+  runStatData.iSamplingRepeatable = 23; /* seed for consistent results */
+
+  runStatData.iNumColumns = 0;
+  runStatData.iNumColdist = 0;
+  runStatData.iNumColGroups = 0;
+  runStatData.iNumIndexes = 0;
+  runStatData.iParallelismOption = 0;
+  runStatData.iTableDefaultFreqValues = 0;
+  runStatData.iTableDefaultQuantiles = 0;
+  runStatData.iUtilImpactPriority      = 100;
+
+  db2Runstats (versionNumber, &runStatData, &sqlca);
+
+  DB2_API_CHECK("table -- runstats");
+
+  printf("  Make sure to rebind all packages that use this table.\n");
+
+  return rc;
+} /* TbReorganize */
+

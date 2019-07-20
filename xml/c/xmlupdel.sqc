@@ -1,0 +1,269 @@
+/****************************************************************************
+** (c) Copyright IBM Corp. 2007 All rights reserved.
+** 
+** The following sample of source code ("Sample") is owned by International 
+** Business Machines Corporation or one of its subsidiaries ("IBM") and is 
+** copyrighted and licensed, not sold. You may use, copy, modify, and 
+** distribute the Sample in any form without payment to IBM, for the purpose of 
+** assisting you in the development of your applications.
+** 
+** The Sample code is provided to you on an "AS IS" basis, without warranty of 
+** any kind. IBM HEREBY EXPRESSLY DISCLAIMS ALL WARRANTIES, EITHER EXPRESS OR 
+** IMPLIED, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED WARRANTIES OF 
+** MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE. Some jurisdictions do 
+** not allow for the exclusion or limitation of implied warranties, so the above 
+** limitations or exclusions may not apply to you. IBM shall not be liable for 
+** any damages you suffer as a result of using, copying, modifying or 
+** distributing the Sample, even if IBM has been advised of the possibility of 
+** such damages.
+*****************************************************************************
+**
+** SOURCE FILE NAME: xmlinsert.sqc
+**
+** SAMPLE: This sample demonstrates how to insert a XML document into
+**         a column of XML data type.
+**
+** SQL STATEMENTS USED:
+**                      INSERT
+**                      DECLARE
+**                      OPEN
+**                      FETCH
+**                      CLOSE   
+** 
+** OUTPUT FILE: xmlinsert.out (available in the online documentation)
+*****************************************************************************
+**
+** For more information on the sample programs, see the README file.
+**
+** For information on developing C applications, see the Application
+** Development Guide.
+**
+** For information on using SQL statements, see the SQL Reference.
+**
+** For the latest information on programming, building, and running DB2
+** applications, visit the DB2 application development website:
+**     http://www.software.ibm.com/data/db2/udb/ad
+****************************************************************************/
+
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+#include <sqlenv.h>
+#include <sqlutil.h>
+#include "utilemb.h"
+
+EXEC SQL INCLUDE SQLCA;
+
+EXEC SQL BEGIN DECLARE SECTION;
+  char xmldata[2000];
+  char parse_option[30];
+  short nullind = 0;
+  static SQL TYPE IS XML AS CLOB(1k) xmlclob1=SQL_CLOB_INIT("<a> a </a>") ;
+  static SQL TYPE IS BLOB(1k) hv_blob2 = SQL_BLOB_INIT("<init> a </init>");
+  static SQL TYPE IS XML AS BLOB(1k) xmlblob3 = SQL_BLOB_INIT("<init> a</init>");
+EXEC SQL END DECLARE SECTION;
+
+int createtables(void);
+int droptables(void);
+
+int main(int argc, char *argv[])
+{
+  int rc = 0;
+  int charcount = 0;
+  char stmt[500];
+  char xmlfilename[50];
+  char prep_string[200];
+  char dbAlias[SQL_ALIAS_SZ + 1];
+  char user[USERID_SZ + 1];
+  char pswd[PSWD_SZ + 1];
+
+  /* Create a XML document that will be used to INSERT in the table */
+  strcpy(xmldata, "<product pid=\"10\"><description>"
+                  "<name> Plastic Casing </name>"
+                  "<details> Blue Color </details>"
+                  "<price> 2.89 </price>"
+                  "<weight> 0.23 </weight>"
+                  "</description></product>");
+
+  strcpy(xmlclob1.data, xmldata);
+  strcpy(hv_blob2.data, xmldata);
+  strcpy(xmlblob3.data, xmldata);
+  strcpy(parse_option, "preserve whitespace"); 
+  
+  xmlclob1.length = strlen(xmldata) + 1;
+  hv_blob2.length = xmlclob1.length;
+  xmlblob3.length = xmlclob1.length;
+  
+  /* check the command line arguments */
+  rc = CmdLineArgsCheck1(argc, argv, dbAlias, user, pswd);
+  if (rc != 0)
+  {
+    return rc;
+  }
+
+  /* connect to database */
+  rc = DbConn(dbAlias, user, pswd);
+  if (rc != 0)
+  {
+    return rc;
+  }
+  
+  /* Call function to create needed tables */
+  rc = createtables();
+
+  /* Inserting when source is from host variable of type XML AS CLOB */
+  printf("\n Insert into Purchaseorder table\n");
+  EXEC SQL INSERT INTO purchaseorder (poid, porder)   
+             VALUES (1612, :xmlclob1:nullind);
+  EMB_SQL_CHECK("INSERTING with host variable of type XML as CLOB"); 
+ 
+  EXEC SQL INSERT INTO purchaseorder (poid, porder)
+             VALUES (2341, :xmlclob1:nullind);
+  EMB_SQL_CHECK("INSERTING with host variable of type XML as CLOB");
+
+  /* Update the XML column using host varable of type XML */
+  printf(" Update XML column using varibale of type XML\n");
+  EXEC SQL UPDATE purchaseorder SET porder = :xmlclob1 WHERE poid = 1612;
+  EMB_SQL_CHECK("UPDATE using XML type host variable");
+
+  /* Update the XML colum using the BLOB host variable */
+  printf(" Update Purchaseorder with a varibalre of type BLOB\n");
+  EXEC SQL UPDATE purchaseorder SET porder = XMLPARSE(
+    DOCUMENT :hv_blob2 STRIP WHITESPACE) WHERE POID = 1612;
+  EMB_SQL_CHECK("UPDATE using BLOB type host variable");
+
+  /* Update the XML column using the BLOB host variable */
+  /* with IMPLICIT parsing */
+  printf(" Update using Implicit Parsing and a BLOB variable\n");
+  EXEC SQL UPDATE purchaseorder SET porder = :hv_blob2 WHERE poid = 1612;
+  EMB_SQL_CHECK("UPDATE  using BLOB type host variable with implicit parsing");
+
+  /* SET the register  with the option PRESERVE WHITESPACE */
+  printf(" Set the CURRENT IMPLICIT XMLPARSE OPTION register\n");
+  EXEC SQL SET CURRENT IMPLICIT XMLPARSE OPTION = :parse_option;
+  EMB_SQL_CHECK("SET THE CURRENT IMPLICIT PARSE REGISTER"); 
+
+  /* UPDATE the XML column using varchar */
+  printf(" UPDATE XML column using VARCHAR type variable\n");
+  EXEC SQL  UPDATE  purchaseorder SET porder = XMLPARSE (DOCUMENT
+    '<Product> <ProdId> 123 </ProdId></Product>' 
+    PRESERVE WHITESPACE) WHERE POID = 1612;
+  EMB_SQL_CHECK("UPDATE USING VARCHAR");
+  
+  /* UPDATE THE XML COLUMN USING VARCHAR WITH IMPLICIT PARSING */
+  printf(" UPDATE XML column using VARCHAR and IMPLICIT PARSING\n");
+  EXEC SQL UPDATE PURCHASEORDER SET PORDER = 
+    '<Product> <ProdId> 123 </ProdId></Product>'
+     WHERE POID = 1612;
+  EMB_SQL_CHECK("UPDATE USING varchar WITH IMPLICT PARSING");
+
+  /* UPDATE  the xml column using another column of varchar */
+  printf(" UPDATE XML column from another column of type VARCHAR\n");
+  strcpy(stmt, "UPDATE purchaseorder SET PORDER = (SELECT XMLPARSE( DOCUMENT desc PRESERVE WHITESPACE) "
+               " FROM vartable where id = 11111)"
+               " WHERE POID = 1612");
+  EXEC SQL EXECUTE IMMEDIATE :stmt;
+  EMB_SQL_CHECK(" Update using column of type VARCHAR"); 
+
+  /* Insert when source is a XML document from a column */
+  /* of type VARCHAR, Using Implicit Parsing */
+  printf(" Upate whne source is a XML document from a column of type VARCHAR, Using Implicit Parsing\n");
+  strcpy(stmt, "UPDATE purchaseorder SET PORDER = "
+               "(SELECT desc FROM vartable where id = 22222)"
+               " WHERE POID = 1612"); 
+   EXEC SQL EXECUTE IMMEDIATE :stmt;
+   EMB_SQL_CHECK("Insert from another column of type VARCHAR using implicit Parsing");
+
+  /* update the xml column with XMLVALIDATE and source is a XML host variable */
+  printf(" UPDATE XML column when host variable is xml, using XMLVALIDATE\n");
+  EXEC SQL UPDATE PURCHASEORDER SET PORDER = XMLVALIDATE (:xmlclob1 
+    ACCORDING TO XMLSCHEMA ID product) where POID = 1631;
+  EMB_SQL_CHECK("UPDATE USING XML HOST VARIABLE WITH XMLVALIDATE");
+  
+  printf(" UPDATE using XML document returned by select using XMLVALIDATE\n");
+  EXEC SQL UPDATE PURCHASEORDER SET PORDER = (Select
+    XMLVALIDATE( porder ACCORDING TO XMLSCHEMA ID product) 
+    FROM purchaseorder WHERE poid = 2341) WHERE POID = 1631;
+  EMB_SQL_CHECK("UPDATE USING VARCHAR VARIABLE WITH XMLVALIDATE");
+
+  printf(" Perform Searched delete\n");
+  strcpy((char *)prep_string, "DELETE FROM PURCHASEORDER WHERE "
+                       "XMLEXISTS('$p/product[@pid=\"10\"]' "
+                       "passing by ref PURCHASEORDER.PORDER as \"p\")");
+  EXEC SQL EXECUTE IMMEDIATE :prep_string;
+  EMB_SQL_CHECK("DELETE");
+
+  EXEC SQL ROLLBACK;
+  EMB_SQL_CHECK("ROLLBACK");
+  
+  /* Call function for cleanup */
+  rc = droptables();
+  
+  /* disconnect from the database */
+  rc = DbDisconn(dbAlias);
+  if (rc != 0)
+  {
+    return rc;
+  }
+
+  return 0;
+} /* main */
+
+/* Create tables */
+int createtables(void)
+{
+  int rc = 0;
+  char stmt[800];
+
+  strcpy(stmt, "CREATE TABLE vartable (id INT,"
+               " desc VARCHAR(200), comment VARCHAR(25))");
+  EXEC SQL EXECUTE IMMEDIATE :stmt;
+  EMB_SQL_CHECK("Table--Creation");
+
+  strcpy(stmt, "INSERT INTO vartable VALUES "
+               "(11111, \'<NAME><FIRSTNAME> Neeraj </FIRSTNAME>"
+               "<LASTNAME> Gaurav </LASTNAME></NAME>\', "
+               "\'Final Year\')");
+  EXEC SQL EXECUTE IMMEDIATE :stmt;
+  EMB_SQL_CHECK("Table--Insert");
+
+  strcpy(stmt, "INSERT INTO vartable VALUES "
+               "(22222, '<product pid=\"80\">"
+               "<description><name> Plastic Casing </name>"
+               "<details> Green Color </details>"
+               "<price> 7.89 </price>"
+               "<weight> 6.23 </weight>"
+               "</description></product>', "
+               "'Last Product')");
+  EXEC SQL EXECUTE IMMEDIATE :stmt;
+  EMB_SQL_CHECK("Table--Insert");
+
+  strcpy(stmt, "INSERT INTO vartable VALUES "
+               "(33333, \'<NAME><FIRSTNAME> Neeraj </FIRSTNAME>"
+               "<LASTNAME> Gaurav </LASTNAME></NAME>\', "
+               "\'Final Year\')");
+  EXEC SQL EXECUTE IMMEDIATE :stmt;
+  EMB_SQL_CHECK("Table--Insert");
+
+  EXEC SQL COMMIT;
+  EMB_SQL_CHECK("COMMIT");
+
+  return 0;
+}/* createtables */
+
+/* droptables */
+int droptables(void)
+{
+  int rc = 0;
+  char stmt[200];
+
+  strcpy(stmt, "DROP TABLE VARTABLE");
+  EXEC SQL EXECUTE IMMEDIATE :stmt;
+  EMB_SQL_CHECK("Table--Drop");
+
+  EXEC SQL COMMIT;
+  EMB_SQL_CHECK("COMMIT");
+
+  return 0;
+}/* droptables */
+

@@ -1,0 +1,3 @@
+LIBRARY asnqspC
+EXPORTS
+server1

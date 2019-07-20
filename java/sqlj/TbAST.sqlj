@@ -1,0 +1,287 @@
+//***************************************************************************
+// (c) Copyright IBM Corp. 2007 All rights reserved.
+// 
+// The following sample of source code ("Sample") is owned by International 
+// Business Machines Corporation or one of its subsidiaries ("IBM") and is 
+// copyrighted and licensed, not sold. You may use, copy, modify, and 
+// distribute the Sample in any form without payment to IBM, for the purpose of 
+// assisting you in the development of your applications.
+// 
+// The Sample code is provided to you on an "AS IS" basis, without warranty of 
+// any kind. IBM HEREBY EXPRESSLY DISCLAIMS ALL WARRANTIES, EITHER EXPRESS OR 
+// IMPLIED, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED WARRANTIES OF 
+// MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE. Some jurisdictions do 
+// not allow for the exclusion or limitation of implied warranties, so the above 
+// limitations or exclusions may not apply to you. IBM shall not be liable for 
+// any damages you suffer as a result of using, copying, modifying or 
+// distributing the Sample, even if IBM has been advised of the possibility of 
+// such damages.
+//***************************************************************************
+//
+// SOURCE FILE NAME: TbAST.sqlj
+//
+// SAMPLE: How to use staging table for updating deferred AST 
+//          
+//         This sample:
+//         1. Creates a refresh-deferred summary table 
+//         2. Creates a staging table for this summary table 
+//         3. Applies contents of staging table to AST
+//         4. Restores the data in a summary table 
+//
+// SQL STATEMENTS USED:
+//         INSERT
+//         REFRESH
+//         SET INTEGRITY
+//         FETCH
+//         COMMIT 
+//
+// Classes used from Util.java are:
+//        Db
+//        SqljException
+//
+// PREQUISITES : 1. Create the pre-requisite tables by running the command:
+//                    TbAstScrpt
+//                  Alternatively,you can run the command:
+//                    db2 -tvf TbAst_setup.db2
+//
+// EXECUTION : 1. Compile the sample using:
+//                   bldsqlj TbAst <userid> <password> <server_name> <port_number> <db_name>
+//             2. Run the sample as:
+//                   java TbAst
+//             3. Perform a clean up once the sample has been executed using:
+//                   db2 -tvf TbAst_cleanup.db2
+//
+// OUTPUT FILE: TbAST.out (available in the online documentation)
+// Output will vary depending on the JDBC driver connectivity used.
+//**************************************************************************
+//
+// For more information on the sample programs, see the README file.
+//
+// For information on developing SQLJ applications, see the Application
+// Development Guide.
+//
+// For information on using SQL statements, see the SQL Reference.
+//
+// For the latest information on programming, compiling, and running DB2
+// applications, visit the DB2 application development website at
+//     http://www.software.ibm.com/data/db2/udb/ad
+//***************************************************************************
+
+import java.lang.*;
+import java.sql.*;
+import sqlj.runtime.*;
+import sqlj.runtime.ref.*;
+
+#sql iterator TbAST_Cursor0(int, int, int);
+
+class TbAST
+{
+  public static void main(String argv[])
+  {
+    DefaultContext ctx = null;
+    
+    try
+    {
+      Db db = new Db(argv);
+
+      System.out.println();
+      System.out.println(
+        "THIS SAMPLE SHOWS THE USAGE OF STAGING TABLE TO UPDATE \n" + 
+        "REFRESH DEFERRED AST AND RESTORE DATA IN A SUMMARY TABLE \n" +
+        "\n-----------------------------------------------------------\n");
+
+      // connect to the 'sample' database
+      ctx = db.getDefaultContext();
+
+      // create a base table, summary table, staging table 
+      System.out.println(
+        "\nBase table 't', summary table 'd_ast' and staging table 'g' \n" +
+        "are created in the setup script TbAst_setup.db2 using the commands\n" +
+        "'CREATE TABLE t(c1 SMALLINT NOT NULL,c2 SMALLINT NOT NULL,c3 SMALLINT,c4 SMALLINT)' \n" +
+        "'CREATE SUMMARY TABLE d_ast AS(SELECT c1, c2, COUNT(*) AS count FROM t GROUP BY c1, c2) \n" +
+        "                                      DATA INITIALLY DEFERRED REFRESH DEFERRED' \n" +
+        "'CREATE TABLE g FOR d_ast PROPAGATE IMMEDIATE' \n");
+
+      // to show the propagation of changes of base table to
+      // summary tables through the staging table 
+      System.out.println(
+        "\n-----------------------------------------------------------\n" +
+        "To show the propagation of changes from base table to \n" +
+        "summary tables through the staging table: \n" );
+      propagateStagingToAst( ctx.getConnection() );
+    
+      // to show restoring of data in a summary table 
+      System.out.println(
+        "\n------------------------------------------------------------ \n" +
+        "To show restoring of data in a summary table");
+      restoreSummaryTable( ctx.getConnection() );
+  
+      // disconnect from 'sample' database
+      db.disconnect();
+    }
+    catch (Exception e)
+    {
+      SqljException sqljExc = new SqljException(e);
+      sqljExc.handle();
+    }
+  } // main
+
+  // Show how to propagate the changes from base table to
+  // summary tables through the staging table
+  static void propagateStagingToAst(Connection con)
+  {
+    try
+    {  
+      Statement stmt = con.createStatement();
+          
+      System.out.println(
+        "Bring staging table out of pending state \n"+
+        "  SET INTEGRITY FOR g IMMEDIATE CHECKED");
+      stmt.executeUpdate("SET INTEGRITY FOR G IMMEDIATE CHECKED");
+      #sql {COMMIT};
+                   
+      System.out.println(
+        "\nRefresh summary table, get it out of pending state. \n" + 
+        "  REFRESH TABLE d_ast NOT INCREMENTAL\n");
+      #sql {REFRESH TABLE d_ast NOT INCREMENTAL};  
+      #sql {COMMIT};
+            
+      System.out.println(
+        "\nInsert data into base table T\n" +
+        "  INSERT INTO t VALUES(1,1,1,1), \n" +
+        "                      (2,2,2,2), \n" +
+        "                      (1,1,1,1), \n" +
+        "                      (3,3,3,3)");
+      #sql {INSERT INTO t VALUES (1,1,1,1), 
+                                 (2,2,2,2), 
+                                 (1,1,1,1), 
+                                 (3,3,3,3) };
+      #sql {COMMIT};
+      
+      System.out.println(
+        "\nDisplay the contents of staging table g.\n" + 
+        "The Staging table contains incremental changes to base table."); 
+      displayTable("g");
+ 
+      System.out.println(
+        "\n\nRefresh the summary table \n" +
+        "  REFRESH TABLE d_ast INCREMENTAL\n");
+      #sql {REFRESH TABLE d_ast INCREMENTAL};
+      #sql {COMMIT};
+      
+      System.out.println(
+        "Display the contents of staging table g \n" +
+        "   NOTE: The staging table is pruned after AST is \n" +
+        "         refreshed. The contents are propagated to AST \n" +
+        "         from the staging table");
+      displayTable("g");
+
+      System.out.println(
+        "\nDisplay the contents of AST\n"  +
+        "Summary table has the changes propagated from staging table");
+      displayTable("d_ast");
+    }
+    catch (Exception e)
+    {
+      SqljException sqljExc = new SqljException(e);
+      sqljExc.handle();
+    }
+  } // propagateStagingToAst
+  
+  // Shows how to restore the data in a summary table 
+  static void restoreSummaryTable(Connection con)
+  {
+    try
+    { 
+      Statement stmt = con.createStatement();
+     
+      System.out.println(
+        "\nBlock all modifications to the summary table \n" +
+        "by setting the integrity to off \n" +
+        "  (g is placed in pending and g.CC=N) \n" +      
+        "\n  SET INTEGRITY FOR g OFF");
+      stmt.executeUpdate("SET INTEGRITY FOR g OFF");    
+      #sql {COMMIT};
+                
+      System.out.println(
+        "\nExport the query definition in summary table and load \n" +
+        "directly back to the summary table.\n" +
+        "  (d_ast and g both in pending \n" + 
+        "\n  SET INTEGRITY FOR d_ast OFF CASCADE IMMEDIATE\n");
+      stmt.executeUpdate("SET INTEGRITY FOR d_ast OFF CASCADE IMMEDIATE");
+      #sql {COMMIT};
+     
+      System.out.println(
+        "Prune staging table and place it in normal state\n" +
+        "  (g.CC=F)\n" + 
+        "\n  SET INTEGRITY FOR g IMMEDIATE CHECKED PRUNE\n");
+      stmt.executeUpdate("SET INTEGRITY FOR g IMMEDIATE CHECKED PRUNE");
+      #sql {COMMIT}; 
+      
+      System.out.println(
+        "Changing staging table state to U \n"  +
+        "  (g.CC to U)\n" +
+        "\n  SET INTEGRITY FOR g STAGING IMMEDIATE UNCHECKED\n");
+      stmt.executeUpdate("SET INTEGRITY FOR g STAGING IMMEDIATE UNCHECKED");
+      #sql {COMMIT};
+      
+      System.out.println(
+        "\nPlace d_ast in normal and d_ast.CC to U \n" + 
+        "\n  SET INTEGRITY FOR d_ast MATERIALIZED QUERY" +
+        " IMMEDIATE UNCHECKED\n" );
+      stmt.executeUpdate(
+        "SET INTEGRITY FOR d_ast MATERIALIZED QUERY IMMEDIATE UNCHECKED");
+      #sql {COMMIT};
+
+      stmt.close();
+    }
+    catch (Exception e)
+    {
+      SqljException sqljExc = new SqljException(e);
+      sqljExc.handle();
+    }
+  } // restoreSummaryTable
+  
+  // Displays the contents of the table being passed as the argument
+  static void displayTable(String tableName)
+  {
+    TbAST_Cursor0 cur0;
+    int c1 = 0;
+    int c2 = 0;
+    int count = 0;
+      
+    try
+    {           
+      if (tableName.equals("g"))
+      {
+        #sql cur0 = {SELECT c1, c2, count FROM g};
+        System.out.println(
+          "\n  SELECT c1, c2, count FROM g\n" +
+          "\n  C1    C2    COUNT " +
+          "\n  ------------------");
+      }
+      else 
+      {
+        #sql cur0 = {SELECT c1, c2, count FROM d_ast};
+        System.out.println(
+          "\n  SELECT c1, c2, count FROM d_ast\n" +
+          "\n  C1    C2    COUNT " +
+          "\n  ------------------");
+      }
+           
+      // retrieve and display the result from the SELECT statement
+      #sql {FETCH :cur0 INTO :c1, :c2, :count};
+      
+      while (!cur0.endFetch())
+      {                
+        System.out.println("   " + c1 + "    " + c2 + "    " + count );
+        #sql {FETCH :cur0 INTO :c1, :c2, :count};
+      }
+    }  
+    catch (Exception e)
+    {
+      SqljException sqljExc = new SqljException(e);
+      sqljExc.handle();
+    }
+  } // displayTable
+} // TbAST

@@ -1,0 +1,59 @@
+*****************************************************************************
+*
+* README for user mapping plugin Samples (all platforms)
+*
+* Last Update: Jan 2007
+*
+* The sample User Mapping plugin is designed to provide a simple 
+* implementation that you can customize to meet the specific requirements
+* of your installation.  User Mapping plugins can be used to retrieve 
+* user mappings stored in repository other than the database catalog
+* of the federation server.
+*
+* For information on developing security plugins, see the Federation System
+* Guide.
+*
+*****************************************************************************
+*
+* QUICKSTART
+*
+* - Copy sqllib/samples/federated/umplugin/file/* to a working directory.
+* - Examine the "bldplugin" script and update any path information to reflect
+*   your specific installation.
+* - Execute "bldplugin <prog_name>" (view bldplugin for more detail) to build
+*   the fsumpluginfile sample.
+*
+*****************************************************************************
+*
+* Sample files:
+*
+* bldplugin (bldplugin.bat on Windows)
+*   Build script used to handle plugin compilation and linking.
+*
+* fsumplugin_file.h
+*    The header file for the sample file based user mapping plugin.
+*
+* fsumplugin_file.c
+*    Implements a simple, file based user mapping lookup. This sample can be
+*    built with "bldplugin fsumplugin_file".
+*
+* fsumlookup (fsumlookup.exe on Windows)
+*    A standalone program to test the plugin outside of the DB2 environment
+*    Usage:
+*    fsumlookup <pluginName> <fsInstance> <fsDatabase> <fsRemoteServer> <fsAuthid>
+*    where <pluginName> is the name of the plugin library with full path
+*    
+* fsumsetup_file (fsumsetup_file.exe on Windows)
+*    A standalone program to setup the file name with full path of file holding
+*    the user mappings.
+*
+* fsumplugin_file.txt
+*    The sample file that stores the user mappings. User mapping entries are 
+*    stored in the file as the following. Each user mapping entry occupies one
+*    line in the file.
+*    <fsInstance>;<fsDatabase>;<fsRemoteServer>;<fsAuthid>;REMOTE_AUTHID:<remote_authid>;REMOTE_PASSWOD:<remote_password>
+*    Where <remote_password> is encrypted (reserved byte order). This is just
+*    use to show the encryption and decryption process. You should customize
+*    the encryption and decryption algorithm to meet your need.     
+*
+*****************************************************************************

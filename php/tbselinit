@@ -1,0 +1,22 @@
+# Licensed Materials - Property of IBM
+#
+# Governed under the terms of the International
+# License Agreement for Non-Warranted Sample Code.
+#
+# (C) COPYRIGHT International Business Machines Corp. 1996 - 2002
+# All Rights Reserved.
+#
+# US Government Users Restricted Rights - Use, duplication or
+# disclosure restricted by GSA ADP Schedule Contract with IBM Corp.
+
+# SCRIPT: tbselinit
+# To create tables for the tbsel program
+# tbseldrop.db2 drops the tables if previously created
+# tbselcreate.db2 creates the tables
+# Both CLP scripts can be run on their own
+# Usage: tbselinit
+
+db2 connect to sample
+db2 -td@ -vf tbseldrop.db2
+db2 -td@ -vf tbselcreate.db2
+db2 connect reset

@@ -1,0 +1,489 @@
+******************************************************************************
+* (c) Copyright IBM Corp. 2007 All rights reserved.
+* 
+* The following sample of source code ("Sample") is owned by International 
+* Business Machines Corporation or one of its subsidiaries ("IBM") and is 
+* copyrighted and licensed, not sold. You may use, copy, modify, and 
+* distribute the Sample in any form without payment to IBM, for the purpose of 
+* assisting you in the development of your applications.
+* 
+* The Sample code is provided to you on an "AS IS" basis, without warranty of 
+* any kind. IBM HEREBY EXPRESSLY DISCLAIMS ALL WARRANTIES, EITHER EXPRESS OR 
+* IMPLIED, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED WARRANTIES OF 
+* MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE. Some jurisdictions do 
+* not allow for the exclusion or limitation of implied warranties, so the above 
+* limitations or exclusions may not apply to you. IBM shall not be liable for 
+* any damages you suffer as a result of using, copying, modifying or 
+* distributing the Sample, even if IBM has been advised of the possibility of 
+* such damages.
+*
+******************************************************************************
+*
+*                   README for SQL Procedures Samples
+*
+* For windows, the <install_path>\sqllib\samples\sqlpl directory contains
+* this README file.
+*
+* For unix, the <install_path>/sqllib/samples/sqlpl directory contains
+* this README file.
+*
+* This README describes how to build and run stored procedure sample code
+* for DB2 9.7. The DB2 9.7 stored procedure samples are located in the
+* <install_path>\sqllib\samples\sqlpl directory for windows platform
+* and <install_path>/sqllib/samples/sqlpl for unix based platforms.
+* where <install_path> is the location of DB2 9.7 on your hard drive. The
+* default location for <install_path> is C:\Program Files\IBM for windows
+* and $HOME for unix based platform.
+*
+* The following table lists sample programs that demonstrate SQL procedures.
+*
+* Files with a ".db2" file extension are DB2 Command Line Processer (CLP)
+* scripts. These scripts issue CREATE PROCEDURE statements that create
+* stored procedure on the database server.
+*
+* The stored procedures created by "spserver.db2" can be called by client
+* applications created from sample files in other sample directories (see
+* the "spserver.db2" source file for details). All other CLP scripts have
+* a corresponding client application source file in the sqlpl directory.
+*
+* The client application for nested stored procedure "nestedsp.db2" is
+* "NestedSP.java", which is a client application written using JDBC in
+* the JAVA programming language.
+*
+* The client application for "rsultset.db2" is "rsultset.c", which is a
+* client application written using CLI in the C programming language.
+*
+* The other CLP scripts have a corresponding client application file with
+* a ".sqc" file extension, indicating that they use embedded SQL in the
+* C programming language.
+*
+* NOTE: The JDBC driver used in "NestedSP.java" is the legacy JDBC Type 2
+*       driver.  You may modify it to use different DB2 JDBC drivers, but
+*       be advised that a 64-bit instance of DB2 for Linux on AMD64 does
+*       not support the DB2 Universal JDBC driver's Type 2 connectivity.
+*       All other DB2 JDBC drivers are supported.  The same is true for the
+*       "SpClient.java" file mentioned in the comments in the "spserver.db2"
+*       file.
+*
+* WARNING: Some of these samples will change your database or database
+*          manager's configuration. Execute the samples against a test
+*          database only, such as the DB2 SAMPLE database.
+*
+******************************************************************************
+*
+*           Prepare your DB2 sample development environment
+*
+* On Windows steps 2 to 4  should be run in a DB2 Command Window.
+* The DB2 Command Window is needed to execute the db2 specific commands.
+* Listed below is how to opening the DB2 Command Window:
+*
+*   o From the Start Menu click Start --> Programs --> IBM DB2 -->
+*    <DB2 copy name> --> Command Line Tools --> Command Window
+*
+* This Opens the CLP-enabled DB2 window, and initializes the DB2 command line
+* environment. Issuing this command is equivalent to clicking the DB2
+* Command Window as above.
+*
+*  1) Copy the files in <install_path>\sqllib\samples\sqlpl\* (for
+*     windows platform) or <install_path>/sqllib/samples/sqlpl/*
+*     (for UNIX based platform) to your working directory and ensure that
+*     directory has write permission.
+*
+*  2) Start the Database Manager with the following command:
+*       db2start
+*
+*  3) Create the sample database with the following command:
+*       db2sampl 
+*
+*  4) Connect to the database with the following command:
+*      db2 "connect to sample"
+*
+*  5) cd to the directory containing the files copied in step 1.
+*
+******************************************************************************/
+*
+*                  Building DB2 Stored Procedure Samples
+*
+* Building Stored Procedure
+*
+* To run the SQL procedure CLP scripts, perform the following steps:
+* 1. Connect to the database
+* 2. Issue the following command at the CLP:
+*
+*     db2 -td@ -vf <script-name>
+*
+* For example, to issue the CREATE PROCEDURE statement contained in the
+* "nestif.db2" CLP script, issue the following command:
+*
+*     db2 -td@ -vf nestif.db2
+*
+* Building Stored Procedure Client applications.
+*
+*   There are two ways to build DB2 stored procedure client : using a nmake
+*   utility for windows(make utility for unix based platform) or using
+*    build files.
+*
+*        o To build client application using the nmake utility for windows see
+*          'BUILDING CLIENT APPLICATION USING nmake UTILITY on WINDOWS'.
+*        o To build client application using the make utility for unix see
+*          'BUILDING CLIENT APPLICATION USING make UTILITY on UNIX'.
+*        o To build client application using the build files or when you do not
+*          have a compatible nmake utility see 'BUILDING CLIENT
+*          APPLICATION USING BUILD FILES'.
+*
+******************************************************************************
+*
+*     *** BUILDING CLIENT APPLICATION USING nmake UTILITY on WINDOWS ***
+*
+*
+*      If you have a compatible nmake utility on your system, you
+*      can use the makefile provided. Such a nmake utility may be
+*      provided by another language compiler.Modify the PATH
+*      variable to include the directory containing the nmake
+*      utility.
+*
+*      Depending on your environment, the makefile might have to be
+*      modified.For more details refer to the 'VARIABLES' section
+*      in the makefile.
+*
+*      Execute the appropriate 'nmake' command in your working
+*      directory:
+*
+*        nmake <app_name>   - Builds the program designated by <app_name>
+*
+*        nmake all          - Builds the all the supplied sample programs
+*
+*        nmake clean        - Erases intermediate files
+*        nmake cleanall     - Erases all files produced in the build process,
+*                             except the original source files
+*
+******************************************************************************
+*
+*     *** BUILDING CLIENT APPLICATION USING make UTILITY on UNIX ***
+*
+*      If you have a compatible make utility on your system, you
+*      can use the makefile provided. Modify the PATH
+*      variable to include the directory containing the make
+*      utility.
+*
+*      Depending on your environment, the makefile might have to be
+*      modified.For more details refer to the 'VARIABLES' section
+*      in the makefile.
+*
+*      Execute the appropriate 'make' command in your working
+*      directory:
+*
+*        make <app_name>   - Builds the program designated by <app_name>
+*
+*        make all          - Builds the all the supplied sample programs
+*
+*        make clean        - Erases intermediate files
+*        make cleanall     - Erases all files produced in the build process,
+*                            except the original source files
+*
+******************************************************************************
+*
+*       *** BUILDING CLIENT APPLICATION USING BUILD FILES ***
+*
+*  For building CLI and C client application, use the build file provided.
+*  Run the following command to make the client application
+*      bldapp <sample name>
+*          where <sample name> is the name of
+*          the client application without extension.
+*
+*  For building JAVA client application, use the java bytecode compiler to
+*  compile the application.
+*  Util.java has utility classes which are required to compile the java
+*  client application. Compile the Util.java to generate required classes.
+*       javac Util.java
+*
+*  Run the following command to make the client application
+*       javac <sample name>
+*          where <sample name> is the name of
+*          the client application.
+*
+******************************************************************************
+*
+*              Common file Descriptions
+* 
+* The following are the common files for SQL Procedures samples. For more
+* information on these files, refer to the program source files.
+*
+******************************************************************************
+*
+* Common files
+*
+* makefile      - Builds the supplied sample programs in the "sqlpl"
+*                 samples directory.
+* README        - Lists and describes, at a high-level, all files in the
+*                 "sqlpl" samples directory. (This file).
+*
+******************************************************************************
+*
+* BUILD Files for Windows
+*
+* bldapp.bat    - Batch file for compiling embedded C applications
+*                 with the Microsoft Visual C compiler. Use this script to
+*                 compile source files in this directory that have a ".sqc"
+*                 file extension.
+* bldcli.bat    - Batch file for compiling applications with
+*                 the Microsoft Visual C compiler. Use this batch file to
+*                 compile source files in this directory that have a
+*                 ".c" file extension.
+* embprep.bat   - Batch file to precompile and bind C sample programs
+*                 that contain embedded SQL.
+*
+*****************************************************************************
+*
+* BUILD Files for UNIX
+*
+* bldapp        - Script file for compiling embedded C applications.
+*                 Use this script to compile source files in this directory
+*                 that have a ".sqc" file extension.
+* bldcli        - Script file for compiling applications. Use
+*                 this script to compile source files in this directory that
+*                 have a ".c" file extension.
+* embprep       - Script file to precompile and bind C sample
+*                 programs that contain embedded SQL.
+*
+*****************************************************************************
+*
+* OTHER
+*
+* utilapi.c     - Utility functions used by DB2 API samples.
+* utilapi.h     - Header file for utilapi.h.
+* utilcli.c     - Utility functions used by samples.
+* utilcli.h     - Header file for utilcli.c.
+* utilemb.sqc   - Utility functions used by embedded SQL samples.
+* utilemb.h     - Header file for utilemb.sqc.
+*
+*****************************************************************************
+*
+*                   SQL Procedures sample descriptions
+*
+* The following are the SQL Procedures sample files included with DB2.
+* For more information on these files, refer to program source files.
+*
+* (CLI) - A client application, which calls a stored procedure or
+*         declares and calls a user-defined function on the server. 
+* 
+******************************************************************************
+*
+* COMMAND LINE PROCESSOR SQL Procedures Samples
+*
+* basecase.db2    - The UPDATE_SALARY procedure raises the salary of an
+*                   employee identified by the "empno" IN parameter in the
+*                   "staff" table of the "sample" database. The procedure
+*                   determines the raise according to a CASE statement
+*                   that uses the "rating" IN parameter.
+*                   To call this SQL procedure from the CLP,
+*                   issue the following statement:
+*                       db2 "CALL update_salary ('000100', 1)"
+*
+* basecase.sqc    - Calls the UPDATE_SALARY procedure.           (CLI)
+*
+* baseif.db2      - The UPDATE_SALARY_IF procedure raises the salary of an
+*                   employee identified by the "empno" IN parameter in the
+*                   "staff" table of the "sample" database. The procedure
+*                   determines the raise according to an IF statement that
+*                   uses the "rating" IN parameter.
+*                   To call this SQL procedure from the CLP,
+*                   issue the following statement:
+*                       db2 "CALL update_salary_if ('000100', 1)"
+*
+* baseif.sqc      - Calls the UPDATE_SALARY_IF procedure.        (CLI)
+*
+* dynamic.db2     - The CREATE_DEPT_TABLE procedure uses dynamic DDL to
+*                   create a new table. The name of the table is based on
+*                   the value of the IN parameter to the procedure.
+*                   To call this SQL procedure from the CLP,
+*                   issue the following statement:
+*                       db2 "CALL create_dept_table ('D11', ?)"
+*
+* dynamic.sqc     - Calls the CREATE_DEPT_TABLE procedure.       (CLI)
+*
+* iterate.db2     - The ITERATOR procedure uses a FETCH loop to retrieve
+*                   data from the "department" table. If the value of the
+*                   "deptno" column is not 'D11', modified data is inserted
+*                   into the "department" table. If the value of the
+*                   "deptno" column is 'D11', an ITERATE statement passes
+*                   the flow of control back to the beginning of the LOOP
+*                   statement.
+*                   To call this SQL procedure from the CLP,
+*                   issue the following statement:
+*                       db2 "CALL iterator ()"
+*
+* iterate.sqc     - Calls the ITERATOR procedure.                (CLI)
+*
+* leave.db2       - The LEAVE_LOOP procedure counts the number of FETCH
+*                   operations performed in a LOOP statement before the
+*                   "not_found" condition handler invokes a LEAVE statement.
+*                   The LEAVE statement causes the flow of control to exit
+*                   the loop and complete the stored procedure.
+*                   To call this SQL procedure from the CLP,
+*                   issue the following statement:
+*                       db2 "CALL leave_loop (?)"
+*
+* leave.sqc       - Calls the LEAVE_LOOP procedure.              (CLI)
+*
+* loop.db2        - The LOOP_UNTIL_SPACE procedure counts the number of
+*                   FETCH operations performed in a LOOP statement until
+*                   the cursor retrieves a row with a space (' ') value
+*                   for column "midinit". The loop statement causes the
+*                   flow of control to exit the loop and complete the
+*                   stored procedure.
+*                   To call this SQL procedure from the CLP,
+*                   issue the following statement:
+*                     db2 "CALL loop_until_space (?)"
+*
+* loop.sqc        - Calls the LOOP_UNTIL_SPACE procedure.        (CLI)
+*
+* nestcase.db2    - The BUMP_SALARY procedure uses nested CASE statements
+*                   to raise the salaries of employees in a department
+*                   identified by the dept IN parameter from the "staff"
+*                   table of the "sample" database.
+*                   To call this SQL procedure from the CLP,
+*                   issue the following statement:
+*                       db2 "CALL bump_salary (51)"
+*
+* nestcase.sqc    - Calls the BUMP_SALARY procedure.             (CLI)
+*
+* nestedsp.db2    - This CLP script contains three stored procedures.
+*                   They are OUT_AVERAGE, OUT_MEDIAN and MAX_SALARY.
+*                   They are nested, where OUT_AVERAGE calls OUT_MEDIAN
+*                   and OUT_MEDIAN calls MAX_SALARY.
+*                   To call these SQL procedures from the CLP,
+*                   issue the following statement:
+*                       db2 "CALL out_average (?,?,?,?,?)"
+*
+* nestedspdrop.db2- This CLP script drops the three stored procedures
+*                   created by nestedsp.db2.
+*
+* NestedSP.java   - Calls the OUT_AVERAGE procedure.             (CLI)
+*
+* nestif.db2      - The BUMP_SALARY_IF procedure uses nested IF statements
+*                   to raise the salaries of employees in a department
+*                   identified by the dept IN parameter from the "staff"
+*                   table of the "sample" database.
+*                   To call this SQL procedure from the CLP,
+*                   issue the following statement:
+*                       db2 "CALL bump_salary_if (20)"
+*
+* nestif.sqc      - Calls the BUMP_SALARY_IF procedure.          (CLI)
+*
+* repeat.db2      - The REPEAT_STMT procedure counts the number of FETCH
+*                   operations performed in a repeat statement until the
+*                   cursor can retrieve no more rows. The condition handler
+*                   causes the flow of control to exit the repeat loop and
+*                   complete the stored procedure.
+*                   To call this SQL procedure from the CLP,
+*                   issue the following statement:
+*                       db2 "CALL repeat_stmt (?)"
+*
+* repeat.sqc      - Calls the REPEAT_STMT procedure.             (CLI)
+*
+* rsultset.db2    - The MEDIAN_RESULT_SET procedure calculates the median
+*                   salary of employees from the "staff" table of
+*                   the "sample" database. The median value is assigned
+*                   to the salary OUT parameter and returned to the
+*                   "rsultset" client. The procedure opens two
+*                   WITH RETURN cursors to return result sets of the
+*                   employees with a salary greater than the median and
+*                   employees with a salary less than the median salary.
+*                   The procedure returns the result sets to the client.
+*                   To call this SQL procedure from the CLP, issue the
+*                   following statement:
+*                       db2 "CALL median_result_set (?)"
+*
+* rsultset.c      - Calls the MEDIAN_RESULT_SET procedure,       (CLI)
+*                   displays the median salary, then displays
+*                   the result set generated by the SQL
+*                   procedure. This client is written using
+*                   the API, which can accept result sets.
+*
+* spserver.db2    - The SQL procedures in this CLP script demonstrate basic
+*                   error-handling, nested stored procedure calls, and
+*                   returning result sets to the client application or
+*                   the calling application. This script contains the
+*                   following SQL procedures:
+*                       o OUT_LANGUAGE
+*                       o OUT_PARAM
+*                       o IN_PARAMS
+*                       o INOUT_PARAM
+*                       o ONE_RESULT_SET
+*                       o RESULT_SET_CALLER
+*                       o TWO_RESULT_SETS
+*                       o ALL_DATA_TYPES To call these SQL procedures,
+*                         you can use the "spclient" application in the C,
+*                         CLI, and CPP samples directories, or the "SpClient"
+*                         application in the Java/JDBC and Java/SQLj
+*                         samples directories.
+*
+* tbfn.db2        - The tables and SQL functions in this CLP script are used
+*                   to illustrate various ways of invoking a table function
+*                   that MODIFIES SQL DATA from within a SELECT statement.
+*
+* tbfnuse.db2     - This script invokes three table functions, updateInv,
+*                   sal_by_dept, and update_salary. It displays the data
+*                   in the tables related to this sample before and after
+*                   the invocations to the table functions.
+*
+* tbselcreate.db2 - The tables and SQL procedure BUY_COMPANY in this CLP
+*                   script are used to illustrate various ways of using a
+*                   SELECT statement with a data change statement as the
+*                   table-reference in the FROM clause. Data change
+*                   statements include INSERT, UPDATE, DELETE, MERGE.
+*                   Referencing one of these in a SELECT statement
+*                   (also called SELECT FROM a data change statement)
+*                   is useful for retrieving column values of just inserted
+*                   rows (ie. when a column is a generated column), or for
+*                   retrieving the old and new values of an updated column
+*                   without having to use two statements, and more...
+*                   The procedure BUY_COMPANY encapsulates some examples of
+*                   useful applications of this statement.
+*                   To call this SQL procedures, you can use the
+*                   "tbsel" application in this directory.
+*
+* tbseldrop.db2   - The SQL statements in this script drop the tables and the
+*                   procedure created script tbselcreate.db2
+*
+* tbsel.sqc       - Client application that CALLs the            (CLI)
+*                   BUY_COMPANY SQL procedure, displays the
+*                   data in the tables related to this sample
+*                   before and after the CALL to the SQL procedure.
+*
+* whiles.db2      - The DEPT_MEDIAN procedure obtains the median salary of
+*                   employees in a department identified by the "dept" IN
+*                   parameter from the "staff" table of the "sample" database.
+*                   The median value is assigned to the salary OUT parameter
+*                   and returned to the "whiles" client. The whiles client
+*                   then prints the median salary.
+*                   To call this SQL procedure from the CLP, issue
+*                   the following statement:
+*                       db2 "CALL dept_median (51, ?)"
+*
+* whiles.sqc      - Calls the DEPT_MEDIAN procedure.             (CLI)
+*
+* arrays_sqlpl.db2- How to use ARRAY data type in SQL stored procedure.
+*                   For java client for this sample please refer to 
+*                   sqllib/samples/java/jdbc directory 
+*
+* array_stack.db2 - How to use ARRAY data type in SQL stored procedure
+*                   to implement a stack operations.
+*                   For java client for this sample please refer to
+*                   sqllib/samples/java/jdbc directory
+*
+* modules.db2     - This sample demonstrates:
+*                   1. Creation of modules and module objects
+*                   2. Creation and usage of row data types, boolean data type,
+*                      associative arrays and array of rows
+*                   3. Creation and usage of strongly-typed, weakly-typed and
+*                      parameterized cursors
+*                   4. Full SQL PL support for UDFs, triggers and compiled
+*                      compound statements
+*                   5. Support for INOUT and OUT parameters in compiled UDFs
+*                   6. Support for compiled UDFs and triggers that contain
+*                      assignment to global variables
+*
+*defaultparam.db2 - How to use DEFAULT values in procedure.
+********************************************************************************

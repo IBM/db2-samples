@@ -1,0 +1,184 @@
+--********************************************************************/
+--                                                                   */
+--    IBM InfoSphere Replication Server                              */
+--    Version 10.5 FPs for Linux, UNIX AND Windows                     */
+--                                                                   */
+--    Sample Q Replication migration script for UNIX AND NT          */
+--    Licensed Materials - Property of IBM                           */
+--                                                                   */
+--    (C) Copyright IBM Corp. 1993, 2015. All Rights Reserved        */
+--                                                                   */
+--    US Government Users Restricted Rights - Use, duplication       */
+--    or disclosure restricted by GSA ADP Schedule Contract          */
+--    with IBM Corp.                                                 */
+--                                                                   */
+--********************************************************************/
+-- File name: asnoqappluwv1021fp.sql
+--
+-- Script to migrate Oracle Q Apply control tables from  V10.5 Fixpak 7 to
+-- the latest fixpack.
+--
+-- Prior to running this script, customize it to your existing
+-- Q Apply server environment:
+-- (1) Locate and change all occurrences of the string !appschema!
+--     to the name of the Q Apply schema applicable to your
+--     environment
+--
+--********************************************************************/
+
+ALTER TABLE !APPSCHEMA!.IBMQREP_APPLYMON ADD NUM_MQMSGS NUMBER(10) DEFAULT NULL;
+ALTER TABLE !APPSCHEMA!.IBMQREP_APPLYMON ADD NUM_DBMS_COMMITS INTEGER DEFAULT 0;
+ALTER TABLE !APPSCHEMA!.IBMQREP_APPLYMON ADD OLDEST_COMMIT_TIME TIMESTAMP;
+ALTER TABLE !APPSCHEMA!.IBMQREP_APPLYPARMS ADD COMMIT_COUNT_UNIT CHAR(1) DEFAULT 'T';
+ALTER TABLE !APPSCHEMA!.IBMQREP_APPLYPARMS ADD WARNTXLATENCY INTEGER DEFAULT 0 NOT NULL;
+ALTER TABLE !APPSCHEMA!.IBMQREP_APPLYPARMS ADD WARNTXEVTS INTEGER DEFAULT 10 NOT NULL;
+ALTER TABLE !APPSCHEMA!.IBMQREP_APPLYPARMS ADD WARNTXRESET INTEGER DEFAULT 300000 NOT NULL;
+ALTER TABLE !APPSCHEMA!.IBMQREP_TARGETS ADD CODEPAGE_EXPAND_FACTOR SMALLINT DEFAULT 1;
+ALTER TABLE !APPSCHEMA!.IBMQREP_TARGETS ADD CCD_KEYUPD_AS_DELINS CHAR(1) DEFAULT 'N';
+
+-- Uncomment the following REGISTER and PC table creation SQL
+-- if user !APPSCHEMA! exists and user creating control
+-- tables has sufficient privileges to create tables 
+-- and index in !APPSCHEMA! schema
+-- The REGISTER and PC table schema should match SQL_CAP_SCHEMA value 
+-- in !APPSCHEMA!.IBMQREP_APPLYPARMS  
+
+-- CREATE TABLE !SQL_CAP_SCHEMA!.IBMSNAP_REGISTER
+-- (
+--  SOURCE_OWNER                    VARCHAR(30) NOT NULL,
+--  SOURCE_TABLE                    VARCHAR(128) NOT NULL,
+--  SOURCE_VIEW_QUAL                NUMBER(4,0) NOT NULL,
+--  GLOBAL_RECORD                   CHAR( 1) NOT NULL,
+--  SOURCE_STRUCTURE                NUMBER(4,0) NOT NULL,
+--  SOURCE_CONDENSED                CHAR( 1) NOT NULL,
+--  SOURCE_COMPLETE                 CHAR(  1) NOT NULL,
+--  CD_OWNER                        VARCHAR(30),
+--  CD_TABLE                        VARCHAR(128),
+--  PHYS_CHANGE_OWNER               VARCHAR(30),
+--  PHYS_CHANGE_TABLE               VARCHAR(128),
+--  CD_OLD_SYNCHPOINT               RAW( 16),
+--  CD_NEW_SYNCHPOINT               RAW( 16),
+--  DISABLE_REFRESH                 NUMBER(4,0) NOT NULL,
+--  CCD_OWNER                       VARCHAR(30),
+--  CCD_TABLE                       VARCHAR(128),
+--  CCD_OLD_SYNCHPOINT              RAW( 16),
+--  SYNCHPOINT                      RAW( 16),
+--  SYNCHTIME                       DATE,
+--  CCD_CONDENSED                   CHAR(  1),
+--  CCD_COMPLETE                    CHAR(  1),
+--  ARCH_LEVEL                      CHAR(  4) NOT NULL,
+--  DESCRIPTION                     CHAR(254),
+--  BEFORE_IMG_PREFIX               VARCHAR(   4),
+--  CONFLICT_LEVEL                  CHAR(   1),
+--  CHG_UPD_TO_DEL_INS              CHAR(   1),
+--  CHGONLY                         CHAR(   1),
+--  RECAPTURE                       CHAR(   1),
+--  OPTION_FLAGS                    CHAR(   4) NOT NULL,
+--  STOP_ON_ERROR                   CHAR(  1),
+--  STATE                           CHAR(  1),
+--  STATE_INFO                      CHAR(  8)
+-- );
+-- 
+-- 
+-- CREATE UNIQUE INDEX !SQL_CAP_SCHEMA!.IBMSNAP_REGISTERX ON !SQL_CAP_SCHEMA!.IBMSNAP_REGISTER
+-- (
+--  SOURCE_OWNER                    ASC,
+--  SOURCE_TABLE                    ASC,
+--  SOURCE_VIEW_QUAL                ASC
+-- );
+-- 
+-- 
+-- CREATE  INDEX !SQL_CAP_SCHEMA!.IBMSNAP_REGISTERX1 ON !SQL_CAP_SCHEMA!.IBMSNAP_REGISTER
+-- (
+--  PHYS_CHANGE_OWNER               ASC,
+--  PHYS_CHANGE_TABLE               ASC
+-- );
+-- 
+-- 
+-- CREATE  INDEX !SQL_CAP_SCHEMA!.IBMSNAP_REGISTERX2 ON !SQL_CAP_SCHEMA!.IBMSNAP_REGISTER
+-- (
+--  GLOBAL_RECORD                   ASC
+-- );
+-- 
+-- 
+-- CREATE TABLE !SQL_CAP_SCHEMA!.IBMSNAP_PRUNCNTL
+-- (
+--  TARGET_SERVER                   CHAR( 18) NOT NULL,
+--  TARGET_OWNER                    VARCHAR(30) NOT NULL,
+--  TARGET_TABLE                    VARCHAR(128) NOT NULL,
+--  SYNCHTIME                       DATE ,
+--  SYNCHPOINT                      RAW( 16) ,
+--  SOURCE_OWNER                    VARCHAR(30) NOT NULL,
+--  SOURCE_TABLE                    VARCHAR(128) NOT NULL,
+--  SOURCE_VIEW_QUAL                NUMBER(4,0) NOT NULL,
+--  APPLY_QUAL                      CHAR( 18) NOT NULL,
+--  SET_NAME                        CHAR( 18) NOT NULL,
+--  CNTL_SERVER                     CHAR( 18) NOT NULL,
+--  TARGET_STRUCTURE                NUMBER(4,0) NOT NULL,
+--  CNTL_ALIAS                      CHAR(  8) ,
+--  PHYS_CHANGE_OWNER               VARCHAR(30),
+--  PHYS_CHANGE_TABLE               VARCHAR(128),
+--  MAP_ID                          VARCHAR( 10) NOT NULL
+-- );
+-- 
+-- 
+-- CREATE UNIQUE INDEX !SQL_CAP_SCHEMA!.IBMSNAP_PRUNCNTLX ON !SQL_CAP_SCHEMA!.IBMSNAP_PRUNCNTL
+-- (
+--  SOURCE_OWNER                    ASC,
+--  SOURCE_TABLE                    ASC,
+--  SOURCE_VIEW_QUAL                ASC,
+--  APPLY_QUAL                      ASC,
+--  SET_NAME                        ASC,
+--  TARGET_SERVER                   ASC,
+--  TARGET_TABLE                    ASC,
+--  TARGET_OWNER                    ASC
+-- );
+-- 
+-- 
+-- CREATE UNIQUE INDEX !SQL_CAP_SCHEMA!.IBMSNAP_PRUNCNTLX1 ON !SQL_CAP_SCHEMA!.IBMSNAP_PRUNCNTL
+-- (
+--  MAP_ID                          ASC
+-- );
+-- 
+-- 
+-- CREATE  INDEX !SQL_CAP_SCHEMA!.IBMSNAP_PRUNCNTLX2 ON !SQL_CAP_SCHEMA!.IBMSNAP_PRUNCNTL
+-- (
+--  PHYS_CHANGE_OWNER               ASC,
+--  PHYS_CHANGE_TABLE               ASC
+-- );
+-- 
+-- 
+-- CREATE  INDEX !SQL_CAP_SCHEMA!.IBMSNAP_PRUNCNTLX3 ON !SQL_CAP_SCHEMA!.IBMSNAP_PRUNCNTL
+-- (
+--  APPLY_QUAL                      ASC,
+--  SET_NAME                        ASC,
+--  TARGET_SERVER                   ASC
+-- );
+-- 
+-- INSERT INTO !SQL_CAP_SCHEMA!.IBMSNAP_REGISTER
+-- (source_owner, source_table, cd_owner, cd_table, phys_change_owner,
+--  phys_change_table, source_view_qual, source_structure,
+--  source_condensed, source_complete, disable_refresh, conflict_level,
+--  chg_upd_to_del_ins, chgonly, recapture, stop_on_error, global_record,
+--  option_flags, state, arch_level)
+-- VALUES
+--  ('!CCDTABLESCHEMA!', '!CCDTABLENAME!', '!APPSCHEMA!', '!QNAME!', 'SCOTT', 'T1', 0, 3, 
+--  '!CONDENSED_ATTRIBUTE!','!COMPLETE_ATTRIBUTE!', 0, '0', 'N', 'N', 'Y', 'Y', 'N', 
+--  'NNNN', 'I', '0801');
+
+-- source_owner value should match !CCDTABLESCHEMA!
+-- source_table value should match !CCDTABLENAME!
+-- cd_owner value should match !APPSCHEMA!
+-- cd_table value should match !QNAME!
+-- source_condensed value should match CONDENSED ATTRIBUTE for CCD table
+-- source_complete value should match COMPLETE ATTRIBUTE for CCD table
+-- other columns values could be random
+
+-- Uncomment the above REGISTER and PC table creation SQL
+-- if user !APPSCHEMA! exists and user creating control
+-- tables has sufficient privileges to create tables 
+-- and index in !APPSCHEMA! schema
+-- The REGISTER and PC table schema should match SQL_CAP_SCHEMA value 
+-- in !APPSCHEMA!.IBMQREP_APPLYPARMS  
+
+

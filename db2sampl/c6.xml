@@ -1,0 +1,15 @@
+<customerinfo Cid='1005'>
+<name>Larry Menard</name>
+<addr country="Canada">
+<street>223 NatureValley Road</street>
+<city>Toronto</city>
+<prov-state>Ontario</prov-state>
+<pcode-zip>M4C 5K8</pcode-zip>
+</addr>
+<phone type="work">905-555-9146</phone>
+<phone type="home">416-555-6121</phone>
+<assistant>
+<name>Goose Defender</name>
+<phone type="home">416-555-1943</phone>
+</assistant>
+</customerinfo>

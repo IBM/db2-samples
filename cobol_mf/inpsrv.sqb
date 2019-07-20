@@ -1,0 +1,197 @@
+      ***********************************************************************
+      ** (c) Copyright IBM Corp. 2007 All rights reserved.
+      ** 
+      ** The following sample of source code ("Sample") is owned by International 
+      ** Business Machines Corporation or one of its subsidiaries ("IBM") and is 
+      ** copyrighted and licensed, not sold. You may use, copy, modify, and 
+      ** distribute the Sample in any form without payment to IBM, for the purpose of 
+      ** assisting you in the development of your applications.
+      ** 
+      ** The Sample code is provided to you on an "AS IS" basis, without warranty of 
+      ** any kind. IBM HEREBY EXPRESSLY DISCLAIMS ALL WARRANTIES, EITHER EXPRESS OR 
+      ** IMPLIED, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED WARRANTIES OF 
+      ** MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE. Some jurisdictions do 
+      ** not allow for the exclusion or limitation of implied warranties, so the above 
+      ** limitations or exclusions may not apply to you. IBM shall not be liable for 
+      ** any damages you suffer as a result of using, copying, modifying or 
+      ** distributing the Sample, even if IBM has been advised of the possibility of 
+      ** such damages.
+      ***********************************************************************
+      **
+      ** SOURCE FILE NAME: inpsrv.sqb 
+      **
+      ** SAMPLE: A stored procedure using the GENERAL parameter style
+      **
+      **         This program is the server of a client/server example.
+      **         (The client program is called inpcli.sqb.) The server
+      **         program does all the database processing and returns the
+      **         SQLCA status to the client program.
+      **
+      ** BUILDING THE STORED PROCEDURE:
+      ** 1. Ensure the Database Manager Configuration file has the keyword
+      **    KEEPFENCED set to "no". This allows unloading shared libraries
+      **    while developing stored procedures. You can view the file's
+      **    settings by entering the command: "db2 get dbm cfg". You can
+      **    set KEEPFENCED to "no" with this command: "db2 update dbm cfg
+      **    using KEEPFENCED no".
+      **    NOTE: Setting KEEPFENCED to "no" causes a performance cost when
+      **    accessing the stored procedures because they have to be reloaded
+      **    into memory each time they are called. If this is a
+      **    consideration, use the KEEPFENCED "yes" setting, and stop and
+      **    restart DB2 before building the stored procedure, by entering
+      **    "db2stop" followed by "db2start". This forces DB2 to unload
+      **    the stored procedure and enables the build file or the makefile
+      **    to delete a previous version of the stored procedure from the
+      **    "sqllib/function" directory.
+      ** 2. To build the shared library, enter "bldrtn inpsrv", or use the
+      **    makefile: "make inpsrv" (UNIX) or "nmake inpsrv" (Windows).
+      ** 3. Enter "spcat" to catalog the stored procedure. The spcat script
+      **    (UNIX) or spcat.bat batch file (Windows) connects to the
+      **    database, runs spdrop.db2 to uncatalog the stored procedure if
+      **    it was previously cataloged, then runs spcreate.db2 which
+      **    catalogs the stored procedure, then disconnects from the
+      **    database.
+      **
+      ** CALLING THE STORED PROCEDURES IN THE SHARED LIBRARY:
+      ** 1. Compile the inpcli program with "bldapp inpcli" or use the 
+      **    makefile: "make inpcli" (UNIX) or "nmake inpcli" (Windows).
+      ** 2. Run inpcli: "inpcli" (if calling remotely add the parameters
+      **    for database, user ID and password.)
+      **
+      ** EXTERNAL DEPENDENCIES:
+      **        This program must be built on a DB2 server.
+      **        Ensure existence of the sample database.
+      **        Precompile with the SQL precompiler (PREP in DB2).
+      **        Bind to a database (BIND in DB2).
+      **        Compile and link loop with the compiler supported on your
+      **        platform. All these building steps can be done with the
+      **        commands in BUILDING THE STORED PROCEDURE, above.
+      **
+      ** SQL STATEMENTS USED:
+      **         BEGIN DECLARE SECTION 
+      **         END DECLARE SECTION 
+      **         EXECUTE IMMEDIATE
+      **         EXECUTE
+      **         WHENEVER
+      **         ROLLBACK
+      **         PREPARE
+      **         COMMIT
+      **
+      ** STRUCTURES USED:
+      **         sqlca
+      ***********************************************************************
+      **
+      ** For more information on the sample programs, see the README file. 
+      **
+      ** For information on developing COBOL applications, see the 
+      ** Application Development Guide.
+      **
+      ** For information on using SQL statements, see the SQL Reference. 
+      **
+      ** For the latest information on programming, compiling, and running
+      ** DB2 applications, visit the DB2 application development website: 
+      **     http://www.software.ibm.com/data/db2/udb/ad
+      ***********************************************************************
+
+       IDENTIFICATION DIVISION.
+       PROGRAM-ID. "inpsrv".
+
+       DATA DIVISION.
+       WORKING-STORAGE SECTION.
+
+       01  FILLER                      PIC X(31)
+               VALUE 'WS BEGINS HERE FOR SP EXAMPLE ('.
+
+      * Declare and Initialize SQL Statement Strings
+       01  INSERT-STMT.
+           05  FILLER    PIC X(16) VALUE "INSERT INTO ORG ".
+           05  FILLER    PIC X(21) VALUE "(DEPTNUMB, DEPTNAME, ".
+           05  FILLER    PIC X(18) VALUE "LOCATION) VALUES (".
+           05  DEPTNUM   PIC S9(4).
+           05  FILLER    PIC X(2) VALUE ",'".
+           05  DEPTNAME  PIC X(14).
+           05  FILLER    PIC X(3) VALUE "','".
+           05  LOCATION  PIC X(13).
+           05  FILLER    PIC X(2) VALUE "')".
+       01  SELECT-STMT.
+           05  FILLER    PIC X(17) VALUE "SELECT * FROM ORG".
+
+      * Declare Host Variables
+           EXEC SQL BEGIN DECLARE SECTION END-EXEC.
+       01  INS-SMT-INF.
+           05  INS-STMT.
+           49  INS-LEN       PIC S9(4) USAGE COMP-5.
+           49  INS-TEXT      PIC X(100).
+       01  SEL-SMT-INF.
+           05  SEL-STMT.
+           49  SEL-LEN       PIC S9(4)  USAGE COMP-5.
+           49  SEL-TEXT      PIC X(100).
+           EXEC SQL END DECLARE SECTION END-EXEC.
+      /
+           EXEC SQL INCLUDE SQLCA END-EXEC.
+
+       01  FILLER                      PIC X(29)
+               VALUE ') WS ENDS HERE FOR SP EXAMPLE'.
+
+       LINKAGE SECTION.
+
+      * Declare Parameters
+       01  IN-DEPTNUM                  PIC S9(4)   USAGE COMP-5.
+       01  IN-DEPTNAME                 PIC X(14).
+       01  IN-LOCATION                 PIC X(13).
+       01  OUT-SQLCODE                 PIC S9(9)   USAGE COMP-5.
+
+       PROCEDURE DIVISION USING IN-DEPTNUM
+                                IN-DEPTNAME
+                                IN-LOCATION
+                                OUT-SQLCODE.
+
+       MAIN SECTION.
+
+           MOVE 0 TO SQLCODE.
+           MOVE 0 TO OUT-SQLCODE.
+
+           PERFORM INSERT-ROW.
+           MOVE 0 TO OUT-SQLCODE.
+           IF SQLCODE IS NOT EQUAL TO 0
+              MOVE SQLCODE TO OUT-SQLCODE
+              GOBACK
+           END-IF.
+
+      * If this stored procedure is cataloged with a result set,
+      * uncomment the following line. At this time, however,
+      * embedded SQL in COBOL does not support the handling of
+      * result sets.
+
+      *    PERFORM SELECT-ROWS.
+           MOVE SQLCODE TO OUT-SQLCODE.
+
+           GOBACK.
+
+       INSERT-ROW.
+           MOVE IN-DEPTNUM TO DEPTNUM.
+           MOVE IN-DEPTNAME TO DEPTNAME.
+           MOVE IN-LOCATION TO LOCATION.
+           MOVE           INSERT-STMT TO INS-TEXT.
+           MOVE LENGTH OF INSERT-STMT TO INS-LEN.
+           EXEC SQL
+                EXECUTE IMMEDIATE :INS-STMT
+           END-EXEC.
+
+       SELECT-ROWS.
+           MOVE           SELECT-STMT TO SEL-TEXT.
+           MOVE LENGTH OF SELECT-STMT TO SEL-LEN.
+           EXEC SQL
+                PREPARE SEL FROM :SEL-STMT
+           END-EXEC
+           IF SQLCODE = 0
+              EXEC SQL
+                   DECLARE CUR1 CURSOR WITH RETURN FOR SEL
+              END-EXEC
+              IF SQLCODE = 0
+                 EXEC SQL
+                      OPEN CUR1
+                 END-EXEC
+              END-IF
+           END-IF.
+           EXEC SQL WHENEVER SQLERROR CONTINUE END-EXEC.

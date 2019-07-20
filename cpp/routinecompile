@@ -1,0 +1,627 @@
+#!/usr/bin/perl -w
+#
+# (C) Copyright IBM Corp. 2007, 2014  All Rights Reserved.
+#
+#
+# routinecompile: Compile and register C++ routines on Linux
+#
+# PREREQUISITE  : Source instance's db2profile or run as instance owner
+#
+# Usage         : routinecompile -h
+#
+#------------------------------------------------------------------------------
+
+
+use Getopt::Long;
+use Env qw(DB2_HOME HOME);
+use strict;
+use File::Temp;
+use Cwd;
+use File::Basename;
+
+Getopt::Long::Configure ("bundling");
+
+my %option = ();
+my($ind) = "\t\t\t\t";
+my $syntax = "Usage: $0 [OPTION]... srcfile\n" .
+
+    "\nGeneral options:\n" .
+
+    "\t--user username\t\tDB2 username (defaults to current user)\n" .
+
+    "\t--pw password\t\tDB2 password must be specified for --user\n" .
+    
+    "\t--db database\t\tDB2 database\n" .
+
+    "\t--schema schema\t\tDB2 schema (defaults to current username)\n" .
+
+    "\t--copyout copydir\tCopy the object file to <copydir>\n" .
+    "${ind}Applicable only during registration\n" .
+
+    "\t-h, --help\t\tShow this command usage\n" .
+
+    "\nCompile options:\n" .
+
+    "\tsrcfile\t\t\tSource CPP or R file. The CPP file is\n" .
+    "${ind}compiled and linked into a shared object\n" .
+
+    "\t--compile\t\tCompiles the source file, but does not link\n" .
+
+    "\t-g\t\t\tCompile debug\n" .
+
+    "\t--print-compiler\tDisplays the compiler used.\n".
+    "${ind}All other options ignored\n" .
+
+    "\t-o objectfile\t\tOutput shared object file. If not specified,\n" .
+    "${ind}defaults to the source file with .so extension\n" .
+
+    "\t--args args\t\tAdditional arguments to pass to\n" .
+    "${ind}the compiler as is\n" .
+
+    "\t--objs file\t\tSpecify input object file(s) to be\n" .
+    "${ind}linked into one shared object file\n" .
+
+
+    "\nGeneral registration options:\n" .
+
+    "\t--language\t\tSpecify language for the routine\n" .
+    "${ind}CPP or R\n" .
+
+    "\t--nzdefaults\t\tApply Netezza defaults DETERMINISTIC,\n" .
+    "${ind}FENCED and RETURNS NULL ON NULL INPUT.\n" .
+
+    "\t--sig signature\t\tArgument signature for function.\n" .
+    "${ind}UDXname(arg1, arg2, ...) Will need to be\n" .
+    "${ind}quoted to stop the shell from interpreting\n" .
+    "${ind}the ()'s\n" .
+
+    "\t--return return\t\tReturn type for function\n" .
+    "${ind}For table function, will need to be quoted\n" .
+    "${ind}to stop the shell from interpreting the ()'s\n" .
+
+    "\t--class class\t\tClass name for function\n" .
+    "${ind}Applicable only for CPP routines\n" .
+
+    "\t--unfenced\t\tUnFenced mode. Not applicable for language R\n" .
+
+    "\t--fenced\t\tFenced mode (default)\n" .
+
+    "\t--threadsafe\t\tSpecify THREADSAFE for fenced only\n".
+    "${ind}Default is NOT THREADSAFE for fenced mode\n" .
+    "${ind}Only THREADSAFE allowed for unfenced mode\n" .
+    "${ind}Not applicable for language R\n" .
+
+    "\t--environment val\tEnvironment entry\n" .
+    "${ind}i.e. --environment \"'name1' = 'value1', 'name2' = 'value2'...\"\n" .
+
+    "\t--noresident\t\tUnload the user shared object at the end of\n" .
+    "${ind}execution for language CPP, otherwise ignored.\n" .
+
+
+    "\nFunction registration options:\n" .
+
+    "\t--nondet\t\tNOT DETERMINISTIC. Default is DETERMINISTIC.\n" .
+
+    "\t--nullcall\t\tCALLED ON NULL INPUT\n" .
+    "\t--nonullcall\t\tRETURNS NULL ON NULL INPUT\n" .
+    "${ind}For user-defined scalar and table function,\n" .
+    "${ind}the default is RETURNS NULL ON NULL INPUT\n" .
+    "${ind}For aggregates, it is CALLED ON NULL INPUT.\n" .
+
+    "\t--noparallel\t\tApplicable only for user-defined scalar\n" .
+    "${ind}function and aggregate. Specifies that\n" .
+    "${ind}the function invocation cannot be parallelized.\n" .
+    "${ind}Default is ALLOW PARALLEL for user-defined\n" .
+    "${ind}scalar function and aggregate. The user-defined\n" .
+    "${ind}table functions are always run in\n" .
+    "${ind}DISALLOW PARALLEL mode.\n" .
+
+    "\nAggregate registration options:\n" .
+    "\t--state state\t\tState signature for aggregate. (state1,\n" .
+    "${ind}state2, ...). Will need to be quoted to stop\n" .
+    "${ind}the shell from interpreting the ()'s\n" .
+
+
+    "\nUsage examples:\n" .
+
+    "\troutinecompile -h\n" .
+    "\troutinecompile udf.cpp\n" .
+    "\troutinecompile udf.cpp -o udf.so\n" .
+    "\troutinecompile --compile udf.cpp; routinecompile --compile dependency.cpp; routinecompile --objs udf.o --objs dependency.o -o udf.so\n" .
+    "\troutinecompile --sig \"myudf(varchar(1024))\" --return integer --class MyUdf --db sample udf.cpp\n" .
+    "\troutinecompile --sig \"myudf(varchar(1024))\" --return integer --class MyUdf --environment \"'ENV1'='VAL1','ENV2'='VAL2'\" --db sample -o udf.so\n" .
+    "\troutinecompile --sig \"myudf(varchar(1024))\" --return integer --class MyUdf --db sample --objs udf.o --objs dependency.o -o udf.so\n" .
+    "\troutinecompile --sig \"myudf(varchar(1024))\" --return integer --class MyUdf --db sample udf.cpp -o udf.so\n" .
+    "\troutinecompile --sig \"myudf(varchar(1024))\" --return integer --class MyUdf --db sample --user myuser -pw mypw --schema myschema udf.cpp\n" .
+    "\troutinecompile --sig \"myudtf(varchar(1024))\" --return \"TABLE(product_id varchar(200))\" --class MyUdtf --db sample --user myuser --pw mypw --schema myschema udtf.cpp\n" .
+    "\troutinecompile --sig \"myudtf(varchar(1024))\" --return \"GENERIC TABLE\" --class MyUdtf --db sample --user myuser --pw mypw --schema myschema udtf.cpp\n" .
+    "\troutinecompile --sig \"myuda(varchar(1024))\" --return integer --class MyUda --state \"(char, varchar)\" --db sample uda.cpp\n" .
+
+    "";
+
+# check options
+
+GetOptions \%option, "user=s", "pw=s", "db=s", "schema=s", "copyout=s",
+                     "h", "help",
+                     "compile", "g", "print-compiler", "o=s", 
+                     "args=s", "objs=s@",
+                     "language=s", "nzdefaults", "sig=s", "return=s",
+                     "class=s", "unfenced", "fenced", "threadsafe",
+                     "environment=s", "state=s", "noresident",
+                     "nullcall", "nonullcall", "nondet", "noparallel"
+    or die $syntax;
+
+
+# set defaults/globals
+my $CC="/usr/bin/g++";
+my $language=""; # Language option
+my $srcfile=0; # The specified .c or .cpp file to compile
+my $outdir=0; # The shared object will be stored in outdir
+my $outfile=0; # The output file from -o option
+my $outobjfile=0; # The compiled (-c) .c or .cpp file
+my $register=0; # Will be equal to 1 if the script is invoked to register the UDX
+my $sig=0; # From the --sig option, specifies the UDX name and arguments to register as
+my $ret=0; # From the --return option, specifies the UDX return type to register as
+my $class=0; # From the --class option, specifies the UDX class name to register as
+my $state=0; # from the --state option, specifies the UDA state types to register as
+my $dbuser=""; # From --user option, specifies the DB username
+my $dbpass=""; # From --pw option, specifies the DB password
+my $authclause=""; # Authentication clause in CONNECT statement
+my $db=""; # From --db option, specifies the DB
+my $schema=""; # From --schema option, specifies the SCHEMA
+my $copyout = ""; #From --copyout option, specifies where to copy the object file
+my $base = $DB2_HOME || "$HOME/sqllib"; # DB2 instance location
+my $justcompile = 0;  # Just compile option. Turned on by --compile option.
+my $dbg = "";  # Debug options. Turned on by -g option.
+my $inc; # Include directory based on $base
+my $args; # Common compiler arguments
+my $largs; # Linker arguments
+my $compile = 1; # Equal to 0 when doing register only mode
+my(@objs); # From --objs option, specifies input object files when doing link only mode
+my($compargs) = ""; # From the --args option, used to specify additional compiler arguments when compiling/linking
+my($warn) = 4 * 1024; # Theshold size after which to warn for nucleus stack size
+my($error) = 60 * 1024; # Theshold size after which to error for nucleus stack size
+my $detclause = " DETERMINISTIC "; # From --nondet option, specifies whether to register a UDF as not deterministic
+my($parallelclause) = " ALLOW PARALLEL "; # whether function invocation can be parallelized
+my $nullclause = " RETURNS NULL ON NULL INPUT ";
+my $print_compiler = 0; #From the --print-compiler option, specifies whether to print the compiler name
+my($no_invalid) = ""; # Will hold -Wno-invalid-offsetof if valid
+my($paramstyle) = " NPSGENERIC "; # PARAMETER STYLE
+my($unfenced) = 0;
+my($fencedclause) = " FENCED "; # fenced/unfenced
+my($threadsafe) = 0;
+my($threadsafeclause) = " NOT THREADSAFE "; # threadsafe/not threadsafe
+my($environment) = " "; # Environment
+my($noresidentclause) = ""; # STAY RESIDENT NO option
+my($finalcall) = " NO FINAL CALL "; # whether a final call is to be made to an external function
+my($sqlaccess) = " NO SQL "; # Specifies the classification of SQL statements that the function can run
+my($dbinfo) = " NO DBINFO "; # # whether certain specific information known by the database server will be passed to the UDF as an additional invocation-time argument
+my($registercmd) = ""; # Registration command
+my($nzdefaults) = 0;
+my($externalnameclause) = "";
+
+sub parse_options ()
+{
+    my($val);
+    # Always check nzdefaults option before others, so others can overwrite them
+    if ($option{language}) { $language=uc($option{language}); }
+    if ($option{nzdefaults}) { $nzdefaults = 1; &setNzDefaults(); }
+    if ($option{copyout}) { $copyout=$option{copyout}; }
+    if ($option{h}) { die $syntax; }
+    if ($option{help}) { die $syntax; }
+    if ($option{o}) { $outfile=$option{o}; }
+    if ($option{sig}) { $sig=$option{sig};  $register  =1 ;}
+    if ($option{return}) { $ret=$option{return};  $register  =1 ;}
+    if ($option{class}) { $class=$option{class};  $register  =1 ;}
+    if ($option{state}) { $state=$option{state};  $register  =1 ;
+                          if (!$nzdefaults)
+                          {
+                            $nullclause =" CALLED ON NULL INPUT ";}
+                          }
+    if ($option{user}) { $dbuser=$option{user}; }
+    if ($option{pw}) { $dbpass=$option{pw}; }
+    if ($option{db}) { $db=$option{db}; }
+    if ($option{schema}) { $schema=$option{schema}; }
+    if ($option{compile}) { $justcompile=1; $compile=0; }
+    if ($option{g}) { $dbg="-g3 -ggdb"; }
+    if ($option{nondet}) { $detclause =  " NOT DETERMINISTIC "; }
+    if ($option{noparallel}) { $parallelclause =  " DISALLOW PARALLEL "; }
+    if ($option{nullcall}) { $nullclause =" CALLED ON NULL INPUT "; }
+    # Always process --nonullcall after --state processing
+    if ($option{nonullcall}) { $nullclause =" RETURNS NULL ON NULL INPUT "; }
+    if ($option{args}) {$compargs = $option{args}; }
+    if ($option{objs}) { @objs = @{$option{objs}}; }
+    if ($option{"print-compiler"}) { $print_compiler=1; }
+    if ($option{unfenced}) { $unfenced = 1; $fencedclause = " NOT FENCED "; $threadsafeclause = " THREADSAFE "; }
+    if ($option{fenced}) { $fencedclause = " FENCED "; }
+    if ($option{threadsafe}) { $threadsafe = 1; $threadsafeclause = " THREADSAFE "; }
+    if ($option{noresident}) { $noresidentclause = " STAY RESIDENT NO "; }
+    if ($option{environment})
+    {
+        $environment = " ENVIRONMENT " . $option{environment};
+    }
+
+    &validate_general_options();
+
+    if ($language eq "R")
+    {
+        &validate_r_options();
+    }
+    else
+    {
+        &validate_cpp_options();
+    }
+}
+
+sub validate_general_options
+{
+
+    if ($register && ($dbuser || $dbpass))
+    {
+        if ($dbuser && !$dbpass)
+        {
+            die "ERROR: Password for user '$dbuser' was not specified (--pw)\n";
+        }
+        if($dbpass && !$dbuser)
+        {
+            $dbuser = &getCurrentUser();
+        }
+        $authclause = "user $dbuser using $dbpass";
+    }
+
+    if ($#ARGV > 0)
+    {
+        die "ERROR: extra text on command line - may be badly formed options\n";
+    }
+
+    if(!$language || ($language ne "CPP" && $language ne "R"))
+    {
+        die "ERROR: Specify --language with \"CPP\" or \"R\" values\n";
+    }
+
+    if ( $register)
+    {
+        # Validate the registration options.
+        $sig or die "ERROR: specify argument signature when creating UDX\n";
+        $ret or die "ERROR: specify return type when creating UDX\n";
+
+        $sig =~ /^[\s\"]*\w+[\s\"]*\(.*\)\s*$/
+            or die "ERROR: argument signature must be of the form UDXNAME(arg1,arg2,...)\n";
+
+        if (!$schema) {
+            $schema = &getCurrentUser();
+        }
+
+        if ($schema) {
+            $sig = $schema.'.'.$sig;
+        }
+
+        $state && $state !~ /^\s*\(.*\)\s*$/
+            and die "ERROR: state signature must be of the form (arg1,arg2,...)\n";
+
+        $db or die "ERROR: database not found. Please specify the DB2 database (--db)\n";
+
+        $db =~ s/\"/\\\"/g;
+
+        if (isTableFunction())
+        {
+          $parallelclause = " DISALLOW PARALLEL ";
+        }
+    }
+}
+
+sub validate_cpp_options
+{
+    if ($print_compiler)
+    {
+        print "$CC\n";
+        exit(0);
+    }
+
+    if ($#objs>=0)
+    {
+        if ($#ARGV >= 0)
+        {
+            die "ERROR: extra text on command line - may be badly formed options\n";
+        }
+
+        $outfile or die "ERROR: Must specify -o with --objs\n";
+    }
+
+    if ($#objs == -1 && ($compile || $justcompile) && !$outfile && $#ARGV != 0)
+    {
+        die "ERROR: must specify source file\n";
+    }
+
+    $srcfile = shift @ARGV;
+
+    if ($register)
+    {
+        if ($outfile && !$srcfile)
+        {
+            $compile = 0;
+            $justcompile = 0;
+        }
+        # Validate the registration options.
+        $class or die "ERROR: specify class name when creating UDX\n";
+    }
+
+    if (!$compile && !$justcompile && $srcfile)
+    {
+        die "ERROR: Can't specify srcfile when doing register only mode\n";
+    }
+
+    if (($compile || $justcompile) && $srcfile)
+    {
+        # $srcfile or die "ERROR: must specify srcfile\n";
+        -f $srcfile or die "ERROR: can't access srcfile $srcfile\n";
+
+        if ($justcompile && $outfile)
+        {
+            $outobjfile = $outfile;
+        }
+        else
+        {
+            $outobjfile = basename($srcfile);
+            $outobjfile =~ s/\.c(pp)?$/.o/g;
+        }
+        if (! $outfile)
+        {
+            $outfile = basename($srcfile);
+            $outfile =~ s/\.c(pp)?$/.so/;
+        }
+    }
+
+    if ($outfile !~ /\//)
+    {
+        my($pwd) = `pwd`;
+        $pwd =~ s/[\r\n]//g;
+        $outfile = "$pwd/$outfile";
+    }
+    else
+    {
+        if ($outfile =~ /^\./)
+        {
+            my($pwd) = `pwd`;
+            $pwd =~ s/[\r\n]//g;
+            $outfile = "$pwd/$outfile";
+        }
+        elsif ($outfile !~ /^\//)
+        {
+            die "ERROR: outfile must be an absolute path\n";
+        }
+    }
+
+    $externalnameclause = "$outfile!$class";
+
+    $inc = "-I$base/include ";
+
+    $args="$dbg -m64 -fpic $inc -D_REENTRANT";
+
+    $largs="$dbg -m64 -fpic -shared -Wl,-rpath,$base/lib64 -L$base/lib64 -ldb2 -lpthread";
+}
+
+sub validate_r_options
+{
+    if ($justcompile         # --compile
+        || $dbg              # -g
+        || $print_compiler   # --print-compiler
+        || $outfile          # -o
+        || $compargs         # --args
+        || @objs             # --objs
+        || $class            # --class
+        || $unfenced         # --unfenced
+        || $threadsafe)      # --threadsafe 
+    {
+        die "ERROR: Cannot specify --compile, -g, --print-compiler, -o, --args, --objs, --class, --unfenced, --threadsafe with language R\n";
+    }
+    $compile = 0;
+    $outfile = shift @ARGV;
+    -f $outfile or die "ERROR: can't access srcfile $outfile\n";
+
+    if ($outfile !~ /\//)
+    {
+        my($pwd) = `pwd`;
+        $pwd =~ s/[\r\n]//g;
+        $outfile = "$pwd/$outfile";
+    }
+    else
+    {
+        if ($outfile =~ /^\./)
+        {
+            my($pwd) = `pwd`;
+            $pwd =~ s/[\r\n]//g;
+            $outfile = "$pwd/$outfile";
+        }
+        elsif ($outfile !~ /^\//)
+        {
+            die "ERROR: srcfile must be an absolute path\n";
+        }
+    }
+    $externalnameclause = "$outfile";
+}
+
+sub setNzDefaults
+{
+    # Irrespective of what these variables are set at definition,
+    # we are ensuring NZ defaults by being explicit.
+    $paramstyle   = " NPSGENERIC ";
+    $detclause    = " DETERMINISTIC ";
+    $fencedclause = " FENCED ";
+    $nullclause   = " RETURNS NULL ON NULL INPUT ";
+}
+
+sub isTableFunction
+{
+    if ( $ret =~ /^[\s]*TABLE[\s]*\(/i ||
+         $ret =~ /^[\s]*(GENERIC)[\s]*(TABLE)[\s]*$/i )
+    {
+        return 1;
+    }
+}
+
+sub readCommand
+{
+    local $_;
+    open(PIPE, "@_ |") or die "Failed to invoke $_[0]: $!\n";
+    {
+        local $/ = undef;
+        $_ = <PIPE>;
+    }
+    close(PIPE);
+    return $_;
+}
+
+sub runCommand
+{
+    my $text = shift;
+    # print "Command: @_\n";
+
+    my $ret = readCommand(@_, '2>&1');
+    if ($? != 0)
+    {
+        print "\nError $text: $!\n\n";
+        print "@_\n";
+        die "$ret\n";
+    }
+
+    # If there was any output, print it.
+    $ret && $ret =~ /\S/ and print "$ret";
+}
+
+sub checkClass
+{
+    $class or return;
+    my($object) = shift;
+
+    $_ = readCommand("nm -C --defined-only $object | grep $class");
+    /\Q${class}::instantiate\E/
+    or die "ERROR: ${class}::instantiate() not found in object file $object\n";
+}
+
+sub linkObjects
+{
+    &runCommand("linking",
+                "$CC $largs $compargs -o $outfile @objs");
+}
+
+sub justcompile()
+{
+    &runCommand("compiling",
+                "$CC $args $compargs -o $outobjfile -c $srcfile");
+}
+
+sub compile()
+{
+    &justcompile();
+    &runCommand("linking",
+                "$CC $largs $compargs -o $outfile $outobjfile");
+    &checkClass($outfile);
+}
+
+sub checkNoCompile()
+{
+    &checkClass($outfile);
+}
+
+sub getCurrentUser
+{
+    my($whoami);
+    $whoami=`/usr/bin/whoami`;
+    $whoami =~ s/^\s+|\s+$//g;
+    return $whoami;
+}
+
+sub registerUdf()
+{
+    my($cmd) = "create function $sig returns $ret language $language parameter style $paramstyle $fencedclause $threadsafeclause $environment $finalcall $parallelclause $dbinfo $detclause $nullclause $sqlaccess $noresidentclause external name '$externalnameclause'";
+    &registerUdx($cmd);
+    print "Created udf\n";
+}
+
+sub registerUda()
+{
+    my($cmd) = "create function $sig returns $ret aggregate with $state language $language parameter style $paramstyle $fencedclause $threadsafeclause $environment $parallelclause $dbinfo $detclause $nullclause $sqlaccess $noresidentclause external name '$externalnameclause'";
+    &registerUdx($cmd);
+    print "Created uda\n";
+}
+
+sub registerUdx()
+{
+    $registercmd = shift;
+
+    if ($copyout) {
+        $outdir="$copyout";
+        &runCommand("copying",
+                "cp $outfile $outdir");
+    } else {
+        $outdir=`dirname $outfile`;
+        $outdir=~ s/[\r\n]//g;
+    }
+
+    # Clear the file contents first
+    `cat /dev/null > $outfile.log`;
+
+    # print "Registration command: $registercmd\n";
+
+    open(PIPE, "|$base/bin/db2 -svt +op -v -z $outfile.log") || die "Can't run db2 command-line for registration: $!\n";
+    print PIPE <<EOF;
+        connect to $db $authclause;
+        $registercmd;
+        disconnect current;
+EOF
+    close(PIPE);
+    if($? != 0)
+    {
+        print STDOUT "Output in $outfile.log\n\n";
+        open(OUTFILE,"<$outfile.log") or die "Can't open file";
+        my (@lines) = <OUTFILE>;
+        close(OUTFILE);
+        print STDERR @lines;
+        die "Error registering routine\n";
+    }
+}
+
+
+# MAIN
+sub main ()
+{
+    &parse_options();
+
+    if ($language eq "CPP")
+    {
+        if (@objs)
+        {
+            &linkObjects();
+        }
+        elsif ($justcompile)
+        {
+            &justcompile();
+        }
+        elsif ($compile)
+        {
+            &compile();
+        }
+        else
+        {
+            &checkNoCompile();
+        }
+    }
+
+    if ($register)
+    {
+        if ($state)
+        {
+            &registerUda();
+        }
+        else
+        {
+            &registerUdf();
+        }
+    }
+
+    print "Done\n";
+    return 0;
+}
+
+&main();

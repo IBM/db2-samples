@@ -1,0 +1,1064 @@
+/******************************************************************************
+** (c) Copyright IBM Corp. 2007 All rights reserved.
+** 
+** The following sample of source code ("Sample") is owned by International 
+** Business Machines Corporation or one of its subsidiaries ("IBM") and is 
+** copyrighted and licensed, not sold. You may use, copy, modify, and 
+** distribute the Sample in any form without payment to IBM, for the purpose of 
+** assisting you in the development of your applications.
+** 
+** The Sample code is provided to you on an "AS IS" basis, without warranty of 
+** any kind. IBM HEREBY EXPRESSLY DISCLAIMS ALL WARRANTIES, EITHER EXPRESS OR 
+** IMPLIED, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED WARRANTIES OF 
+** MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE. Some jurisdictions do 
+** not allow for the exclusion or limitation of implied warranties, so the above 
+** limitations or exclusions may not apply to you. IBM shall not be liable for 
+** any damages you suffer as a result of using, copying, modifying or 
+** distributing the Sample, even if IBM has been advised of the possibility of 
+** such damages.
+** ****************************************************************************
+**
+** SAMPLE FILE NAME: globvarsupport.sqc
+**
+** PURPOSE         : To demonstrate how to use global variables with DB2.
+**
+** USAGE SCENARIO  : This sample demonstrates how to exploit session global
+**                   variables in DB2.
+**
+** PREREQUISITE    : Need to run spcreate_gv.db2 before globvarsupport.sqc 
+**
+** EXECUTION       : db2 -tvf spcreate_gv.db2
+**                   bldapp globvarsupport or make globvarsupport 
+**
+** INPUTS          : NONE
+**
+** OUTPUTS         :
+**
+** OUTPUT FILE     : globvarsupport.out (available in the online documentation)
+**
+** DEPENDENCIES    : NONE
+**
+** SQL STATEMENTS USED:
+**                   COMMENT ON
+**                   CREATE PROCEDURE
+**                   CREATE TABLE
+**                   CREATE TRIGGER
+**                   CREATE VARIABLE
+**                   CREATE VIEW
+**                   DROP
+**                   GRANT
+**                   INSERT
+**                   REVOKE
+**                   SELECT
+**                   SET
+**                   VALUES
+**
+** ****************************************************************************
+** For more information about the command line processor (CLP) scripts,
+** see the README file.
+** For information on using SQL statements, see the SQL Reference.
+**
+** For the latest information on programming, building, and running DB2
+** applications, visit the DB2 application development website:
+** http://www.software.ibm.com/data/db2/udb/ad
+** ****************************************************************************
+**  SAMPLE DESCRIPTION
+** ****************************************************************************
+** The sample showcases the following:
+**  1. Simple operations with global variables, such as:
+**        *  creating and dropping of session global variable.
+**        *  granting/revoking the permissions to/from users.
+**        *  setting value to a global variable using SET statement.
+**        *  adding comment to a global variable.
+**        *  counting the number of global variables from catalog tables.
+**        *  transferring the ownership of a variable.
+**
+**  2. Use of global variable in a trigger which can be used to control the
+**     operation on the trigger like switching off the trigger for maintenance.
+**
+**  3. Use of global variable in a view to show how global variables can help
+**     to improve security, performance and complexity.
+**
+**  4. Use of global variable in a stored procedure.
+** ***************************************************************************/
+
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+#include <sqlenv.h>
+#include <sqlcodes.h>
+#include <sqlutil.h>
+#include <db2ApiDf.h>
+#include "utilemb.h"
+#include <sqlsystm.h>
+
+EXEC SQL INCLUDE SQLCA;
+
+EXEC SQL BEGIN DECLARE SECTION;
+  char strStmt[1000];
+  char varschema[10];
+  char varname[10];
+  sqlint32 varid;
+  char owner[10];
+  char ownertype[5];
+  char typeschema[10]; 
+  char typename[10]; 
+  sqlint32 length;
+  char grantor[10];
+  char grantee[10];
+  char grantortype[5];
+  char granteetype[5];
+  char readauth[5];
+  char writeauth[5];
+  char comment[10];
+  char timeStamp[31];
+EXEC SQL END DECLARE SECTION;
+
+/* Function prototypes */
+int SimpleOperationsWithGV(void);
+int TransferOwnershipOfGV(void);
+int TriggerWithGV(void);
+int ViewWithGV(void);
+int StoredProcWithGV(void);
+
+int main(int argc, char *argv[])
+{
+  int rc = 0;
+  struct sqlca sqlca = {0};
+  char dbAlias[SQL_ALIAS_SZ + 1];
+  char user[USERID_SZ + 1];
+  char pswd[PSWD_SZ + 1];
+
+  /* Check the command line arguments */
+  rc = CmdLineArgsCheck1(argc, argv, dbAlias, user, pswd);
+  if (rc != 0)
+  {
+    return rc;
+  }
+  
+  printf("****************************************************************\n");
+  printf("THIS SAMPLE DEMONSTRATES HOW TO EXPLOIT SESSION GLOBAL VARIABLES\n"); 
+  printf(" IN DB2.\n");
+  printf("****************************************************************\n");
+  
+  /* Connect to the database */
+  rc = DbConn(dbAlias, user, pswd);
+  if (rc != 0)
+  {
+    return rc;
+  }
+  
+  rc = SimpleOperationsWithGV();
+
+  rc = TransferOwnershipOfGV();
+
+  rc = TriggerWithGV();
+
+  rc = ViewWithGV();
+
+  rc = StoredProcWithGV();
+
+  /* Disconnect from the database */
+  rc = DbDisconn(dbAlias);
+  if (rc != 0)
+  {
+    return rc;
+  }
+
+  return 0;
+
+} /* End main */
+
+int SimpleOperationsWithGV()
+{
+  int rc = 0;
+  struct sqlca sqlca = {0};
+
+  printf("------------------------------------------------------------------\n");
+  printf("1. Simple operations with global variables\n");
+  printf("------------------------------------------------------------------\n");
+ 
+  /* Create a session global variable. */ 
+  printf("\nUSE THE SQL STATEMENT:\n");
+  printf("  CREATE VARIABLE\n");
+  printf("TO CREATE A SESSION GLOBAL VARIABLE\n");
+
+  printf("\nExecute the statements:");
+  printf("\n  CREATE VARIABLE myjob_current varchar (10) DEFAULT ('soft-engg')");
+  printf("\n  COMMIT\n");
+
+  /* Create a session global variable */
+  sprintf(strStmt, "CREATE VARIABLE myjob_current varchar (10)" 
+                   "  DEFAULT ('soft-engg')");
+  EXEC SQL EXECUTE IMMEDIATE :strStmt;
+  EMB_SQL_CHECK("Create Global Variable -- myjob_current");
+
+  EXEC SQL COMMIT;
+  EMB_SQL_CHECK("Transaction -- Commit");
+ 
+  /* Obtain information of the global variable created. */ 
+  printf("\n  Execute the statement\n");
+  printf("     SELECT varschema, varname, owner, ownertype"
+                   "  typeschema, typename, length\n "
+         "       FROM syscat.variables\n "
+         "       WHERE varname = 'MYJOB_CURRENT'\n");
+
+  printf("\n   Results:\n");
+  printf(" Varschema Varname   Varid    Owner   Ownertype" 
+         "  Typeschema  Typename  Length       Creation_Time\n");
+  printf(" --------- -------- -------- -------- ---------- "
+         "----------  --------- --------  -----------------------\n");
+  
+  /* Declare the cursor */
+  EXEC SQL DECLARE c CURSOR FOR SELECT varschema,
+                                       varname,
+       			               varid,
+                                       owner,
+                                       ownertype, 
+                                       typeschema,
+                                       typename, 
+                                       length,
+                                       create_time 
+              FROM syscat.variables WHERE varname = 'MYJOB_CURRENT';
+   
+  /* Open cursor */
+  EXEC SQL OPEN c;
+  EMB_SQL_CHECK("cursor -- open");
+
+  /* Fetch cursor */
+  EXEC SQL FETCH c INTO :varschema,
+                        :varname,
+                        :varid,
+                        :owner,
+                        :ownertype,
+                        :typeschema,
+                        :typename,
+                        :length,
+                        :timeStamp;
+  EMB_SQL_CHECK("cursor -- fetch");
+
+  while (sqlca.sqlcode != 100)
+  {
+    printf(" %5s %s %d  %13s   %s %17s %10s %6d %16s\n", varschema, 
+                varname, varid, owner, ownertype, typeschema,
+                typename, length, timeStamp);
+
+    EXEC SQL FETCH c INTO :varschema,
+                        :varname,
+                        :varid,
+                        :owner,
+                        :ownertype,
+                        :typeschema,
+                        :typename,
+                        :length,
+                        :timeStamp;
+    EMB_SQL_CHECK("cursor -- fetch");
+  }
+
+  /* Close cursor */
+  EXEC SQL CLOSE c;
+  EMB_SQL_CHECK("cursor -- close");
+
+  EXEC SQL COMMIT;
+  EMB_SQL_CHECK("Transaction -- Commit");
+
+  /* Give read and write permissions to users 'praveen' and 'sanjay'*/
+  printf("\nUSE THE SQL STATEMENT:\n");
+  printf("  GRANT\n");
+  printf("TO GRANT PERMISSIONS TO USERS\n");
+
+  printf("\n  Execute the statement\n");
+  printf("    GRANT READ, WRITE ON VARIABLE myjob_current"
+              " TO USER praveen, USER sanjay\n");
+  
+  sprintf(strStmt, "GRANT READ, WRITE ON VARIABLE myjob_current"
+                   "  TO USER praveen, USER sanjay");
+  EXEC SQL EXECUTE IMMEDIATE :strStmt;
+  EMB_SQL_CHECK("GRANT -- READ and WRITE");
+
+  /* Check the privileges for users 'praveen' and 'sanjay'. */
+  printf("\n  Execute the statement\n");
+  printf("     SELECT varschema, varname, grantor, grantortype"
+                   "  grantee, granteetype, readauth, writeauth\n "
+         "       FROM syscat.variableauth\n "
+         "       WHERE varname = 'MYJOB_CURRENT'\n");
+
+  printf("\n   Results:\n");
+  printf(" Varschema Varname   Grantor     Grantortype"
+
+         "   Grantee   Granteetype Readauth  Writeauth\n");
+  printf(" --------- --------  --------   ------------- "
+         "---------- ----------- --------  -----------\n");
+
+  /* Declare the cursor */
+  EXEC SQL DECLARE c1 CURSOR FOR SELECT varschema,
+                                        varname,
+                                        grantor,
+                                        grantortype,
+                                        grantee,
+                                        granteetype,
+                                        readauth,
+                                        writeauth
+              FROM syscat.variableauth WHERE varname = 'MYJOB_CURRENT';
+
+  /* Open cursor */
+  EXEC SQL OPEN c1;
+  EMB_SQL_CHECK("cursor -- open");
+
+  /* Fetch cursor */
+  EXEC SQL FETCH c1 INTO :varschema,
+                         :varname,
+                         :grantor,
+                         :grantortype,
+                         :grantee,
+                         :granteetype,
+                         :readauth,
+                         :writeauth;
+  EMB_SQL_CHECK("cursor -- fetch");
+
+  while (sqlca.sqlcode != 100)
+  {
+    printf(" %5s %s %s  %8s   %13s %7s %9s %11s\n", varschema,
+                varname, grantor, grantortype, grantee, granteetype,
+                readauth, writeauth);
+
+    EXEC SQL FETCH c1 INTO :varschema,
+                         :varname,
+                         :grantor,
+                         :grantortype,
+                         :grantee,
+                         :granteetype,
+                         :readauth,
+                         :writeauth;
+    EMB_SQL_CHECK("cursor -- fetch");
+
+  }
+
+  /* Close cursor */
+  EXEC SQL CLOSE c1;
+  EMB_SQL_CHECK("cursor -- close");
+
+  EXEC SQL COMMIT;
+  EMB_SQL_CHECK("Transaction -- Commit");
+  
+  /* Revoke write permission from user 'sanjay'*/
+  printf("\nUSE THE SQL STATEMENT:\n");
+  printf("  REVOKE\n");
+  printf("TO REVOKE PERMISSIONS FROM USERS\n");
+
+  printf("\n  Execute the statement\n");
+  printf("    REVOKE WRITE ON VARIABLE myjob_current FROM USER sanjay\n");
+
+  strcpy(strStmt, "REVOKE WRITE ON VARIABLE myjob_current FROM USER sanjay");
+  EXEC SQL EXECUTE IMMEDIATE :strStmt;
+  EMB_SQL_CHECK("REVOKE -- WRITE");
+
+  /* Check the privilege for user 'sanjay' to verify write */
+  /* permission was revoked. */
+  printf("\n  Execute the statement\n");
+  printf("     SELECT varschema, varname, grantor, grantortype"
+                   "  grantee, granteetype, readauth, writeauth\n "
+         "       FROM syscat.variableauth\n "
+         "       WHERE varname = 'MYJOB_CURRENT' AND grantee = 'SANJAY'\n");
+
+  printf("\n   Results:\n");
+  printf(" Varschema Varname   Grantor     Grantortype"
+
+         "   Grantee   Granteetype Readauth  Writeauth\n");
+  printf(" --------- --------  --------   ------------- "
+         "---------- ----------- --------  -----------\n");
+
+  /* Declare the cursor */
+  EXEC SQL DECLARE c2 CURSOR FOR SELECT varschema,
+                                        varname,
+                                        grantor,
+                                        grantortype,
+                                        grantee,
+                                        granteetype,
+                                        readauth,
+                                        writeauth
+              FROM syscat.variableauth 
+              WHERE varname = 'MYJOB_CURRENT' AND grantee = 'SANJAY';
+
+  /* Open cursor */
+  EXEC SQL OPEN c2;
+  EMB_SQL_CHECK("cursor -- open");
+
+  /* Fetch cursor */
+  EXEC SQL FETCH c2 INTO :varschema,
+                         :varname,
+                         :grantor,
+                         :grantortype,
+                         :grantee,
+                         :granteetype,
+                         :readauth,
+                         :writeauth;
+  EMB_SQL_CHECK("cursor -- fetch");
+
+  while (sqlca.sqlcode != 100)
+  {
+    printf(" %5s %s %s  %8s   %13s %7s %9s %11s\n", varschema,
+                varname, grantor, grantortype, grantee, granteetype,
+                readauth, writeauth);
+
+    EXEC SQL FETCH c2 INTO :varschema,
+                         :varname,
+                         :grantor,
+                         :grantortype,
+                         :grantee,
+                         :granteetype,
+                         :readauth,
+                         :writeauth;
+    EMB_SQL_CHECK("cursor -- fetch");
+
+  }
+
+  /* Close cursor */
+  EXEC SQL CLOSE c2;
+  EMB_SQL_CHECK("cursor -- close");
+
+  EXEC SQL COMMIT;
+  EMB_SQL_CHECK("Transaction -- Commit");
+
+  printf("\nUSE THE SQL STATEMENT:\n");
+  printf("  SET\n");
+  printf("TO ASSIGN VALUE TO GLOBAL VARIABLE\n");
+
+  printf("\n  Execute the statement\n");
+  printf("    SET myjob_current = 'MGR'\n");
+
+  /* Assign value 'MGR' to global variable 'myjob_current' */
+  strcpy(strStmt, "SET myjob_current = 'MGR'");
+  EXEC SQL EXECUTE IMMEDIATE :strStmt;
+  EMB_SQL_CHECK("SET -- VALUE TO A GLOBAL VARIABLE");
+
+  /* Add a comment to the  global variable 'myjob_current' */ 
+  printf("\nUSE THE SQL STATEMENT:\n");
+  printf("  COMMENT\n");
+  printf("TO ADD A COMMENT TO GLOBAL VARIABLE\n");
+
+  printf("\n  Execute the statement\n");
+  printf("    COMMENT ON VARIABLE myjob_current IS 'Manager'\n");
+
+  strcpy(strStmt, "COMMENT ON VARIABLE myjob_current IS 'Manager'");
+  EXEC SQL EXECUTE IMMEDIATE :strStmt;
+  EMB_SQL_CHECK("COMMENT -- TO A GLOBAL VARIABLE");
+  
+  /* Check comment added to the global variable 'myjob_current' */
+  printf("\n  Execute the statement\n");
+  printf("     SELECT varschema, varname, remarks\n"
+         "       FROM syscat.variables\n "
+         "       WHERE varname = 'MYJOB_CURRENT'\n");
+
+  printf("\n   Results:\n");
+  printf(" Varschema Varname   Comment\n");
+
+  printf(" --------- --------  --------\n");
+
+  /* Declare the cursor */
+  EXEC SQL DECLARE c3 CURSOR FOR SELECT varschema,
+                                        varname,
+                                        remarks 
+              FROM syscat.variables WHERE varname = 'MYJOB_CURRENT';
+
+  /* Open cursor */
+  EXEC SQL OPEN c3;
+  EMB_SQL_CHECK("cursor -- open");
+
+  /* Fetch cursor */
+  EXEC SQL FETCH c3 INTO :varschema,
+                         :varname,
+                         :comment;
+  EMB_SQL_CHECK("cursor -- fetch");
+
+  while (sqlca.sqlcode != 100)
+  {
+    printf(" %5s %s %s\n", varschema, varname, comment);
+
+    EXEC SQL FETCH c3 INTO :varschema,
+                           :varname,
+                           :comment;
+    EMB_SQL_CHECK("cursor -- fetch");
+
+  }
+
+  /* Close cursor */
+  EXEC SQL CLOSE c3;
+  EMB_SQL_CHECK("cursor -- close");
+
+  EXEC SQL COMMIT;
+  EMB_SQL_CHECK("Transaction -- Commit");
+
+  /* Drop the global variable. */
+  printf("\nUSE THE SQL STATEMENT:\n");
+  printf("  DROP VARIABLE\n");
+  printf("TO DROP A SESSION GLOBAL VARIABLE\n");
+
+  printf("\n  Execute the statements:");
+  printf("\n   DROP VARIABLE myjob_current");
+  printf("\n   COMMIT\n");
+  
+  strcpy(strStmt, "DROP VARIABLE myjob_current");
+  EXEC SQL EXECUTE IMMEDIATE :strStmt;
+  EMB_SQL_CHECK("Drop Global Variable -- myjob_current");
+
+  EXEC SQL COMMIT;
+  EMB_SQL_CHECK("Transaction -- Commit");
+
+  printf("------------------------------------------------------------------\n");
+  return rc;
+
+} /* SimpleOperationsWithGV() - End */
+
+int TransferOwnershipOfGV()
+{
+  int rc = 0;
+  struct sqlca sqlca = {0};
+
+  /* Create a session global variable */
+  printf("\nUSE THE SQL STATEMENT:\n");
+  printf("  CREATE VARIABLE\n");
+  printf("TO CREATE A SESSION GLOBAL VARIABLE\n");
+
+  printf("\n  Execute the statements:");
+  printf("\n    CREATE VARIABLE myvar_transfer int");
+  printf("\n    COMMIT\n");
+
+  strcpy(strStmt, "CREATE VARIABLE myvar_transfer int");
+  EXEC SQL EXECUTE IMMEDIATE :strStmt;
+  EMB_SQL_CHECK("Create Global Variable -- myvar_transfer");
+
+  EXEC SQL COMMIT;
+  EMB_SQL_CHECK("Transaction -- Commit");
+  
+  /* Obtain information of the global variable created. */
+  printf("\n  Execute the statement\n");
+  printf("     SELECT varschema, varname, owner, ownertype"
+                   "  typeschema, typename, length\n "
+         "       FROM syscat.variables\n "
+         "       WHERE varname = 'MYVAR_TRANSFER'\n");
+
+  printf("\n   Results:\n");
+  printf(" Varschema Varname   Varid    Owner   Ownertype"
+         "  Typeschema  Typename  Length\n");
+  printf(" --------- -------- -------- -------- ---------- "
+         "----------  --------- --------\n");
+
+  /* Declare the cursor */
+  EXEC SQL DECLARE c5 CURSOR FOR SELECT varschema,
+                                       varname,
+                                       varid,
+                                       owner,
+                                       ownertype,
+                                       typeschema,
+                                       typename,
+                                       length
+              FROM syscat.variables WHERE varname = 'MYVAR_TRANSFER';
+
+  /* Open cursor */
+  EXEC SQL OPEN c5;
+  EMB_SQL_CHECK("cursor -- open");
+
+  /* Fetch cursor */
+  EXEC SQL FETCH c5 INTO :varschema,
+                        :varname,
+                        :varid,
+                        :owner,
+                        :ownertype,
+                        :typeschema,
+                        :typename,
+                        :length;
+  EMB_SQL_CHECK("cursor -- fetch");
+
+  while (sqlca.sqlcode != 100)
+  {
+    printf(" %5s %s %d  %13s   %s %17s %10s %6d\n", varschema,
+                varname, varid, owner, ownertype, typeschema,
+                typename, length);
+
+    EXEC SQL FETCH c5 INTO :varschema,
+                        :varname,
+                        :varid,
+                        :owner,
+                        :ownertype,
+                        :typeschema,
+                        :typename,
+                        :length;
+    EMB_SQL_CHECK("cursor -- fetch");
+  }
+
+  /* Close cursor */
+  EXEC SQL CLOSE c5;
+  EMB_SQL_CHECK("cursor -- close");
+
+  EXEC SQL COMMIT;
+  EMB_SQL_CHECK("Transaction -- Commit");
+
+   
+  /* Transfer ownership of the global variable to another user. */
+  printf("\nUSE THE SQL STATEMENT:\n");
+  printf("  TRANSFER\n");
+  printf("TO TRANSFER OWNERSHIP OF A GLOBAL VARIABLE\n");
+
+  printf("\n  Execute the statement\n");
+  printf("    TRANSFER OWNERSHIP OF VARIABLE myvar_transfer"
+              " TO USER mohan PRESERVE PRIVILEGES\n");
+
+  sprintf(strStmt, "TRANSFER OWNERSHIP OF VARIABLE myvar_transfer"
+                   " TO USER mohan PRESERVE PRIVILEGES");
+  EXEC SQL EXECUTE IMMEDIATE :strStmt;
+  EMB_SQL_CHECK("TRANSFER -- OWNERSHIP OF A GLOBAL VARIABLE");
+
+    /* Obtain information of the global variable created. */
+  printf("\n  Execute the statement\n");
+  printf("     SELECT varschema, varname, owner, ownertype"
+                   "  typeschema, typename, length\n "
+         "       FROM syscat.variables\n "
+         "       WHERE varname = 'MYVAR_TRANSFER'\n");
+
+  printf("\n   Results:\n");
+  printf(" Varschema Varname   Varid    Owner   Ownertype"
+         "  Typeschema  Typename  Length\n");
+  printf(" --------- -------- -------- -------- ---------- "
+         "----------  --------- --------\n");
+
+  /* Declare the cursor */
+  EXEC SQL DECLARE c6 CURSOR FOR SELECT varschema,
+                                       varname,
+                                       varid,
+                                       owner,
+                                       ownertype,
+                                       typeschema,
+                                       typename,
+                                       length
+              FROM syscat.variables WHERE varname = 'MYVAR_TRANSFER';
+
+  /* Open cursor */
+  EXEC SQL OPEN c6;
+  EMB_SQL_CHECK("cursor -- open");
+
+  /* Fetch cursor */
+  EXEC SQL FETCH c6 INTO :varschema,
+                        :varname,
+                        :varid,
+                        :owner,
+                        :ownertype,
+                        :typeschema,
+                        :typename,
+                        :length;
+  EMB_SQL_CHECK("cursor -- fetch");
+
+  while (sqlca.sqlcode != 100)
+  {
+    printf(" %5s %s %d  %13s   %s %17s %10s %6d\n", varschema,
+                varname, varid, owner, ownertype, typeschema,
+                typename, length);
+
+    EXEC SQL FETCH c6 INTO :varschema,
+                        :varname,
+                        :varid,
+                        :owner,
+                        :ownertype,
+                        :typeschema,
+                        :typename,
+                        :length;
+    EMB_SQL_CHECK("cursor -- fetch");
+  }
+
+  /* Close cursor */
+  EXEC SQL CLOSE c6;
+  EMB_SQL_CHECK("cursor -- close");
+
+  EXEC SQL COMMIT;
+  EMB_SQL_CHECK("Transaction -- Commit");
+
+  /* Drop the  global variable. */
+  printf("\nUSE THE SQL STATEMENT:\n");
+  printf("  DROP VARIABLE\n");
+  printf("TO DROP A SESSION GLOBAL VARIABLE\n");
+
+  printf("\n  Execute the statements:");
+  printf("\n   DROP VARIABLE myvar_transfer");
+  printf("\n   COMMIT\n");
+
+  strcpy(strStmt, "DROP VARIABLE myvar_transfer");
+  EXEC SQL EXECUTE IMMEDIATE :strStmt;
+  EMB_SQL_CHECK("DROP -- GLOABL VARIABLE");
+ 
+  EXEC SQL COMMIT;
+  EMB_SQL_CHECK("Transaction -- Commit");
+ 
+  return rc;
+
+} /* TransferOwnershipOfGV() - End */
+
+int TriggerWithGV()
+{
+  int rc = 0;
+  struct sqlca sqlca = {0};
+
+  printf("------------------------------------------------------------------\n");
+  printf("2. Use of global variable in a trigger which can be used to\n");
+  printf("   control the operation on the trigger like switching off \n");
+  printf("   the trigger for maintenance.\n");
+  printf("------------------------------------------------------------------\n");
+ 
+  /* Create a global variable whose default value is set to 'N'. We will   */
+  /* use this this global variable to enable or disable the firing of the  */
+  /* trigger. Its default will be 'N' since we want the trigger to be      */
+  /* active by default. */
+ 
+  printf("\nUSE THE SQL STATEMENT:\n");
+  printf("  CREATE VARIABLE\n");
+  printf("TO CREATE A SESSION GLOBAL VARIABLE\n");
+
+  printf("\n  Execute the statements:");
+  printf("\n    CREATE VARIABLE disable_trigger char (1) DEFAULT ('N')");
+  printf("\n    COMMIT\n");
+
+  strcpy(strStmt, "CREATE VARIABLE disable_trigger char (1) DEFAULT ('N')");
+  EXEC SQL EXECUTE IMMEDIATE :strStmt;
+  EMB_SQL_CHECK("Create Global Variable -- disable_trigger");
+
+  EXEC SQL COMMIT;
+  EMB_SQL_CHECK("Transaction -- Commit");
+
+  /* Grant write privilege only to the DBA User ID. We only want the DBA */ 
+  /* user to be able to change the value of the global variable. This is */
+  /* because we want to prevent regular users from being able to disable */ 
+  /* the trigger. */
+
+  printf("\nUSE THE SQL STATEMENT:\n");
+  printf("  GRANT\n");
+  printf("TO GRANT PERMISSIONS TO USERS\n");
+
+  printf("\n  Execute the statement\n");
+  printf("    GRANT WRITE ON VARIABLE disable_trigger TO dba_user\n");
+  
+  strcpy(strStmt, "GRANT WRITE ON VARIABLE disable_trigger TO dba_user");
+  EXEC SQL EXECUTE IMMEDIATE :strStmt;
+  EMB_SQL_CHECK("GRANT -- WRITE PRIVILEGE");
+
+  /* Create a trigger that depends on the global variable. The trigger will */ 
+  /* only fire if the 'disable_trigger' global variable is set to 'N'.*/
+
+  printf("\nUSE THE SQL STATEMENT:\n");
+  printf("  CREATE TRIGGER\n");
+  printf("TO CREATE A TRIGGER\n");
+
+  printf("\n  Execute the statements:");
+  printf("\n    CREATE TRIGGER validate_t BEFORE INSERT ON EMPLOYEE\n"
+         "      REFERENCING NEW AS n FOR EACH ROW\n"
+         "      WHEN (disable_trigger = 'N' AND n.empno > '10000')\n"
+         "      SIGNAL SQLSTATE '38000'\n"
+         "      SET message_text = 'EMPLOYEE NUMBER TOO BIG and INVALID'\n");
+
+  sprintf(strStmt, "CREATE TRIGGER validate_t BEFORE INSERT ON EMPLOYEE"
+         "        REFERENCING NEW AS n FOR EACH ROW"
+         "        WHEN (disable_trigger = 'N' AND n.empno > '10000')"
+         "        SIGNAL SQLSTATE '38000'"
+         "        SET message_text = 'EMPLOYEE NUMBER TOO BIG and INVALID'");
+
+  EXEC SQL EXECUTE IMMEDIATE :strStmt;
+  EMB_SQL_CHECK("Create trigger -- validate_t");
+
+  /* To diable the trigger the DBA will set the global variable to 'Y'. */ 
+  printf("\nUSE THE SQL STATEMENT:\n");
+  printf("  SET\n");
+  printf("TO ASSIGN VALUE TO GLOBAL VARIABLE\n");
+
+  printf("\n  Execute the statement\n");
+  printf("    SET disable_trigger = 'Y'\n");
+
+  strcpy(strStmt, "SET disable_trigger = 'Y'");
+  EXEC SQL EXECUTE IMMEDIATE :strStmt;
+  EMB_SQL_CHECK("SET -- VALUE TO A GLOBAL VARIABLE");
+
+  /* The DBA can perform table maintenance operations like for example */ 
+  /* importing older records since the trigger will not fire. After    */
+  /* completing the table operations,the DBA can set the global        */ 
+  /* variable again to 'N'. */
+  printf("\n  Execute the statement\n");
+  printf("    SET disable_trigger = 'N'\n");
+
+  strcpy(strStmt, "SET disable_trigger = 'N'");
+  EXEC SQL EXECUTE IMMEDIATE :strStmt;
+  EMB_SQL_CHECK("SET -- VALUE TO A GLOBAL VARIABLE");
+
+  /* Drop the trigger. */
+  printf("\nUSE THE SQL STATEMENT:\n");
+  printf("  DROP TRIGGER\n");
+  printf("TO DROP THE TRIGGER\n");
+
+  printf("\n  Execute the statements:");
+  printf("\n   DROP TRIGGER validate_t");
+  printf("\n   COMMIT\n");
+
+  strcpy(strStmt, "DROP TRIGGER validate_t");
+  EXEC SQL EXECUTE IMMEDIATE :strStmt;
+  EMB_SQL_CHECK("DROP -- TRIGGER");
+
+  EXEC SQL COMMIT;
+  EMB_SQL_CHECK("Transaction -- Commit");
+
+  /* Drop the variable. */
+  printf("\nUSE THE SQL STATEMENT:\n");
+  printf("  DROP VARIABLE\n");
+  printf("TO DROP A SESSION GLOBAL VARIABLE\n");
+
+  printf("\n  Execute the statements:");
+  printf("\n   DROP VARIABLE disable_trigger");
+  printf("\n   COMMIT\n");
+
+  strcpy(strStmt, "DROP VARIABLE disable_trigger");
+  EXEC SQL EXECUTE IMMEDIATE :strStmt;
+  EMB_SQL_CHECK("DROP -- GLOABL VARIABLE");
+ 
+  EXEC SQL COMMIT;
+  EMB_SQL_CHECK("Transaction -- Commit");
+ 
+  return rc;
+
+} /* TriggerWithGV() - End */
+
+int StoredProcWithGV()
+{
+  int rc = 0;
+  struct sqlca sqlca = {0};
+
+  printf("------------------------------------------------------------------\n");
+  printf("4. Use of global variable in a stored procedure.\n");
+  printf("------------------------------------------------------------------\n");
+  
+  /* The code below shows how to use global variables in a stored procedure.*/
+  /* It returns the authorization level of the user invoking the stored     */
+  /* procedure. The authorization level returned will be different depending*/
+  /* on the user executing the stored procedure.                            */
+
+  /* The idea of this example is that the users will only have permissions  */
+  /* to execute the stored procedure and not to modify the global variable. */
+  /* Since the default value of the global variable is "SESSION_USER" it    */
+  /* will get the correct value when called even if it was not set before.  */
+  /* Each time the user logs in and calls this stored procedure he will     */
+  /* receive the correct authorization level. */
+
+  /* Assign 'praveen' to variable 'security.gv_user'. */
+  printf("\nUSE THE SQL STATEMENT:\n");
+  printf("  SET\n");
+  printf("TO ASSIGN VALUE TO GLOBAL VARIABLE\n");
+
+  printf("\n  Execute the statement\n");
+  printf("    SET security.gv_user = 'praveen'\n");
+
+  strcpy(strStmt, "SET security.gv_user = 'praveen'");
+  EXEC SQL EXECUTE IMMEDIATE :strStmt;
+  EMB_SQL_CHECK("SET -- VALUE TO A GLOBAL VARIABLE");
+
+  
+  /* Call stored procedure 'get_authorization'. */ 
+  /* The authorization level returned will be 1 */
+
+  rc = callOutParameter();
+
+  /*  Assign 'padma' to variable 'security.gv_user'. */
+  printf("\nUSE THE SQL STATEMENT:\n");
+  printf("  SET\n");
+  printf("TO ASSIGN VALUE TO GLOBAL VARIABLE\n");
+
+  printf("\n  Execute the statement\n");
+  printf("    SET security.gv_user = 'padma'\n");
+
+  strcpy(strStmt, "SET security.gv_user = 'padma'");
+  EXEC SQL EXECUTE IMMEDIATE :strStmt;
+  EMB_SQL_CHECK("SET -- VALUE TO A GLOBAL VARIABLE");
+
+  /* Call stored procedure 'get_authorization'. */ 
+  /* The authorization level returned will be 3 */
+
+  rc = callOutParameter();
+
+  /* Drop a procedure. */
+  printf("\nUSE THE SQL STATEMENT:\n");
+  printf("  DROP PROCEDURE\n");
+  printf("TO DROP A STORED PROCEDURE\n");
+
+  printf("\n  Execute the statements:");
+  printf("\n   DROP PROCEDURE get_authorization");
+  printf("\n   COMMIT\n");
+
+  strcpy(strStmt, "DROP PROCEDURE get_authorization");
+  EXEC SQL EXECUTE IMMEDIATE :strStmt;
+  EMB_SQL_CHECK("DROP -- STORED PROCEDURE");
+
+  /* Drop a variable. */ 
+  printf("\nUSE THE SQL STATEMENT:\n");
+  printf("  DROP VARIABLE\n");
+  printf("TO DROP A SESSION GLOBAL VARIABLE\n");
+
+  printf("\n  Execute the statements:");
+  printf("\n   DROP VARIABLE security.gv_user");
+  printf("\n   COMMIT\n");
+
+  strcpy(strStmt, "DROP VARIABLE security.gv_user");
+  EXEC SQL EXECUTE IMMEDIATE :strStmt;
+  EMB_SQL_CHECK("DROP -- GLOABL VARIABLE");
+
+  /* Drop a table. */
+  printf("\nUSE THE SQL STATEMENT:\n");
+  printf("  DROP TABLE\n");
+  printf("TO DROP A TABLE\n");
+
+  printf("\n  Execute the statements:");
+  printf("\n   DROP TABLE security.users");
+  printf("\n   COMMIT\n");
+
+  strcpy(strStmt, "DROP TABLE security.users");
+  EXEC SQL EXECUTE IMMEDIATE :strStmt;
+  EMB_SQL_CHECK("DROP -- TABLE");
+ 
+  EXEC SQL COMMIT;
+  EMB_SQL_CHECK("Transaction -- Commit");
+ 
+  printf("------------------------------------------------------------------\n");
+  return rc;
+
+} /* StoredProcWithGV() - End */
+
+int ViewWithGV()
+{
+  int rc = 0;
+  struct sqlca sqlca = {0};
+
+  printf("------------------------------------------------------------------\n");
+  printf("3. Use of global variable in a view to show how global variables\n");
+  printf("   can help to improve security, performance and complexity.\n");
+  printf("------------------------------------------------------------------\n");
+  
+  /* A variable can be set by invoking a function that supplies the value    */ 
+  /* of the SESSION_USER special register to fetch the department number     */
+  /* for the current user. A view can use the value of this global variable  */
+  /* in a predicate to select only those rows that contains the user's       */
+  /* department. Since the value of the variable is set the                  */
+  /* first time it is invoked, then we only execute the query once instead of*/
+  /* doing it for each row if the query was embedded in the view definition. */
+  /* This will improve the performance. */
+
+  /* Create the global variable using a SELECT statement in the defination.  */
+  printf("\nUSE THE SQL STATEMENT:\n");
+  printf("  CREATE VARIABLE\n");
+  printf("TO CREATE A SESSION GLOBAL VARIABLE\n");
+
+  printf("\n  Execute the statements:");
+  printf("\n    CREATE VARIABLE schema.gv_workdept CHAR\n"
+         "      DEFAULT ((SELECT workdept FROM employee\n"
+         "      WHERE firstnme = SESSION_USER))\n");
+  printf("\n    COMMIT\n");
+
+  sprintf(strStmt, "CREATE VARIABLE schema.gv_workdept CHAR" 
+                   "  DEFAULT ((SELECT workdept FROM employee"
+                   "  WHERE firstnme = SESSION_USER))");
+  EXEC SQL EXECUTE IMMEDIATE :strStmt;
+  EMB_SQL_CHECK("Create Global Variable -- schema.gv_workdept");
+
+  EXEC SQL COMMIT;
+  EMB_SQL_CHECK("Transaction -- Commit");
+
+  /* Create the view which depends on the global variable */
+  printf("\nUSE THE SQL STATEMENT:\n");
+  printf("  CREATE VIEW\n");
+  printf("TO CREATE A VIEW\n");
+
+  printf("\n  Execute the statements:");
+  printf("\n    CREATE VIEW schema1.emp_filtered AS\n"
+         "      SELECT * FROM employee\n"
+         "      WHERE workdept = schema.gv_workdept\n");
+  printf("\n    COMMIT\n");
+
+  sprintf(strStmt, "CREATE VIEW schema1.emp_filtered AS" 
+                   "  SELECT * FROM employee "
+                   "  WHERE workdept = schema.gv_workdept");
+  EXEC SQL EXECUTE IMMEDIATE :strStmt;
+  EMB_SQL_CHECK("Create View-- schema1.emp_filtered ");
+
+  EXEC SQL COMMIT;
+  EMB_SQL_CHECK("Transaction -- Commit");
+
+  /* Adjust permissions so that other users can only select from the view. */ 
+  /* Any user using this view will only be able to see his department rows.*/
+
+  printf("\nUSE THE SQL STATEMENT:\n");
+  printf("  GRANT\n");
+  printf("TO GRANT PERMISSIONS TO USERS\n");
+
+  printf("\n  Execute the statement\n");
+  printf("    GRANT SELECT on schema1.emp_filtered TO PUBLIC\n");
+  
+  strcpy(strStmt, "GRANT SELECT on schema1.emp_filtered TO PUBLIC");
+  EXEC SQL EXECUTE IMMEDIATE :strStmt;
+  EMB_SQL_CHECK("GRANT -- SELECT");
+
+  /* Drop a view. */
+  printf("\nUSE THE SQL STATEMENT:\n");
+  printf("  DROP VIEW\n");
+  printf("TO DROP A VIEW\n");
+
+  printf("\n  Execute the statements:");
+  printf("\n    DROP VIEW schema1.emp_filtered");
+  printf("\n    COMMIT\n");
+
+  strcpy(strStmt, "DROP VIEW schema1.emp_filtered");
+  EXEC SQL EXECUTE IMMEDIATE :strStmt;
+  EMB_SQL_CHECK("Drop View-- schema1.emp_filtered ");
+
+  EXEC SQL COMMIT;
+  EMB_SQL_CHECK("Transaction -- Commit");
+
+  /* Drop a variable. */
+  printf("\nUSE THE SQL STATEMENT:\n");
+  printf("  DROP VARIABLE\n");
+  printf("TO DROP A SESSION GLOBAL VARIABLE\n");
+
+  printf("\n  Execute the statements:");
+  printf("\n   DROP VARIABLE schema.gv_workdept");
+  printf("\n   COMMIT\n");
+
+  strcpy(strStmt, "DROP VARIABLE schema.gv_workdept");
+  EXEC SQL EXECUTE IMMEDIATE :strStmt;
+  EMB_SQL_CHECK("DROP -- GLOABL VARIABLE");
+  
+  return rc;
+} /* ViewWithGV()- End */
+
+int callOutParameter()
+{
+  /********************************************************\
+  * Call GET_AUTHORIZATION stored procedure *
+  \********************************************************/
+
+  EXEC SQL BEGIN DECLARE SECTION;
+  sqlint16 outOutParamMedian;
+  sqlint16 outOutParamMedianInd;
+  EXEC SQL END DECLARE SECTION;
+
+  printf("\nCALL stored procedure named GET_AUTHORIZATION \n");
+
+  /* initialize variables */
+  outOutParamMedian = -1;
+  outOutParamMedianInd = -1;
+
+  /* GET_AUTHORIZATION is of parameter style SQL, so pass a null indicator */
+  EXEC SQL CALL get_authorization(:outOutParamMedian:outOutParamMedianInd);
+  EMB_SQL_CHECK("get_authorization");
+
+  if (outOutParamMedianInd == 0)
+  {
+    printf("Stored procedure returned successfully\n");
+
+    /*****************************************************************\
+    * Display the authorization level returned as an output parameter *
+    \*****************************************************************/
+    printf("---------------------------------------\n");
+    printf("Authorization Level of the user = %d\n", outOutParamMedian);
+    printf("---------------------------------------\n");
+  }
+} /* callOutParameter() - End*/ 

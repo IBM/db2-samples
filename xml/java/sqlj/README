@@ -1,0 +1,463 @@
+********************************************************************************
+* (c) Copyright IBM Corp. 2007 All rights reserved.
+* 
+* The following sample of source code ("Sample") is owned by International 
+* Business Machines Corporation or one of its subsidiaries ("IBM") and is 
+* copyrighted and licensed, not sold. You may use, copy, modify, and 
+* distribute the Sample in any form without payment to IBM, for the purpose of 
+* assisting you in the development of your applications.
+* 
+* The Sample code is provided to you on an "AS IS" basis, without warranty of 
+* any kind. IBM HEREBY EXPRESSLY DISCLAIMS ALL WARRANTIES, EITHER EXPRESS OR 
+* IMPLIED, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED WARRANTIES OF 
+* MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE. Some jurisdictions do 
+* not allow for the exclusion or limitation of implied warranties, so the above 
+* limitations or exclusions may not apply to you. IBM shall not be liable for 
+* any damages you suffer as a result of using, copying, modifying or 
+* distributing the Sample, even if IBM has been advised of the possibility of 
+* such damages.
+*
+********************************************************************************
+*
+*                    README for SQLj XML Samples 	
+*
+* For windows, the <install_path>\sqllib\samples\xml\java\sqlj directory
+* contains this README file.
+* For unix, <install_path>/sqllib/samples/xml/java/sqlj directory contain
+* this README file.
+* This README describes how to build and run sqlj sample code for DB2 9.7.
+* The DB2 9.7 sqlj sample are located in the
+* <install_path>\sqllib\samples\xml\java\sqlj directory for windows platform
+* and <install_path>/sqllib/samples/xml/java/sqlj for unix based platforms.
+* where <install_path> is the location of DB2 9.7 on your hard drive. The
+* default location for <install_path> is C:\Program Files\IBM for windows
+* and $HOME for unix based platform.
+*
+* Copy the files from this directory to your working directory prior to
+* building the sample programs. The sample programs directory is
+* typically read-only on most platforms and some samples produce output
+* files that require write permissions on the directory.
+*
+* WARNINGS:
+* 1. Some of these samples may change your database or database
+* manager configuration.  Execute the samples against a test database
+* only, such as the DB2 SAMPLE database.
+*
+*******************************************************************************
+*
+*           Prepare your DB2 sample development environment
+*
+*  1) Copy the files in <install_path>\sqllib\samples\xml\java\sqlj\* (for
+*     windows platform) or <install_path>/sqllib/samples/xml/java/sqlj/*
+*     (for UNIX based platform) to your working directory and ensure that
+*     directory has write permission.
+*
+*  2) Modify the CLASSPATH.
+*       For Windows include
+*         <install_path>\sqllib\java\db2java.zip
+*         <install_path>\sqllib\java\db2jcc.jar
+*         <install_path>\sqllib\java\db2jcc_license_cu.jar
+*         <install_path>\sqllib\java\jdk\lib
+*         <install_path>\sqllib\lib
+*         <install_path>\sqllib\function
+*         <install_path>\sqllib\java\sqlj.zip
+*
+*       For UNIX based platform include
+*         <install_path>/sqllib/java/db2java.zip
+*         <install_path>/sqllib/java/db2jcc.jar
+*         <install_path>/sqllib/java/db2jcc_license_cu.jar
+*         <install_path>/sqllib/java/jdk/lib
+*         <install_path>/sqllib/lib
+*         <install_path>/sqllib/function
+*         <install_path>/sqllib/java/sqlj.zip
+*
+*     Modify the PATH.
+*       For Windows include
+*         <install_path>\sqllib\java\<jdkDirName>\bin
+*         <install_path>\sqllib\lib
+*       where <jdkDirName> is the name of the java directory.
+*
+*       For UNIX include
+*         <install_path>/sqllib/java/<jdkDirName>/bin
+*         <install_path>/sqllib/lib
+*       where <jdkDirName> is the name of the java directory.
+*
+*     Please make sure that JDK_PATH( db2
+*     database manager  configuration parameter) is
+*     pointing to the <install_path>\sqllib\java\<jdkDirName> for windows
+*     and <install_path>/sqllib/java/<jdkDirName> for unix platform.
+*
+*     To see the dbm cfg parameter value, run the following from db2
+*     command window (open the db2 command window from
+*     Start -> Run -> db2cmd for windows platform) and look for the value
+*     of JDK_PATH
+*
+*     db2 "get dbm cfg"
+*
+*  3). Enable tcpip:
+*          db2set DB2COMM=tcpip
+*          db2stop
+*          db2start
+*
+*  4). By default, your database configuration parameter SVCENAME is
+*      set to an available port_number. If it is not, update the database
+*      configuration with an available port number using the following
+*      command:
+*      db2 update dbm cfg using SVCENAME <port_number>
+*      where <port_number> is an available port_number.
+*
+*      After you have updated the database configuration manually, you have
+*      to restart DB2 using the following commands:
+*        db2 terminate
+*        db2stop
+*        db2start
+*
+*  5) Create the sample database with the following command:
+*       db2sampl -xml
+*
+*  6) Connect to the database with the following command:
+*      db2 "connect to sample"
+*
+*  7) cd to the directory containing the files copied in step 1.
+*
+*
+*******************************************************************************
+*
+*                       Building DB2 Samples
+*
+*   There are two ways to build DB2 samples: using a nmake utility for windows
+*   (make utility for unix based platform) or using the SQLj precompiler and
+*   java compiler which comes along with the DB2 installation
+*
+*        o To build samples using the nmake utility for windows see
+*          'BUILDING SAMPLES USING nmake UTILITY on WINDOWS'.
+*        o To build samples using the make utility for unix see
+*          'BUILDING SAMPLES USING make UTILITY on UNIX'.
+*        o To build samples using the java compiler or when you do not
+*          have a compatible nmake utility see 'BUILDING
+*          SAMPLES USING SQLj PRECOMPILER AND JAVA COMPILER'.
+*
+* NOTE :
+*
+*    1. Some of the samples might need one or more data files at runtime.
+*       some of the samples may also need setup script to be run before
+*       running the sample.See the specific sample descriptions in
+*       "File Descriptions" section for more details.
+*
+*
+*    2. There are utility files available in this directory that are used
+*       by these samples for error checking. Please make sure that these
+*       files are present in you working directory. The information
+*       about these files can be found in "File Descriptions" section of this
+*       README.
+*
+*    3. Refer to the "File Descriptions" section in this README for
+*       information on specific samples and any special considerations
+*       relevant for each. The HEADER sections of these samples also provide
+*       further details on each sample.
+*
+*******************************************************************************
+*
+*           *** BUILDING SAMPLES USING nmake UTILITY on WINDOWS ***
+*
+*      If you have a compatible nmake utility on your system, you
+*      can use the makefile provided. Such a nmake utility may be
+*      provided by another language compiler.Modify the PATH
+*      variable to include the directory containing the nmake
+*      utility.
+*
+*      Depending on your environment, the makefile might have to be
+*      modified.For more details refer to the 'VARIABLES' section
+*      in the makefile.
+*
+*      Execute the appropriate 'nmake' command in your working
+*      directory:
+*
+*         nmake <app_name> - Builds the program designated by <app_name>.
+*
+*         nmake all        - Builds all supplied sample programs
+*
+*         nmake clean      - Erases all intermediate files produced in the
+*                            build process.
+*
+*         nmake cleanall   - Erases all files produced in the build process
+*                            (all files except the original source files).
+*
+*******************************************************************************
+*
+*           *** BUILDING SAMPLES USING make UTILITY on UNIX ***
+*
+*      If you have a compatible make utility on your system, you
+*      can use the makefile provided. Modify the PATH
+*      variable to include the directory containing the make
+*      utility.
+*
+*      Depending on your environment, the makefile might have to be
+*      modified.For more details refer to the 'VARIABLES' section
+*      in the makefile.
+*
+*      Execute the appropriate 'make' command in your working
+*      directory:
+*
+*         make <app_name>  - Builds the program designated by <app_name>.
+*
+*         make all         - Builds all supplied sample programs
+*
+*         make clean       - Erases all intermediate files produced in the
+*                            build process.
+*
+*         make cleanall    - Erases all files produced in the build process
+*                            (all files except the original source files).
+*
+*******************************************************************************
+*
+*      *** BUILDING SAMPLES USING SQLj PRECOMPILER AND JAVA COMPILER ***
+*
+*     If you do not have a compatible make utility you can use
+*     the SQLj precompiler and javac bytecode compiler to build SQLj
+*     programs.
+*
+*     These samples use classes in Util.sqlj. Build the Util.sqlj program
+*     using the following command.
+*
+*       bldsqlj Util
+*
+*     Note:
+*             When you build SQLj programs with the build files, do not
+*             include the file extension for the program name.
+*
+*     Like the SQLj makefile, the SQLj build files need to be
+*     updated with a valid user ID, password and an available
+*     port number.
+*
+*           bldsqlj - Builds an SQLj program. Here is the usage of
+*                     this build file:
+*
+*           bldsqlj <prog_name> (requires hardcoding user ID and
+*                                password in the bldsqlj.bat file)
+*           bldsqlj <prog_name> <userid> <password>
+*           bldsqlj <prog_name> <userid> <password> <server_name>
+*           bldsqlj <prog_name> <userid> <password> <server_name>
+*                               <port_number>
+*           bldsqlj <prog_name> <userid> <password> <server_name>
+*                   <port_number> <db_name>
+*
+*        Where,
+*          o <prog_name>   - the name of the sample program without the
+*                            .sqlj extension.
+*          o <userid>      - user ID needed connect to the database.
+*          o <password>    - password needed to connect to the
+*                            database.
+*          o <server_name> - server's name that you work with.
+*          o <port_number> - an available port_number on the server.
+*          o <db_name>     - the name of the database where the SQL
+*                            package will be created. The default is
+*                            "sample".
+*
+*    To build a individual sqlj sample, use the following command
+*
+*       sqlj <program name>.sqlj
+*
+*    To run the sample, use the following command
+*
+*       java <program name>
+*
+*******************************************************************************
+*
+*              Common file Descriptions
+* 
+* The following are the common files for SQLj samples. For more
+* information on these files, refer to the program source files.
+*
+*******************************************************************************
+*
+* Common file Descriptions
+*
+* bldsqlj        - build file for application programs
+* Util.sqlj      - utilities used by most programs.
+* README         - This file
+* makefile       - makefile for all files
+*
+*******************************************************************************
+*
+*               SQLj Sample Descriptions
+*
+* The following are the SQLj sample files included with DB2. For more
+* information on the sample programs, refer to the program source files.
+*
+*******************************************************************************
+*
+* Sample Files
+*
+* XmlSchema.sqlj        - How to register an XML schema to a database using
+*                         stored procedures. How to use this registered schema
+*                         to validate an XML value before inserting into
+*                         a table.
+* 
+*                         PREREQUISITE: copy product.xsd, order.xsd,
+*                         customer.xsd, header.xsd Schema files, order.xml XML
+*                         document from xml/data directory to working
+*                         directory.
+*
+* XmlRead.sqlj          - How to read XML data stored in tables.
+*
+* XmlInsert.sqlj        - How to insert XML data into tables having an XML
+*                         column.
+*  
+*                         PREREQUISITE: copy the files expPrg1.xml and
+*                         expPrg.xml to working directory before running the
+*                         sample. These files can be found in xml/data
+*                         directory.
+*                         Run the script XmlInsert_setup.db2 before
+*                         running this sample. Run the XmlInsert_cleanup.db2 
+*                         script to cleanup the database objects after running
+*                         the sample. 
+*
+* XmlUpDel.sqlj         - How to update and delete XML documents in tables.
+*                        
+*                         PREREQUISITE: copy the files expPrg1.xml and
+*                         expPrg.xml to working directory before running the
+*                         sample. These files can be found in xml/data
+*                         directory.
+*                         Run the script XmlUpDel_setup.db2 before
+*                         running this sample. Run the XmlUpDel_cleanup.db2
+*                         script to cleanup the database objects after running
+*                         the sample. 
+*
+* XmlConst.sqlj         - How to put constraints on an XML column.
+*                         NOTE : This sample demonstrate the how to enforce the
+*                         constraints on an XML value. There are some statement
+*                         in the samples which are expected to fail because of
+*                         constraint violation so The sql error SQL803N,
+*                         SQL20305N and SQL20306N are expected.
+*
+* XmlIndex.sqlj         - How to create an index on a table with XML type
+*                         columns and how to query using XQUERY on the
+*                         index created.
+*
+* RelToXmlDoc.sqlj      - How to create XML object from data stored in
+*                         relational tables using various SQL/XML Constructor
+*                         functions. The XML object is created using stored
+*                         procedure.
+*
+*                         PREREQUISITE: This sample uses a stored procedure.
+*                         Stored procedure should be registered before running
+*                         the sample. Follow the step given in the header of
+*                         the sample for more details.
+*                                      Run the scripts cleanupscript.db2 and 
+*                         setupscript.db2 before running this sample.
+*                         Run the cleanupscript.db2 script to cleanup the 
+*                         database objects after running the sample.
+*                         These scripts can be found in xml/data directory.
+*
+* RelToXmlType.sqlj     - How to create XML object from data stored in
+*                         relational tables using various SQL/XML Constructor
+*                         functions.
+* 
+*                         PREREQUISITE: Run the script setupscript.db2 before
+*                         running this simple. Run the cleanupscript.db2
+*                         script to cleanup the database objects after running
+*                         the sample. These scripts can be found in xml/data
+*                         directory.
+*
+* XmlToTable.sqlj       - How to insert the data from XML document to a
+*                         relational table using XML Constructor function and
+*                         SQL/XML functions.
+*
+*                         PREREQUISITE: copy purchaseorder.xml XML document
+*                         from xml/data directory to the working directory.
+*                         Run the script XmlToTable_setup.db2 before running
+*                         this sample.
+*                         Run the XmlToTable_cleanup.db2 script 
+*                         to cleanup the database objects after running the 
+*                         sample.
+*
+* XmlXslt.sqlj          - How to convert XML document from one form to another
+*                         using XSL stylesheets. 
+*
+*                         PREREQUISITE: Run the script XmlXslt_setup.db2 before
+*                         running this sample. Run the XmlXslt_cleanup.db2
+*                         script to cleanup the database objects after running
+*                         the sample.
+*
+*
+* XmlIntegrate.sqlj     - How to use XMLROW and XMLGROUP functions to publish
+*                         relational information as XML. Also,to show XMLQuery 
+*                         default passing mechanism and default column 
+*                         specification for XMLTABLE. 
+*
+*                         PREREQUISITE: Run the script XmlIntegrate_setup.db2
+*                         before running this sample. Run the
+*                         XmlIntegrate_cleanup.db2 script to cleanup the 
+*                         database objects after running the sample.
+*
+*******************************************************************************
+*                        Setup and Cleanup Scripts Used
+*******************************************************************************
+*
+* RelToXmlScrpt            - CLP script present in the xml/data directory that 
+*                            calls two scripts cleanupscript.db2 and 
+*                            setupscript.db2  respectively also present in the 
+*                            xml/data directory
+*
+* setupscript.db2          - CLP script that issues CREATE TABLE and INSERT TABLE 
+*                            statements for the samples RelToXmlDoc.sqlj and 
+*                            RelToXmlType.sqlj
+*
+* cleanupscript.db2        - CLP script that issues DROP TABLE statements for the 
+*                            samples RelToXmlDoc.sqlj and RelToXmlType.sqlj
+*
+* XmlInsertScrpt           - CLP script that calls two scripts XmlInsert_cleanup.db2
+*                            and XmlInsert_setup.db2 respectively
+*
+* XmlInsert_setup.db2      - CLP script that issues CREATE TABLE statements for the 
+*                            sample XmlInsert.sqlj
+*
+* XmlInsert_cleanup.db2    - CLP script that issues DROP TABLE statements for the 
+*                            sample XmlInsert.sqlj
+*
+* XmlIntegrateScrpt        - CLP script that calls two scripts XmlIntegrate_cleanup.db2
+*                            and XmlIntegrate_setup.db2 respectively
+*
+* XmlIntegrate_setup.db2   - CLP script that issues CREATE TABLE statements for the 
+*                            sample XmlIntegrate.sqlj
+*
+* XmlIntegrate_cleanup.db2 - CLP script that issues DROP TABLE statements for the 
+*                            sample XmlIntegrate.sqlj
+*
+* XmlToTableScrpt          - CLP script that calls two scripts XmlToTable_cleanup.db2
+*                            and XmlToTable_setup.db2 respectively
+*
+* XmlToTable_setup.db2     - CLP script that issues CREATE TABLE statements for the 
+*                            sample XmlToTable.sqlj
+*
+* XmlToTable_cleanup.db2   - CLP script that issues DROP TABLE statements for the 
+*                            sample XmlToTable.sqlj
+*
+* XmlUpDelScrpt            - CLP script that calls two scripts XmlUpDel_cleanup.db2
+*                            and XmlUpDel_setup.db2 respectively
+*
+* XmlUpDel_setup.db2       - CLP script that issues CREATE TABLE statements for the 
+*                            sample XmlUpDel.sqlj
+*
+* XmlUpDel_cleanup.db2     - CLP script that issues DROP TABLE statements for the 
+*                            sample XmlUpDel.sqlj
+*
+* XmlXsltScrpt             - CLP script that calls two scripts XmlXslt_cleanup.db2
+*                            and XmlXslt_setup.db2 respectively
+*
+* XmlXslt_setup.db2        - CLP script that issues CREATE TABLE statements for 
+*                            the sample XmlXslt.sqlj
+*
+* XmlXslt_cleanup.db2      - CLP script that issues DROP TABLE statements for the
+*                            sample XmlXslt.sqlj
+*
+* reltoxmlprocScrpt        - CLP script that calls two scripts reltoxmlprocdrop.db2
+*                            and reltoxmlproc.db2 respectively
+*
+* reltoxmlproc.db2         - CLP script that issues CREATE PROCEDURE statement for 
+*                            the sample RelToXmlDoc.sqlj
+*
+* reltoxmlprocdrop.db2     - CLP script that issues DROP PROCEDURE statement for 
+*                            the sample RelToXmlDoc.sqlj
+*******************************************************************************

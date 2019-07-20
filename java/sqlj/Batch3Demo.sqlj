@@ -1,0 +1,212 @@
+//***************************************************************************
+// (c) Copyright IBM Corp. 2007 All rights reserved.
+// 
+// The following sample of source code ("Sample") is owned by International 
+// Business Machines Corporation or one of its subsidiaries ("IBM") and is 
+// copyrighted and licensed, not sold. You may use, copy, modify, and 
+// distribute the Sample in any form without payment to IBM, for the purpose of 
+// assisting you in the development of your applications.
+// 
+// The Sample code is provided to you on an "AS IS" basis, without warranty of 
+// any kind. IBM HEREBY EXPRESSLY DISCLAIMS ALL WARRANTIES, EITHER EXPRESS OR 
+// IMPLIED, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED WARRANTIES OF 
+// MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE. Some jurisdictions do 
+// not allow for the exclusion or limitation of implied warranties, so the above 
+// limitations or exclusions may not apply to you. IBM shall not be liable for 
+// any damages you suffer as a result of using, copying, modifying or 
+// distributing the Sample, even if IBM has been advised of the possibility of 
+// such damages.
+//***************************************************************************
+//
+// SOURCE FILE NAME: Batch3Demo.sqlj
+//
+// SAMPLE: SQLJ Batching - When do we need to implicitly execute a batch 
+//
+//         This sample shows that when you use a batching limit constant, 
+//         for example, ExecutionContext.UNLIMITED_BATCH and
+//         ExecutionContext.AUTO_BATCH, you will have to do an explicit
+//         batch execution in SQLJ to execute the batch. 
+//
+//         In this program AUTO_BATCH  has been set currently to 100,
+//         so implicit batch execution will trigger at 100th statement. 
+ 
+//         This sample program uses the DataSource jdbc/DB2SimpleDataSource_ds1 
+//         from JNDI. The DataSource is registered using createRegisterDS.java 
+//         and DS1.prop. Refer to the README file for details on how to run 
+//         this sample. 
+//
+// SQL Statements USED:
+//         SELECT
+//
+// OUTPUT FILE: Batch3Demo.out (available in the online documentation)
+// Output will vary depending on the JDBC driver connectivity used.
+//***************************************************************************
+//
+// For more information on the sample programs, see the README file.
+//
+// For information on developing JDBC applications, see the Application
+// Development Guide.
+//
+// For information on using SQL statements, see the SQL Reference.
+//
+// For the latest information on programming, compiling, and running DB2
+// applications, visit the DB2 application development website at
+//     http://www.software.ibm.com/data/db2/udb/ad
+//**************************************************************************/
+
+
+import java.sql.*;
+import sqlj.runtime.*;
+import sqlj.runtime.ref.*;
+
+#sql context Batch3_Ctx with (dataSource="jdbc/DB2SimpleDataSource_ds1");
+
+class Batch3Demo 
+{
+
+  static Batch3_Ctx ctx1 = null;
+
+  public static void main(String argv[]) throws SQLException
+  {  
+  
+    // Obtain Connection Context from DataSource  jdbc/DB2SimpleDataSource_ds1
+    ctx1 = new Batch3_Ctx();
+
+    try
+    {
+      Statement stmt = null;
+      ResultSet rs = null;
+      Connection conn = null;
+
+      conn = ctx1.getConnection();
+      stmt = conn.createStatement();
+      ExecutionContext exCtx1 = ctx1.getExecutionContext();
+      System.out.println("");
+      System.out.println("  Execution Context exCtx1 is created.\n");
+
+      // Set batch limit to 'unlimited'
+      exCtx1.setBatching(true);
+      exCtx1.setBatchLimit(ExecutionContext.UNLIMITED_BATCH);
+
+      System.out.println(
+        " ***************************************************\n" +
+        " **  Batch Limit is set to 'unlimited' for exCtx1 **\n" +
+        " ***************************************************\n");
+
+      // Insert some data into the testing table Batch_Test2
+      System.out.println(
+        "  Insert some data into the table Batch_test2 using host \n" +
+        "  variables by performing the following SQL statement \n" + 
+        "  25 times:\n\n" +
+        "    INSERT INTO Batch_Test2 \n" +
+        "      VALUES(:i, :col2, :col3) }\n");
+
+      String col2 = "";
+      String col3 = "";
+      String s1 = "someVal";
+      String s2 = "col3Val";
+
+      for (int i=1; i<=25; ++i)
+      {
+        col2=s1+i;
+        col3=s2+i;
+        #sql [ctx1] { INSERT INTO Batch_Test2 VALUES(:i, :col2, :col3) };
+        System.out.println("    INSERT INTO Batch_Test2 VALUES(" + i + ", "
+                           + col2 + ", " + col3 + ")");
+      }
+      System.out.println ("");
+
+      // Retrieve and display table Batch_Test2 using JDBC 
+      System.out.println(
+        "----------------------------------------------------------\n" +
+        "  Display the content of the table Batch_Test2 by performing\n" +
+        "  the following SQL statement in 'JDBC':\n\n" +
+        "    SELECT * FROM Batch_Test2\n");
+
+      rs = stmt.executeQuery("SELECT * from Batch_Test2");
+
+      displayTableContent(rs);
+
+      System.out.println("");
+      System.out.println(
+        "  Note: Since we have set batch limit to the constant \n" +
+        "        UNLIMITED_BATCH, an explicit batch execute is needed \n" +
+        "        to execute the batch.\n");
+	
+      // Check Batch Update Counts
+      int[] batchUpdateCount = exCtx1.executeBatch();
+      System.out.println("  Executed batch explicitly.\n");
+ 
+      batchUpdateCount = exCtx1.getBatchUpdateCounts();
+      System.out.println ("  Batch update Count Length: " + 
+                          batchUpdateCount.length + "\n");
+
+      // Retrieve and display table Batch_Test2 using JDBC to verify that 
+      // it has 25 rows now
+      System.out.println(
+        "----------------------------------------------------------\n" +
+        "  After an explicit batch execution... \n\n" +	
+        "  Display the content of the table Batch_Test2 by performing\n" +
+        "  the following SQL statement in 'JDBC':\n\n" +
+        "    SELECT * FROM Batch_Test2\n");
+
+      rs = stmt.executeQuery("SELECT * from Batch_Test2");
+
+      displayTableContent(rs);
+
+      System.out.println("");
+      cleanup();
+    }
+    catch(Exception ex)
+    {
+      if (ex instanceof java.sql.SQLException)
+      {
+        System.out.println("error code: " +
+              ((java.sql.SQLException)(ex)).getErrorCode());
+        System.out.println("error message: " + ex.getMessage());
+      }
+      ex.printStackTrace();
+    }
+  }
+
+  static void displayTableContent(ResultSet rs)
+  {
+    try
+    {
+      System.out.println(
+        "  Results:\n\n" +
+        "    INDEX  COLUMN 2  COLUMN 3\n" +
+        "    ------ --------- --------- ");
+
+      int row=1;	
+      while (rs.next())
+      {
+        System.out.println("    "+Data.format(rs.getInt(1),6) +
+                           " "+Data.format(rs.getString(2),9) +
+                           " "+Data.format(rs.getString(2),9));
+        row++;
+      }
+      if (row == 1)
+      { 
+        System.out.println("");      
+        System.out.println("  The table Batch_Test2 is empty with 0 rows.\n");
+      }
+    }
+    catch(Exception ex)
+    {
+      if (ex instanceof java.sql.SQLException)
+      {
+        System.out.println("error code: " +
+                 ((java.sql.SQLException)(ex)).getErrorCode());
+        System.out.println("error message: " + ex.getMessage());
+      }
+      ex.printStackTrace();
+    }
+  }
+	
+  private static void  cleanup() throws SQLException
+  {
+    #sql [ctx1] { DELETE  FROM Batch_Test1 WHERE 1=1 };
+    #sql [ctx1] { DELETE  FROM Batch_Test2 WHERE 1=1 };
+  }
+}

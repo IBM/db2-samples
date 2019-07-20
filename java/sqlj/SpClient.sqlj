@@ -1,0 +1,582 @@
+//*************************************************************************
+// (c) Copyright IBM Corp. 2007 All rights reserved.
+// 
+// The following sample of source code ("Sample") is owned by International 
+// Business Machines Corporation or one of its subsidiaries ("IBM") and is 
+// copyrighted and licensed, not sold. You may use, copy, modify, and 
+// distribute the Sample in any form without payment to IBM, for the purpose of 
+// assisting you in the development of your applications.
+// 
+// The Sample code is provided to you on an "AS IS" basis, without warranty of 
+// any kind. IBM HEREBY EXPRESSLY DISCLAIMS ALL WARRANTIES, EITHER EXPRESS OR 
+// IMPLIED, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED WARRANTIES OF 
+// MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE. Some jurisdictions do 
+// not allow for the exclusion or limitation of implied warranties, so the above 
+// limitations or exclusions may not apply to you. IBM shall not be liable for 
+// any damages you suffer as a result of using, copying, modifying or 
+// distributing the Sample, even if IBM has been advised of the possibility of 
+// such damages.
+//*************************************************************************
+//
+// SOURCE FILE NAME: SpClient.sqlj
+//
+// SAMPLE: Call the set of stored procedures implemented in SpServer.sqlj
+//
+// Steps to run the sample with command line window:
+//         I) If you have a compatible make/nmake program on your system, 
+//            do the following:
+//            1. Update makefile with a valid userid, password and 
+//               an available port number.
+//            2. Compile the server source file SpServer.sqlj (this will also 
+//               compile the Utility file, Util.sqlj, erase the existing 
+//               library/class files and copy the newly compiled class files, 
+//               SpServer.class, SpContext.class, SpIterat.class, 
+//               SpServerEmployees.class, SpServerSalary.class, 
+//               SpServer_SJProfileKeys.class and SpServer_SJProfile0.ser 
+//               from the current directory to the $(DB2PATH)\function directory):
+//                 nmake/make SpServer
+//            2. Compile the client source file SpClient.sqlj (this will also 
+//               call the script 'spcat' to create and catalog the stored 
+//               procedures):
+//                 nmake/make SpClient
+//            3. Run the client SpClient:
+//                 java SpClient
+//
+//         II) If you don't have a compatible make/nmake program on your 
+//             system do the following:
+//             1. Compile the utility file and the server source file with:
+//                  sqlj Util.sqlj
+//                  sqlj SpServer.sqlj
+//             2. Update bldsqljs and bldsqlj build files with a valid userid
+//                and password.
+//             3. Erase the existing library/class files (if any): 
+//                SpContext.class, SpIterat.class, SpServer.class, 
+//                SpServerEmployees.class, SpServerSalary.class, 
+//                SpServer_SJProfileKeys.class and SpServer_SJProfile0.ser 
+//                from the following path, $(DB2PATH)\function. 
+//             4. Compile the Iterator class file for SpServer.sqlj with
+//                the following command:
+//                  sqlj SpIterat.sqlj
+//             5. Build the SQLj stored procedure server with the following
+//                command (It will also copy the following class files from
+//                the current directory to the $(DB2PATH)\function :
+//                SpContext.class, SpIterat.class, SpServer.class, 
+//                SpServerEmployees.class, SpServerSalary.class, 
+//                SpServer_SJProfileKeys.class and SpServer_SJProfile0.ser):
+//                  bldsqljs SpServer
+//             6. Catalog the stored procedures in the database with:
+//                  spcat
+//             7. Build the SQLj stored procedure client with the following
+//                command:
+//                  bldsqlj SpClient
+//             8. Run SpClient with:
+//                  java SpClient
+//
+// SpClient calls nine methods that call stored procedures:
+//  (1) callOutLanguage: Calls a stored procedure that returns the 
+//      implementation language of the stored procedure library
+//        Parameter types used: OUT CHAR(8)
+//  (2) callOutParameter: Calls a stored procedure that returns median 
+//      salary of employee salaries
+//        Parameter types used: OUT DOUBLE                    
+//  (3) callInParameters: Calls a stored procedure that accepts 3 salary 
+//      values and updates employee salaries in the EMPLOYEE table based 
+//      on these values for a given department.
+//        Parameter types used: IN DOUBLE
+//                              IN DOUBLE
+//                              IN DOUBLE
+//                              IN CHAR(3)
+//  (4) callInoutParameter: Calls a stored procedure that accepts an input
+//      value and returns the median salary of those employees in the
+//      EMPLOYEE table who earn more than the input value. Demonstrates how 
+//      to use null indicators in a client application. The stored procedure
+//      has to be implemented in the following parameter styles for it to be
+//      compatible with this client application.
+//        Parameter style for a C stored procedure:  SQL
+//        Parameter style for a Java(JDBC/SQLJ) stored procedure:  JAVA
+//        Parameter style for an SQL stored procedure:  SQL
+//        Parameter types used: INOUT DOUBLE
+//  (5) callClobExtract: Calls a stored procedure that extracts and returns a 
+//      portion of a CLOB data type
+//        Parameter types used: IN CHAR(6)
+//                              OUT VARCHAR(1000)
+//  (6) callDecimalType: Calls a stored procedure that passes and receives a 
+//      DECIMAL data type from a stored procedure
+//        Parameter types used: INOUT DECIMAL
+//  (7) callAllDataTypes: Calls a stored procedure that uses a variety of 
+//      common data types (not DECIMAL, GRAPHIC, VARGRAPHIC, BLOB, CLOB, 
+//      DBCLOB). This sample shows only a subset of DB2 supported data types.
+//      For a full listing of DB2 data types, please see the SQL Reference.
+//        Parameter types used: INOUT SMALLINT
+//                              INOUT INTEGER
+//                              INOUT BIGINT
+//                              INOUT REAL
+//                              INOUT DOUBLE
+//                              OUT CHAR(1)
+//                              OUT CHAR(15)
+//                              OUT VARCHAR(12)
+//                              OUT DATE
+//                              OUT TIME
+//  (8) callOneResultSet: Calls a stored procedure that returns a result set to
+//      the client application
+//        Parameter types used: IN DOUBLE
+//  (9) callTwoResultSets: Calls a stored procedure that returns two result sets 
+//      to the client application
+//        Parameter types used: IN DOUBLE
+//
+// SQL Statements USED:
+//         CALL
+//         SELECT
+//
+// OUTPUT FILE: SpClient.out (available in the online documentation)
+// Output will vary depending on the JDBC driver connectivity used.
+//*************************************************************************
+//
+// For more information on the sample programs, see the README file.
+//
+// For information on developing SQLJ applications, see the Application
+// Development Guide.
+//
+// For information on using SQL statements, see the SQL Reference.
+//
+// For the latest information on programming, compiling, and running DB2
+// applications, visit the DB2 application development website at
+//     http://www.software.ibm.com/data/db2/udb/ad
+//**************************************************************************/
+
+import java.sql.*;            // JDBC classes           
+import java.math.BigDecimal;  // BigDecimal support for packed decimal type
+import sqlj.runtime.*;
+import sqlj.runtime.ref.*;
+
+public class SpClient
+{
+  static double outMedian = 0;
+
+  public static void main(String argv[])
+  {
+    DefaultContext ctx = null;
+    Connection con = null;
+    String language = "";
+
+    try
+    {
+      Db db = new Db(argv);
+
+      System.out.println("HOW TO CALL VARIOUS STORED PROCEDURES.\n");
+      
+      // connect to the 'sample' database
+      ctx = db.getDefaultContext();
+            
+      language = callOutLanguage();
+      callOutParameter();
+      callInParameters();
+      
+      // call INOUT_PARAM stored procedure using the median returned
+      // by the call to OUT_PARAM
+      System.out.println("\nCall stored procedure named INOUT_PARAM");
+      System.out.println("using the median returned by the call to " + 
+                         "OUT_PARAM");
+      callInoutParameter(outMedian);
+      
+      // call INOUT_PARAM stored procedure again in order to depict a        
+      // NOT FOUND error that is raised when no rows are found to satisfy
+      // a query in the procedure.  No row is found because the query
+      // depends on the procedure's input parameter value which is too high.
+      System.out.println("\nCALL stored procedure INOUT_PARAM again");
+      System.out.println("with an input value that causes a NOT FOUND error");
+      callInoutParameter(99999.99);
+            
+      callClobExtract("000140");
+      callDecimalType();
+      callAllDataTypes();
+      callOneResultSet(ctx);
+      callTwoResultSets(ctx);
+
+      // roll back any changes to the database made by this sample
+      #sql { ROLLBACK WORK };
+      db.disconnect();
+    }
+    catch (Exception e)
+    {
+      try
+      {
+        #sql { ROLLBACK WORK };
+        ctx.close();
+      }
+      catch (Exception x)
+      { }
+
+      e.printStackTrace();
+    }
+  } // end main
+
+  public static String callOutLanguage()
+  {
+    String outLang = "";
+    try
+    {
+      // prepare the CALL statement for OUT_LANGUAGE
+      String procName = "OUT_LANGUAGE";
+
+      // call the stored procedure
+      System.out.println();
+      System.out.println("Call stored procedure named " + procName);
+      #sql {CALL OUT_LANGUAGE(:out outLang)};
+
+      System.out.println("Stored procedures are implemented in language "
+                         + outLang);                         
+    }
+    catch (SQLException e)
+    {
+      System.out.println(e.getMessage());
+    }
+    
+    return(outLang);
+    
+  } // callOutLanguage
+
+  public static void callOutParameter()
+  {
+    try
+    {
+      String procName = "OUT_PARAM";
+      
+      // call the stored procedure                       
+      System.out.println();
+      System.out.println("Call stored procedure named " + procName);
+      #sql {CALL OUT_PARAM(:out outMedian)};
+      
+      System.out.println(procName + " completed successfully");
+      System.out.println("Median salary returned from " + procName + " = "
+                         + outMedian);                         
+    }
+    catch (SQLException e)
+    {
+      System.out.println(e.getMessage());
+    }
+    
+  } // callOutParameter
+
+
+  public static void callInParameters() throws SQLException
+  {
+    double sumSalary, inParamLowSal, inParamMedSal, inParamHighSal;
+    String inDept;
+    try
+    {
+      // prepare the CALL statement for IN_PARAMS
+      String procName = "IN_PARAMS";
+      inDept = "E11";
+    
+      // display total salary before calling IN_PARAMS
+      #sql {SELECT SUM(salary) INTO :sumSalary
+              FROM employee
+              WHERE workdept = :inDept};
+      
+      System.out.println();
+      System.out.println("Sum of salaries for dept. E11 = " +
+                         sumSalary + " before " + procName);     
+
+      // set the input parameters of the stored procedure          
+      inParamLowSal = 15000;
+      inParamMedSal = 20000;
+      inParamHighSal = 25000;
+
+      System.out.println("Call stored procedure named " + procName);
+      #sql {CALL IN_PARAMS(:in inParamLowSal, :in inParamMedSal, 
+                           :in inParamHighSal, :in inDept)};
+
+      System.out.println(procName + " completed successfully");
+
+      // display total salary after calling IN_PARAMS
+      #sql {SELECT SUM(salary) INTO :sumSalary
+              FROM employee
+              WHERE workdept = :inDept};
+     
+      System.out.println("Sum of salaries for dept. E11 = "
+                         + sumSalary + " after " + procName);
+      
+    }
+    catch (SQLException e)
+    {
+      // roll back any UPDATE statements issued before the SQLException 
+      #sql { ROLLBACK WORK };
+      System.out.println(e.getMessage());
+    }
+  } // callInParameters
+
+  public static void callInoutParameter(double median) 
+  {
+    double inoutMedian;
+    try
+    {
+      String procName = "INOUT_PARAM";
+      inoutMedian = median;
+
+      // call the stored procedure
+       
+      if (median == 99999.99)
+      {         
+        System.out.println("\n-- The following error report is " +
+                           "expected! --");
+      }
+
+      #sql {CALL INOUT_PARAM(:inout inoutMedian)};               
+     
+      System.out.println(procName + " completed successfully");
+      System.out.println("Median salary returned from " + procName + " = "
+                         + inoutMedian);
+                    
+     
+    }
+    catch (SQLException e)
+    {      
+      System.out.println(e.getMessage());
+    }
+    
+  } // callInoutParameter
+
+  public static void callClobExtract(String empNo)
+  {
+    String outResume;
+    
+    try
+    {
+      String procName = "CLOB_EXTRACT";
+
+      // call the stored procedure
+      System.out.println();
+      System.out.println("Call stored procedure named " + procName);
+      #sql {CALL CLOB_EXTRACT(:in empNo, :out outResume)};
+           
+      System.out.println(procName + " completed successfully");
+      System.out.println("Resume section returned for employee "
+                         + empNo + "=\n" + outResume);        
+    }
+    catch (Exception e)
+    {
+      System.out.println(e.getMessage());
+    }
+  } // callClobExtract
+
+  //*************************************************************************
+  // PARAMETER STYLE JAVA procedures do not support the DBINFO clause.
+  // The following PARAMETER STYLES can be used with DBINFO or PROGRAM TYPE
+  // clauses: 
+  //          - DB2SQL
+  //          - GENERAL
+  //          - GENERAL WITH NULLS
+  //          - SQL
+  // Please see the SpClient implementation for C/C++/CLI language to
+  // see this functionality.
+  //*************************************************************************
+
+  //*************************************************************************
+  // PROGRAM TYPE MAIN is only valid for LANGUAGE C, COBOL or CLR, and 
+  // following PARAMETER STYLE:
+  //          - DB2SQL
+  //          - GENERAL
+  //          - GENERAL WITH NULLS
+  //          - SQL
+  // Please see the SpClient implementation for C/C++/CLI language to
+  // see this functionality.
+  //*************************************************************************
+
+  public static void callDecimalType()
+  {
+    try
+    {
+      // prepare the CALL statement for DECIMAL_TYPE
+      String procName = "DECIMAL_TYPE";
+      
+      // declare and initialize input variable
+      BigDecimal inoutDecimal = new BigDecimal("400000.00");
+
+      // call the stored procedure
+      System.out.println();
+      System.out.println("Call stored procedure named " + procName);
+      #sql {CALL DECIMAL_TYPE(:inout inoutDecimal)};
+   
+      System.out.println(procName + " completed successfully");
+      System.out.println("Value of DECIMAL = " + inoutDecimal);     
+    }
+    catch (SQLException e)
+    {
+      System.out.println(e.getMessage());
+    }
+  } // callDecimalType
+
+  public static void callAllDataTypes()
+  {
+    try
+    {
+      // prepare the CALL statement for ALL_DATA_TYPES
+      String procName = "ALL_DATA_TYPES";
+           
+      // declare and initialize input variables
+      short inoutSmallint = 32000;
+      int inoutInteger = 2147483000;
+      long inoutBigint = 2147483000;
+      float inoutReal = 100000;
+      double inoutDouble = 2500000;
+
+      // declare output variables
+      String outChar, outChars, outVarchar;
+      Date outDate;
+      Time outTime;
+
+      // call the stored procedure
+      System.out.println();
+      System.out.println("Call stored procedure named " + procName);
+      #sql {CALL ALL_DATA_TYPES(:inout inoutSmallint, :inout inoutInteger,
+                                :inout inoutBigint, :inout inoutReal,
+                                :inout inoutDouble, :out outChar,
+                                :out outChars, :out outVarchar,
+                                :out outDate, :out outTime)};
+      
+      System.out.println(procName + " completed successfully");
+    
+      System.out.println("Value of SMALLINT = " + inoutSmallint);
+      System.out.println("Value of INTEGER = " + inoutInteger);
+      System.out.println("Value of BIGINT = " + inoutBigint);
+      System.out.println("Value of REAL = " + inoutReal);
+      System.out.println("Value of DOUBLE = " + inoutDouble);
+      System.out.println("Value of CHAR(1) = " + outChar);
+      System.out.println("Value of CHAR(15) = " + outChars.trim());
+      System.out.println("Value of VARCHAR(12) = " + outVarchar.trim());
+      System.out.println("Value of DATE = " + outDate);
+      System.out.println("Value of TIME = " + outTime);
+    
+    }
+    catch (SQLException e)
+    {
+      System.out.println(e.getMessage());
+    }
+  } // callAllDataTypes
+
+  public static void callOneResultSet(ConnectionContext ctx)
+  {
+
+    ResultSet rs;
+    ExecutionContext execCtx = ctx.getExecutionContext();
+
+    String procName = "ONE_RESULT_SET";
+
+    try
+    {
+      // call the stored procedure
+      System.out.println();
+      System.out.println("Call stored procedure named " + procName);
+      #sql {CALL ONE_RESULT_SET(:in outMedian)};
+
+      System.out.println(procName + " completed successfully");
+      if ((rs = execCtx.getNextResultSet()) != null)
+      {
+        fetchAll(rs);
+
+        // close ResultSet
+        rs.close();
+      }
+    }
+    catch (SQLException e)
+    {
+      System.out.println(e.getMessage());
+    }
+    
+  } // callOneResultSet
+
+  public static void callTwoResultSets(ConnectionContext ctx)
+  {
+    ResultSet rs;
+    ExecutionContext execCtx = ctx.getExecutionContext();
+    
+    String procName = "TWO_RESULT_SETS";
+    try
+    {
+      // call the stored procedure
+      System.out.println();
+      System.out.println("Call stored procedure named " + procName);
+      #sql {CALL TWO_RESULT_SETS(:in outMedian)};
+      System.out.println(procName + " completed successfully");
+
+      if ((rs = execCtx.getNextResultSet()) != null)
+      {
+        System.out.println(
+          "Result set 1: Employees with salaries greater than " + outMedian);
+        // get first result set
+        fetchAll(rs);
+      }
+      
+      if ((rs = execCtx.getNextResultSet()) != null)
+      {
+        System.out.println();
+        System.out.println("Result set 2: Employees with salaries less than " +
+                            outMedian);
+        // get second result set
+        fetchAll(rs);
+      }
+      
+      // close ResultSet
+      rs.close();           
+    }
+    catch (SQLException e)
+    {
+      System.out.println(e.getMessage());
+    }
+  } // callTwoResultSets
+
+  //*************************************************************************
+  // PARAMETER STYLE GENERAL and GENERAL WITH NULLS can be specified when
+  // LANGUAGE C, COBOL, or CLR is used.
+  // Please see the SpClient implementation for CLI language to see this 
+  // functionality.
+  //*************************************************************************
+
+  // ======================================================
+  // Method: fetchAll -- returns all rows from a result set
+  // ======================================================
+  public static void fetchAll(ResultSet rs)
+  {
+    try
+    {
+      System.out.println(
+        "=============================================================");
+    
+      // retrieve the  number, types and properties of the 
+      // resultset's columns
+      ResultSetMetaData stmtInfo = rs.getMetaData();
+      
+      int numOfColumns = stmtInfo.getColumnCount();
+      int r = 0;
+
+      while (rs.next())
+      {
+        r++;
+        System.out.print("Row: " + r + ": ");
+        for (int i = 1; i <= numOfColumns; i++)
+        {
+          if (i == 3)
+          {
+            System.out.print(Data.format(rs.getDouble(i), 7, 2));
+          }
+          else
+          {
+            System.out.print(rs.getString(i));
+          }
+
+          if (i != numOfColumns)
+          {
+            System.out.print(", ");
+          }
+        }
+        System.out.println();
+      }
+    }
+    catch (Exception e)
+    {
+      System.out.println("Error: fetchALL: exception");
+      System.out.println(e.getMessage());
+    }
+  } // fetchAll
+} // SpServer

@@ -1,0 +1,2389 @@
+/******************************************************************************
+ *
+ * Source File Name = db2uext2.ctsm  
+ *
+ * Licensed Materials - Property of IBM
+ *
+ * (C) COPYRIGHT International Business Machines Corp. 1996.
+ * All Rights Reserved
+ *
+ * US Government Users Restricted Rights - Use, duplication or
+ * disclosure restricted by GSA ADP Schedule Contract with IBM Corp.
+ *
+ * Function = Sample Log Management User Exit C Source Code
+ *
+ *****************************************************************************/
+
+/*****************************************************************************/
+/*                                                                           */
+/* Sample Name: db2uext2.ctsm                                                */
+/*                                                                           */
+/*                                                                           */
+/* Purpose:    This is a sample User Exit utilizing Tivoli Storage Manager   */
+/*             ( TSM ) to Archive and Retrieve database log files.           */
+/*                                                                           */
+/* Options:    1. This sample provides an audit trail of calls ( stored in a */
+/*                separate file for each option ) including a timestamp and  */
+/*                parameters received.  This option can be disabled.         */
+/*                                                                           */
+/*             2. This sample provides an error trail of calls in error      */
+/*                including a timestamp and an error isolation string for    */
+/*                problem determination.  This option can be disabled.       */
+/*                                                                           */
+/*                                                                           */
+/* Usage:      1. Copy "db2uext2.ctsm" to "db2uext2.c" and place this file   */
+/*                into a working directory.                                  */
+/*                                                                           */
+/*             2. Modify the "Installation Defined Variables" to suit your   */
+/*                environment.  Two example scenarios have been provided     */
+/*                below for illustrative purposes.                           */
+/*                                                                           */
+/*             3. Modify the program logic to suit your environment.  If     */
+/*                there are situations where the user exit program fails on  */
+/*                archive request and you want DB2 to retry the request, set */
+/*                the return code to RC_OPATTN.                              */
+/*                                                                           */
+/*             4. Compile and link "db2uext2.c" with the following command:  */
+/*                   cc_r -o db2uext2 db2uext2.c                             */
+/*                       /usr/tivoli/tsm/client/api/bin/libApiDS.a           */
+/*                       -I/usr/tivoli/tsm/client/api/bin/sample             */
+/*                or a functional equivalent.                                */
+/*                Place the resultant "db2uext2" named executable into       */
+/*                sqllib/adm or sqllib/bin.                                  */
+/*                                                                           */
+/*                *** NOTE ***  Code/command modification may be required    */
+/*                   depending on compiler options used and header           */
+/*                   file location.                                          */
+/*                                                                           */
+/*                *** NOTE ***  On 64-bit AIX compile as follows:            */
+/*                   cc_r -o db2uext2 -q64 db2uext2.c                        */
+/*                       /usr/tivoli/tsm/client/api/bin64/libApiTSM64.a      */
+/*                       -I/usr/tivoli/tsm/client/api/bin64/sample           */
+/*                                                                           */
+/*                *** NOTE ***  On Solaris compile as follows:               */
+/*                   cc -o db2uext2 db2uext2.c -xarch=v9                     */
+/*                       /opt/tivoli/tsm/client/api/bin/libApiDS.so          */
+/*                       -I/opt/tivoli/tsm/client/api/bin/sample             */
+/*                                                                           */
+/*                   where -xarch=<a> specifies architecture instruction     */
+/*                   set.                                                    */
+/*                                                                           */
+/*                   For 64-bit architectures, use the appropriate           */
+/*                   library paths:                                          */
+/*                                                                           */
+/*                   cc -o db2uext2 db2uext2.c -xarch=v9                     */
+/*                       /opt/tivoli/tsm/client/api/bin64/libApiDS64.so      */
+/*                       -I/opt/tivoli/tsm/client/api/bin64/sample           */
+/*                                                                           */
+/*                *** NOTE ***  On HP compile as follows:                    */
+/*                   cc -D_INCLUDE_POSIX_SOURCE -Aa db2uext2.c               */
+/*                       -o db2uext2                                         */
+/*                       -I/opt/tivoli/tsm/client/api/bin/sample +e          */
+/*                       /opt/tivoli/tsm/client/api/bin/libApiDS.sl          */
+/*                                                                           */
+/*                   For 64-bit architectures, use the appropriate           */
+/*                   library paths and flags:                                */
+/*                                                                           */
+/*                   cc -D_INCLUDE_POSIX_SOURCE -Aa +DA2.0W                  */
+/*                       db2uext2.c -o db2uext2                              */
+/*                       -I/opt/tivoli/tsm/client/api/bin64/sample +e        */
+/*                       /opt/tivoli/tsm/client/api/bin64/libApiDS64.sl      */
+/*                                                                           */
+/*                *** NOTE ***  On Linux compile as follows:                 */
+/*                   cc -D_INCLUDE_POSIX_SOURCE db2uext2.c                   */
+/*                       -o db2uext2                                         */
+/*                       -I/opt/tivoli/tsm/client/api/bin/sample             */
+/*                       /opt/tivoli/tsm/client/api/bin/libApiDS.so          */
+/*                       -lApiDS -lpthread -lcrypt -ldl                      */
+/*                                                                           */
+/*                   For 64-bit architectures, use the appropriate           */
+/*                   library paths:                                          */
+/*                                                                           */
+/*                   cc -D_INCLUDE_POSIX_SOURCE db2uext2.c                   */
+/*                       -o db2uext2                                         */
+/*                       -I/opt/tivoli/tsm/client/api/bin64/sample           */
+/*                       /opt/tivoli/tsm/client/api/bin64/libApiTSM64.so     */
+/*                       -lApiTSM64 -lpthread -lcrypt -ldl                   */
+/*                                                                           */
+/*                   On certain 64-bit architectures may need to specify     */
+/*                   -m64 when using the gcc compiler, and -q64 when         */
+/*                   using xlC                                               */
+/*                                                                           */
+/*             5. DB2 calls "db2uext2" in the following format -             */
+/*                                                                           */
+/*                  db2uext2 -OS<os> -RL<release> -RQ<request> -DB<dbname>   */
+/*                           -NN<nodenumber> -LP<logpath> -LN<logname>       */
+/*                           [-LSlogsize -SPstartingpage]                    */
+/*                           [-AP<tsmpasswd>]                                */
+/*                                                                           */
+/*                  where:  os         = operating system                    */
+/*                          release    = DB2 release                         */
+/*                          request    = 'ARCHIVE' or 'RETRIEVE'             */
+/*                          dbname     = database name                       */
+/*                          nodenumber = node number                         */
+/*                          logpath    = log file path                       */
+/*                          logname    = log file name                       */
+/*                          logsize    = log file size (optional)            */
+/*                          startingpage = starting offset in 4K page unit   */
+/*                                         (optional)                        */
+/*                          tsmpasswd  = TSM password (optional)             */
+/*                                                                           */
+/*                  Note: logsize and startingpage are only used when        */
+/*                        logpath is a raw device.                           */
+/*                                                                           */
+/*             6. The following naming convention has been used in this user */
+/*                exit:                                                      */
+/*                                                                           */
+/*                  For the TSM register filespace call:                     */
+/*                  . filespace name = "/xxxxxxxx" where "xxxxxxx" is the    */
+/*                                     database name                         */
+/*                  . filespace type = "DB2"                                 */
+/*                                                                           */
+/*                  For the TSM object:                                      */
+/*                  . object name filespace  = "/xxxxxxxx" where "xxxxxxxx"  */
+/*                                             is the database name          */
+/*                  . object high level name = "/NODEyyyy" where "yyyy"      */
+/*                                             is the node number            */
+/*                  . object low  level name = "/Szzzzzzz.LOG" where         */
+/*                                             "zzzzzzz" is the log file     */
+/*                                             number                        */
+/*                                                                           */
+/*                For example: If the database name was "SAMPLE", the node   */
+/*                             number was NODE0000 and the log file name was */
+/*                             "S0000001.LOG", the following                 */
+/*                             would result:                                 */
+/*                                                                           */
+/*                             For the TSM register filespace call:          */
+/*                             . filespace name = "/SAMPLE"                  */
+/*                             . filespace type = "DB2"                      */
+/*                                                                           */
+/*                             For the TSM object:                           */
+/*                             . object name filespace  = "/SAMPLE"          */
+/*                             . object high level name = "/NODE0000"        */
+/*                             . object low  level name = "/S0000001.LOG"    */
+/*                                                                           */
+/*                                                                           */
+/* Logic Flow: 1. install signal handlers                                    */
+/*             2. verify the number of parameters passed                     */
+/*             3. verify the action requested                                */
+/*             4. start the audit trail ( if requested )                     */
+/*             5. if the requested action is to archive a file:              */
+/*                . if the log file is not found, proceed to point 10        */
+/*             6. get the TSM library version                                */
+/*             7. setup environment variables and initialize the             */
+/*                TSM session                                                */
+/*             8. if the requested action is to archive a file:              */
+/*                . register the filespace                                   */
+/*                . bind the application                                     */
+/*                . begin the transaction                                    */
+/*                . begin the sending of the object ( log file )             */
+/*                . send the object in BUFFER_SIZE portions to TSM           */
+/*                . end the sending of the object                            */
+/*                . end the transaction                                      */
+/*                if the requested action is to retrieve a file:             */
+/*                . begin the query to search for the object ( log file )    */
+/*                . search for the object                                    */
+/*                . end the search for the object                            */
+/*                . if the object is not found, proceed to point 10          */
+/*                . begin the transfer of data                               */
+/*                . receive the object in BUFFER_SIZE portions from TSM      */
+/*                  into a temporary file                                    */
+/*                . end the transfer of data                                 */
+/*                . if successful, rename the temporary file to the log file */
+/*             9. terminate the TSM session                                  */
+/*            10. log errors ( if requested and required )                   */
+/*            11. end the audit trail ( if requested )                       */
+/*            12. exit with the appropriate return code                      */
+/*                                                                           */
+/*****************************************************************************/
+
+#include <stdio.h>
+#include <stdlib.h>
+#include <unistd.h>
+#include <string.h>
+#include <time.h>
+#include <signal.h>
+#include <errno.h>
+#include <fcntl.h>
+
+#ifdef __cplusplus
+extern "C" {
+#endif
+
+#include "dsmapitd.h"
+#include "dsmapifp.h"
+#include "dsmrc.h"
+
+#ifdef __cplusplus
+}
+#endif
+
+
+/*===========================================================================*/
+/*==                                                                       ==*/
+/*== ------------------ INSTALLATION DEFINED VARIABLES ------------------- ==*/
+/*==                                                                       ==*/
+/*== -------------------- REQUIRES USER MODIFICATION --------------------- ==*/
+/*==                                                                       ==*/
+/*===========================================================================*/
+/*==                                                                       ==*/
+/*== BUFFER_SIZE:   Size of the buffer used to archive or retrieve a log   ==*/
+/*==                file to/from TSM.  This user exit does not transmit    ==*/
+/*==                or receive a log file whole but does so in BUFFER_SIZE ==*/
+/*==                portions                                               ==*/
+/*==                Notes: 1. this value should be modified to suit your   ==*/
+/*==                          log file size (performance on larger log     ==*/
+/*==                          files may improve with a larger BUFFER_SIZE) ==*/
+/*==                       2. the default buffer size is 32768 bytes       ==*/
+/*==                       3. BUFFER_SIZE must be multiple of 4096         ==*/
+/*==                                                                       ==*/
+/*== AUDIT_ACTIVE:  The user may wish an audit trail of the user exit run. ==*/
+/*==                Sample audit functions have been provided              ==*/
+/*==                ( AuditLogStart() and AuditLogEnd() )                  ==*/
+/*==                Notes: 1. enable audit logging by setting AUDIT_ACTIVE ==*/
+/*==                          to 1                                         ==*/
+/*==                       2. disable audit logging by setting             ==*/
+/*==                          AUDIT_ACTIVE to 0                            ==*/
+/*==                       3. archive requests will be traced in a file    ==*/
+/*==                          named "ARCHIVE.LOG" located in the audit and ==*/
+/*==                          error file path                              ==*/
+/*==                       4. retrieve requests will be traced in a file   ==*/
+/*==                          named "RETRIEVE.LOG" located in the audit    ==*/
+/*==                          and error file path                          ==*/
+/*==                       5. the default setting is enable audit          ==*/
+/*==                          logging                                      ==*/
+/*==                                                                       ==*/
+/*== ERROR_ACTIVE:  The user may wish an error trail of the user exit run. ==*/
+/*==                A sample error log function has been provided          ==*/
+/*==                ( ErrorLog() )                                         ==*/
+/*==                Notes: 1. enable error logging by setting ERROR_ACTIVE ==*/
+/*==                          to 1                                         ==*/
+/*==                       2. disable error logging by setting             ==*/
+/*==                          ERROR_ACTIVE to 0                            ==*/
+/*==                       3. errors will be traced in a file named        ==*/
+/*==                          "USEREXIT.ERR" located in the audit and      ==*/
+/*==                          error file path                              ==*/
+/*==                       4. the default setting is enable error          ==*/
+/*==                          logging                                      ==*/
+/*==                                                                       ==*/
+/*== AUDIT_ERROR_PATH: Path where Audit and Error logs will reside         ==*/
+/*==                   Notes: 1. the path must exist ( the user exit will  ==*/
+/*==                             not create the path )                     ==*/
+/*==                          2. the path must end with a back slash       ==*/
+/*==                          3. the default is "/u/"                      ==*/
+/*==                                                                       ==*/
+/*== AUDIT_ERROR_ATTR: Standard C file open attributes for the Audit and   ==*/
+/*==                   Error logs                                          ==*/
+/*==                   Notes: 1. the default is "a" (text append)          ==*/
+/*==                                                                       ==*/
+/*==   NOTE:                                                               ==*/
+/*==    . the DSMI_DIR, DSMI_CONFIG, DSMI_LOG variables defined in the     ==*/
+/*==      environment when the last db2start was issued will be used by    ==*/
+/*==      the user exit.  The ability to overwrite them can be done by     ==*/
+/*==      setting the defined variables below.  For more information on    ==*/
+/*==      these variables please see the TSM Admin Guide.                  ==*/
+/*==                                                                       ==*/
+/*==    . to utilize the LAN Free capabilities, you must have a minimum    ==*/
+/*==      TSM client of 4.2.0.                                             ==*/
+/*==                                                                       ==*/
+/*== DSMI_DIR:         For UNIX:                                           ==*/
+/*==                              Points to the path containing dsm.sys,   ==*/
+/*==                              dsmtca, the en_US subdirectory, and any  ==*/
+/*==                              other NLS language.                      ==*/
+/*==                   For Intel:                                          ==*/
+/*==                              Points to the path containing            ==*/
+/*==                              dscameng.txt and any NLS message file.   ==*/
+/*==                   If this variable is NULL, then the userexit will    ==*/
+/*==                   search the environment for a suitable path.         ==*/
+/*==                                                                       ==*/
+/*== DSMI_CONFIG:      The fully-qualified name for the client options     ==*/
+/*==                   file (dsm.opt).                                     ==*/
+/*==                   If this variable is NULL, then the userexit will    ==*/
+/*==                   search the environment for a suitable path.         ==*/
+/*==                                                                       ==*/
+/*== DSMI_LOG:         Points to the path for the dsierror.log file.       ==*/
+/*==                   If this variable is NULL, then the userexit will    ==*/
+/*==                   search the environment for a suitable path.         ==*/
+/*==                                                                       ==*/
+/*== MGMT_CLASS:       Indicates the management class to be used with the  ==*/
+/*==                   TSM server.  If this variable is NULL, then the     ==*/
+/*==                   userexit will use the default management class.     ==*/
+/*==                                                                       ==*/
+/*== DSMINIT_OPTIONS:  Points to a character string that contains user     ==*/
+/*==                   options used during initialization with TSM.  An    ==*/
+/*==                   example would be for cross-node log file retrieval  ==*/
+/*==                   where a string containing the following:            ==*/
+/*==                      "-fromnode=<node> -fromowner=<owner>"            ==*/
+/*==                   would be used to retrieve log files archived from   ==*/
+/*==                   TSM node <node> under owner <owner>.                ==*/
+
+#define BUFFER_SIZE            32768      /* transmit or receive the log     */
+                                          /* file in 32k portions            */
+#define AUDIT_ACTIVE               1      /* enable audit trail logging      */
+#define ERROR_ACTIVE               1      /* enable error trail logging      */
+#define AUDIT_ERROR_PATH       "/u/"      /* path must end with a slash      */
+#define AUDIT_ERROR_ATTR         "a"      /* append to text file             */
+#define DSMI_DIR                NULL      /* use value from the environment  */
+#define DSMI_CONFIG             NULL      /* use value from the environment  */
+#define DSMI_LOG                NULL      /* use value from the environment  */
+#define MGMT_CLASS              NULL      /* use default management class    */
+#define DSMINIT_OPTIONS         NULL      /* specify no user opts to init.   */
+
+/*===========================================================================*/
+/*==                                                                       ==*/
+/*== ------------------------ EXAMPLE SCENARIOS -------------------------- ==*/
+/*==                  ( FOR ILLUSTRATIVE PURPOSES ONLY )                   ==*/
+/*==                                                                       ==*/
+/*===========================================================================*/
+/*==                                                                       ==*/
+/*== 1) Given that we are "userid1", are working with a database           ==*/
+/*==    named "SAMPLE1" on node NODE0001 and have modified the             ==*/
+/*==    installation defined variables to the following values:            ==*/
+/*==                                                                       ==*/
+/*==        BUFFER_SIZE       32768                                        ==*/
+/*==        AUDIT_ACTIVE      1                                            ==*/
+/*==        ERROR_ACTIVE      1                                            ==*/
+/*==        AUDIT_ERROR_PATH  "/u/userid1/AuditLogs/"                      ==*/
+/*==        AUDIT_ERROR_ATTR  "a"                                          ==*/
+/*==        DSMI_DIR          NULL                                         ==*/
+/*==        DSMI_CONFIG       NULL                                         ==*/
+/*==        DSMI_LOG          NULL                                         ==*/
+/*==        MGMT_CLASS        NULL                                         ==*/
+/*==        DSMINIT_OPTIONS   NULL                                         ==*/
+/*==                                                                       ==*/
+/*==    If a request is received to archive log S0000000.LOG:              ==*/
+/*==                                                                       ==*/
+/*==    . the audit log would be opened in append text mode and be named:  ==*/
+/*==      ==> "/u/userid1/AuditLogs/ARCHIVE.LOG"                           ==*/
+/*==          ( AUDIT_ERROR_PATH + archive audit log file name )           ==*/
+/*==                                                                       ==*/
+/*==    . the log file would be transmitted to TSM in:                     ==*/
+/*==      ==> 32768 byte portions                                          ==*/
+/*==          ( BUFFER_SIZE )                                              ==*/
+/*==                                                                       ==*/
+/*==    . the error log would be opened in append text mode and            ==*/
+/*==      be named:                                                        ==*/
+/*==      ==> "/u/userid1/AuditLogs/USEREXIT.ERR"                          ==*/
+/*==          ( AUDIT_ERROR_PATH + error log file name ( defined below ))  ==*/
+/*==                                                                       ==*/
+/*==    . the DSMI_DIR, DSMI_CONFIG, DSMI_LOG environment variables will   ==*/
+/*==      not be overwritten.                                              ==*/
+/*==                                                                       ==*/
+/*==                                                                       ==*/
+/*== 2) Given that we are "userid2", are working with a database           ==*/
+/*==    named "SAMPLE2" on node NODE0000 and have modified the             ==*/
+/*==    installation defined variables to the following values:            ==*/
+/*==                                                                       ==*/
+/*==        BUFFER_SIZE       16384                                        ==*/
+/*==        AUDIT_ACTIVE      1                                            ==*/
+/*==        ERROR_ACTIVE      0                                            ==*/
+/*==        AUDIT_ERROR_PATH  "/u/userid2/Audit/Logs/"                     ==*/
+/*==        AUDIT_ERROR_ATTR  "w"                                          ==*/
+/*==        DSMI_DIR          NULL                                         ==*/
+/*==        DSMI_CONFIG       "/u/userid2/dsm.opt"                         ==*/
+/*==        DSMI_LOG          "/u/userid2/error/"                          ==*/
+/*==        MGMT_CLASS        NULL                                         ==*/
+/*==        DSMINIT_OPTIONS   NULL                                         ==*/
+/*==                                                                       ==*/
+/*==    If a request is received to retrieve log S0000001.LOG:             ==*/
+/*==                                                                       ==*/
+/*==    . the audit log would be opened in write text mode and be named:   ==*/
+/*==      ==> "/u/userid2/Audit/Logs/RETRIEVE.LOG"                         ==*/
+/*==          ( AUDIT_ERROR_PATH + retrieve audit log file name )          ==*/
+/*==                                                                       ==*/
+/*==    . the log file image would be received from TSM for database       ==*/
+/*==      "SAMPLE2" as:                                                    ==*/
+/*==      ==> "S0000001.LOG"                                               ==*/
+/*==          ( log file name )                                            ==*/
+/*==                                                                       ==*/
+/*==    . the log file image would be received from TSM in:                ==*/
+/*==      ==> 16384 byte portions                                          ==*/
+/*==          ( BUFFER_SIZE )                                              ==*/
+/*==                                                                       ==*/
+/*==    . the error log would not be activated                             ==*/
+/*==                                                                       ==*/
+/*==    . the DSMI_DIR environment variable will not be overwritten, while ==*/
+/*==      DSMI_CONFIG will be overwritten with "/u/userid2/dsm.opt" and    ==*/
+/*==      DSMI_LOG will be overwritten with                                ==*/
+/*==      "/u/userid2/error/dsierror.log".                                 ==*/
+/*===========================================================================*/
+
+
+/* ----------------------------------------------------------------- */
+/* User Exit Supported Return Codes                                  */
+/*    NOTE: DB2 will reinvoke the user exit for the same request     */
+/*          after 5 minutes if return code is 4 or 8.                */
+/*                                                                   */
+/*          For other non-zero return codes, DB2 will not invoke     */
+/*          user exit for the database for at least 5 minutes.       */
+/*          If this request is to archive a log file, DB2 will not   */
+/*          make another archive request for this file, or other     */
+/*          log files produced during the 5 minute time period.      */
+/*          These log files will only be archived when all           */
+/*          applications disconnect from and the database, and the   */
+/*          database is reopenned.                                   */
+/* ----------------------------------------------------------------- */
+#define RC_OK                 0   /* ok                              */
+#define RC_RES                4   /* resource allocation error       */
+#define RC_OPATTN             8   /* operator/user attention required*/
+#define RC_HARDWARE          12   /* hardware error                  */
+#define RC_DEFECT            16   /* software error                  */
+#define RC_PARM              20   /* invalid parameters              */
+#define RC_AUDIT             21   /* error open audit file           */
+#define RC_NOTFOUND          24   /* db2uext2() / file not found     */
+#define RC_UNKNOWN           28   /* unknown error                   */
+#define RC_OPCAN             32   /* operator/user terminated        */
+
+
+/* ----------------------------------------------------------------- */
+/* User Exit Constants                                               */
+/* ----------------------------------------------------------------- */
+#define NUM_VALID_PARMS       5   /* number of valid parameters      */
+#define SLASH               "/"   /* default slash character         */
+#define NEW_LINE           "\n"   /* new line character              */
+#define FILE_EXT         ".LOG"   /* audit log file extension/type   */
+#define MEDIA_TYPE       "TSM"    /* media type used                 */
+#define AUDIT_IO_ERROR       99   /* audit log I/O error             */
+#define SYSTEM_CALL_LEN     550   /* system call string length       */
+#define OUTPUT_LINE_LEN     550   /* output line length              */
+#define FILE_NAME_LEN       255   /* file name length                */
+#define HELP_STRING_LEN      80   /* error help string length        */
+#define FILE_SPACE_LEN       10   /* file space name length          */
+#define TSM_FILE_LEN         32   /* TSM log file name length        */
+#define TSM_DESC_LEN        50    /* TSM description length          */
+#define TSM_OBJECT_HL "NODE_0"    /* TSM object high level name      */
+#define TSM_MAXPATH_LEN  DSM_PATH_MAX + DSM_NAME_MAX /* TSM max      */
+                                  /* length for a file path          */
+#define DELIMITER_LEN        80   /* delimiter length                */
+#define DOT                 "."   /* file name separator             */
+#define SEMI_COLON          ";"   /* command separator               */
+#define FILE_SPACE_TYPE   "DB2"   /* file space type                 */
+#define ERROR_FILE_NAME "USEREXIT.ERR"
+                                  /* error log file name             */
+#define REMOVE             "rm"   /* system remove command           */
+
+/* There is no llseek, nor offset_t, on HP or Linux */
+#ifdef _INCLUDE_POSIX_SOURCE
+# define llseek lseek
+  typedef unsigned long long offset_t;
+#endif
+
+/* There is no O_RSHARE on SUN */
+#ifndef O_RSHARE
+#define O_RSHARE 0
+#endif
+
+/* ----------------------------------------------------------------- */
+/* Define TRUE and FALSE if required                                 */
+/* ----------------------------------------------------------------- */
+#ifndef TRUE
+#  define  TRUE   1
+#endif
+
+#ifndef FALSE
+#  define  FALSE  0
+#endif
+
+/* ----------------------------------------------------------------- */
+/* Define structure for input parameters                             */
+/* ----------------------------------------------------------------- */
+typedef struct input_parms
+{
+   int   argc;
+   char* tsmPasswd;
+   char* dbName;
+   char* logFile;
+   char* label;
+   char* logFilePath;
+   char* logSize;
+   char* mode;
+   char* nodeNumber;
+   char* operatingSys;
+   char* redFile;
+   char* responseFile;
+   char* release;
+   char* request;
+   char* startingPage;
+} INPUT_PARMS;
+
+/* ----------------------------------------------------------------- */
+/* Print error to Error Log macro                                    */
+/* ----------------------------------------------------------------- */
+#define PrintErr  { if ( ERROR_ACTIVE )                               \
+                    {                                                 \
+                      ErrorLog( inputParms, auditFileName,            \
+                               systemCallParms, userExitRc,           \
+                               errorHelpString) ;                     \
+                    }                                                 \
+                  }
+
+/* ----------------------------------------------------------------- */
+/* TSM API level defintions                                          */
+/* ----------------------------------------------------------------- */
+#define CalculateLevelVer(_version, _release, _level)                 \
+(                                                                     \
+   ((_version) * 1000) + ((_release) * 100) + ((_level) * 10)         \
+)
+
+/*********************************************************************/
+/* DetermineThreadMode() - Based on the client API level,            */
+/*                         determines what threading mode should be  */
+/*                         used for the session.                     */
+/*                         For UNIXes, it is multi-threaded only     */
+/*                         for client levels >= 4.2.0, o.w. single   */
+/*                         threaded.                                 */
+/*********************************************************************/
+dsBool_t DetermineThreadMode( dsInt16_t  clientLibVer )
+{
+#define MULTITHREADING_VER_REQ 4200 /* TSM API req. for mulit-thread */
+
+   dsBool_t threadMode = DSM_MULTITHREAD ;
+
+   /* -------------------------------------------------------------- */
+   /* Verify that the client has the right level to use              */
+   /* multi-threading, otherwise use single threaded.                */
+   /* Multi-threaded is the default.                                 */
+   /* -------------------------------------------------------------- */
+   if (clientLibVer < MULTITHREADING_VER_REQ)
+      threadMode = DSM_SINGLETHREAD;
+
+   return threadMode;
+}
+
+
+/* ----------------------------------------------------------------- */
+/* User Exit Function Prototypes for Archive, Retrieve and Data      */
+/* Manipulation                                                      */
+/* ----------------------------------------------------------------- */
+unsigned int
+    ArchiveFile( unsigned long,      /* TSM session handle           */
+                 dsmObjName,         /* TSM object name              */
+                 INPUT_PARMS *,
+                 char *,             /* filespace name               */
+                 char * ) ;          /* error isolation string       */
+
+unsigned int
+    RetrieveFile( unsigned long,     /* TSM session handle           */
+                  dsmObjName,        /* TSM object name              */
+                  INPUT_PARMS *,
+                  unsigned int *,    /* file missing flag            */
+                  char * ) ;         /* error isolation string       */
+
+/* ----------------------------------------------------------------- */
+/* User Exit Function Prototype for Signal Handler                   */
+/* ----------------------------------------------------------------- */
+void SignalEnd( int ) ;              /* signal type                  */
+
+
+/* ----------------------------------------------------------------- */
+/* User Exit Function Prototypes for Audit and Error Logs            */
+/* ----------------------------------------------------------------- */
+unsigned int
+     AuditLogStart( INPUT_PARMS *,   /* input parameter structure    */
+                    char *,          /* audit file name (with path)  */
+                    char *);         /* error isolation string       */
+
+unsigned int
+     AuditLogEnd( char *,            /* audit file name (with path)  */
+                  unsigned int,      /* user exit return code        */
+                  char * );          /* error isolation string       */
+
+void ErrorLog(  INPUT_PARMS *,       /* input parameter structure    */
+                char *,              /* audit file name (with path)  */
+                char *,              /* system call parameter string */
+                unsigned int,        /* user exit return code        */
+                char * ) ;           /* error isolation string       */
+
+unsigned int
+   ParseArguments( int ,             /* input parameter count        */
+                   char * [] ,       /* input paramter list          */
+                   INPUT_PARMS * ,   /* input parameter structure    */
+                   char * ) ;        /* error help string            */
+
+unsigned int
+   PrintArguments( FILE* fp,         /* output file pointer          */
+                   INPUT_PARMS * ) ; /* input parameter structure    */
+
+
+/* ----------------------------------------------------------------- */
+/* User Exit Global Variables                                        */
+/* ----------------------------------------------------------------- */
+unsigned int  archiveRequested ;     /* archive requested flag       */
+unsigned int  retrieveRequested ;    /* retrieve requested flag      */
+
+
+/*********************************************************************/
+/* User Exit Mainline                                                */
+/*********************************************************************/
+int main( int argc, char *argv[] )
+{
+   unsigned int  userExitRc  ;            /* user exit return code   */
+   unsigned int  auditLogRc  ;            /* return call from audit  */
+
+   INPUT_PARMS   inputParmsStruct;
+   INPUT_PARMS  *inputParms = &inputParmsStruct;
+
+   unsigned int  fileMissing ;            /* file missing flag       */
+   char          systemCallParms[ SYSTEM_CALL_LEN ] ;
+                                          /* system call parm string */
+   char          auditFileName[ FILE_NAME_LEN ] ;
+                                          /* audit log file name     */
+   char          errorHelpString[ HELP_STRING_LEN ] ;
+                                          /* error help string       */
+
+   dsmApiVersion tsmClientApiVer   ;      /* TSM Client API version  */
+   dsInt16_t     clientLibVer      ;      /* numerical TSM Client    */
+                                          /* API version             */
+   dsBool_t      threadMode        ;      /* Thread mode for TSM     */
+   envSetUp      tsmEnvSetUpParms  ;      /* TSM environment setup   */
+   unsigned int  tsmHandle         ;      /* TSM session handle      */
+   dsmObjName    objectName        ;      /* TSM object name         */
+   signed  short tsmRc             ;      /* rc from TSM APIs        */
+   char          fileSpaceName[ FILE_SPACE_LEN ] ;
+                                          /* TSM filespace name      */
+
+   /* -------------------------------------------------------------- */
+   /* Initialize variables                                           */
+   /* -------------------------------------------------------------- */
+   archiveRequested  = FALSE ;
+   retrieveRequested = FALSE ;
+   userExitRc        = RC_OK ;
+   auditLogRc        = RC_OK ;
+   fileMissing       = FALSE ;
+   tsmRc             = DSM_RC_OK ;
+   memset( inputParms,        '\0', sizeof(INPUT_PARMS) );
+   memset( systemCallParms,   '\0', SYSTEM_CALL_LEN )    ;
+   memset( auditFileName,     '\0', FILE_NAME_LEN   )    ;
+   memset( errorHelpString,   '\0', HELP_STRING_LEN )    ;
+   memset( &tsmEnvSetUpParms,    0, sizeof(envSetUp) )   ;
+   memset( fileSpaceName,     '\0', FILE_SPACE_LEN  )    ;
+
+   /* -------------------------------------------------------------- */
+   /* Install signal handlers for terminate and interrupt            */
+   /* -------------------------------------------------------------- */
+   if (( signal( SIGTERM, SignalEnd ) == SIG_ERR ) ||
+       ( signal( SIGINT,  SignalEnd ) == SIG_ERR ))
+   {
+      userExitRc = RC_DEFECT ;              /* handler not installed */
+
+      sprintf( errorHelpString, "%s%s",
+               "Unable to install signal handler(s)", NEW_LINE ) ;
+
+      PrintErr ;
+   }
+
+   /* -------------------------------------------------------------- */
+   /* Set the local variables to the passed parameters               */
+   /* -------------------------------------------------------------- */
+   if ( userExitRc == RC_OK )
+   {
+      userExitRc = ParseArguments( argc, argv, inputParms,
+                                   errorHelpString ) ;
+   }
+
+   /* ----------------------------------------------------------- */
+   /* Determine the user exit action                              */
+   /* ----------------------------------------------------------- */
+   if ( userExitRc == RC_OK )
+   {
+      if ( (inputParms->request != NULL) && 
+           (strcmp( inputParms->request, "ARCHIVE" ) == 0 ) )
+      {
+         archiveRequested = TRUE ;          /* action is ARCHIVE     */
+      }
+      else
+      {
+         if ( (inputParms->request != NULL) &&
+              (strcmp( inputParms->request, "RETRIEVE" ) == 0 ) )
+         {
+            retrieveRequested = TRUE ;      /* action is RETRIEVE    */
+         }
+         else
+         {
+            userExitRc = RC_PARM ;          /* invalid action        */
+
+            sprintf( errorHelpString, "%s %s %s%s", "Action",
+                     inputParms->request, "is not valid", NEW_LINE ) ;
+
+            PrintErr ;
+         }
+      }
+   }
+
+   if ( userExitRc == RC_OK )
+   {
+      /* ----------------------------------------------------------- */
+      /* Trace the start of execution if the user has asked for an   */
+      /* audit log                                                   */
+      /* ----------------------------------------------------------- */
+      if ( AUDIT_ACTIVE )
+      {
+         sprintf( auditFileName,            /* audit log file name   */
+                  "%s%s%s",                 /* format of the name    */
+                  AUDIT_ERROR_PATH,         /* audit log file path   */
+                  inputParms->request,      /* ARCHIVE or RETRIEVE   */
+                  FILE_EXT ) ;              /* file extension/type   */
+
+         auditLogRc = AuditLogStart(inputParms,
+                                    auditFileName,
+                                    errorHelpString);
+
+         if (auditLogRc == AUDIT_IO_ERROR)
+         {
+            /* IO error on audit log */
+            userExitRc = RC_AUDIT;
+         }
+      }
+   }
+
+   if ( userExitRc == RC_OK )
+   {
+      /* ----------------------------------------------------- */
+      /* Query the TSM version and initialize the session      */
+      /* ----------------------------------------------------- */
+      dsmQueryApiVersion( &tsmClientApiVer ) ;
+      clientLibVer = CalculateLevelVer( tsmClientApiVer.version,
+                                        tsmClientApiVer.release,
+                                        tsmClientApiVer.level ) ;
+
+      if ( DSMI_DIR != NULL )
+      {
+         strncpy( tsmEnvSetUpParms.dsmiDir,    DSMI_DIR,    TSM_MAXPATH_LEN + 1 ) ;
+      }
+      if ( DSMI_CONFIG != NULL )
+      {
+         strncpy( tsmEnvSetUpParms.dsmiConfig, DSMI_CONFIG, TSM_MAXPATH_LEN + 1 ) ;
+      }
+      if ( DSMI_LOG != NULL )
+      {
+         strncpy( tsmEnvSetUpParms.dsmiLog,    DSMI_LOG,    TSM_MAXPATH_LEN + 1 ) ;
+      }
+
+      threadMode = DetermineThreadMode( clientLibVer ) ;
+      tsmRc = dsmSetUp( threadMode, &tsmEnvSetUpParms ) ;
+
+      /* ----------------------------------------------------- */
+      /* Indicate if the environment setup was not successful  */
+      /* ----------------------------------------------------- */
+      if ( tsmRc != DSM_RC_OK )
+      {
+         userExitRc = RC_DEFECT ;        /* dsmSetUp() failed  */
+
+         sprintf( errorHelpString,"%s %d%s",
+                  "dsmSetUp() returned", tsmRc, NEW_LINE ) ;
+      }
+      else
+      {
+         tsmRc = dsmInit( &tsmHandle, &tsmClientApiVer, NULL, NULL,
+                           inputParms->tsmPasswd, FILE_SPACE_TYPE,
+                           NULL, DSMINIT_OPTIONS ) ;
+
+         /* ----------------------------------------------------- */
+         /* Indicate if the initialization was not successful     */
+         /* ----------------------------------------------------- */
+         if ( tsmRc != DSM_RC_OK )
+         {
+            userExitRc = RC_DEFECT ;        /* dsmInit() failed   */
+
+            sprintf( errorHelpString,"%s %d%s",
+                     "dsmInit() returned", tsmRc, NEW_LINE ) ;
+         }
+         else
+         {
+            /* -------------------------------------------------- */
+            /* If the session initialization was successful       */
+            /* initialize common TSM data structures and ARCHIVE  */
+            /* or RETRIEVE the file                               */
+            /* -------------------------------------------------- */
+            sprintf( fileSpaceName, "/%s", inputParms->dbName  ) ;
+            strcpy(  objectName.fs, fileSpaceName  ) ;
+            sprintf( objectName.hl, "/%s", inputParms->nodeNumber ) ;
+            sprintf( objectName.ll, "/%s", inputParms->logFile ) ;
+            objectName.objType = DSM_OBJ_FILE ;
+
+            if ( archiveRequested )
+            {
+              userExitRc = ArchiveFile(
+                            tsmHandle,       /* session handle    */
+                            objectName,      /* object name       */
+                            inputParms,
+                            fileSpaceName,   /* filespace name    */
+                            errorHelpString);/* error string      */
+            }
+            else
+            {
+              userExitRc = RetrieveFile(
+                            tsmHandle,       /* session handle    */
+                            objectName,      /* object name       */
+                            inputParms,
+                            &fileMissing,    /* file missing flag */
+                            errorHelpString);/* error string      */
+            }
+         }
+      }
+
+      /* -------------------------------------------------------- */
+      /* Cleanup the environment after the TSM session            */
+      /* -------------------------------------------------------- */
+      dsmCleanUp( threadMode ) ;
+
+      /* ----------------------------------------------------------- */
+      /* Trace any errors                                            */
+      /* ----------------------------------------------------------- */
+      if ( userExitRc != RC_OK )
+      {
+         PrintErr ;
+      }
+
+      /* ----------------------------------------------------------- */
+      /* Trace the end of execution if the user has asked for an     */
+      /* audit log                                                   */
+      /* ----------------------------------------------------------- */
+      if (( AUDIT_ACTIVE ) &&
+          ( auditLogRc != AUDIT_IO_ERROR ))
+      {
+         auditLogRc = AuditLogEnd (
+                       auditFileName,       /* audit log file name   */
+                       userExitRc,          /* user exit return code */
+                       errorHelpString ) ;  /* error isolation string*/
+
+         if ( auditLogRc == AUDIT_IO_ERROR )/* IO error on audit log */
+         {
+            PrintErr ;
+         }
+      }
+   }
+
+   /* -------------------------------------------------------------- */
+   /* Return the specified value to the caller                       */
+   /* -------------------------------------------------------------- */
+   exit( userExitRc ) ;
+}
+
+
+/*********************************************************************/
+/* ArchiveFile() - Archive a log file to TSM                         */
+/*********************************************************************/
+unsigned int
+   ArchiveFile( unsigned long  tsmHandle,
+                dsmObjName     objectName,
+                INPUT_PARMS   *inputParms,
+                char          *fileSpaceName,
+                char          *errorHelpString )
+{
+   int             fh ;                /* file handle to log file    */
+   regFSData       regFileSpaceData ;  /* register file space struct */
+   mcBindKey       mcData      ;       /* bind structure             */
+   sndArchiveData  archiveData ;       /* archive data structure     */
+   ObjAttr         objectAttr  ;       /* object attribute structure */
+   DataBlk         dataBlock   ;       /* data block structure       */
+   int             rc          ;       /* function return code       */
+   signed   short  tsmRc      ;        /* TSM API return code        */
+   unsigned short  reason      ;       /* reason for end trans API   */
+   signed   int    amountRead  ;       /* number bytes read from log */
+   offset_t        logFileSize ;       /* size of the log file       */
+   char            fileSpaceType[ FILE_SPACE_LEN ] ;
+                                       /* file space type            */
+   char            archiveFile[ TSM_FILE_LEN ] ;
+                                       /* archive file name          */
+   char            archiveDescription[ TSM_DESC_LEN ] ;
+                                       /* archive file description   */
+   char           *logBuffer = NULL;   /* log buffer to transmit     */
+   char            archivedFile [ FILE_NAME_LEN ];
+                                       /* logfile name and path      */
+
+   /* -------------------------------------------------------------- */
+   /* Initialize variables                                           */
+   /* -------------------------------------------------------------- */
+   fh          = 0  ;
+   rc          = RC_OK ;
+   tsmRc       = DSM_RC_OK ;
+   reason      = RC_OK ;
+   amountRead  = 0     ;
+   memset( fileSpaceType,      '\0', FILE_SPACE_LEN ) ;
+   memset( archiveFile,        '\0', TSM_FILE_LEN   ) ;
+   memset( archiveDescription, '\0', TSM_DESC_LEN   ) ;
+
+   /* ----------------------------------------------------------- */
+   /* Initialize the archived file path and name.  For rawlogs we */
+   /* ignore the logFile parameter and use the logFilePath only.  */
+   /* ----------------------------------------------------------- */
+   if (inputParms->logSize == NULL)
+   {
+      sprintf( archivedFile,             /* file to be archived   */
+               "%s%s",                   /* format of parm string */
+               inputParms->logFilePath,  /* log file path         */
+               inputParms->logFile ) ;   /* log file name         */
+   }
+   else
+   {
+      sprintf( archivedFile,             /* file to be archived   */
+               "%s",                     /* format of parm string */
+               inputParms->logFilePath );/* log file path         */
+   }
+
+
+   /* ----------------------------------------------------------- */
+   /* Initialize the register filespace parameters                */
+   /* ----------------------------------------------------------- */
+   strcpy( fileSpaceType, FILE_SPACE_TYPE ) ;
+   regFileSpaceData.stVersion = regFSDataVersion ;
+   regFileSpaceData.fsName    = fileSpaceName    ;
+   regFileSpaceData.fsType    = fileSpaceType    ;
+   regFileSpaceData.occupancy.hi = 0 ;
+   regFileSpaceData.occupancy.lo = 0 ;
+   regFileSpaceData.capacity.hi  = 0 ;
+   regFileSpaceData.capacity.lo  = 0 ;
+   strcpy( regFileSpaceData.fsAttr.unixFSAttr.fsInfo,
+           inputParms->dbName ) ;
+   regFileSpaceData.fsAttr.unixFSAttr.fsInfoLength =
+                            strlen( inputParms->dbName ) + 1 ;
+
+   /* ----------------------------------------------------------- */
+   /* Register the filespace with TSM.  You may want to comment   */
+   /* this call out if you have already registered the file space.*/
+   /* ----------------------------------------------------------- */
+   tsmRc = dsmRegisterFS( tsmHandle, &regFileSpaceData ) ;
+
+   /* ----------------------------------------------------------- */
+   /* If the filespace is already registered or the register was  */
+   /* successful we can continue                                  */
+   /* ----------------------------------------------------------- */
+   if (( tsmRc == DSM_RC_FS_ALREADY_REGED ) ||
+       ( tsmRc == DSM_RC_OK ))
+   {
+      rc = RC_OK ;
+   }
+   else
+   {
+      sprintf( errorHelpString, "%s %d%s", "dsmRegisterFS() returned",
+               tsmRc, NEW_LINE ) ;
+
+      rc = RC_DEFECT ;
+   }
+
+   /* -------------------------------------------------------------- */
+   /* The register has checked out, now we must bind                 */
+   /* -------------------------------------------------------------- */
+   if ( rc == RC_OK )
+   {
+      mcData.stVersion = mcBindKeyVersion ;
+
+      tsmRc = dsmBindMC(tsmHandle, &objectName, stArchive, &mcData) ;
+
+      /* ----------------------------------------------------------- */
+      /* Indicate the bind failed                                    */
+      /* ----------------------------------------------------------- */
+      if ( tsmRc != DSM_RC_OK )
+      {
+         sprintf( errorHelpString,"%s %d%s", "dsmBindMC() returned",
+                  tsmRc, NEW_LINE ) ;
+
+         rc = RC_DEFECT ;
+      }
+   }
+
+   if ( rc == RC_OK )
+   {
+      fh = open(archivedFile, O_RDONLY | O_RSHARE);
+      if (fh == -1)
+      {
+         if (errno == ENOENT)
+         {
+            rc = RC_OK;
+            strcpy(errorHelpString,
+                   "File does not exist, assume it is already archived.");
+            goto finish;
+         }
+         else
+         {
+            rc = RC_UNKNOWN;
+            sprintf(errorHelpString,
+                    "Fail to open the log file %s, errno = %d%s",
+                    archivedFile, errno, NEW_LINE);
+         }
+      }
+      else
+      {
+         /* ----------------------------------------------------- */
+         /* Find out the size of the log file if not supplied     */
+         /* ----------------------------------------------------- */
+         int startingPage;
+         offset_t offsetll;
+
+         if (inputParms->logSize == NULL )
+         {
+            logFileSize = llseek( fh, 0LL, SEEK_END );
+            rc = logFileSize;
+            if ( logFileSize >= 0 )
+            {
+               rc = llseek(fh, 0LL, SEEK_SET);
+            }
+
+            if (rc == -1)
+            {
+               sprintf(errorHelpString,
+                       "Error seeking to end of file %s %s errno = %d%s", 
+                        archivedFile, "in ArchiveFile(),",
+                        errno, NEW_LINE);
+
+               rc = RC_UNKNOWN;
+            }
+         }
+         else
+         {
+            logFileSize = atol (inputParms->logSize) * 4096;
+         }
+
+         /* ----------------------------------------------------------- */
+         /* Position the file pointer to proper position in the file    */
+         /* ----------------------------------------------------------- */
+         if (inputParms->startingPage != NULL) 
+         {
+            startingPage = atoi(inputParms->startingPage);
+            offsetll = (offset_t)startingPage * 4096;
+            if (llseek(fh, offsetll, SEEK_SET) == -1)
+            {
+               sprintf(errorHelpString, "llseek() failed, errno = %d%s",
+                       errno, NEW_LINE);
+
+               rc = RC_UNKNOWN;
+            }
+         }
+      }
+   }
+
+   if ( rc == RC_OK )
+   {
+      /* ----------------------------------------------------------- */
+      /* Allocate memory for logBuffer                               */
+      /* ----------------------------------------------------------- */
+      logBuffer = malloc(BUFFER_SIZE);
+      if (logBuffer == NULL)
+      {
+         sprintf(errorHelpString, "malloc() failed, BUFFER_SIZE %d, errno = %d",
+                 BUFFER_SIZE, errno);
+         rc = RC_UNKNOWN;
+      }
+      else
+      {
+         /* -------------------------------------------------------- */
+         /* The register and bind have checked out so begin the      */
+         /* transaction                                              */
+         /* -------------------------------------------------------- */
+         tsmRc = dsmBeginTxn(tsmHandle);
+
+         /* -------------------------------------------------------- */
+         /* Indicate the begin transaction failed                    */
+         /* -------------------------------------------------------- */
+         if ( tsmRc != DSM_RC_OK )
+         {
+            sprintf(errorHelpString, "%s %d%s",
+                    "dsmBeginTxn() returned", tsmRc, NEW_LINE);
+
+            rc = RC_DEFECT;
+         }
+      }
+   }
+
+   if ( rc == RC_OK )
+   {
+      /* ----------------------------------------------------------- */
+      /* Initialize the send object parameters                       */
+      /* ----------------------------------------------------------- */
+      sprintf( archiveDescription, "%s %s",
+               "Log file for DB2 database", inputParms->dbName ) ;
+
+      archiveData.stVersion = sndArchiveDataVersion ;
+      archiveData.descr     = archiveDescription    ;
+
+      memset(&objectAttr, 0, sizeof(objectAttr)) ;
+      objectAttr.stVersion       = ObjAttrVersion ;
+      objectAttr.owner[ 0 ]      = '\0'        ;
+      objectAttr.sizeEstimate.hi = 0           ;
+      objectAttr.sizeEstimate.lo = logFileSize ;
+      objectAttr.objCompressed   = bFalse      ;
+      sprintf( archiveFile,
+               "%s.%s",
+               inputParms->dbName,
+               inputParms->logFile ) ;
+      objectAttr.objInfo         = archiveFile ;
+      objectAttr.objInfoLength   = strlen( archiveFile ) + 1 ;
+      objectAttr.mcNameP         = MGMT_CLASS ;
+
+      dataBlock.stVersion = DataBlkVersion ;
+      dataBlock.bufferPtr = NULL ;
+      dataBlock.bufferLen = 0    ;
+      dataBlock.numBytes  = 0    ;
+
+      /* ----------------------------------------------------------- */
+      /* Initialize the sending of the object to TSM                 */
+      /* ----------------------------------------------------------- */
+      tsmRc = dsmSendObj( tsmHandle, stArchive, &archiveData,
+                          &objectName, &objectAttr, &dataBlock ) ;
+
+      /* ----------------------------------------------------------- */
+      /* Indicate the send object failed                             */
+      /* ----------------------------------------------------------- */
+      if ( tsmRc != DSM_RC_OK )
+      {
+         sprintf( errorHelpString,"%s %d%s",
+                  "dsmSendObj() returned", tsmRc, NEW_LINE ) ;
+
+         rc = RC_DEFECT ;
+      }
+      else
+      {
+         /* -------------------------------------------------------- */
+         /* The call to send object was successful so send the       */
+         /* contents in portions of BUFFER_SIZE bytes                */
+         /* -------------------------------------------------------- */
+         memset( logBuffer, '\0', BUFFER_SIZE ) ;
+
+         /* ----------------------------------------------------- */
+         /* Keep sending the object until the end of the log file */
+         /* or until an error is detected                         */
+         /* ----------------------------------------------------- */
+         while (( logFileSize > 0 ) &&
+                ( rc == RC_OK ))
+         {
+            amountRead = read( fh, logBuffer, BUFFER_SIZE ) ;
+            if ( amountRead < BUFFER_SIZE )
+            {
+               if ((amountRead == 0) ||
+                   ((amountRead % 4096) != 0))
+               {
+                  sprintf(errorHelpString,"%s %s, %s %d%s",
+                          "Error reading from file", archivedFile,
+                          "amount read", amountRead, NEW_LINE);
+                  rc = RC_UNKNOWN;
+               }
+            }
+
+            /* -------------------------------------------------- */
+            /* If the read is deemed successful, send the buffer  */
+            /* to TSM.                                            */
+            /* -------------------------------------------------- */
+            if ( rc == RC_OK )
+            {
+               logFileSize -= amountRead;
+               dataBlock.bufferLen = amountRead;
+               dataBlock.bufferPtr = logBuffer;
+
+               tsmRc = dsmSendData(tsmHandle, &dataBlock);
+
+               /* ----------------------------------------------- */
+               /* Indicate the send data failed                   */
+               /* ----------------------------------------------- */
+               if ( tsmRc != DSM_RC_OK )
+               {
+                  sprintf( errorHelpString,"%s %d%s",
+                           "dsmSendData() returned", tsmRc,
+                           NEW_LINE ) ;
+
+                  rc = RC_DEFECT ;
+               }
+            }
+         }
+
+         /* ----------------------------------------------------- */
+         /* Close the log file                                    */
+         /* ----------------------------------------------------- */
+         if ( close( fh ))
+         {
+            /* -------------------------------------------------- */
+            /* Indicate the file close failed if no other error   */
+            /* has occurred                                       */
+            /* -------------------------------------------------- */
+            if ( rc == RC_OK)
+            {
+               sprintf(errorHelpString, 
+                       "Error closing file %s in ArchiveFile(), errno = %d%s",
+                       archivedFile, errno, NEW_LINE);
+
+               rc = RC_UNKNOWN ;
+            }
+         }
+
+         /* -------------------------------------------------------- */
+         /* End the sending of the object                            */
+         /* -------------------------------------------------------- */
+         if ( rc == RC_OK )
+         {
+            tsmRc = dsmEndSendObj( tsmHandle ) ;
+
+            /* ----------------------------------------------------- */
+            /* Indicate the end send object failed                   */
+            /* ----------------------------------------------------- */
+            if ( tsmRc != DSM_RC_OK )
+            {
+               sprintf(errorHelpString,"%s %d%s",
+                       "dsmEndSendObj() returned", tsmRc, NEW_LINE);
+
+               rc = RC_DEFECT;
+            }
+         }
+         else
+         {
+            (void)dsmEndSendObj(tsmHandle);
+         }
+      }
+
+      /* ----------------------------------------------------------- */
+      /* End the transaction                                         */
+      /* ----------------------------------------------------------- */
+      if (rc == RC_OK)
+      {
+         tsmRc = dsmEndTxn(tsmHandle, DSM_VOTE_COMMIT, &reason);
+
+         /* -------------------------------------------------------- */
+         /* Indicate the end transaction failed                      */
+         /* -------------------------------------------------------- */
+         if ( tsmRc != DSM_RC_OK )
+         {
+            sprintf(errorHelpString,"%s %d %s %d%s",
+                    "dsmEndTxn() returned", tsmRc, "Reason",
+                    reason, NEW_LINE);
+
+            rc = RC_DEFECT;
+         }
+      }
+      else
+      {
+         (void)dsmEndTxn(tsmHandle, DSM_VOTE_ABORT, &reason);
+      }
+
+      /* -------------------------------------------------- */
+      /* Terminate the TSM session                          */
+      /* -------------------------------------------------- */
+      if (rc == RC_OK)
+      {
+         tsmRc = dsmTerminate( tsmHandle ) ;
+
+         if ( tsmRc != DSM_RC_OK)
+         {
+             rc = RC_DEFECT ;
+
+             sprintf( errorHelpString,"%s %d%s",
+                      "dsmTerminate() returned",
+                      tsmRc, NEW_LINE ) ;
+         }
+      }
+      else
+      {
+         (void) dsmTerminate( tsmHandle );
+      }
+   }
+
+finish:
+   return(rc);
+}
+
+
+/*********************************************************************/
+/* RetrieveFile() - Retrieve a log file from TSM                     */
+/*********************************************************************/
+unsigned int
+   RetrieveFile( unsigned long  tsmHandle,
+                 dsmObjName     objectName,
+                 INPUT_PARMS   *inputParms,
+                 unsigned int  *fileMissing,
+                 char          *errorHelpString )
+{
+   FILE              *fp        ;      /* pointer to log file        */
+   ObjID              objectId  ;      /* object id structure        */
+   DataBlk            dataBlock ;      /* data block structure       */
+   dsmGetList         getList   ;      /* get list structure         */
+   qryArchiveData     queryData ;      /* query data structure       */
+   qryRespArchiveData queryRespData  ; /* query response structure   */
+   unsigned short     objNotFinished ; /* object not finished flag   */
+   unsigned short     fileNotComplete; /* file not complete flag     */
+   unsigned int       rc     ;         /* function return code       */
+   unsigned int       amountWrite ;    /* number of bytes written    */
+   char              *logBuffer = NULL; /* log buffer to transmit    */
+   char               retrievedFile[FILE_NAME_LEN];
+                                       /* logfile name and path      */
+   char               tempFile[FILE_NAME_LEN];
+   char               systemCommand[2*FILE_NAME_LEN + 12];
+   char              *tmpPtr;
+   int                fileNameLen;
+   signed   short     tsmRc ;          /* TSM API return code        */
+
+   /* -------------------------------------------------------------- */
+   /* Initialize variables                                           */
+   /* -------------------------------------------------------------- */
+   fp              = NULL  ;
+   objNotFinished  = TRUE  ;
+   fileNotComplete = TRUE  ;
+   *fileMissing    = FALSE ;
+   rc              = RC_OK ;
+   amountWrite     = 0     ;
+   tsmRc           = DSM_RC_OK ;
+   sprintf(retrievedFile,                   /* file to be archived   */
+           "%s%s",                          /* format of parm string */
+           inputParms->logFilePath,         /* log file path         */
+           inputParms->logFile);            /* log file name         */
+
+   strcpy(tempFile, retrievedFile);
+   fileNameLen = strlen(tempFile);
+   strcpy(&tempFile[fileNameLen - 3], "TMP");
+
+
+   /* -------------------------------------------------------------- */
+   /* Initialize the begin query parameters                          */
+   /* -------------------------------------------------------------- */
+   queryData.stVersion = qryArchiveDataVersion ;
+   queryData.objName   = &objectName ;
+   queryData.owner     = NULL ;
+   queryData.descr     = "*"  ;
+   queryData.insDateLowerBound.year = DATE_MINUS_INFINITE ;
+   queryData.insDateUpperBound.year = DATE_PLUS_INFINITE  ;
+   queryData.expDateLowerBound.year = DATE_MINUS_INFINITE ;
+   queryData.expDateUpperBound.year = DATE_PLUS_INFINITE  ;
+
+   /* -------------------------------------------------------------- */
+   /* Begin the query                                                */
+   /* -------------------------------------------------------------- */
+   tsmRc = dsmBeginQuery(tsmHandle,qtArchive,(void *) &queryData) ;
+
+   /* -------------------------------------------------------------- */
+   /* Indicate the begin query failed                                */
+   /* -------------------------------------------------------------- */
+   if ( tsmRc != DSM_RC_OK )
+   {
+      sprintf(errorHelpString,"%s %d%s","dsmBeginQuery() returned",
+              tsmRc, NEW_LINE);
+
+      rc = RC_DEFECT;
+   }
+
+   if ( rc == RC_OK )
+   {
+      /* ----------------------------------------------------------- */
+      /* Allocate memory for logBuffer                               */
+      /* ----------------------------------------------------------- */
+      logBuffer = malloc(BUFFER_SIZE);
+      if (logBuffer == NULL)
+      {
+         sprintf(errorHelpString, "malloc() failed, BUFFER_SIZE %d, errno = %d",
+                 BUFFER_SIZE, errno);
+         rc = RC_UNKNOWN;
+      }
+      else
+         memset(logBuffer, '\0', BUFFER_SIZE);
+   }
+
+   if ( rc == RC_OK )
+   {
+      /* ----------------------------------------------------------- */
+      /* Initialize the get next object query parameters             */
+      /* ----------------------------------------------------------- */
+      queryRespData.stVersion = qryRespArchiveDataVersion ;
+
+      dataBlock.stVersion = DataBlkVersion ;
+      dataBlock.bufferPtr = ( char * ) &queryRespData ;
+      dataBlock.bufferLen = sizeof( qryRespArchiveData ) ;
+
+      /* ----------------------------------------------------------- */
+      /* Query TSM for the object until all objects are queried or   */
+      /* the object is not found or an unexpected error occurs       */
+      /* (This logic should pick up the last version of the object)  */
+      /* ----------------------------------------------------------- */
+      while (( objNotFinished ) &&
+             ( rc == RC_OK )     &&
+             ( !(*fileMissing) ))
+      {
+         tsmRc = dsmGetNextQObj( tsmHandle, &dataBlock ) ;
+
+         switch ( tsmRc )
+         {
+           /* ------------------------------------------------------ */
+           /* The query has finished                                 */
+           /* ------------------------------------------------------ */
+           case DSM_RC_FINISHED:  objNotFinished = FALSE ;
+                                  rc = RC_OK ;
+                                  break ;
+
+           /* ------------------------------------------------------ */
+           /* Still more data to query                               */
+           /* ------------------------------------------------------ */
+           case DSM_RC_MORE_DATA: rc = RC_OK ;
+                                  break ;
+
+           /* ------------------------------------------------------ */
+           /* No match was found                                     */
+           /* ------------------------------------------------------ */
+           case DSM_RS_ABORT_NO_MATCH: rc = RC_OK ;
+                                       *fileMissing = TRUE ;
+                                       break ;
+
+           /* ------------------------------------------------------ */
+           /* Unexpected return code has been received               */
+           /* ------------------------------------------------------ */
+           default:   sprintf( errorHelpString,"%s %d%s",
+                               "dsmGetNextQObj() returned",tsmRc,
+                               NEW_LINE ) ;
+                               rc = RC_DEFECT ;
+                               break ;
+         }
+      }
+
+      /* ----------------------------------------------------------- */
+      /* End the query                                               */
+      /* ----------------------------------------------------------- */
+      if ( rc == RC_OK )
+      {
+         tsmRc = dsmEndQuery( tsmHandle ) ;
+
+         /* -------------------------------------------------------- */
+         /* Indicate the end query failed                            */
+         /* -------------------------------------------------------- */
+         if ( tsmRc != DSM_RC_OK )
+         {
+            sprintf( errorHelpString,"%s %d%s",
+                     "dsmEndQuery() returned", tsmRc, NEW_LINE ) ;
+
+            rc = RC_DEFECT ;
+         }
+      }
+      else
+      {
+         ( void ) dsmEndQuery( tsmHandle ) ;
+      }
+   }
+
+   /* -------------------------------------------------------------- */
+   /* If the file to retrieve was found, start pulling the data      */
+   /* from TSM                                                       */
+   /* -------------------------------------------------------------- */
+   if (( rc == RC_OK ) &&
+       ( !(*fileMissing) ))
+   {
+      /* ----------------------------------------------------------- */
+      /* Open the log file as write binary                           */
+      /* ----------------------------------------------------------- */
+      fp = fopen(tempFile, "wb");
+
+      /* ----------------------------------------------------------- */
+      /* If the file was opened successfully                         */
+      /* ----------------------------------------------------------- */
+      if ( fp != NULL )
+      {
+         /* -------------------------------------------------------- */
+         /* Initialize the begin get data parameters                 */
+         /* -------------------------------------------------------- */
+         objectId = queryRespData.objId ;
+
+         getList.stVersion = dsmGetListVersion ;
+         getList.numObjId  = 1 ;
+         getList.objId     = &objectId ;
+
+         /* -------------------------------------------------------- */
+         /* Begin the data transfer                                  */
+         /* -------------------------------------------------------- */
+         tsmRc = dsmBeginGetData( tsmHandle, bTrue, gtArchive,
+                                   &getList ) ;
+
+         /* -------------------------------------------------------- */
+         /* Indicate that begin get data failed                      */
+         /* -------------------------------------------------------- */
+         if ( tsmRc != DSM_RC_OK  )
+         {
+            sprintf( errorHelpString, "%s %d%s",
+                     "dsmBeginGetData() returned", tsmRc, NEW_LINE ) ;
+
+            rc = RC_DEFECT ;
+         }
+         else
+         {
+            /* ----------------------------------------------------- */
+            /* Initialize the Get Object parameters                  */
+            /* ----------------------------------------------------- */
+            dataBlock.bufferPtr = logBuffer;
+            dataBlock.bufferLen = 0;
+
+            /* ----------------------------------------------------- */
+            /* Get the object specifying a buffer length of zero     */
+            /* ----------------------------------------------------- */
+            tsmRc = dsmGetObj( tsmHandle, &objectId, &dataBlock ) ;
+
+            /* ----------------------------------------------------- */
+            /* Indicate the get object failed                        */
+            /* ----------------------------------------------------- */
+            if ( tsmRc != DSM_RC_MORE_DATA )
+            {
+               sprintf( errorHelpString,"%s %d%s",
+                        "dsmGetObj() returned", tsmRc, NEW_LINE ) ;
+
+               rc = RC_DEFECT ;
+            }
+            else
+            {
+               /* -------------------------------------------------- */
+               /* Initialize the get data parameters                 */
+               /* -------------------------------------------------- */
+               dataBlock.bufferPtr = logBuffer ;
+               dataBlock.bufferLen = BUFFER_SIZE ;
+               rc = RC_OK ;
+
+               while (( fileNotComplete ) &&
+                      ( rc == RC_OK ))
+               {
+                  /* ----------------------------------------------- */
+                  /* Get the object data from TSM                    */
+                  /* ----------------------------------------------- */
+                  tsmRc = dsmGetData( tsmHandle, &dataBlock ) ;
+
+                  if (( tsmRc == DSM_RC_FINISHED ) ||
+                      ( tsmRc == DSM_RC_MORE_DATA ))
+                  {
+                     /* -------------------------------------------- */
+                     /* Signal that we are finished                  */
+                     /* -------------------------------------------- */
+                     if ( tsmRc == DSM_RC_FINISHED )
+                     {
+                        fileNotComplete = FALSE ;
+                     }
+
+                     /* -------------------------------------------- */
+                     /* Write the buffer to the log file             */
+                     /* -------------------------------------------- */
+                     amountWrite = fwrite( dataBlock.bufferPtr, 1,
+                                           dataBlock.numBytes, fp ) ;
+
+                     /* -------------------------------------------- */
+                     /* Indicate the write failed                    */
+                     /* -------------------------------------------- */
+                     if ( amountWrite != dataBlock.numBytes )
+                     {
+
+                        sprintf(errorHelpString,"%s %s %s%s",
+                                "Error writing to file", tempFile,
+                                "in RetrieveFile()",NEW_LINE);
+
+                        rc = RC_UNKNOWN;
+                     }
+                     else
+                     {
+                        rc = RC_OK;
+                     }
+
+                     amountWrite = 0;
+                  }
+                  else
+                  {
+                     /* -------------------------------------------- */
+                     /* Indicate that get data failed                */
+                     /* -------------------------------------------- */
+                     sprintf(errorHelpString,"%s %d%s",
+                             "dsmGetData() returned",tsmRc,NEW_LINE) ;
+
+                     rc = RC_DEFECT ;
+                  }
+               }
+            }
+         }
+
+         /* -------------------------------------------------------- */
+         /* Close the log file                                       */
+         /* -------------------------------------------------------- */
+         if (fclose( fp ))
+         {
+            /* ----------------------------------------------------- */
+            /* Indicate the file close failed if no other error has  */
+            /* occurred                                              */
+            /* ----------------------------------------------------- */
+            if (rc == RC_OK)
+            {
+               sprintf(errorHelpString,"%s %s %s%s",
+                       "Error closing file",
+                       tempFile, "in RetrieveFile()", NEW_LINE);
+
+               rc = RC_UNKNOWN;
+            }
+         }
+      }
+      else
+      {
+         /* -------------------------------------------------------- */
+         /* Indicate file open failed                                */
+         /* -------------------------------------------------------- */
+         sprintf(errorHelpString,"%s %s %s%s","Error opening file",
+                 tempFile,"in RetrieveFile()", NEW_LINE);
+
+         rc = RC_UNKNOWN;
+      }
+
+      /* ----------------------------------------------------------- */
+      /* End the get object operation                                */
+      /* ----------------------------------------------------------- */
+      if ( rc == RC_OK )
+      {
+         tsmRc = dsmEndGetObj( tsmHandle ) ;
+
+         /* -------------------------------------------------------- */
+         /* Indicate the end get object failed                       */
+         /* -------------------------------------------------------- */
+         if ( tsmRc != DSM_RC_OK )
+         {
+            sprintf(errorHelpString,"%s %d%s",
+                    "dsmEndGetObj() returned", tsmRc, NEW_LINE);
+
+            rc = RC_DEFECT;
+         }
+      }
+      else
+      {
+         (void)dsmEndGetObj(tsmHandle);
+      }
+
+      /* ----------------------------------------------------------- */
+      /* End the get data operation                                  */
+      /* ----------------------------------------------------------- */
+      if ( rc == RC_OK )
+      {
+         tsmRc = dsmEndGetData(tsmHandle);
+
+         if (tsmRc != DSM_RC_OK)
+         {
+            /* ----------------------------------------------------- */
+            /* Indicate the end get data failed                      */
+            /* ----------------------------------------------------- */
+            sprintf(errorHelpString,"%s %d%s",
+                    "dsmEndGetData() returned", tsmRc, NEW_LINE);
+
+            rc = RC_DEFECT;
+         } 
+      }
+      else
+      {
+         (void)dsmEndGetData(tsmHandle);
+      }
+
+      /* -------------------------------------------------- */
+      /* Terminate the TSM session                          */
+      /* -------------------------------------------------- */
+      if (rc == RC_OK)
+      {
+         tsmRc = dsmTerminate( tsmHandle );
+
+         if ( tsmRc != DSM_RC_OK )
+         {
+             sprintf( errorHelpString,"%s %d%s",
+                      "dsmTerminate() returned",
+                      tsmRc, NEW_LINE );
+
+             rc = RC_DEFECT;
+         }
+      }
+      else
+      {
+        (void) dsmTerminate( tsmHandle );
+      }
+
+      if (rc == RC_OK)
+      {
+          rc = rename(tempFile, retrievedFile);
+
+          if (rc != RC_OK)
+          {
+              sprintf(errorHelpString,"Failed to rename temp file, rc = %d",
+                      rc);
+
+              rc = RC_UNKNOWN;
+          }
+      }
+      else
+      {
+          sprintf(systemCommand, "REMOVE %s", tempFile);
+          system(systemCommand);
+      }
+   }
+
+   return(rc);
+}
+
+
+/*********************************************************************/
+/* SignalEnd() - If a signal has been raised for which we have       */
+/*               installed a handler, perform the following:         */
+/*                 . trace the signal in the error log  (if enabled) */
+/*                 . exit the user exit with a RC_OPCAN return code  */
+/*********************************************************************/
+void SignalEnd( int sigNum )
+{
+   unsigned int userExitRc ;              /* user exit return code   */
+   char         errorHelpString[ HELP_STRING_LEN ] ;
+                                          /* error help string       */
+
+   /* -------------------------------------------------------------- */
+   /* Set the user exit return code to operator cancelled            */
+   /* -------------------------------------------------------------- */
+   userExitRc = RC_OPCAN ;
+
+   /* -------------------------------------------------------------- */
+   /* Log the error if the error log has been requested              */
+   /* -------------------------------------------------------------- */
+   if ( ERROR_ACTIVE )
+   {
+      memset( errorHelpString, '\0', HELP_STRING_LEN ) ;
+
+      sprintf( errorHelpString,"%s %d %s %s%s","Signal",sigNum,
+               ( sigNum == SIGTERM ) ? "(SIGTERM)" : "(SIGINT)",
+               "has been raised",NEW_LINE ) ;
+
+      ErrorLog( NULL, NULL, NULL, userExitRc, errorHelpString ) ;
+   }
+
+   /* -------------------------------------------------------------- */
+   /* Exit the user exit with the appropriate return code            */
+   /* -------------------------------------------------------------- */
+   exit( userExitRc ) ;
+}
+
+
+/*********************************************************************/
+/* AuditLogStart() - Log the following at user exit entrance:        */
+/*                     1. time system call was made                  */
+/*                     2. parameters passed to the user exit         */
+/*                     3. media type                                 */
+/*********************************************************************/
+unsigned int
+   AuditLogStart( INPUT_PARMS *inputParms,
+                  char        *auditFileName,
+                  char        *errorHelpString )
+{
+   FILE         *auditLogFp ;          /* pointer to audit log file  */
+   unsigned int  auditLogRc ;          /* AuditLogStart() return code*/
+   time_t        actionTime ;          /* date and time of exit start*/
+   char          outputLine[ OUTPUT_LINE_LEN ] ;
+                                       /* line to be written to log  */
+
+   /* -------------------------------------------------------------- */
+   /* Initialize variables                                           */
+   /* -------------------------------------------------------------- */
+   auditLogFp = NULL  ;
+   auditLogRc = RC_OK ;
+   memset( &actionTime,   0, sizeof( actionTime )) ;
+   memset( outputLine, '\0', OUTPUT_LINE_LEN     ) ;
+
+   /* -------------------------------------------------------------- */
+   /* Open the audit log file using the appropriate file name and    */
+   /* user defined file attributes                                   */
+   /* -------------------------------------------------------------- */
+   auditLogFp = fopen( auditFileName, AUDIT_ERROR_ATTR ) ;
+
+   /* -------------------------------------------------------------- */
+   /* If the audit log file opened successfully, write the data to   */
+   /* the file                                                       */
+   /* -------------------------------------------------------------- */
+   if ( auditLogFp != NULL )
+   {
+      memset( outputLine, '*', DELIMITER_LEN ) ;
+      outputLine[ DELIMITER_LEN ] = '\n' ;
+
+      if (( fprintf( auditLogFp, outputLine ) ) <= 0 )
+         auditLogRc = AUDIT_IO_ERROR ;
+
+      time( &actionTime ) ;            /* time system call started   */
+      sprintf( outputLine,
+               "%s%s%s",
+               "Time Started:      ",
+               ctime( &actionTime ),
+               NEW_LINE ) ;
+
+      if (( fprintf( auditLogFp, outputLine ) ) <= 0 )
+         auditLogRc = AUDIT_IO_ERROR ;
+
+      if ( PrintArguments( auditLogFp, inputParms ) != RC_OK )
+         auditLogRc = AUDIT_IO_ERROR ;
+
+      sprintf( outputLine,             /* system action              */
+               "%s %s %s %s file %s %s %s for database %s%s",
+               "System Action:    ",
+               inputParms->request,
+               ( archiveRequested ) ? "from" : "to",
+               inputParms->logFilePath,
+               inputParms->logFile,
+               ( archiveRequested ) ? "to" : "from",
+               "TSM", 
+               inputParms->dbName,
+               NEW_LINE ) ;
+
+      if (( fprintf( auditLogFp, outputLine ) ) <= 0 )
+         auditLogRc = AUDIT_IO_ERROR ;
+
+      sprintf( outputLine,             /* user defined media type    */
+               "%s %s%s",
+               "Media Type:       ",
+               MEDIA_TYPE,
+               NEW_LINE ) ;
+
+      if (( fprintf( auditLogFp, outputLine ) ) <= 0 )
+         auditLogRc = AUDIT_IO_ERROR ;
+
+      /* ----------------------------------------------------------- */
+      /* If an error was encountered during the audit log write      */
+      /* ----------------------------------------------------------- */
+      if ( auditLogRc == AUDIT_IO_ERROR )
+      {
+         sprintf( errorHelpString, "%s%s",
+                  "Error writing to the Audit Log file",NEW_LINE ) ;
+
+         ( void ) fclose( auditLogFp ) ;    /* close the audit log   */
+
+      }
+      else
+      {
+         if ( fclose( auditLogFp ) )        /* close the audit log   */
+         {
+            auditLogRc = AUDIT_IO_ERROR ;
+
+            sprintf( errorHelpString,  "%s%s",
+                     "Error closing Audit Log file", NEW_LINE ) ;
+         }
+      }
+   }
+   else                                     /* error opening file    */
+   {
+      auditLogRc = AUDIT_IO_ERROR;
+
+      sprintf(errorHelpString, "%s%s",
+              "Error opening Audit Log file", NEW_LINE);
+   }
+
+   return(auditLogRc);
+}
+
+
+/*********************************************************************/
+/* AuditLogEnd() - Log the following at user exit end:               */
+/*                   1. time system call returned                    */
+/*                   2. user exit return code                        */
+/*********************************************************************/
+unsigned int
+   AuditLogEnd( char         *auditFileName,
+                unsigned int  userExitRc,
+                char         *errorHelpString )
+{
+   FILE         *auditLogFp ;          /* pointer to audit log file  */
+   unsigned int  auditLogRc ;          /* AuditLogEnd() return code  */
+   time_t        actionTime ;          /* date and time of exit end  */
+   char          outputLine[OUTPUT_LINE_LEN];
+                                       /* line to be written to log  */
+
+   /* -------------------------------------------------------------- */
+   /* Initialize variables                                           */
+   /* -------------------------------------------------------------- */
+   auditLogFp = NULL  ;
+   auditLogRc = RC_OK ;
+   memset( &actionTime,   0, sizeof( actionTime )) ;
+   memset( outputLine, '\0', OUTPUT_LINE_LEN     ) ;
+
+   /* -------------------------------------------------------------- */
+   /* Open the audit log file using the appropriate file name and    */
+   /* user defined file attributes                                   */
+   /* -------------------------------------------------------------- */
+   auditLogFp = fopen( auditFileName, AUDIT_ERROR_ATTR ) ;
+
+   /* -------------------------------------------------------------- */
+   /* If the audit log file opened successfully, write the data to   */
+   /* the file                                                       */
+   /* -------------------------------------------------------------- */
+   if ( auditLogFp != NULL )
+   {
+      sprintf( outputLine,             /* user exit return code      */
+               "%s %d            %s%s",
+               "User Exit RC:     ",
+               userExitRc,
+               ( userExitRc ) ? "|||> ERROR <|||" : errorHelpString,
+               NEW_LINE ) ;
+
+      if (( fprintf( auditLogFp, outputLine ) ) <= 0 )
+         auditLogRc = AUDIT_IO_ERROR ;
+
+      time( &actionTime ) ;            /* time system call completed */
+      sprintf( outputLine,
+               "%s %s%s",
+               "Time Completed:   ",
+               ctime( &actionTime ),
+               NEW_LINE ) ;
+
+      if (( fprintf( auditLogFp, outputLine ) ) <= 0 )
+         auditLogRc = AUDIT_IO_ERROR ;
+
+      /* ----------------------------------------------------------- */
+      /* If an error was encountered during the audit log write      */
+      /* ----------------------------------------------------------- */
+      if ( auditLogRc == AUDIT_IO_ERROR )
+      {
+         sprintf( errorHelpString, "%s%s",
+                  "Error writing to the Audit Log file", NEW_LINE ) ;
+
+         ( void ) fclose( auditLogFp ) ;    /* close the audit log   */
+
+      }
+      else
+      {
+         if ( fclose( auditLogFp ) )        /* close the audit log   */
+         {
+            auditLogRc = AUDIT_IO_ERROR ;
+
+            sprintf( errorHelpString,"%s%s",
+                     "Error closing Audit Log file", NEW_LINE ) ;
+         }
+      }
+   }
+   else                                     /* error opening file    */
+   {
+      auditLogRc = AUDIT_IO_ERROR ;
+
+      sprintf( errorHelpString,"%s%s",
+               "Error opening Audit Log file",NEW_LINE ) ;
+   }
+
+   return( auditLogRc ) ;
+}
+
+
+/*********************************************************************/
+/* ErrorLog() - Log the following if an error has occurred:          */
+/*                . time the error occurred                          */
+/*                . values of all parameters passed to the user      */
+/*                  exit at the time of the error                    */
+/*                . media type                                       */
+/*                . audit log file name                              */
+/*                . system call string                               */
+/*                . user exit return code                            */
+/*                . error isolation help string                      */
+/*********************************************************************/
+void ErrorLog( INPUT_PARMS *inputParms,
+               char        *auditFileName,
+               char        *systemCallParms,
+               unsigned int userExitRc,
+               char        *errorHelpString )
+{
+   FILE   *errorLogFp ;                /* pointer to error log file  */
+   time_t  actionTime ;                /* date and time of error     */
+   char    outputLine[ OUTPUT_LINE_LEN ] ;
+                                       /* line to be written to log  */
+   char    errorFileName[ FILE_NAME_LEN ] ;
+                                       /* error log file name        */
+
+   /* -------------------------------------------------------------- */
+   /* Initialize variables                                           */
+   /* -------------------------------------------------------------- */
+   errorLogFp = NULL ;
+   memset( &actionTime,      0, sizeof( actionTime )) ;
+   memset( outputLine,    '\0', OUTPUT_LINE_LEN ) ;
+   memset( errorFileName, '\0', FILE_NAME_LEN   ) ;
+
+   /* -------------------------------------------------------------- */
+   /* Open the error log file using the user defined name and file   */
+   /* attributes                                                     */
+   /* -------------------------------------------------------------- */
+   sprintf( errorFileName,
+            "%s%s",
+            AUDIT_ERROR_PATH,          /* error log path             */
+            ERROR_FILE_NAME ) ;        /* error log file name        */
+
+   errorLogFp = fopen( errorFileName, AUDIT_ERROR_ATTR ) ;
+
+   /* -------------------------------------------------------------- */
+   /* If the error log file opened successfully, write the available */
+   /* data to the file                                               */
+   /* -------------------------------------------------------------- */
+   if ( errorLogFp != NULL )
+   {
+      memset( outputLine, '*', DELIMITER_LEN ) ;
+      outputLine[ DELIMITER_LEN ] = '\n' ;
+      fprintf( errorLogFp, outputLine ) ;
+
+      time( &actionTime ) ;            /* time error occurred        */
+      sprintf( outputLine,
+               "%s %s%s",
+               "Time of Error:    ",
+               ctime( &actionTime ),
+               NEW_LINE ) ;
+      fprintf( errorLogFp, outputLine ) ;
+
+
+      if ( inputParms != NULL )        /* parmeters passed to user   */
+      {                                /* exit                       */
+         (void) PrintArguments( errorLogFp, inputParms ) ;
+      }
+
+      if (auditFileName) 
+      {
+         sprintf( outputLine,             /* audit log file name        */
+                  "%s %s%s",
+                  "Audit Log File:   ",
+                  auditFileName,
+                  NEW_LINE ) ;
+         fprintf( errorLogFp, outputLine ) ;
+      }
+
+      if (systemCallParms)
+      {
+         sprintf( outputLine,             /* system call string         */
+                  "%s %s%s",
+                  "System Call Parms:",
+                  systemCallParms,
+                  NEW_LINE ) ;
+         fprintf( errorLogFp, outputLine ) ;
+      }
+
+      sprintf( outputLine,             /* user defined media type    */
+               "%s %s%s",
+               "Media Type:       ",
+               MEDIA_TYPE,
+               NEW_LINE ) ;
+      fprintf( errorLogFp, outputLine ) ;
+
+      sprintf( outputLine,             /* user exit return code      */
+               "%s %d %s%s",
+               "User Exit RC:     ",
+               userExitRc,
+               NEW_LINE,
+               NEW_LINE ) ;
+      fprintf( errorLogFp, outputLine ) ;
+
+      sprintf( outputLine,             /* error isolation string     */
+               "%s %s%s%s",
+               "> Error isolation:",
+               errorHelpString,
+               NEW_LINE,
+               NEW_LINE ) ;
+      fprintf( errorLogFp, outputLine ) ;
+
+      /* ----------------------------------------------------------- */
+      /* Close the error log file                                    */
+      /* ----------------------------------------------------------- */
+      fclose( errorLogFp ) ;
+   }
+
+   return ;
+}
+
+
+unsigned int
+   ParseArguments( int argc ,
+                   char *argv[] ,
+                   INPUT_PARMS *inputParms ,
+                   char *errorHelpString )
+{
+   int parseRc;                      /* ParseArguments() return code */
+   int count;                        /* index for for loop           */
+   char *argument;                   /* pointer to argument          */
+   int  parmLen;                     /* length of parameter          */
+   int  parmIden;                    /* parameter identifier         */
+   char *parmValue;                  /* parameter value              */
+
+
+   /* -------------------------------------------------------------- */
+   /* Initialize variables                                           */
+   /* -------------------------------------------------------------- */
+   parseRc = RC_OK ;
+   count   = 1 ;
+
+   /* -------------------------------------------------------------- */
+   /* Copy values into inputParms structure.                         */
+   /* -------------------------------------------------------------- */
+   inputParms->argc = argc;
+
+   while ( ( count < argc ) && ( parseRc == RC_OK) )
+   {
+      argument = argv[count];
+
+      parmLen = strlen(argument);
+      if (parmLen < 4)
+      {
+        parseRc = RC_PARM;
+        break;
+      }
+
+      parmIden = ((argument[2]) | (argument[1] << 8) | (argument[0] << 16));
+      parmValue = &argument[3];
+
+#define INPUT_PARM_AP 0x2d4150    /* -AP */
+#define INPUT_PARM_DB 0x2d4442    /* -DB */
+#define INPUT_PARM_LN 0x2d4c4e    /* -LN */
+#define INPUT_PARM_LB 0x2d4c42    /* -LB */
+#define INPUT_PARM_LP 0x2d4c50    /* -LP */
+#define INPUT_PARM_LS 0x2d4c53    /* -LS */
+#define INPUT_PARM_MD 0x2d4d44    /* -MD */
+#define INPUT_PARM_NN 0x2d4e4e    /* -NN */
+#define INPUT_PARM_OS 0x2d4f53    /* -OS */
+#define INPUT_PARM_RD 0x2d5244    /* -RD */
+#define INPUT_PARM_RF 0x2d5246    /* -RF */
+#define INPUT_PARM_RL 0x2d524c    /* -RL */
+#define INPUT_PARM_RQ 0x2d5251    /* -RQ */
+#define INPUT_PARM_SP 0x2d5350    /* -SP */
+
+      switch(parmIden)
+      {
+        case INPUT_PARM_AP:            /* TSM password               */
+           inputParms->tsmPasswd = parmValue;
+           break;
+        case INPUT_PARM_DB:            /* database name              */
+           inputParms->dbName = parmValue;
+           break;
+        case INPUT_PARM_LN:            /* log file name              */
+           inputParms->logFile = parmValue;
+           break;
+        case INPUT_PARM_LB:            /* label                      */
+           inputParms->label = parmValue;
+           break;
+        case INPUT_PARM_LP:            /* log file path              */
+           inputParms->logFilePath = parmValue;
+           break;
+        case INPUT_PARM_LS:            /* log file size              */
+           inputParms->logSize = parmValue;
+           break;
+        case INPUT_PARM_MD:            /* mode                       */
+           inputParms->mode = parmValue;
+           break;
+        case INPUT_PARM_NN:            /* node number                */
+           inputParms->nodeNumber = parmValue;
+           break;
+        case INPUT_PARM_OS:            /* operating system           */
+           inputParms->operatingSys = parmValue;
+           break;
+        case INPUT_PARM_RD:            /* redirection file           */
+           inputParms->redFile = parmValue;
+           break;
+        case INPUT_PARM_RF:            /* response file              */
+           inputParms->responseFile = parmValue;
+           break;
+        case INPUT_PARM_RL:            /* DB2 release                */
+           inputParms->release = parmValue;
+           break;
+        case INPUT_PARM_RQ:            /* user exit request          */
+           inputParms->request = parmValue;
+           break;
+        case INPUT_PARM_SP:            /* starting page offset       */
+           inputParms->startingPage = parmValue;
+           break;
+        default:                       /* log unrecognized parameter */
+           if ( ERROR_ACTIVE )
+           {
+              memset(  errorHelpString, '\0', HELP_STRING_LEN ) ;
+
+              sprintf( errorHelpString,
+                       "%s %s%s%s%s",
+                       "Unrecognized parameter :",
+                       argument,
+                       NEW_LINE,
+                       "Parameter has been ignored.",
+                       NEW_LINE ) ;
+
+              ErrorLog( NULL, NULL, NULL, RC_OK, errorHelpString ) ;
+           }
+           break;
+      }
+
+      count ++;                       /* increment count            */
+   }
+
+   if (inputParms->request == NULL)
+      parseRc = RC_PARM;
+
+   return(parseRc);
+}
+
+
+
+unsigned int PrintArguments(FILE *fp, INPUT_PARMS *inputParms)
+{
+   char          outputLine[ OUTPUT_LINE_LEN ] ;
+   int           printRc = RC_OK ;
+
+   sprintf( outputLine,
+            "%s %d%s",
+            "Parameter Count:     ",
+            inputParms->argc,
+            NEW_LINE ) ;
+
+   if (( fprintf( fp, outputLine ) ) <= 0 )
+         printRc = AUDIT_IO_ERROR ;
+
+   if ( printRc == RC_OK )
+   {
+      sprintf( outputLine,
+               "%s %s",
+               "Parameters Passed:",
+               NEW_LINE ) ;
+      if (( fprintf( fp, outputLine ) ) <= 0 )
+         printRc = AUDIT_IO_ERROR;
+   }
+
+   if ( ( printRc == RC_OK ) &&
+        ( inputParms->tsmPasswd != NULL ) )
+   {
+      sprintf( outputLine,
+               "%s %s%s",
+               "TSM password:    ",
+               inputParms->tsmPasswd,
+               NEW_LINE ) ;
+      if (( fprintf( fp, outputLine ) ) <= 0 )
+         printRc = AUDIT_IO_ERROR;
+   }
+
+   if ( ( printRc == RC_OK ) &&
+        ( inputParms->dbName != NULL ) )
+   {
+      sprintf( outputLine,
+               "%s %s%s",
+               "Database name:    ",
+               inputParms->dbName,
+               NEW_LINE ) ;
+      if (( fprintf( fp, outputLine ) ) <= 0 )
+         printRc = AUDIT_IO_ERROR;
+   }
+
+   if ( ( printRc == RC_OK ) &&
+        ( inputParms->logFile != NULL ) )
+   {
+      sprintf( outputLine,
+               "%s %s%s",
+               "Logfile name:     ",
+               inputParms->logFile,
+               NEW_LINE ) ;
+      if (( fprintf( fp, outputLine ) ) <= 0 )
+         printRc = AUDIT_IO_ERROR;
+   }
+
+   if ( ( printRc == RC_OK ) &&
+        ( inputParms->label != NULL ) )
+   {
+      sprintf( outputLine,
+               "%s %s%s",
+               "Label:            ",
+               inputParms->label,
+               NEW_LINE ) ;
+      if (( fprintf( fp, outputLine ) ) <= 0 )
+         printRc = AUDIT_IO_ERROR;
+   }
+
+   if ( ( printRc == RC_OK ) &&
+        ( inputParms->logFilePath != NULL ) )
+   {
+      sprintf( outputLine,
+               "%s %s%s",
+               "Logfile path:     ",
+               inputParms->logFilePath,
+               NEW_LINE ) ;
+      if (( fprintf( fp, outputLine ) ) <= 0 )
+         printRc = AUDIT_IO_ERROR;
+   }
+
+   if ( ( printRc == RC_OK ) &&
+        ( inputParms->logSize != NULL ) )
+   {
+      sprintf(outputLine,
+              "%s%s 4K pages%s",
+              "Logfile size:      ",
+              inputParms->logSize,
+              NEW_LINE);
+      if (( fprintf( fp, outputLine ) ) <= 0 )
+         printRc = AUDIT_IO_ERROR;
+   }
+
+   if ( ( printRc == RC_OK ) &&
+        ( inputParms->mode != NULL ) )
+   {
+      sprintf( outputLine,
+               "%s %s%s",
+               "Mode:             ",
+               inputParms->mode,
+               NEW_LINE ) ;
+      if (( fprintf( fp, outputLine ) ) <= 0 )
+         printRc = AUDIT_IO_ERROR;
+   }
+
+   if ( ( printRc == RC_OK ) &&
+        ( inputParms->nodeNumber != NULL ) )
+   {
+      sprintf( outputLine,
+               "%s %s%s",
+               "Node number:      ",
+               inputParms->nodeNumber,
+               NEW_LINE ) ;
+      if (( fprintf( fp, outputLine ) ) <= 0 )
+         printRc = AUDIT_IO_ERROR;
+   }
+
+   if ( ( printRc == RC_OK ) &&
+        ( inputParms->operatingSys != NULL ) )
+   {
+      sprintf( outputLine,
+               "%s %s%s",
+               "Operating system: ",
+               inputParms->operatingSys,
+               NEW_LINE ) ;
+      if (( fprintf( fp, outputLine ) ) <= 0 )
+         printRc = AUDIT_IO_ERROR;
+   }
+
+   if ( ( printRc == RC_OK ) &&
+        ( inputParms->redFile != NULL ) )
+   {
+      sprintf( outputLine,
+               "%s %s%s",
+               "Red file:         ",
+               inputParms->redFile,
+               NEW_LINE ) ;
+      if (( fprintf( fp, outputLine ) ) <= 0 )
+         printRc = AUDIT_IO_ERROR;
+   }
+
+   if ( ( printRc == RC_OK ) &&
+        ( inputParms->responseFile != NULL ) )
+   {
+      sprintf( outputLine,
+               "%s %s%s",
+               "Response file:    ",
+               inputParms->responseFile,
+               NEW_LINE ) ;
+      if (( fprintf( fp, outputLine ) ) <= 0 )
+         printRc = AUDIT_IO_ERROR;
+   }
+
+   if ( ( printRc == RC_OK ) &&
+        ( inputParms->release != NULL ) )
+   {
+      sprintf( outputLine,
+               "%s %s%s",
+               "Release:          ",
+               inputParms->release,
+               NEW_LINE ) ;
+      if (( fprintf( fp, outputLine ) ) <= 0 )
+         printRc = AUDIT_IO_ERROR;
+   }
+
+   if ( ( printRc == RC_OK ) &&
+        ( inputParms->request != NULL ) )
+   {
+      sprintf( outputLine,
+               "%s %s%s",
+               "Request:          ",
+               inputParms->request,
+               NEW_LINE ) ;
+      if (( fprintf( fp, outputLine ) ) <= 0 )
+         printRc = AUDIT_IO_ERROR;
+   }
+
+   if ( ( printRc == RC_OK ) &&
+        ( inputParms->startingPage != NULL ) )
+   {
+      sprintf(outputLine,
+              "%s %s%s",
+              "Starting page offset: ",
+              inputParms->startingPage,
+              NEW_LINE);
+      if (( fprintf( fp, outputLine ) ) <= 0 )
+         printRc = AUDIT_IO_ERROR;
+   }
+
+   return(printRc);
+}

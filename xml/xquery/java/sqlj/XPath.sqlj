@@ -1,0 +1,416 @@
+//***************************************************************************
+// (c) Copyright IBM Corp. 2007 All rights reserved.
+// 
+// The following sample of source code ("Sample") is owned by International 
+// Business Machines Corporation or one of its subsidiaries ("IBM") and is 
+// copyrighted and licensed, not sold. You may use, copy, modify, and 
+// distribute the Sample in any form without payment to IBM, for the purpose of 
+// assisting you in the development of your applications.
+// 
+// The Sample code is provided to you on an "AS IS" basis, without warranty of 
+// any kind. IBM HEREBY EXPRESSLY DISCLAIMS ALL WARRANTIES, EITHER EXPRESS OR 
+// IMPLIED, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED WARRANTIES OF 
+// MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE. Some jurisdictions do 
+// not allow for the exclusion or limitation of implied warranties, so the above 
+// limitations or exclusions may not apply to you. IBM shall not be liable for 
+// any damages you suffer as a result of using, copying, modifying or 
+// distributing the Sample, even if IBM has been advised of the possibility of 
+// such damages.
+//***************************************************************************
+//
+// SOURCE FILE NAME: XPath.sqlj
+//
+// SAMPLE: How to run simple XPath Queries.
+//
+// SQL STATEMENTS USED:
+//         SELECT
+//
+// SQL/XML STATEMENTS USED:
+//           xmlcolumn
+//
+// XQuery FUNCTIONS USED:
+//                distinct-values
+//                starts-with
+//                avg
+//                count
+//
+//
+// OUTPUT FILE: XPath.out (available in the online documentation)
+// Output will vary depending on the JDBC driver connectivity used.
+//***************************************************************************
+//
+// For more information on the sample programs, see the README file.
+//
+// For information on developing SQLJ applications, see the Application
+// Development Guide.
+//
+// For information on using XQuery statements, see the XQuery Reference.
+//
+// For information on using SQL statements, see the SQL Reference.
+//
+// For the latest information on programming, compiling, and running DB2
+// applications, visit the DB2 application development website at
+//     http://www.software.ibm.com/data/db2/udb/ad
+//**************************************************************************/
+
+import java.lang.*;
+import java.sql.*;
+import sqlj.runtime.*;
+import sqlj.runtime.ref.*;
+import com.ibm.db2.jcc.DB2Xml;
+
+// Define the iterator to use in the functions
+#sql iterator Positioned_Iterator(Object);
+#sql iterator Positioned_Iterator2(com.ibm.db2.jcc.DB2Xml);
+class XPath
+{
+  public static void main(String argv[])
+  {
+    int rc=0;
+    String url = "jdbc:db2:sample";
+    Connection con=null;
+    DefaultContext ctx=null;
+    try
+    {
+      Class.forName("com.ibm.db2.jcc.DB2Driver").newInstance();
+      
+      // connect to the 'sample' database
+      con = DriverManager.getConnection( url );
+      
+      // get the default context
+      ctx= new DefaultContext(con);
+      
+      // set the default context for the sample
+      DefaultContext.setDefaultContext(ctx); 
+      System.out.println();  
+    }
+    catch(SQLException sqle)
+    {
+      System.out.println("Error Msg: "+ sqle.getMessage());
+      System.out.println("SQLState: "+sqle.getSQLState());
+      System.out.println("SQLError: "+sqle.getErrorCode());
+      System.out.println("Rollback the transaction and quit the program");
+      System.out.println();
+      try { DefaultContext.getDefaultContext().getConnection().rollback(); }
+      catch (Exception e)
+      {
+      }
+      System.exit(1);
+    }
+    catch(Exception e)
+    {}
+    
+    System.out.println("----------------------------------------------------------------");
+    System.out.println("SELECT THE CUSTOMER DETAILS........");
+    CustomerDetails();
+    
+    System.out.println("------------------------------------------------------------------");
+    System.out.println("SELECT THE CUSTOMER'S CITIES FROM CANADA .....");
+    CitiesInCanada();
+
+    System.out.println("-------------------------------------------------------------------");
+    System.out.println("SELECT THE NAME OF THE CUSTOMER WITH MOBILE NUMBER START FROM 905.......");    
+    CustMobileNum();
+
+    System.out.println("--------------------------------------------------------------------");
+    System.out.println("SELECT THE AVERAGE PRICE FOR ALL THE PRODUCT IN 100 SERIES.....");
+    AvgPrice();         
+
+    System.out.println("---------------------------------------------------------------------");
+    System.out.println("SELECT THE CUSTOMER FROM TORONTO CITY.......");
+    CustomerFromToronto();
+
+    System.out.println("--------------------------------------------------------------------");
+    System.out.println("SELECT THE NUMBER OF CUSTOMER FROM TORONTO CITY.......");
+    NumOfCustInToronto();
+  
+  } 
+  static void CustomerDetails()
+  {
+    try
+    {
+      com.ibm.db2.jcc.DB2Xml data=null;
+      
+      // declare an iterator 
+      Positioned_Iterator2 custIter=null;
+      
+      // Run the query with default context
+      #sql custIter = {SELECT XMLQUERY('$custinfo' PASSING BY REF customer.info as "custinfo") from customer order by cid};
+      while (true)
+      {
+        
+        // fetch the cursor
+        #sql {FETCH :custIter into :data};
+        if (custIter.endFetch())
+        {
+          break;
+        }
+
+        // print the reslt as an XML string
+        System.out.println();
+        System.out.println(data.getDB2XmlString());
+      }
+
+      // close the cursor
+      custIter.close(); 
+                   	  
+    }
+    catch(SQLException sqle)
+    {
+      System.out.println("Error Msg: "+ sqle.getMessage());
+      System.out.println("SQLState: "+sqle.getSQLState());
+      System.out.println("SQLError: "+sqle.getErrorCode());
+      System.out.println("Rollback the transaction and quit the program");
+      System.out.println();
+      try { DefaultContext.getDefaultContext().getConnection().rollback(); }
+      catch (Exception e)
+      {
+      }
+      System.exit(1);
+    }
+    catch(Exception e)
+    {}
+  } // CustomerDetails
+  
+  static void CitiesInCanada()
+  {
+    try
+    {
+      Object data=null;
+      
+      // declare an iterator
+      Positioned_Iterator citiesIter=null;
+ 
+      // Run the query with default context
+      #sql citiesIter = {SELECT XMLQUERY('for $cty in fn:distinct-values(db2-fn:xmlcolumn("CUSTOMER.INFO")/customerinfo/addr[@country="Canada"]
+                                        /city) order by $cty return $cty') FROM SYSIBM.SYSDUMMY1};
+
+      while (true)
+      {
+        // fetch the cursor
+        #sql {FETCH :citiesIter INTO :data};
+
+        if (citiesIter.endFetch())
+        {
+          break;
+        }
+
+        // print the reslt as DB2  string
+        System.out.println();
+        System.out.println(((com.ibm.db2.jcc.DB2Xml)data).getDB2XmlString());
+      }
+
+      // close the cursor
+      citiesIter.close(); 
+    }
+    catch(SQLException sqle)
+    {
+      System.out.println("Error Msg: "+ sqle.getMessage());
+      System.out.println("SQLState: "+sqle.getSQLState());
+      System.out.println("SQLError: "+sqle.getErrorCode());
+      System.out.println("Rollback the transaction and quit the program");
+      System.out.println();
+      try { DefaultContext.getDefaultContext().getConnection().rollback(); }
+      catch (Exception e)
+      {
+      }
+      System.exit(1);
+    }
+    catch(Exception e)
+    {}
+  } //CitiesInCanada
+
+  static void CustMobileNum()
+  {
+    try
+    {
+      Object data=null;
+      
+      // declare an iterator
+      Positioned_Iterator mobileIter=null;
+      
+      // Run the query with default context
+      #sql mobileIter = {SELECT XMLQUERY('$custinfo/customerinfo[phone[@type="cell" and
+                              fn:starts-with(text(),"905")]]' passing by ref customer.info as "custinfo") from customer};
+      
+      while (true)
+      {
+        // fetch the cursor
+        #sql {FETCH :mobileIter INTO :data};
+
+        if (mobileIter.endFetch())
+        {
+          break;
+        }
+   
+        // print the reslt as an XML string
+        System.out.println();
+        System.out.println(((com.ibm.db2.jcc.DB2Xml)data).getDB2String());
+      }
+
+      // close the cursor
+     mobileIter.close(); 
+   }
+   catch(SQLException sqle)
+   {
+     System.out.println("Error Msg: "+ sqle.getMessage());
+     System.out.println("SQLState: "+sqle.getSQLState());
+     System.out.println("SQLError: "+sqle.getErrorCode());
+     System.out.println("Rollback the transaction and quit the program");
+     System.out.println();
+     try { DefaultContext.getDefaultContext().getConnection().rollback(); }
+     catch (Exception e)
+     {
+     }
+     System.exit(1);
+   }
+   catch(Exception e)
+   {}
+  }
+  
+  static void AvgPrice()
+  {
+    try
+    {
+      Object data=null;
+      
+      // declare an iterator	  
+      Positioned_Iterator priceIter=null;
+     
+      // Run the query with default context
+      #sql priceIter= {SELECT XMLQUERY('let $prod_price:=db2-fn:xmlcolumn("PRODUCT.DESCRIPTION")
+                             /product[fn:starts-with(@pid,"100")]/description/price
+                              return avg($prod_price)') FROM sysibm.sysdummy1};
+ 
+      while (true)
+      {
+        // fetch the cursor
+        #sql {FETCH :priceIter INTO :data};
+
+        if (priceIter.endFetch())
+        {
+          break;
+        }
+        
+        // print the result as DB2 string
+        System.out.println();
+        System.out.println(((com.ibm.db2.jcc.DB2Xml)data).getDB2String());
+      }
+
+      // close the cursor
+      priceIter.close(); 
+    }
+    catch(SQLException sqle)
+    {
+      System.out.println("Error Msg: "+ sqle.getMessage());
+      System.out.println("SQLState: "+sqle.getSQLState());
+      System.out.println("SQLError: "+sqle.getErrorCode());
+      System.out.println("Rollback the transaction and quit the program");
+      System.out.println();
+      try { DefaultContext.getDefaultContext().getConnection().rollback(); }
+      catch (Exception e)
+      {
+      }
+      System.exit(1);
+    }
+    catch(Exception e)
+    {}
+  } // AvgPrice
+  
+  static void CustomerFromToronto()
+  {
+    try
+    {
+      Object data=null;
+	  
+      // declare an iterator
+      Positioned_Iterator custIter=null;
+      
+      // Run the query with default context 
+      #sql custIter = {SELECT XMLQUERY('$custinfo/customerinfo[addr/city="Toronto"]/name'
+                           passing by ref customer.info as "custinfo") from customer ORDER BY cid desc};
+      
+      while (true)
+      {
+        // fetch the cursor
+        #sql {FETCH :custIter INTO :data};
+
+        if (custIter.endFetch())
+        {
+          break;
+        }
+
+        // print the result as an XML string
+        System.out.println();
+        System.out.println(((com.ibm.db2.jcc.DB2Xml)data).getDB2String());
+      }
+
+      // close the cursor
+      custIter.close(); 
+                   	  
+    }
+    catch(SQLException sqle)
+    {
+      System.out.println("Error Msg: "+ sqle.getMessage());
+      System.out.println("SQLState: "+sqle.getSQLState());
+      System.out.println("SQLError: "+sqle.getErrorCode());
+      System.out.println("Rollback the transaction and quit the program");
+      System.out.println();
+      try { DefaultContext.getDefaultContext().getConnection().rollback(); }
+      catch (Exception e)
+      {
+      }
+      System.exit(1);
+    }
+    catch(Exception e)
+    {}
+  } // CustomerFromToronto
+
+  static void NumOfCustInToronto()
+  {
+    try
+    {
+      Object data=null;
+
+      // declare an iterator 
+      Positioned_Iterator custIter=null;
+      
+      // Run the query with default context 
+      #sql custIter = { SELECT XMLQUERY('fn:count(db2-fn:xmlcolumn("CUSTOMER.INFO")
+                                           /customerinfo[addr/city="Toronto"])')
+                                          from sysibm.sysdummy1};
+      while (true)
+      {
+        // fetch the cursor
+        #sql {FETCH :custIter INTO :data};
+
+        if (custIter.endFetch())
+        {
+          break;
+        }
+
+        // print the result a DB2  string
+        System.out.println();
+        System.out.println(((com.ibm.db2.jcc.DB2Xml)data).getDB2String());
+      }
+
+      // close the cursor
+      custIter.close();
+    }
+    catch(SQLException sqle)
+    {
+      System.out.println("Error Msg: "+ sqle.getMessage());
+      System.out.println("SQLState: "+sqle.getSQLState());
+      System.out.println("SQLError: "+sqle.getErrorCode());
+      System.out.println("Rollback the transaction and quit the program");
+      System.out.println();
+      try { DefaultContext.getDefaultContext().getConnection().rollback(); }
+      catch (Exception e)
+      {
+      }
+      System.exit(1);
+    }
+    catch(Exception e)
+    {}
+  } // NumOfCustInToronto 
+}  // XPath 

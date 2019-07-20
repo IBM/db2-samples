@@ -1,0 +1,845 @@
+/****************************************************************************
+** (c) Copyright IBM Corp. 2007 All rights reserved.
+** 
+** The following sample of source code ("Sample") is owned by International 
+** Business Machines Corporation or one of its subsidiaries ("IBM") and is 
+** copyrighted and licensed, not sold. You may use, copy, modify, and 
+** distribute the Sample in any form without payment to IBM, for the purpose of 
+** assisting you in the development of your applications.
+** 
+** The Sample code is provided to you on an "AS IS" basis, without warranty of 
+** any kind. IBM HEREBY EXPRESSLY DISCLAIMS ALL WARRANTIES, EITHER EXPRESS OR 
+** IMPLIED, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED WARRANTIES OF 
+** MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE. Some jurisdictions do 
+** not allow for the exclusion or limitation of implied warranties, so the above 
+** limitations or exclusions may not apply to you. IBM shall not be liable for 
+** any damages you suffer as a result of using, copying, modifying or 
+** distributing the Sample, even if IBM has been advised of the possibility of 
+** such damages.
+*****************************************************************************
+**
+** SOURCE FILE NAME: tbsavept.sqc
+**
+** SAMPLE: How to use external savepoints
+**         Also demonstrates how to change the default value of a column
+**
+** SQL STATEMENTS USED:
+**         ALTER TABLE
+**         CLOSE
+**         COMMIT
+**         CREATE TABLE
+**         CREATE USER TEMPORARY TABLESPACE
+**         DECLARE GLOBAL TEMPORARLY TABLE
+**         DECLARE CURSOR
+**         DROP TABLE
+**         DROP TABLESPACE
+**         EXECUTE IMMEDIATE
+**         FETCH
+**         INCLUDE
+**         INSERT
+**         OPEN
+**         PREPARE
+**         RELEASE SAVEPOINT
+**         ROLLBACK TO SAVEPOINT
+**         SAVEPOINT
+**         SELECT
+**         SET INTEGRITY
+**
+** STRUCTURES USED:
+**         sqlca
+**
+** OUTPUT FILE: tbsavept.out (available in the online documentation)
+*****************************************************************************
+**
+** For more information on the sample programs, see the README file.
+**
+** For information on developing C applications, see the Application
+** Development Guide.
+**
+** For information on using SQL statements, see the SQL Reference.
+**
+** For the latest information on programming, building, and running DB2
+** applications, visit the DB2 application development website:
+**     http://www.software.ibm.com/data/db2/udb/ad
+****************************************************************************/
+
+#include <stdio.h>
+#include <stdlib.h>
+#include <sqlenv.h>
+#include <sqlutil.h>
+#include <string.h>
+#include "utilemb.h"
+
+#ifndef TRUE
+  #define TRUE 1
+  #define FALSE 0
+#endif
+
+EXEC SQL INCLUDE SQLCA;
+
+EXEC SQL BEGIN DECLARE SECTION;
+  char firstName[20 + 1];
+  char lastName[20 + 1];
+  char major[20 + 1];
+  char university[20 + 1];
+  char mystmnt[150 + 1];
+  char tablename[20 + 1];
+  char status[5 + 1];
+  float GPA;
+  short stuID;
+  short empID;
+EXEC SQL END DECLARE SECTION;
+
+/* Function declarations */
+int DropTablespaceAndTables(void);
+int CreateTablespaceAndTablesWithData(void);
+int TbContentDisplay(char, char, char, char, char, char);
+int TbIntegrityInfoDisplay();
+int SavepointWithAlterTable(void);
+int SavepointWithGlobalTemporaryTable(void);
+int NestedSavepoints(void);
+int SavepointWithSetIntegrity(void);
+int SavepointWithNotLoggedInitiallyTable(void);
+
+int main(int argc, char *argv[])
+{
+  int rc = 0;
+  char dbAlias[SQL_ALIAS_SZ + 1];
+  char user[USERID_SZ + 1];
+  char pswd[PSWD_SZ + 1];
+
+  /* Clear host variables */
+  memset(firstName, '\0', 21);
+  memset(lastName,  '\0', 21);
+  memset(major,     '\0', 21);
+  memset(university,'\0', 21);
+  memset(mystmnt,   '\0', 151);
+  memset(tablename, '\0', 21);
+  memset(status,    '\0', 6);
+
+  /* Check command line arguments */
+  rc = CmdLineArgsCheck1(argc, argv, dbAlias, user, pswd);
+  if (rc != 0)
+  {
+    return rc;
+  }
+
+  printf("\nTHIS SAMPLE SHOWS HOW TO USE EXTERNAL SAVEPOINTS\n");
+
+  /* Connect to sample database */
+  rc = DbConn(dbAlias, user, pswd);
+  if (rc != 0)
+  {
+    return rc;
+  }
+
+  /* Set up the initial state of the database */
+  CreateTablespaceAndTablesWithData();
+
+  SavepointWithAlterTable();
+  SavepointWithGlobalTemporaryTable();
+  NestedSavepoints();
+  SavepointWithSetIntegrity();
+  SavepointWithNotLoggedInitiallyTable();
+
+  /* Drop the tables and temporary table space */
+  rc = DropTablespaceAndTables();
+  if (rc != 0)
+  {
+    return rc;
+  }
+
+  /* Disconnect from sample database */
+  rc = DbDisconn(dbAlias);
+  if (rc != 0)
+  {
+    return rc;
+  }
+
+  return rc;
+} /* main */
+
+/*** Helper functions ***/
+
+/* The following function drops the temporary tablespace as well as the 
+   tables created and used by this sample. */
+int DropTablespaceAndTables(void)
+{
+  printf("\n-----------------------------------------------------------\n");
+  printf("USE THE SQL STATEMENTS:\n");
+  printf("  DROP TABLE\n");
+  printf("  DROP TABLESPACE\n");
+  printf("TO DROP TABLE AND TABLE SPACE\n");
+
+  printf("\n  DROP TABLESPACE tempspace\n");
+  EXEC SQL DROP TABLESPACE tempspace;
+  EMB_SQL_CHECK("Tablespace: drop");
+
+  printf("\n  DROP TABLE students\n");
+  EXEC SQL DROP TABLE students;
+  EMB_SQL_CHECK("Table: drop");
+
+  printf("\n  DROP TABLE studentrecords\n");
+  EXEC SQL DROP TABLE studentrecords;
+  EMB_SQL_CHECK("Table: drop");
+
+  return 0;
+} /* DropTablespaceAndTables */
+
+/* The following function creates a temporary tablespace as well as two
+   tables, studentrecords and students.  The tables are populated with 
+   initial values. */
+int CreateTablespaceAndTablesWithData(void)
+{
+  printf("\n-----------------------------------------------------------\n");
+  printf("USE THE SQL STATEMENTS:\n");
+  printf("  COMMIT\n");
+  printf("  CREATE TABLE\n");
+  printf("  CREATE USER TEMPORARY TABLESPACE\n");
+  printf("  INSERT\n");
+  printf("TO CREATE TABLES WITH DATA AND A USER TEMPORARY TABLE SPACE FOR\n");
+  printf("THE TEMP TABLE\n");
+
+  /* Create the tables and temporary table space */
+
+  /* Create a temporary table space */
+  printf("\n  CREATE USER TEMPORARY TABLESPACE tempspace\n");
+  printf("    MANAGED BY SYSTEM USING('temp')\n");
+  EXEC SQL
+    CREATE USER TEMPORARY TABLESPACE tempspace
+    MANAGED BY SYSTEM USING('temp');
+  EMB_SQL_CHECK("Temporary Table Space: create");
+
+  /* Create studentrecords table */
+  printf("\n  CREATE TABLE studentrecords(\n");
+  printf("    studentid SMALLINT\n");
+  printf("    gpa FLOAT(3)\n");
+  printf("    university CHAR(20))\n\n");
+
+  EXEC SQL CREATE TABLE studentrecords(
+    studentid smallint,
+    gpa float(3),
+    university char(20));
+  EMB_SQL_CHECK("Table: create");
+
+  /* Create students table */
+  printf("  CREATE TABLE students(\n");
+  printf("    firstname CHAR(20)\n");
+  printf("    lastname CHAR(20)\n");
+  printf("    studentid SMALLINT\n");
+  printf("    employeeid SMALLINT)\n");
+  printf("    NOT LOGGED INITIALLY\n\n");
+
+  EXEC SQL CREATE TABLE students(
+    firstname char(20),
+    lastname char(20),
+    studentid smallint,
+    employeeid smallint)
+    NOT LOGGED INITIALLY;
+  EMB_SQL_CHECK("Table: create");
+
+  /* This is for deactivating NOT LOGGED INITIALLY mode for the table
+     STUDENTS. */
+  printf("  COMMIT\n");
+  EXEC SQL COMMIT;
+  EMB_SQL_CHECK("Commit");
+
+  /* Populate the tables just created */
+
+  /* Insert 2 records into students table */
+  printf("\n  INSERT INTO students(firstname, lastname, studentid,");
+  printf(" emplyeeid)\n");
+  printf("    VALUES('Jack', 'Hill', 1, 3),\n");
+  printf("          ('Jill', 'Hill', 5, 7)\n\n");
+
+  strcpy(mystmnt, "INSERT INTO students(firstname, lastname, studentid,");
+  strcat(mystmnt, " employeeid) VALUES('Jack', 'Hill', 1, 3),");
+  strcat(mystmnt, " ('Jill', 'Hill', 5, 7)");
+  EXEC SQL EXECUTE IMMEDIATE :mystmnt;
+  EMB_SQL_CHECK("Table: insert");
+
+  /* Insert 2 records into studentrecords table */
+  printf("  INSERT INTO studentrecords(studentid, gpa, university)\n");
+  printf("    VALUES(1, 2.5, 'Crown'),\n");
+  printf("          (5, 3.99, 'Tumbling')\n");
+
+  strcpy(mystmnt, "INSERT INTO studentrecords(studentid, gpa, university)");
+  strcat(mystmnt, " VALUES(1, 2.5, 'Crown'),");
+  strcat(mystmnt, " (5, 3.99, 'Tumbling')");
+  EXEC SQL EXECUTE IMMEDIATE :mystmnt;
+  EMB_SQL_CHECK("Table: insert");
+
+  /* Prepare SELECT statements */
+  strcpy(mystmnt, "SELECT * FROM studentrecords");
+  EXEC SQL PREPARE selectstmnt1 FROM :mystmnt;
+  EMB_SQL_CHECK("Prepare");
+
+  strcpy(mystmnt, "SELECT * FROM students");
+  EXEC SQL PREPARE selectstmnt2 FROM :mystmnt;
+  EMB_SQL_CHECK("Prepare");
+
+  strcpy(mystmnt, "SELECT TABNAME, STATUS");
+  strcat(mystmnt, " FROM syscat.tables WHERE TABNAME='STUDENTRECORDS'");
+  EXEC SQL PREPARE selectstmnt3 FROM :mystmnt;
+  EMB_SQL_CHECK("Prepare");
+
+  /* Declare cursors for the prepared SELECT statements */
+  EXEC SQL DECLARE stuRecCursor CURSOR FOR selectstmnt1;
+  EMB_SQL_CHECK("Cursor: declare");
+
+  EXEC SQL DECLARE studentsCursor CURSOR FOR selectstmnt2;
+  EMB_SQL_CHECK("Cursor: declare");
+
+  EXEC SQL DECLARE syscatCursor CURSOR FOR selectstmnt3;
+  EMB_SQL_CHECK("Cursor: declare");
+
+  /* Display the contents of the tables to show that the records were
+     inserted successfully */
+  TbContentDisplay(FALSE, TRUE, TRUE, FALSE, TRUE, TRUE);
+
+  return 0;
+} /* CreateTablespaceAndTablesWithData */
+
+/* The following function displays data in two tables, studentrecords
+   and students.  The parameters passed to this function should be either
+   TRUE or FALSE.  If the parameter is true, a corresponding section of
+   code is executed. For example:
+   
+   TbContentDisplay(TRUE, TRUE, TRUE, FALSE, TRUE, TRUE);
+
+   will show the major column, show the data in both tables, will not expect 
+   failure, and will open and close all cursors used for displaying the 
+   tables. */
+int TbContentDisplay(char useMajor,
+                     char showSTUDENTRECORDS,
+                     char showSTUDENTS,
+                     char expectStuRecFail,
+                     char openCursors,
+                     char closeCursors)
+{
+  /* If the cursors are to be opened, open them */
+  if(openCursors)
+  {
+    EXEC SQL OPEN stuRecCursor;
+    EMB_SQL_CHECK("Cursor: open");
+
+    EXEC SQL OPEN studentsCursor;
+    EMB_SQL_CHECK("Cursor: open");
+  }
+
+  /* Display the contents of the studentrecords table */
+  if (showSTUDENTRECORDS)
+  {
+    printf("\n  SELECT * FROM studentrecords\n");
+
+    /* Print out header for the student record table */
+    if(useMajor)
+    {
+      printf("    Student ID  GPA   University            Major\n");
+      printf("    ----------  ----  --------------------  ");
+      printf("--------------------\n");
+    }
+    else
+    {
+      printf("    Student ID  GPA   University          \n");
+      printf("    ----------  ----  --------------------\n");
+    }
+
+    /* Display all of the records in the studentrecords table */
+    while(sqlca.sqlcode != 100)
+    {
+      /* Check whether to retrieve the 'major' column */
+      if(useMajor)
+      {
+        EXEC SQL FETCH stuRecCursor INTO :stuID, :GPA, :university, :major;
+
+        if (sqlca.sqlcode == 0)
+          printf("    %10d  %.2f  %20s  %s\n", stuID, GPA, university, major);
+      }
+      else
+      {
+        EXEC SQL FETCH stuRecCursor INTO :stuID, :GPA, :university;
+
+        if (sqlca.sqlcode == 0)
+          printf("    %10d  %.2f  %20s\n", stuID, GPA, university);
+      }
+
+      /* Check whether an error has occured before reaching the end of
+         the table */
+      if (sqlca.sqlcode != 100)
+      {
+        /* Check whether the failure of the fetch is expected */
+        if (expectStuRecFail)
+        {
+          EXPECTED_ERR_CHECK("Cursor:fetch");
+          break;
+        }
+        else
+        {
+          EMB_SQL_CHECK("Cursor:fetch");
+        }
+      }
+    } 
+  }
+
+  /* Display the contents of the students table */
+  if (showSTUDENTS)
+  {
+    printf("\n  SELECT * FROM students\n");
+
+    /* Print out header for the student record table */
+    printf("    First Name            Last Name             ");
+    printf("Student ID  Employee ID\n");
+    printf("    --------------------  --------------------  ");
+    printf("----------  -----------\n");
+
+    /* Fetch the first record.  This is to reset the value of the sqlcode */
+    EXEC SQL FETCH studentsCursor INTO :firstName, :lastName, :stuID, :empID;
+
+    /* Print out all of the records in the studentrecords table */
+    while(sqlca.sqlcode != 100)
+    {
+      /* Check whether an error has occured before reaching the end of
+         the table */
+      if (sqlca.sqlcode != 100)
+        EMB_SQL_CHECK("Cursor:fetch");
+
+      if (sqlca.sqlcode == 0)
+        printf("    %20s  %20s  %10d  %11d\n", firstName, lastName, stuID, empID);
+
+      EXEC SQL FETCH studentsCursor INTO :firstName, :lastName, :stuID, :empID;
+    }
+  }
+
+  /* Check whether to close the cursors */
+  if (closeCursors)
+  {
+    EXEC SQL CLOSE stuRecCursor;
+    EMB_SQL_CHECK("Cursor: close");
+    EXEC SQL CLOSE studentsCursor;
+    EMB_SQL_CHECK("Cursor: close");
+  }
+  return 0;
+} /* TbContentDisplay */
+
+/* The following function displays the integrity status for the
+   studentrecords table. */
+int TbIntegrityInfoDisplay()
+{
+  /* Get the status of the studentrecords table from syscat.tables */
+
+  printf("  SELECT tabname, status\n");
+  printf("      FROM syscat.tables WHERE tabname='STUDENTRECORDS'\n");
+
+  EXEC SQL OPEN syscatCursor;
+  EMB_SQL_CHECK("Cursor: open");
+
+  EXEC SQL FETCH syscatCursor INTO :tablename, :status;
+  EMB_SQL_CHECK("Cursor: fetch");
+
+  EXEC SQL CLOSE syscatCursor;
+  EMB_SQL_CHECK("Cursor: close");
+
+  /* Print out the status for the studentrecords table */
+  printf("\n  Integrity status:\n");
+  printf("  Table                 Status\n");
+  printf("  --------------------  ------\n");
+  printf("  %20s  %5s\n", tablename, status);
+
+  return 0;
+} /* TbIntegrityInfoDisplay */
+
+/*** Main functions ***/
+
+/* The following function demonstrates the use of a savepoint.  A savepoint
+   is set, after which the studentrecords table is modified.  A rollback is
+   issued, invalidating the cursor for the studentrecords table.  All 
+   changes that occurred after the savepoint was set are also undone. */
+int SavepointWithAlterTable()
+{
+  printf("\n-----------------------------------------------------------\n");
+  printf("USE THE SQL STATEMENTS:\n");
+  printf("  ALTER TABLE\n");
+  printf("  INSERT\n");
+  printf("  RELEASE SAVEPOINT\n");
+  printf("  ROLLBACK TO SAVEPOINT\n");
+  printf("  SAVEPOINT\n");
+  printf("  SELECT\n");
+  printf("TO ADD A 'MAJOR' COLUMN TO THE STUDENTRECORDS TABLE\n");
+  printf("AND ATTEMPT TO SELECT ROWS FROM THE STUDENTRECORDS TABLE \n");
+  printf("BEFORE AND AFTER ROLLING BACK TO THE SAVEPOINT.\n");
+
+  /* Set savepoint */
+  printf("\n  SAVEPOINT sp ON ROLLBACK RETAIN CURSORS\n");
+  EXEC SQL SAVEPOINT sp ON ROLLBACK RETAIN CURSORS;
+  EMB_SQL_CHECK("Savepoint: set");
+
+  /* Add a column to the studentrecords table */
+  printf("\n  ALTER TABLE studentrecords\n");
+  printf("    ADD COLUMN major char(20) WITH DEFAULT 'Computer Science'\n");
+  strcpy(mystmnt, "ALTER TABLE studentrecords");
+  strcat(mystmnt, " ADD COLUMN major char(20) WITH DEFAULT 'Computer Science'");
+  EXEC SQL EXECUTE IMMEDIATE :mystmnt;
+  EMB_SQL_CHECK("Alter table: add column");
+
+  /* Show that the column has successfully been added to the studentrecords
+     table, and that the cursors successfully retrieve the records from the
+     studentrecords and students tables. */
+  TbContentDisplay(TRUE, TRUE, TRUE, FALSE, TRUE, TRUE);
+  printf("\n  NOTE:\n");
+  printf("    The 'major' column has successfully been added to the\n");
+  printf("    studentrecords table.  As well, cursors for the\n");
+  printf("    studentrecords and students tables were able to\n");
+  printf("    successfully retrieve their records.\n");
+
+  /* Update the default value of the new column to 'Computer Science' */
+  printf("\n  ALTER TABLE studentrecords\n");
+  printf("    ALTER COLUMN major SET DEFAULT 'English Lit'\n");
+  strcpy(mystmnt, "ALTER TABLE studentrecords");
+  strcat(mystmnt,
+         " ALTER COLUMN major SET DEFAULT 'English Lit'");
+  EXEC SQL EXECUTE IMMEDIATE :mystmnt;
+  EMB_SQL_CHECK("Alter table: alter default value");
+
+  /* Insert a row to the table with the new default value */
+  printf("\n  INSERT INTO students(firstname, lastname, studentid,");
+  printf(" emplyeeid)\n");
+  printf("    VALUES('Rolling', 'Hill', 9, 22))\n");
+
+  strcpy(mystmnt, "INSERT INTO students(firstname, lastname, studentid,");
+  strcat(mystmnt, " employeeid) VALUES('Rolling', 'Hill', 9, 22)");
+  EXEC SQL EXECUTE IMMEDIATE :mystmnt;
+  EMB_SQL_CHECK("Table: insert");
+
+  /* Insert the new record into studentrecords table */
+  printf(" INSERT INTO studentrecords(studentid, gpa, university, major)\n");
+  printf("    VALUES(9, 3.0, 'After', default))\n");
+
+  strcpy(mystmnt, "INSERT INTO studentrecords(studentid, gpa, university, major)");
+  strcat(mystmnt, " VALUES(9, 3.0, 'After', default)");
+  EXEC SQL EXECUTE IMMEDIATE :mystmnt;
+  EMB_SQL_CHECK("Table: insert");
+
+  /* Display the results, to see that only the new column has the */
+  /* modified default value */
+  TbContentDisplay(TRUE, TRUE, TRUE, FALSE, TRUE, FALSE);
+  printf("\n  NOTE:\n");
+  printf("    The 'major' column has successfully been altered \n");
+  printf("    for the record just inserted. Old rows retained their \n");
+  printf("    original values\n");
+
+  /* Rollback to the savepoint */
+  printf("\n  ROLLBACK TO SAVEPOINT sp\n");
+  EXEC SQL ROLLBACK TO SAVEPOINT sp;
+  EMB_SQL_CHECK("Savepoint: rollback");
+
+  /* Show that the cursor for the studentrecords table has been invalidated
+     while the cursor for the students table is still valid. */
+  TbContentDisplay(FALSE, TRUE, TRUE, TRUE, FALSE, TRUE);
+  printf("\n  NOTE:\n");
+  printf("    Due to the ROLLBACK TO SAVEPOINT, the ALTER TABLE\n");
+  printf("    statement applied to the studentrecords table has been\n");
+  printf("    undone and it's cursor has been invalidated, thus the\n");
+  printf("    SELECT statement for the studentrecords table fails.\n");
+  printf("    However, the student table was not modified within\n");
+  printf("    this savepoint, so it's cursor is valid and it's SELECT\n");
+  printf("    statement is successful.\n");
+
+  /* Set the savepoint */
+  printf("\n  RELEASE SAVEPOINT sp\n");
+  EXEC SQL RELEASE SAVEPOINT sp;
+  EMB_SQL_CHECK("Savepoint: point");
+
+  return 0;
+} /* SavepointWithAlterTable */
+
+/* The following function demonstrates the use of a savepoint.  A savepoint
+   is set, after which a global temporary table is declared.  A rollback is
+   issued, implicitly dropping the global temporary table. */
+int SavepointWithGlobalTemporaryTable()
+{
+  printf("\n-----------------------------------------------------------\n");
+  printf("USE THE SQL STATEMENTS:\n");
+  printf("  DECLARE GLOBAL TEMPORARY TABLE\n");
+  printf("  RELEASE SAVEPOINT\n");
+  printf("  ROLLBACK TO SAVEPOINT\n");
+  printf("  SAVEPOINT\n");
+  printf("  SELECT\n");
+  printf("TO CREATE AND INSERT DATA INTO A DECLARED GLOBAL TEMPORARY\n");
+  printf("TABLE, WITH THE SAME COLUMNS AS THE STUDENTS TABLE, WITHIN\n");
+  printf("A SAVEPOINT AND SHOW THAT THE TEMPORARY TABLE IS REMOVED AFTER\n");
+  printf("ROLLING BACK TO THE SAVEPOINT.\n");
+
+  /* Set savepoint */
+  printf("\n  SAVEPOINT sp ON ROLLBACK RETAIN CURSORS\n");
+  EXEC SQL SAVEPOINT sp ON ROLLBACK RETAIN CURSORS;
+
+  /* Create a temporary table */
+  printf("\n  DECLARE GLOBAL TEMPORARY TABLE temptbl\n");
+  printf("    LIKE students NOT LOGGED\n");
+  EXEC SQL DECLARE GLOBAL TEMPORARY TABLE temptbl
+    LIKE students NOT LOGGED;
+  EMB_SQL_CHECK("Temporary Table: declare");
+
+  /* Insert a record into the temporary table
+     using the required "session" qualifier */
+  printf("\n  INSERT INTO session.temptbl\n");
+  printf("    (SELECT firstname, lastname, studentid, employeeid\n");
+  printf("      FROM students)\n");
+  EXEC SQL INSERT INTO session.temptbl
+    (SELECT firstname, lastname, studentid, employeeid FROM students);
+  EMB_SQL_CHECK("Temporary Table: insert");
+
+  /* Rollback to the savepoint */
+  printf("\n  ROLLBACK TO SAVEPOINT sp\n");
+  EXEC SQL ROLLBACK TO SAVEPOINT sp;
+  EMB_SQL_CHECK("Savepoint: rollback");
+
+  /* Attempt to retrieve records from the temporary table after rolling
+     back to the savepoint. */
+  printf("\n  SELECT * FROM session.temptbl\n");
+  EXEC SQL DECLARE tmpselect CURSOR FOR SELECT * FROM session.temptbl;
+  EMB_SQL_CHECK("Cursor: declare");
+  EXEC SQL OPEN tmpselect;
+  EXPECTED_ERR_CHECK("Cursor: open");
+  printf("\n  NOTE:\n");
+  printf("    The temporary table that was created within this savepoint\n");
+  printf("    was implicitly dropped during the ROLLBACK TO SAVEPOINT.\n");
+  printf("    So an attempt to select some records from the temporary\n");
+  printf("    table fails.\n");
+
+  /* Release the savepoint */
+  printf("\n  RELEASE SAVEPOINT sp\n");
+  EXEC SQL RELEASE SAVEPOINT sp;
+  EMB_SQL_CHECK("Savepoint: release");
+
+  return 0;
+} /* SavepointWithGlobalTemporaryTable */
+
+/* The following function demonstrates nested savepoints. */
+int NestedSavepoints()
+{
+  printf("\n-----------------------------------------------------------\n");
+  printf("USE THE SQL STATEMENTS:\n");
+  printf("  SAVEPOINT sp\n");
+  printf("  INSERT\n");
+  printf("  SAVEPOINT nestedsp\n");
+  printf("  INSERT\n");
+  printf("  SELECT\n");
+  printf("  ROLLBACK TO SAVEPOINT nestedsp\n");
+  printf("  SELECT\n");
+  printf("  INSERT\n");
+  printf("  ROLLBACK TO SAVEPOINT sp\n");
+  printf("  SELECT\n");
+  printf("  RELEASE SAVEPOINT nestedsp\n");
+  printf("  RELEASE SAVEPOINT sp\n");
+
+  printf("TO ATTEMPT TO CREATE A SAVEPOINT WITHIN A SAVEPOINT\n");
+  printf("(NESTED SAVEPOINTS) TO SHOW SAVEPOINTS CAN BE NESTED.\n");
+
+  /* Set savepoint */
+  printf("\n  SAVEPOINT sp ON ROLLBACK RETAIN CURSORS\n");
+  EXEC SQL SAVEPOINT sp ON ROLLBACK RETAIN CURSORS;
+  EMB_SQL_CHECK("Savepoint");
+
+ /* Insert 2 records into students table */
+  printf("\n  INSERT INTO students(firstname, lastname, studentid,");
+  printf(" emplyeeid)\n");
+  printf("    VALUES('Evelyn', 'Moore', 10, 30),\n");
+  printf("          ('Jamie', 'Mak', 7, 75)\n");
+
+  strcpy(mystmnt, "INSERT INTO students(firstname, lastname, studentid,");
+  strcat(mystmnt, " employeeid) VALUES('Evelyn', 'Moore', 10, 30),");
+  strcat(mystmnt, " ('Jamie', 'Mak', 7, 75)");
+  EXEC SQL EXECUTE IMMEDIATE :mystmnt;
+  EMB_SQL_CHECK("Table: insert");
+
+  /* Set a nested savepoint */
+  printf("\n  SAVEPOINT nestedsp ON ROLLBACK RETAIN CURSORS\n");
+  EXEC SQL SAVEPOINT nestedsp on rollback retain cursors;
+  EMB_SQL_CHECK("Savepoint");
+
+ /* Insert 2 records into students table */
+  printf("\n  INSERT INTO students(firstname, lastname, studentid,");
+  printf(" emplyeeid)\n");
+  printf("    VALUES('Aaron', 'Johnson', 11, 31),\n");
+  printf("          ('Karl', 'Johnson', 8, 76)\n");
+
+  strcpy(mystmnt, "INSERT INTO students(firstname, lastname, studentid,");
+  strcat(mystmnt, " employeeid) VALUES('Aaron', 'Johnson', 11, 31),");
+  strcat(mystmnt, " ('Karl', 'Johnson', 8, 76)");
+  EXEC SQL EXECUTE IMMEDIATE :mystmnt;
+  EMB_SQL_CHECK("Table: insert");
+
+  /* Show that the record has been added to the students table */
+  TbContentDisplay(FALSE, TRUE, TRUE, FALSE, TRUE, TRUE);
+
+ /* Rollback the nested savepoint */
+  printf("\n  RELEASE SAVEPOINT nestedsp\n");
+  EXEC SQL ROLLBACK TO SAVEPOINT nestedsp;
+  EMB_SQL_CHECK("Savepoint: rollback");
+
+  /* Show that the records inserted to the students table after savepoint nestedsp was rollback */
+  TbContentDisplay(FALSE, TRUE, TRUE, FALSE, TRUE, TRUE);
+
+  strcpy(mystmnt, "INSERT INTO students(firstname, lastname, studentid,");
+  strcat(mystmnt, " employeeid) VALUES('Erin', 'Tory', 11, 31)");
+  EXEC SQL EXECUTE IMMEDIATE :mystmnt;
+  EMB_SQL_CHECK("Table: insert");
+
+
+  /* Rollback to the savepoint */
+  printf("\n  ROLLBACK TO SAVEPOINT sp\n");
+  EXEC SQL ROLLBACK TO SAVEPOINT sp;
+  EMB_SQL_CHECK("Savepoint: rollback");
+
+  /* Show that the records inserted to the students table after savepoint sp was rollback */
+  TbContentDisplay(FALSE, TRUE, TRUE, FALSE, TRUE, TRUE);
+
+
+  /* Release the nested savepoint */
+  printf("\n  RELEASE SAVEPOINT nestedsp\n");
+  EXEC SQL RELEASE SAVEPOINT nestedsp;
+  EXPECTED_ERR_CHECK("Savepoint: release");
+  printf("\n  NOTE:\n");
+  printf("    Since the savepoint nestedsp is started after savepoint sp, the\n");
+  printf("    rollback of savepoint sp has removed the savepoints nested inside.\n");
+
+
+  /* Release the nested savepoint */
+  printf("\n  RELEASE SAVEPOINT sp\n");
+  EXEC SQL RELEASE SAVEPOINT sp;
+  EMB_SQL_CHECK("Savepoint: release");
+
+
+  return 0;
+} /* NestedSavepoints */
+
+
+/* The following function demonstrates that table integrity is retained by a
+   savepoint. If a ROLLBACK TO SAVEPOINT is issued and a savepoint exists 
+   before a table's integrity is modified, changes to the table's integrity 
+   are rolled back. */
+int SavepointWithSetIntegrity()
+{
+  printf("\n-----------------------------------------------------------\n");
+  printf("USE THE SQL STATEMENTS:\n");
+  printf("  RELEASE SAVEPOINT\n");
+  printf("  ROLLBACK TO SAVEPOINT\n");
+  printf("  SAVEPOINT\n");
+  printf("  SELECT\n");
+  printf("  SET INTEGRITY\n");
+  printf("WITHIN A SAVEPOINT, TO SET INTEGRITY FOR STUDENTRECORDS\n");
+  printf("(CHANGE THE STATUS OF THE STUDENTRECORDS TABLE, IN\n");
+  printf("SYSCAT.TABLES, FROM 'N', FOR NORMAL to 'C' FOR CHECK PENDING\n");
+  printf("STATE), THEN ROLLBACK TO THE SAVEPOINT AND SHOW THAT THE\n");
+  printf("STATUS OF THE STUDENTRECORDS TABLE IS RETURNED TO 'N'\n");
+  printf(" (NORMAL STATE).\n");
+
+  /* Set savepoint */
+  printf("\n  SAVEPOINT sp ON ROLLBACK RETAIN CURSORS\n\n");
+  EXEC SQL SAVEPOINT sp ON ROLLBACK RETAIN CURSORS;
+  EMB_SQL_CHECK("Savepoint");
+
+  /* Print out the current integrity status for the studentrecords table */
+  TbIntegrityInfoDisplay();
+
+  /* Set the integrity for the studentrecords table to CHECK PENDING
+     NO ACCESS state, and IMMEDIATELY CASCADE. */
+  printf("\n  SET INTEGRITY FOR studentrecords\n");
+  printf("    OFF NO ACCESS CASCADE IMMEDIATE\n\n");
+  strcpy(mystmnt,
+         "SET INTEGRITY FOR studentrecords OFF NO ACCESS CASCADE IMMEDIATE");
+  EXEC SQL EXECUTE IMMEDIATE :mystmnt;
+  EMB_SQL_CHECK("Set integrity");
+
+  /* Print out the update integrity status for the studentrecords table */
+  TbIntegrityInfoDisplay();
+
+  /* Rollback to the savepoint */
+  printf("\n  ROLLBACK TO SAVEPOINT sp\n\n");
+  EXEC SQL ROLLBACK TO SAVEPOINT sp;
+  EMB_SQL_CHECK("Savepoint: rollback");
+
+  /* Print out the current integrity status for the studentrecords table to
+     show it has been reset to it's original status. */
+  TbIntegrityInfoDisplay();
+
+  /* Release the savepoint */
+  printf("\n  RELEASE SAVEPOINT sp\n");
+  EXEC SQL RELEASE SAVEPOINT sp;
+  EMB_SQL_CHECK("Savepoint: release");
+
+  return 0;
+} /* SavepointWithSetIntegrity */
+
+/* The following function demonstrates a special case of savepoints.  If a
+   table is set to NOT LOG INITIALLY mode and a new row is inserted, rolling
+   back to a savepoint fails.  This failure causes the entire unit of work 
+   to rollback.  This means that the initially created savepoint is no 
+   longer available. */
+int SavepointWithNotLoggedInitiallyTable()
+{
+  printf("\n-----------------------------------------------------------\n");
+  printf("USE THE SQL STATEMENTS:\n");
+  printf("  ALTER TABLE\n");
+  printf("  COMMIT\n");
+  printf("  INSERT\n");
+  printf("  RELEASE SAVEPOINT\n");
+  printf("  ROLLBACK TO SAVEPOINT\n");
+  printf("  SAVEPOINT\n");
+  printf("  SELECT\n");
+  printf("TO ALTER THE STUDENTS TABLE TO BE NOT LOGGED INITIALLY,\n");
+  printf("SET A SAVEPOINT, INSERT A RECORD INTO THE STUDENTS\n");
+  printf("TABLE, THEN ATTEMPT TO ROLLBACK TO THE SAVEPOINT\n");
+
+  /* Prevent the loss of the earlier work done by this sample */
+  printf("\n  COMMIT\n");
+  EXEC SQL COMMIT;
+  EMB_SQL_CHECK("Commit");
+
+  /* Activate the students table's NOT LOGGED INITIALLY mode */
+  printf("\n  ALTER TABLE students ACTIVATE NOT LOGGED INITIALLY\n");
+  strcpy(mystmnt, "ALTER TABLE students ACTIVATE NOT LOGGED INITIALLY");
+  EXEC SQL EXECUTE IMMEDIATE :mystmnt;
+  EMB_SQL_CHECK("Alter table: not logged initially");
+
+  /* Set savepoint */
+  printf("\n  SAVEPOINT sp ON ROLLBACK RETAIN CURSORS\n");
+  EXEC SQL SAVEPOINT sp ON ROLLBACK RETAIN CURSORS;
+  EMB_SQL_CHECK("Savepoint");
+
+  /* Insert another record into the students table */
+  printf("\n  INSERT INTO students(firstname, lastname, studentid,");
+  printf(" emplyeeid)\n");
+  printf("    VALUES('Jack', 'Benimble', 9, 11)\n");
+  strcpy(mystmnt, "INSERT INTO students(firstname, lastname, studentid,");
+  strcat(mystmnt, " employeeid) VALUES('Jack', 'Benimble', 9, 11)");
+  EXEC SQL EXECUTE IMMEDIATE :mystmnt;
+  EMB_SQL_CHECK("Table: insert");
+
+  /* Show that the record has been added to the students table */
+  TbContentDisplay(TRUE, FALSE, TRUE, FALSE, TRUE, TRUE);
+
+  /* Rollback to the savepoint */
+  printf("\n  ROLLBACK TO SAVEPOINT sp\n");
+  EXEC SQL ROLLBACK TO SAVEPOINT sp;
+  EXPECTED_ERR_CHECK("Savepoint: rollback");
+  printf("\n  NOTE:\n");
+  printf("    Since the students table is in NOT LOGGED INITIALLY\n");
+  printf("    mode rolling back to a savepoint fails with an error. The\n");
+  printf("    result is the entire unit of work being rolled back and\n");
+  printf("    the students table being put into a 'drop only' state.\n");
+
+  /* Release the savepoint */
+  printf("\n  RELEASE SAVEPOINT sp\n");
+  EXEC SQL RELEASE SAVEPOINT sp;
+  EXPECTED_ERR_CHECK("Savepoint: release");
+  printf("\n  NOTE:\n");
+  printf("    Since the entire unit of work has been rolled back, the\n");
+  printf("    savepoint no longer exists.  So the RELEASE SAVEPOINT\n");
+  printf("    statement fails.\n");
+
+  return 0;
+} /* SavepointWithNotLoggedInitiallyTable */
+

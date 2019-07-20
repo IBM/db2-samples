@@ -1,0 +1,427 @@
+/****************************************************************************
+** (c) Copyright IBM Corp. 2007 All rights reserved.
+** 
+** The following sample of source code ("Sample") is owned by International 
+** Business Machines Corporation or one of its subsidiaries ("IBM") and is 
+** copyrighted and licensed, not sold. You may use, copy, modify, and 
+** distribute the Sample in any form without payment to IBM, for the purpose of 
+** assisting you in the development of your applications.
+** 
+** The Sample code is provided to you on an "AS IS" basis, without warranty of 
+** any kind. IBM HEREBY EXPRESSLY DISCLAIMS ALL WARRANTIES, EITHER EXPRESS OR 
+** IMPLIED, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED WARRANTIES OF 
+** MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE. Some jurisdictions do 
+** not allow for the exclusion or limitation of implied warranties, so the above 
+** limitations or exclusions may not apply to you. IBM shall not be liable for 
+** any damages you suffer as a result of using, copying, modifying or 
+** distributing the Sample, even if IBM has been advised of the possibility of 
+** such damages.
+*****************************************************************************
+**
+** SOURCE FILE NAME: tbmerge.sqc 
+**    
+** SAMPLE: How to use the MERGE statement
+**           
+** SQL STATEMENTS USED:
+**         DELETE 
+**         DECLARE CURSOR 
+**         OPEN
+**         FETCH
+**         CLOSE
+**         INSERT
+**         UPDATE
+**         MERGE
+**
+** OUTPUT FILE: tbmerge.out (available in the online documentation)
+**
+*****************************************************************************
+**
+** For more information on the sample programs, see the README file.
+**
+** For information on developing C applications, see the Application
+** Development Guide.
+**
+** For information on using SQL statements, see the SQL Reference.
+**
+** For the latest information on programming, building, and running DB2 
+** applications, visit the DB2 application development website: 
+**     http://www.software.ibm.com/data/db2/udb/ad
+****************************************************************************/
+
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+#include <sqlenv.h>
+#include <sqlutil.h>
+#include "utilemb.h"
+
+/* Function that creates a table 'empsamp' and inserts some values into it */
+int CreateTable(void);
+
+/* Function that makes changes to 'empsamp' */
+int ChangeTable(void);
+
+/* Function that applies changes from table 'empsamp' to the 'staff' table
+   through the MERGE statement */
+int MergeTables(void);
+
+/* Functions that display the 'staff' and 'empsamp' tables */
+int StaffTbContentDisplay(void);
+int EmpsampTbContentDisplay(void);
+
+EXEC SQL BEGIN DECLARE SECTION;
+  short id;
+  char name[10];
+  short dept;
+  char job[10];
+  short jobInd;
+  short years;
+  short yearsInd;
+  double salary;
+  double comm;
+  short commInd;
+  char empno[7];
+  char workdept[8];
+  char strStmt[512];
+EXEC SQL END DECLARE SECTION;
+
+int main(int argc, char *argv[])
+{
+  int rc = 0;
+  struct sqlca sqlca;
+
+  char dbAlias[SQL_ALIAS_SZ + 1];
+  char user[USERID_SZ + 1];
+  char pswd[PSWD_SZ + 1];
+
+  printf("\n  This sample shows how to use the MERGE statement\n");
+
+  /* check the command line arguments */
+  rc = CmdLineArgsCheck1(argc, argv, dbAlias, user, pswd);
+  if (rc != 0)
+  {
+    return rc;
+  }
+
+  /* connect to database */
+  rc = DbConn(dbAlias, user, pswd);
+  if (rc != 0)
+  {
+    return rc;
+  }
+
+  /* create a table called 'empsamp' */
+  rc = CreateTable();
+  
+  /* make changes to 'empsamp' */
+  rc = ChangeTable();
+
+  /* apply changes from table 'empsamp' to the 'staff' table */
+  rc = MergeTables();
+
+  /* drop the table 'empsamp' */
+  EXEC SQL DROP TABLE empsamp;
+
+  /* disconnect from the 'sample' database */
+  rc = DbDisconn(dbAlias);
+  if (rc != 0)
+  {
+    return rc;
+  }
+  return 0;
+} /* main */
+
+/* This function creates a table 'empsamp' and inserts some values into it */
+int CreateTable(void)
+{
+  int rc = 0;
+  struct sqlca sqlca;
+
+  printf("\n  -----------------------------------------------------------");
+  printf("\n  USE THE SQL STATEMENT:\n");
+  printf("    CREATE TABLE\n");
+  printf("  TO CREATE A TABLE IN THE SAMPLE DATABASE.\n");
+
+  /* create the table 'empsamp' */
+  printf("\n  Create a table 'EMPSAMP' with attributes:");
+  printf("\n    ID SMALLINT NOT NULL,");
+  printf("\n    NAME VARCHAR(9),");
+  printf("\n    DEPT SMALLINT,");
+  printf("\n    JOB CHAR(5),");
+  printf("\n    YEARS SMALLINT,");
+  printf("\n    SALARY DEC(7,2),");
+  printf("\n    COMM DEC(7,2),");
+  printf("\n    PRIMARY KEY(ID)\n");  
+  EXEC SQL CREATE TABLE empsamp( 
+             ID SMALLINT NOT NULL,
+             NAME VARCHAR(9),
+             DEPT SMALLINT,
+             JOB CHAR(5),
+             YEARS SMALLINT,
+             SALARY DEC(7,2),
+             COMM DEC(7,2),    
+             PRIMARY KEY(ID));  
+
+  /* insert values into 'empsamp' */
+  printf("\n  Insert values into EMPSAMP");
+  printf("\n  Invoke the statement:\n");
+  printf("\n    INSERT INTO empsamp SELECT * FROM staff WHERE ID >= 310\n");
+  strcpy(strStmt,
+         "INSERT INTO empsamp SELECT * FROM staff WHERE ID >= 310");
+  EXEC SQL EXECUTE IMMEDIATE :strStmt;
+  EMB_SQL_CHECK("table -- insert using values");
+
+  /* display content of 'empsamp' after inserting values */
+  rc = EmpsampTbContentDisplay();
+
+  /* commit the transaction */
+  EXEC SQL COMMIT;
+  return 0;
+} /* CreateTable */
+
+/* This function makes changes to 'empsamp' */
+int ChangeTable(void)
+{
+  int rc = 0;
+  struct sqlca sqlca;
+
+  printf("\n  -----------------------------------------------------------");
+  printf("\n  USE THE SQL STATEMENTS:\n");
+  printf("    UPDATE\n");
+  printf("    INSERT\n");
+  printf("  TO MODIFY THE CONTENTS OF 'empsamp'.\n");
+
+  /* display the initial content of the 'empsamp' table */
+  rc = EmpsampTbContentDisplay();
+
+  /* insert values and make changes to the empsamp table */
+  printf("\n  Invoke the statement:\n");
+  printf("    INSERT INTO empsamp(id, name, dept, job, salary)\n");
+  printf("      VALUES(380, 'Pearce', 38, 'Clerk', 13217.50),\n");
+  printf("            (390, 'Hachey', 38, 'Mgr', 21270.00),\n");
+  printf("            (400, 'Wagland', 38, 'Clerk', 14575.00)\n");
+
+  printf("\n  Invoke the statements:\n");
+  printf("\n    UPDATE empsamp SET job = 'Mgr' WHERE id = 310");
+  printf("\n    UPDATE empsamp SET job = 'sales', salary = 15000.00");
+  printf(" WHERE id = 350");
+  printf("\n    UPDATE empsamp SET name = '-' WHERE id = 320\n");
+
+  strcpy(strStmt,
+         "INSERT INTO empsamp(id, name, dept, job, salary)"
+         "  VALUES(380, 'Pearce', 38, 'Clerk', 13217.50),"
+         "        (390, 'Hachey', 38, 'Mgr', 21270.00),"
+         "        (400, 'Wagland', 38, 'Clerk', 14575.00)");
+  EXEC SQL EXECUTE IMMEDIATE :strStmt;
+  EMB_SQL_CHECK("table -- insert using values");
+
+  strcpy(strStmt,
+         "UPDATE empsamp SET job = 'Mgr' WHERE id = 310");
+  EXEC SQL EXECUTE IMMEDIATE :strStmt;
+
+  strcpy(strStmt,
+         "UPDATE empsamp "
+         "  SET job = 'Sales', salary = 15000.00 "
+         "  WHERE id = 350");
+  EXEC SQL EXECUTE IMMEDIATE :strStmt;
+
+  strcpy(strStmt,
+         "UPDATE empsamp SET name = '-' WHERE id = 320");
+  EXEC SQL EXECUTE IMMEDIATE :strStmt;
+  EMB_SQL_CHECK("table -- update");
+
+  /* display the final content of the 'empsamp' table */
+  rc = EmpsampTbContentDisplay();
+
+  /* commit the transaction */
+  EXEC SQL COMMIT;
+  return 0;
+} /* ChangeTable */
+
+/* This function applies changes from table 'empsamp' to the 'staff' table */
+int MergeTables(void)
+{
+  int rc = 0;
+  struct sqlca sqlca;
+
+  printf("\n  -----------------------------------------------------------");
+  printf("\n  USE THE SQL STATEMENT:\n");
+  printf("    MERGE\n");
+  printf("  TO APPLY CHANGES FROM TABLE 'empsamp' TO TABLE 'staff'\n");
+
+  /* display initial content of the 'staff' table */
+  rc = StaffTbContentDisplay();
+
+  /* use the MERGE statement to reflect changes made to 'empsamp' to the 
+     'staff' table */
+  printf("\n  Merge tables");
+  printf("\n  Invoke the statement:\n");
+  printf("\n    MERGE INTO staff S");
+  printf("\n      USING (SELECT * FROM empsamp) E");
+  printf("\n        ON (S.id = E.id)");
+  printf("\n          WHEN MATCHED AND E.name != '-' THEN");
+  printf("\n            UPDATE SET (name, dept, job, years, salary, comm)=");
+  printf("\n                       (E.name, E.dept, E.job, E.years,");
+  printf(" E.salary, E.comm)");
+  printf("\n          WHEN NOT MATCHED THEN");
+  printf("\n            INSERT (id, name, dept, job, years, salary, comm)");
+  printf("\n              VALUES (E.id, E.name, E.dept, E.job, E.years,");
+  printf(" E.salary, E.comm)");
+  printf("\n          ELSE");
+  printf("\n            IGNORE\n");
+
+  strcpy(strStmt,
+         "MERGE INTO staff S"
+         "    USING (SELECT * FROM empsamp) E"
+         "    ON (S.id = E.id)"
+         "    WHEN MATCHED AND E.name != '-' THEN"
+         "      UPDATE SET (name, dept, job, years, salary, comm) ="
+         "                 (E.name, E.dept, E.job, E.years, E.salary,E.comm)"
+         "    WHEN NOT MATCHED THEN"
+         "      INSERT (id, name, dept, job, years, salary, comm)"
+         "        VALUES (E.id, E.name, E.dept, E.job, E.years,"
+         "                E.salary, E.comm)"
+         "    ELSE"
+         "      IGNORE");
+
+  EXEC SQL EXECUTE IMMEDIATE :strStmt;
+  EMB_SQL_CHECK("tables -- merge");
+
+  /* display final content of the 'staff' table */
+  rc = StaffTbContentDisplay();
+
+  /* rollback the transaction */
+  TransRollback();
+  return 0;
+} /* MergeTables */
+
+
+/* helper function: displays the contents of the 'staff' table */
+int StaffTbContentDisplay(void)
+{
+  struct sqlca sqlca;
+
+  printf("\n  Contents of the 'staff' table:\n");
+  printf("\n  SELECT * FROM staff WHERE id >= 310\n");
+  printf("    ID  NAME     DEPT JOB   YEARS SALARY   COMM\n");
+  printf("    --- -------- ---- ----- ----- -------- -------\n");
+
+  EXEC SQL DECLARE posCur0 CURSOR FOR SELECT * FROM staff WHERE id >= 310;
+
+  EXEC SQL OPEN posCur0;
+  EMB_SQL_CHECK("cursor -- open");
+
+  EXEC SQL FETCH posCur0 INTO :id, :name, :dept, :job:jobInd,
+                              :years:yearsInd, :salary, :comm:commInd;
+  EMB_SQL_CHECK("cursor -- fetch");
+
+  while (sqlca.sqlcode != 100)
+  {
+    printf("    %3d %-8.8s %4d", id, name, dept);
+    if (jobInd >= 0)
+    {
+      printf(" %-5.5s", job);
+    }
+    else
+    {
+      printf("     -");
+    }
+
+    if (yearsInd >= 0)
+    {
+      printf(" %5d", years);
+    }
+    else
+    {
+      printf("     -");
+    }
+    printf(" %7.2f", salary);
+
+    if (commInd >= 0)
+    {
+      printf(" %7.2f", comm);
+    }
+    else
+    {
+      printf("       -");
+    }
+    printf("\n");
+
+    EXEC SQL FETCH posCur0 INTO :id, :name, :dept, :job:jobInd,
+                                :years:yearsInd, :salary, :comm:commInd;
+    EMB_SQL_CHECK("cursor -- fetch");
+  }
+
+  EXEC SQL CLOSE posCur0;
+  EMB_SQL_CHECK("cursor -- close");
+
+  return 0;
+} /* StaffTbContentDisplay */
+
+/* helper function: displays the contents of the 'empsamp' table */
+int EmpsampTbContentDisplay(void)
+{
+  struct sqlca sqlca;
+
+  printf("\n  Contents of the 'empsamp' table:\n");
+  printf("\n  SELECT * FROM empsamp WHERE id >= 310\n");
+  printf("    ID  NAME     DEPT JOB   YEARS SALARY   COMM\n");
+  printf("    --- -------- ---- ----- ----- -------- -------\n");
+
+  strcpy(strStmt,
+         "SELECT * FROM empsamp WHERE id >= 310");
+  EXEC SQL PREPARE S1 FROM :strStmt;
+  EMB_SQL_CHECK("after prepare");
+
+  EXEC SQL DECLARE posCur1 CURSOR FOR s1;
+  EMB_SQL_CHECK("declare cursor");
+
+  EXEC SQL OPEN posCur1;
+  EMB_SQL_CHECK("open cursor");
+
+  EXEC SQL FETCH posCur1 INTO :id, :name, :dept, :job:jobInd,
+                              :years:yearsInd, :salary, :comm:commInd;
+  EMB_SQL_CHECK("cursor -- fetch");
+
+  while (sqlca.sqlcode != 100)
+  {
+    printf("    %3d %-8.8s %4d", id, name, dept);
+    if (jobInd >= 0)
+    {
+      printf(" %-5.5s", job);
+    }
+    else
+    {
+      printf("     -");
+    }
+
+    if (yearsInd >= 0)
+    {
+      printf(" %5d", years);
+    }
+    else
+    {
+      printf("     -");
+    }
+    printf(" %7.2f", salary);
+
+    if (commInd >= 0)
+    {
+      printf(" %7.2f", comm);
+    }
+    else
+    {
+      printf("       -");
+    }
+    printf("\n");
+
+    EXEC SQL FETCH posCur1 INTO :id, :name, :dept, :job:jobInd,
+                                :years:yearsInd, :salary, :comm:commInd;
+    EMB_SQL_CHECK("cursor -- fetch");
+  }
+
+  EXEC SQL CLOSE posCur1;
+  EMB_SQL_CHECK("cursor -- close");
+
+  return 0;
+} /* EmpsampTbContentDisplay */

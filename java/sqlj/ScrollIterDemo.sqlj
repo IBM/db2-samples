@@ -1,0 +1,235 @@
+//***************************************************************************
+// (c) Copyright IBM Corp. 2007 All rights reserved.
+// 
+// The following sample of source code ("Sample") is owned by International 
+// Business Machines Corporation or one of its subsidiaries ("IBM") and is 
+// copyrighted and licensed, not sold. You may use, copy, modify, and 
+// distribute the Sample in any form without payment to IBM, for the purpose of 
+// assisting you in the development of your applications.
+// 
+// The Sample code is provided to you on an "AS IS" basis, without warranty of 
+// any kind. IBM HEREBY EXPRESSLY DISCLAIMS ALL WARRANTIES, EITHER EXPRESS OR 
+// IMPLIED, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED WARRANTIES OF 
+// MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE. Some jurisdictions do 
+// not allow for the exclusion or limitation of implied warranties, so the above 
+// limitations or exclusions may not apply to you. IBM shall not be liable for 
+// any damages you suffer as a result of using, copying, modifying or 
+// distributing the Sample, even if IBM has been advised of the possibility of 
+// such damages.
+//***************************************************************************
+//
+// SOURCE FILE NAME: ScrollIterDemo.sqlj
+//
+// SAMPLE: How to use Named and Positional Scrollable Iterators in SQLJ
+//
+//         This program shows how to use Named and Positional Scrollable 
+//         Iterators in SQLJ. It also shows how a Scrollable Iterator 
+//         can be used for Positioned update by implementing ForUpdate 
+//         Clause. However, updates will work only when the program 
+//         is customized.
+// 
+//         This sample program uses the DataSource jdbc/DB2SimpleDataSource_ds1 
+//         from JNDI. The DataSource is registered using createRegisterDS.java 
+//         and DS1.prop. Refer to the README file for details on how to run
+//         this sample. 
+//
+//
+// SQL Statements USED:
+//         SELECT
+//
+// Classes used from Util.sqlj are:
+//         Data
+//
+// OUTPUT FILE: ScrollIterDemo.out (available in the online documentation)
+// Output will vary depending on the JDBC driver connectivity used.
+//***************************************************************************
+//
+// For more information on the sample programs, see the README file.
+//
+// For information on developing JDBC applications, see the Application
+// Development Guide.
+//
+// For information on using SQL statements, see the SQL Reference.
+//
+// For the latest information on programming, compiling, and running DB2
+// applications, visit the DB2 application development website at
+//     http://www.software.ibm.com/data/db2/udb/ad
+//**************************************************************************/
+
+import java.sql.*;
+import sqlj.runtime.*;
+import sqlj.runtime.ref.*;
+
+#sql context ScrollCtx with (dataSource="jdbc/DB2SimpleDataSource_ds1");
+
+
+class ScrollIterDemo 
+{
+  // Scrollable 
+  //   allows the iterator to move both forward and backward relative to the current position, and it can
+  //   move to an absolute position
+  //
+  // ForUpdate
+  //   It is equivalent to the FOR UPDATE clause in SQL 
+  //   It identifies the columns that can be updated in a subsequent Positioned UPDATE statement.
+  //   Each column name must be unqualified and must identify a column of the table in the FROM clause of the
+  //   fullselect.
+  //   If the ForUpdate cluase is specified without column names, all updatable columns of the table or view 
+  //   identified in the frist FROM clause of the fullselect are included
+  //   
+  // Sensitivity can be one of SENSITIVE, INSENSITIVE, or ASENSITIVE
+  //   SENSITIVE - the result set reflects changes made to the underlying data source while the result set remains open
+  //   INSENSITIVE - the result set is insensitive to changes made to the underlying data source while it is open
+
+  #sql public iterator sensitivePosUpdateIter implements 
+      sqlj.runtime.Scrollable, sqlj.runtime.ForUpdate 
+      with (sensitivity=sqlj.runtime.ResultSetIterator.SENSITIVE,
+            updateColumns="c1") (int, String);
+
+  #sql public iterator sensitiveNamedUpdateIter implements 
+       sqlj.runtime.Scrollable
+       with (sensitivity=sqlj.runtime.ResultSetIterator.INSENSITIVE) 
+            (int c1, String c2);
+
+  static ScrollCtx ctx1 = null;
+
+  public static void main(String argv[]) 
+  {
+    System.out.println();
+    System.out.println(
+      "THIS SAMPLE SHOWS HOW TO USE NAMED AND POSITIONAL SCROLLABLE \n" +
+      "ITERATORS IN SQLJ. \n");
+
+    ScrollIterDemo sid = new ScrollIterDemo();
+    try
+    {
+      sid.runThis();
+    }
+    catch (Exception e)
+    {
+      e.printStackTrace();
+    }
+  }
+
+  public void runThis() throws SQLException
+  {
+    // Obtain Connection Context from DataSource  jdbc/DB2SimpleDataSource_ds1
+    ctx1 = new ScrollCtx();
+    Connection conn = ctx1.getConnection();
+    conn.setAutoCommit(false);
+
+    try
+    {
+      System.out.println ("  Insert 4 rows into the table Scroll_Test.\n");
+      #sql[ctx1] { INSERT INTO Scroll_Test VALUES(101, 'row1') };
+      System.out.println("  INSERT INTO Scroll_Test VALUES(101, 'row1')");
+      #sql[ctx1] { INSERT INTO Scroll_Test VALUES(102, 'row2') };
+      System.out.println("  INSERT INTO Scroll_Test VALUES(102, 'row2')");
+      #sql[ctx1] { INSERT INTO Scroll_Test VALUES(103, 'row3') };
+      System.out.println("  INSERT INTO Scroll_Test VALUES(103, 'row3')");
+      #sql[ctx1] { INSERT INTO Scroll_Test VALUES(104, 'row4') };
+      System.out.println("  INSERT INTO Scroll_Test VALUES(104, 'row4')");
+
+      sensitivePosUpdateIter posUpdateIter = null;
+      sensitiveNamedUpdateIter namedUpdateIter = null;
+      int col1 = 0;
+      String col2 = null;
+      #sql [ctx1] posUpdateIter =  { SELECT c1, c2 FROM Scroll_Test };
+
+      // Retrieve and display the data in the table Scroll_Test
+      System.out.println("");
+      System.out.println(
+        "  Display the content of the table Scroll_Test by performing\n" +
+        "  the following SQL statement in 'SQLJ':\n\n" +
+        "    SELECT c1, c2 FROM Scroll_Test\n");
+
+      System.out.println(
+        "  Results:\n" +
+        "    COL1  COL2 \n" +
+        "    ----- ----- ");
+
+      while (true)
+      {
+        #sql {FETCH FROM :posUpdateIter INTO :col1, :col2};
+        if (posUpdateIter.endFetch()) 
+        {
+          break;
+        }
+        System.out.println("    "+Data.format(col1, 5) +
+                           " " + Data.format(col2, 5));
+      }
+
+      System.out.println("");
+      System.out.println(
+        "----------------------------------------------------------\n\n" +
+        "  PART II:   Positioned Scrollable Iterator Fetch \n" +
+        " ------------------------------------------------ \n");
+
+      System.out.println("  Test scrollability-> Fetch first: \n");
+      #sql {FETCH FIRST FROM :posUpdateIter INTO :col1, :col2};
+      System.out.println(
+        "    FETCH FIRST FROM :posUpdateIter INTO :col1, :col2\n\n" +
+        "    First Row:   COL1 = " + col1 + ", COL2 = " + col2 + "\n\n");
+
+      System.out.println("  Test scrollability-> Fetch last:\n");
+      #sql {FETCH LAST FROM :posUpdateIter INTO :col1, :col2};
+      System.out.println(
+        "    FETCH LAST FROM :posUpdateIter INTO :col1, :col2\n\n" +
+        "    Last Row: COL1 = " + col1 + ", COL2 = " + col2 + "\n\n");
+
+      int abs = 3;
+      System.out.println("  Test scrollability-> Fetch third:\n");
+      #sql {FETCH ABSOLUTE(:abs) FROM :posUpdateIter INTO :col1, :col2};
+      System.out.println(
+        "    FETCH ABSOLUTE(:abs) FROM :posUpdateIter INTO :col1, :col2\n\n"+
+        "    Third row: COL1 = " + col1 + ", COL2 = " +col2 + "\n\n");
+
+      System.out.println ("  Test Update of current row: \n ");
+      #sql [ctx1] {UPDATE Scroll_Test 
+                     SET c1 = 5000 
+                     WHERE CURRENT OF :posUpdateIter};
+      System.out.println("    UPDATE Scroll_Test SET c1 = 5000 WHERE "+
+                         "CURRENT OF :posUpdateIter\n");
+      #sql {FETCH ABSOLUTE(:abs) FROM :posUpdateIter INTO :col1, :col2};
+      System.out.println(
+        "    FETCH ABSOLUTE(:abs) FROM :posUpdateIter INTO :col1, :col2\n\n"+
+        "    Updated Third row: COL1 = " + col1 + ", COL2 = " +col2+"\n\n");
+
+      posUpdateIter.close();
+      #sql [ctx1] { commit };
+
+
+      System.out.println("");
+      System.out.println(
+        "----------------------------------------------------------\n\n" +
+        "  PART I:   Named Scrollable Iterator Fetch \n" +
+        " ------------------------------------------------ \n");
+
+      #sql [ctx1] namedUpdateIter =  { SELECT c1,c2 FROM Scroll_Test };
+      System.out.println("  SELECT c1,c2 FROM Scroll_Test\n");
+      namedUpdateIter.first();
+      System.out.println("  First Row: COL1 = " + namedUpdateIter.c1() + 
+                         ", COL2 = " + namedUpdateIter.c2() + "\n");
+      namedUpdateIter.last();
+      System.out.println("  Last Row: COL1 = " + namedUpdateIter.c1() + 
+                         ", COL2 = " + namedUpdateIter.c2() + "\n");
+
+      cleanup();
+    }
+    catch(Exception ex)
+    {
+      if (ex instanceof java.sql.SQLException)
+      {
+        System.out.println("error code: " +
+              ((java.sql.SQLException)(ex)).getErrorCode());
+        System.out.println("error message: " + ex.getMessage());
+      }
+      ex.printStackTrace();
+    }
+  }
+
+  private static void  cleanup() throws SQLException
+  {
+    #sql [ctx1] { DELETE  FROM Scroll_Test WHERE 1=1 };
+  }
+}

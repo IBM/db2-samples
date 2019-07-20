@@ -1,0 +1,172 @@
+/****************************************************************************
+** (c) Copyright IBM Corp. 2007 All rights reserved.
+** 
+** The following sample of source code ("Sample") is owned by International 
+** Business Machines Corporation or one of its subsidiaries ("IBM") and is 
+** copyrighted and licensed, not sold. You may use, copy, modify, and 
+** distribute the Sample in any form without payment to IBM, for the purpose of 
+** assisting you in the development of your applications.
+** 
+** The Sample code is provided to you on an "AS IS" basis, without warranty of 
+** any kind. IBM HEREBY EXPRESSLY DISCLAIMS ALL WARRANTIES, EITHER EXPRESS OR 
+** IMPLIED, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED WARRANTIES OF 
+** MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE. Some jurisdictions do 
+** not allow for the exclusion or limitation of implied warranties, so the above 
+** limitations or exclusions may not apply to you. IBM shall not be liable for 
+** any damages you suffer as a result of using, copying, modifying or 
+** distributing the Sample, even if IBM has been advised of the possibility of 
+** such damages.
+*****************************************************************************
+**
+** SOURCE FILE NAME: xmlread.sqc
+**
+** SAMPLE: This sample demonstrates to read XML data from a table.
+**
+** SQL STATEMENTS USED:
+**                      DECLARE
+**                      OPEN
+**                      FETCH
+**                      CLOSE   
+** 
+** OUTPUT FILE: xmlread.out (available in the online documentation)
+*****************************************************************************
+**
+** For more information on the sample programs, see the README file.
+**
+** For information on developing C applications, see the Application
+** Development Guide.
+**
+** For information on using SQL statements, see the SQL Reference.
+**
+** For the latest information on programming, building, and running DB2
+** applications, visit the DB2 application development website:
+**     http://www.software.ibm.com/data/db2/udb/ad
+****************************************************************************/
+
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+#include <sqlenv.h>
+#include <sqlutil.h>
+#include "utilemb.h"
+
+EXEC SQL INCLUDE SQLCA;
+
+EXEC SQL BEGIN DECLARE SECTION;
+  sqlint32 pid;
+  sqlint32 cid;    
+  char comment[50];
+  char status[20];
+  char orderdate[11];
+  short porderInd;
+  short commentInd;
+  short statusInd;
+  short orderdateInd;
+  short infoInd;
+  short historyInd;
+  SQL TYPE IS XML AS CLOB (2K) porder;
+  SQL TYPE IS BLOB(1K) info;
+  SQL TYPE IS BLOB_FILE history;
+EXEC SQL END DECLARE SECTION;
+
+int main(int argc, char *argv[])
+{
+  int rc = 0;
+  int charcount = 0;
+  char filename[50];
+  char dbAlias[SQL_ALIAS_SZ + 1];
+  char user[USERID_SZ + 1];
+  char pswd[PSWD_SZ + 1];
+
+  /* check the command line arguments */
+  rc = CmdLineArgsCheck1(argc, argv, dbAlias, user, pswd);
+  if (rc != 0)
+  {
+    return rc;
+  }
+
+  /* connect to database */
+  rc = DbConn(dbAlias, user, pswd);
+  if (rc != 0)
+  {
+    return rc;
+  }
+  
+  strcpy(filename, "history.TXT");
+  strcpy(history.name, filename);
+  history.name_length = strlen(history.name);
+  history.file_options = SQL_FILE_OVERWRITE;
+
+  EXEC SQL DECLARE C1 CURSOR FOR SELECT  P.POID, P.CUSTID, STATUS, PORDER, ORDERDATE, COMMENTS, INFO
+             FROM PurchaseOrder As P, customer As C WHERE P.CUSTID = C.CID ORDER BY CID,P.POID;
+  EXEC SQL OPEN C1;
+  EMB_SQL_CHECK("OPEN CURSOR");
+
+  EXEC SQL FETCH C1 INTO :pid, :cid, :status:statusInd, :porder:porderInd, 
+                         :orderdate:orderdateInd, :comment:commentInd, :info:infoInd, :history:historyInd ;
+  EMB_SQL_CHECK("FETCH CURSOR");
+
+  printf("*** Printing data from the PURCHASEORDER table****\n");
+  while (sqlca.sqlcode != 100 )
+    {
+      printf("\n***** NEXT ROW ***** \n\n");
+      printf(" CUSTOMER ID       : %d\n", cid);
+      printf(" PURCHASE ORDER NO : %d\n", pid);
+      if (statusInd >= 0)
+        {
+          printf(" STATUS            : %s\n", status);
+        }
+      else
+        {
+          printf(" STATUS            : NULL\n");
+        }
+      if (orderdateInd >=0)
+        {
+          printf(" ORDER DATE        : %s\n", orderdate);
+        }
+      else
+        {
+          printf(" ORDER DATE        : NULL\n");
+        }
+      if (commentInd >=0)
+        {
+          printf(" COMMENT           : %s\n", comment);
+        }
+      else
+        {
+          printf(" COMMENT           : NULL\n");
+        }
+      if (porderInd >=0)
+        {
+          printf(" PURCHASE ORDER    : ");
+          for (charcount = 0; charcount < porder.length; charcount++)
+            {
+              printf("%c", porder.data[charcount]);
+            }
+          printf("\n");
+        }
+      else
+        {
+          printf(" PURCHASE ORDER    : NULL\n");
+        }
+
+     if (infoInd >= 0)
+	{
+          printf(" CUSTOMER INFO     : ");
+          printf("%s\n", info.data);
+        }
+     else
+	{
+          printf(" CUSTOMER INFO     : NULL\n");
+        }
+
+      EXEC SQL FETCH C1 INTO :pid, :cid, :status:statusInd, :porder :porderInd,
+                         :orderdate:orderdateInd, :comment:commentInd, :info:infoInd, :history:historyInd ;
+      EMB_SQL_CHECK("FETCH CURSOR");
+    }
+
+  EXEC SQL CLOSE C1 WITH RELEASE;
+  EMB_SQL_CHECK("CLOSE CURSOR");
+
+} /* main */
+

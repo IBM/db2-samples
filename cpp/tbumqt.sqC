@@ -1,0 +1,375 @@
+/****************************************************************************
+** (c) Copyright IBM Corp. 2007 All rights reserved.
+** 
+** The following sample of source code ("Sample") is owned by International 
+** Business Machines Corporation or one of its subsidiaries ("IBM") and is 
+** copyrighted and licensed, not sold. You may use, copy, modify, and 
+** distribute the Sample in any form without payment to IBM, for the purpose of 
+** assisting you in the development of your applications.
+** 
+** The Sample code is provided to you on an "AS IS" basis, without warranty of 
+** any kind. IBM HEREBY EXPRESSLY DISCLAIMS ALL WARRANTIES, EITHER EXPRESS OR 
+** IMPLIED, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED WARRANTIES OF 
+** MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE. Some jurisdictions do 
+** not allow for the exclusion or limitation of implied warranties, so the above 
+** limitations or exclusions may not apply to you. IBM shall not be liable for 
+** any damages you suffer as a result of using, copying, modifying or 
+** distributing the Sample, even if IBM has been advised of the possibility of 
+** such damages.
+*****************************************************************************
+**
+** SOURCE FILE NAME: tbumqt.sqC
+**
+** SAMPLE: How to use user materialzed query tables (summary tables).
+**
+**         This sample:
+**         1. Creates User Maintained Query Table(UMQT) for the EMPLOYEE
+**            table.
+**         2. Shows the usage and update mechanisms for UMQTs.
+**
+** SQL STATEMENTS USED:
+**         CLOSE
+**         CREATE TABLE
+**         DECLARE CURSOR
+**         DROP
+**         EXECUTE IMMEDIATE
+**         FETCH
+**         INSERT
+**         OPEN
+**         SET CURRENT
+**         SET INTEGRITY
+**
+** STRUCTURES USED:
+**         sqlca
+**
+** OUTPUT FILE: tbumqt.out (available in the online documentation)
+*****************************************************************************
+**
+** For more information on the sample programs, see the README file.
+**
+** For information on developing C++ applications, see the Application
+** Development Guide.
+**
+** For information on using SQL statements, see the SQL Reference.
+**
+** For the latest information on programming, compiling, and running DB2
+** applications, visit the DB2 application development website at
+**     http://www.software.ibm.com/data/db2/udb/ad
+****************************************************************************/
+#include <stdio.h>
+#include <string.h>
+#include <sqlenv.h>
+#include <sqlutil.h>
+#include <sqlcodes.h>
+#include "utilemb.h"
+#if ((__cplusplus >= 199711L) && !defined DB2HP && !defined DB2AIX) || \
+    (DB2LINUX && (__LP64__ || (__GNUC__ >= 3)) )
+   #include <iomanip>
+   #include <iostream>
+   using namespace std; 
+#else
+   #include <iomanip.h>
+   #include <iostream.h>
+#endif
+
+EXEC SQL INCLUDE SQLCA;
+
+EXEC SQL BEGIN DECLARE SECTION;
+ char workdept[3];
+ short countworkdept;
+EXEC SQL END DECLARE SECTION;
+
+class TbUMQT
+{
+  public:
+    int CreateMQT();
+    int SetIntegrity();
+    int UpdateUserMQT();
+    int SetRegisters();
+    int ShowTableContents();
+    int DropTables();       
+};
+
+// creates user maintained summary table
+int TbUMQT::CreateMQT()
+{
+  int rc ;
+
+  cout << "\n Creating UMQT on EMPLOYEE table...\n";
+
+  cout << "\nUSE THE SQL STATEMENT:\n";
+  cout << "    CREATE TABLE \n";
+  cout << "To create a UMQT with deferred refresh\n\n";
+  cout << "  CREATE TABLE ADEFUSER AS \n";
+  cout << "    (SELECT workdept, count(*) AS no_of_employees \n";
+  cout << "      FROM employee GROUP BY workdept)\n";
+  cout << "    DATA INITIALLY DEFERRED REFRESH DEFERRED\n";
+  cout << "    MAINTAINED BY USER";
+
+  EXEC SQL CREATE TABLE ADEFUSER AS
+             (SELECT workdept, count(*) AS no_of_employees
+               FROM employee GROUP BY workdept)
+             DATA INITIALLY DEFERRED REFRESH DEFERRED
+             MAINTAINED BY USER;
+  EMB_SQL_CHECK(" create -- user MQT with deferred refresh ");
+  EXEC SQL COMMIT ;
+
+  rc = sqlca.sqlcode;
+  if (rc != 0)
+  {
+    return rc;
+  }
+
+  cout << "\n\nCREATE TABLE to create a UMQT with with immediate";
+  cout << "\nrefresh option is not supported\n\n";
+  cout << " CREATE TABLE AIMDUSR AS \n";
+  cout << "   (SELECT workdept, count(*) AS no_of_employees \n";
+  cout << "     FROM employee GROUP BY workdept)\n";
+  cout << "   DATA INITIALLY DEFERRED REFRESH IMMEDIATE\n";
+  cout << "   MAINTAINED BY USER\n";
+
+  EXEC SQL CREATE TABLE AIMDUSR AS
+             (SELECT workdept, count(*) AS no_of_employees
+               FROM employee GROUP BY workdept)
+             DATA INITIALLY DEFERRED REFRESH IMMEDIATE
+             MAINTAINED BY USER;
+  EXPECTED_ERR_CHECK(" create -- user MQT with immediate refresh ");
+  EXEC SQL COMMIT ;
+
+  return rc;
+} // TbUMQT::CreateMQT 
+
+// bring MQTs out of check pending state
+int TbUMQT::SetIntegrity()
+{
+  int rc = 0;
+
+  cout << "\n-----------------------------------------------------------";
+  cout << "\nUSE THE SQL STATEMENT:";
+  cout << "\n  SET INTEGRITY \n";
+  cout << "To bring the MQTs out of check pending state\n\n";
+
+  cout << "  EXEC SQL SET INTEGRITY FOR ADEFUSER ALL IMMEDIATE UNCHECKED\n";
+  EXEC SQL SET INTEGRITY FOR ADEFUSER ALL IMMEDIATE UNCHECKED;
+  EMB_SQL_CHECK(" set integrity ");
+
+  rc = sqlca.sqlcode;
+  return rc;
+} // TbUMQT::SetIntegrity 
+
+// manual updation of User MQT
+int TbUMQT::UpdateUserMQT()
+{
+  char stmt[100];
+  cout << "\n-----------------------------------------------------------\n";
+  cout << "\nADEFUSER must be updated manually by the user \n";
+
+  cout << "USE THE SQL STATEMENT:\n";
+  cout << "  INSERT\n";
+  cout << "To update the UMQT \n";
+  cout << "\n  EXEC SQL INSERT INTO ADEFUSER \n";
+  cout << "               (SELECT workdept, count(*) AS no_of_employees\n";
+  cout << "                 FROM employee GROUP BY workdept)\n";
+
+  strcpy(stmt,"INSERT INTO ADEFUSER (SELECT workdept, count(*) AS ");
+  strcat(stmt,"no_of_employees FROM employee GROUP BY workdept)");
+  EXEC SQL EXECUTE IMMEDIATE :stmt ;
+
+  EMB_SQL_CHECK(" insert ");
+  EXEC SQL COMMIT;
+
+  return sqlca.sqlcode;
+} // TbUMQT::UpdateUserMQT 
+
+// set the CURRENT REFRESH AGE, CURRENT MAINTAINED TABLE TYPES  registers
+int TbUMQT::SetRegisters()
+{
+  // the CURRENT REFRESH AGE special register must be set to a value other
+  // than zero for the specified table types to be considered when optimizing
+  // the processing of dynamic SQL queries. 
+
+  cout << "\n-----------------------------------------------------------\n";
+  cout << "The following registers must be set to route queries to UMQT\n";
+  cout << "\n  SET CURRENT REFRESH AGE ANY\n";
+  cout << "\nIndicates that any table types specified by CURRENT MAINTAINED \n";
+  cout << "TABLE TYPES FOR OPTIMIZATION, and MQTs defined with REFRESH \n";
+  cout << "IMMEDIATE option, can be used to optimize the \n";
+  cout << "processing of a query. \n\n";
+
+  EXEC SQL SET CURRENT REFRESH AGE ANY;
+  EMB_SQL_CHECK(" set ");
+
+  cout << "  SET CURRENT MAINTAINED TABLE TYPES FOR OPTIMIZATION USER \n\n";
+  cout << "Specifies that user-maintained refresh-deferred materialized \n";
+  cout << "query tables can be considered to optimize the processing of \n";
+  cout << "dynamic SQL queries. \n";
+
+  EXEC SQL SET CURRENT MAINTAINED TABLE TYPES FOR OPTIMIZATION USER;
+  EMB_SQL_CHECK(" set ");
+
+  return sqlca.sqlcode;
+} // TbUMQT::SetRegisters 
+
+// display table contents
+int TbUMQT::ShowTableContents()
+{
+  char stmt1[100];
+
+  cout << "\n-----------------------------------------------------------\n";
+  cout << "USE THE SQL STATEMENT:\n";
+  cout << "  SELECT\n";
+  cout << "On EMPLOYEE table. This is routed to the UMQT ADEFUSER\n\n";
+
+  cout << "  SELECT workdept, count(*) AS no_of_employees \n";
+  cout << "    FROM employee GROUP BY workdept\n\n";
+  cout << "  DEPT CODE   NO. OF EMPLOYEES     \n";
+  cout << "  ----------  ----------------\n";
+
+  // declare cursor 
+  EXEC SQL DECLARE c1 CURSOR FOR
+    SELECT workdept, count(*) AS no_of_employees
+      FROM employee GROUP BY workdept;
+
+  // open cursor 
+  EXEC SQL OPEN c1;
+  EMB_SQL_CHECK("cursor -- open");
+
+  // fetch cursor 
+  EXEC SQL FETCH c1 INTO :workdept, :countworkdept;
+  EMB_SQL_CHECK("cursor -- fetch");
+
+  while (sqlca.sqlcode != 100)
+  {
+    cout << "    " << setw(7) << workdept << " ";  
+    cout << setw(17) << countworkdept << endl;
+    EXEC SQL FETCH c1 INTO :workdept, :countworkdept;
+    EMB_SQL_CHECK("cursor -- fetch");
+  }
+  EXEC SQL CLOSE c1;
+  EMB_SQL_CHECK("cursor -- close");
+
+  cout << "\n\nA SELECT query on ADEFUSER yields similar results\n\n";
+  cout << "  SELECT * FROM ADEFUSER \n\n";
+  cout << "  DEPT CODE   NO. OF EMPLOYEES     \n";
+  cout << "  ----------  ----------------\n";
+
+  // declare cursor 
+  strcpy(stmt1, " SELECT * FROM ADEFUSER");
+
+  EXEC SQL PREPARE stmt FROM :stmt1;
+  EMB_SQL_CHECK("statement -- prepare");
+
+  EXEC SQL DECLARE c2 CURSOR FOR stmt;
+
+  // open cursor 
+  EXEC SQL OPEN c2;
+  EMB_SQL_CHECK("cursor -- open");
+
+  // fetch cursor 
+  EXEC SQL FETCH c2 INTO :workdept, :countworkdept;
+
+  EMB_SQL_CHECK("cursor -- fetch");
+  while (sqlca.sqlcode != 100)
+  {
+    cout << "    " << setw(7) << workdept << " ";  
+    cout << setw(17) << countworkdept << endl;
+    EXEC SQL FETCH c2 INTO :workdept, :countworkdept;
+    EMB_SQL_CHECK("cursor -- fetch");
+  }
+  EXEC SQL CLOSE c2;
+  EMB_SQL_CHECK("cursor -- close");
+
+  return sqlca.sqlcode;
+} // TbUMQT::ShowTableContents 
+
+// drop the User MQTs
+int TbUMQT::DropTables()
+{
+  cout << "\nDropping tables...\n\n";
+
+  cout << "USE THE SQL STATEMENT:\n";
+  cout << "  DROP\n";
+  cout << "To drop the UMQT ADEFUSER\n\n";
+
+  cout << "  EXEC SQL DROP TABLE ADEFUSER\n";
+  EXEC SQL DROP TABLE ADEFUSER;
+
+  return sqlca.sqlcode;
+} // TbUMQT::DropTables 
+
+int main(int argc, char *argv[])
+{
+  int rc = 0;
+  CmdLineArgs check;
+  TbUMQT umqt;
+  DbEmb db;
+
+  // check the command line arguments
+  rc = check.CmdLineArgsCheck1(argc, argv, db);
+  if (rc != 0)
+  {
+    return rc;
+  }
+ 
+  cout << "\nTHIS SAMPLE SHOWS THE USAGE OF USER MAINTAINED MATERIALIZED";
+  cout << "\nQUERY TABLES(MQTs).\n";
+
+  // connect to database
+  cout << "\n-----------------------------------------------------------\n";
+  rc = db.Connect();
+  if (rc != 0)
+  {
+    return rc;
+  }
+
+  // create Summary Tables 
+  rc = umqt.CreateMQT();
+  if (rc != 0)
+  {
+    return rc;
+  }
+
+  // bring the summary tables out of check-pending state 
+  rc = umqt.SetIntegrity();
+  if (rc != 0)
+  {
+    return rc;
+  }
+  
+  // populate the base table and update the contents of the summary tables 
+  rc = umqt.UpdateUserMQT();
+  if (rc != 0)
+  {
+    return rc;
+  }
+
+  // set registers to optimize query processing by routing quieries to UMQT 
+  rc = umqt.SetRegisters();
+  if (rc != 0)
+  {
+    return rc;
+  }
+
+  // issue a select statement that is routed to the summary tables 
+  rc = umqt.ShowTableContents();
+  if (rc != 0)
+  {
+    return rc;
+  }
+
+  // drop the Summary Tables created
+  rc = umqt.DropTables();
+  if (rc != 0)
+  {
+    return rc;
+  }
+  
+  // disconnect from the databas
+  rc = db.Disconnect();
+  if (rc != 0)
+  {
+    return rc;
+  }
+
+  return 0;
+} //main   

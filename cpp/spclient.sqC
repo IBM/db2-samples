@@ -1,0 +1,705 @@
+/****************************************************************************
+** (c) Copyright IBM Corp. 2007 All rights reserved.
+** 
+** The following sample of source code ("Sample") is owned by International 
+** Business Machines Corporation or one of its subsidiaries ("IBM") and is 
+** copyrighted and licensed, not sold. You may use, copy, modify, and 
+** distribute the Sample in any form without payment to IBM, for the purpose of 
+** assisting you in the development of your applications.
+** 
+** The Sample code is provided to you on an "AS IS" basis, without warranty of 
+** any kind. IBM HEREBY EXPRESSLY DISCLAIMS ALL WARRANTIES, EITHER EXPRESS OR 
+** IMPLIED, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED WARRANTIES OF 
+** MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE. Some jurisdictions do 
+** not allow for the exclusion or limitation of implied warranties, so the above 
+** limitations or exclusions may not apply to you. IBM shall not be liable for 
+** any damages you suffer as a result of using, copying, modifying or 
+** distributing the Sample, even if IBM has been advised of the possibility of 
+** such damages.
+*****************************************************************************
+**
+** SOURCE FILE NAME: spclient.sqC
+**
+** SAMPLE: Call the set of stored procedues implemented in spserver.sqC
+**
+**         This file contains eight functions that call stored procedures:
+**
+**  (1) callOutLanguage: Calls a stored procedure that returns the 
+**      implementation language of the stored procedure library
+**        Parameter types used: OUT CHAR(8)
+**  (2) callOutParameter: Calls a stored procedure that returns median 
+**      salary of employee salaries
+**        Parameter types used: OUT DOUBLE                    
+**  (3) callInParameters: Calls a stored procedure that accepts 3 salary 
+**      values and updates employee salaries in the EMPLOYEE table based 
+**      on these values for a given department.
+**        Parameter types used: IN DOUBLE
+**                              IN DOUBLE
+**                              IN DOUBLE
+**                              IN CHAR(3)
+**  (4) callInoutParameter: Calls a stored procedure that accepts an input
+**      value and returns the median salary of those employees in the
+**      EMPLOYEE table who earn more than the input value. Demonstrates how 
+**      to use null indicators in a client application. The stored procedure
+**      has to be implemented in the following parameter styles for it to be
+**      compatible with this client application.
+**        Parameter style for a C stored procedure: SQL
+**        Parameter style for a Java(JDBC/SQLJ) stored procedure: JAVA
+**        Parameter style for an SQL stored procedure: SQL
+**        Parameter types used: INOUT DOUBLE
+**  (5) callClobExtract: Calls a stored procedure that extracts and returns a 
+**      portion of a CLOB data type
+**        Parameter types used: IN CHAR(6)
+**                              OUT VARCHAR(1000)
+**  (6) callDBINFO: Calls a stored procedure that receives a DBINFO
+**      structure and returns elements of the structure to the client
+**        Parameter types used: IN CHAR(8)
+**                              OUT DOUBLE
+**                              OUT CHAR(128)
+**                              OUT CHAR(8)
+**  (7) callProgramTypeMain: Calls a stored procedure implemented with
+**       PROGRAM TYPE MAIN parameter style
+**         Parameter types used: IN CHAR(8)
+**                               OUT DOUBLE
+**  (8) callAllDataTypes: Calls a stored procedure that uses a variety of 
+**      common data types (not DECIMAL, GRAPHIC, VARGRAPHIC, BLOB, CLOB, DBCLOB).
+**      This sample shows only a subset of DB2 supported data types. For a  
+**      full listing of DB2 data types, please see the SQL Reference.
+**        Parameter types used: INOUT SMALLINT
+**                              INOUT INTEGER
+**                              INOUT BIGINT
+**                              INOUT REAL
+**                              INOUT DOUBLE
+**                              OUT CHAR(1)
+**                              OUT CHAR(15)
+**                              OUT VARCHAR(12)
+**                              OUT DATE
+**                              OUT TIME
+**
+**         The file "utilemb.sqC" contains functions for error-checking and
+**         rolling back a transaction in case of error. This file must be
+**         compiled and its object file linked to the "spclient" program.
+**
+** SQL STATEMENTS USED:
+**         CALL
+**         CONNECT
+**         ROLLBACK
+**         SELECT
+**
+** STRUCTURES USED:
+**         sqlca
+**         sqlda
+**
+** EXTERNAL DEPENDENCIES:
+**      For successful precompilation, the sample database must exist 
+**      (see DB2's db2sampl command).
+**      The stored procedures called from this program must have been built
+**      and cataloged in the database (see the instructions in spserver.sqC).
+**      This program must have been precompiled (see DB2's PREPARE command).
+**      The packages associated with this program must be bound to the 
+**      database (see DB2's BIND command). 
+**      This program must have been compiled and linked with the supported 
+**      compiler and linker for the current environment.
+**
+** OUTPUT FILE: spclient.out (available in the online documentation)
+*****************************************************************************
+**
+** For more information on the sample programs, see the README file.
+**
+** For information on developing C++ applications, see the Application
+** Development Guide.
+**
+** For information on using SQL statements, see the SQL Reference.
+**
+** For the latest information on programming, compiling, and running DB2
+** applications, visit the DB2 application development website at
+**       http://www.software.ibm.com/data/db2/udb/ad
+****************************************************************************/
+
+#include <string.h>
+#include <sqlenv.h>
+#include <sqlda.h>
+#include <sqlca.h>
+#include <stdio.h>
+#include "utilemb.h"
+#if ((__cplusplus >= 199711L) && !defined DB2HP && !defined DB2AIX) || \
+    (DB2LINUX && (__LP64__ || (__GNUC__ >= 3)))
+   #include <iomanip>
+   #include <iostream>
+   using namespace std; 
+#else
+   #include <iomanip.h>
+   #include <iostream.h>
+#endif
+
+struct sqlca sqlca = { 0 };
+
+class Spclient
+{
+  public:
+    int Call_StorProcs();
+    int callOutLanguage(char *);
+    double callOutParameter();
+    int callInParameters(double, double, double, char *);
+    int callInoutParameter(double);
+    int callClobExtract(char *);
+    int callAllDataTypes();
+    int callDBINFO(char *);
+    int callProgramTypeMain(char *);
+    
+  private:
+    EXEC SQL BEGIN DECLARE SECTION;
+      // declare host variables for connecting to the database
+      char database[9];
+      char userid[9];
+      char passwd[19];
+    EXEC SQL END DECLARE SECTION;
+};
+
+int Spclient::Call_StorProcs()
+{
+  // declare variables
+  char outLang[9];
+  int testLangC;
+  int testLangJava;
+  int testLangSQL;
+  double median;
+
+  callOutLanguage(outLang);
+  // we assume that all the remaining stored procedures are also written in
+  // the same language as outLang and set the following variables accordingly.
+  // This would help us in invoking only those stored procedures that are 
+  // supported in that particular language.
+  testLangSQL = strncmp(outLang, "SQL", 3);
+  testLangC = strncmp(outLang, "C", 1);
+  testLangJava = strncmp(outLang, "JAVA", 4);
+
+  median = callOutParameter();
+  callInParameters(15000, 20000, 25000, "E11");
+    
+  // call INOUT_PARAM stored procedure                      
+  cout << "\nCALL stored procedure named INOUT_PARAM" << endl;
+  cout << "using the median returned by the call to OUT_PARAM" << endl;
+  callInoutParameter(median);
+
+  // call INOUT_PARAM stored procedure two more times to          
+  // intentionally show 2 different errors.  The first error is
+  // a user-defined error that is returned when an invalid  parameter
+  // value (value less than 0 not valid in the logic context) is passed
+  // to the procedure.  The second error shown is the result of a
+  // NOT FOUND error that is raised when no rows are found to satisfy
+  // a query in the procedure.  No row is found because the query
+  // depends on the procedure's input parameter value which is too high.
+  cout << "\nCALL stored procedure INOUT_PARAM again" << endl;
+  cout << "using a NULL input value" << endl;
+  cout << "\n-- The following error report is expected! --" << endl;
+  callInoutParameter(-99999);
+
+  cout << "\nCALL stored procedure INOUT_PARAM again \n";
+  cout << "using a value that returns a NOT FOUND error from the ";
+  cout << "stored procedure\n";
+  cout << "\n-- The following error report is expected! --" << endl;
+  callInoutParameter(99999.99);
+  
+  if (testLangC == 0)
+  {
+    // warn the user that the CLI stored procedure
+    // requires a change to the UDF_MEM_SZ variable
+    cout << "\n  If the CLOB EXTRACT stored procedure is implemented\n"
+         << "  using CLI, you must increase the value of the UDF_MEM_SZ\n"
+         << "  database manager configuration variable to at least two\n"
+         << "  pages larger than the size of the input arguments and\n"
+         << "  the result of the stored procedure. To do this, issue\n"
+         << "  the following command from the CLP:\n"
+         << "    db2 UPDATE DBM CFG USING UDF_MEM_SZ 2048\n"
+         << "  For the change to take effect, you must then stop and\n"
+         << "  restart the DB2 server by issuing the following\n"
+         << "  commands from the CLP:\n"
+         << "    db2stop\n" << "    db2start" << endl;
+  }
+  callClobExtract("000140");
+
+  if (testLangC != 0)
+  {
+    // stored procedures of PROGRAM TYPE MAIN or those containing
+    // the DBINFO clause can only be implemented with
+    // LANGUAGE C stored procedures. If outLang != "C",
+    // since there is no corresponding sample, we do nothing.
+  }
+  else
+  {
+    callDBINFO("MANAGER");
+    callProgramTypeMain("DESIGNER");
+  }
+  
+  //*************************************************************************
+  // Embedded C/C++ applications do not provide direct support for the DECIMAL  
+  // data type.
+  // The following programming languages can be used to directly manipulate 
+  // the DECIMAL type: 
+  //          - JDBC
+  //          - SQLJ
+  //          - SQL routines
+  //          - .NET common language runtime languages (C#, Visual Basic)
+  // Please see the SpClient implementation for one of the above languages
+  // to see this functionality.
+  //*************************************************************************
+
+  callAllDataTypes();
+  
+  //*************************************************************************
+  // Embedded C/C++ client applications do not support receiving result sets 
+  // from stored procedures.
+  // The following programming languages can be used to recieve result sets 
+  // from stored procedures: 
+  //          - CLI 
+  //          - JDBC
+  //          - SQLJ
+  //          - SQL routines
+  //          - .NET common language runtime languages (C#, Visual Basic)
+  // Please see the SpClient implementation for one of the above languages
+  // to see this functionality.
+  //*************************************************************************
+
+  // rollback any changes to the database made by this sample
+  EXEC SQL ROLLBACK;
+  EMB_SQL_CHECK("ROLLBACK");
+  cout << "\nStored procedure rolled back" << endl;
+
+  // disconnect from Remote Database
+  EXEC SQL CONNECT RESET;
+  EMB_SQL_CHECK("CONNECT RESET");
+
+  return (0);
+} // Spclient::Call_StorProcs
+
+int Spclient::callOutLanguage(char *language)
+{
+  /********************************************************\
+  * Call OUT_LANGUAGE stored procedure                     *
+  \********************************************************/
+
+  EXEC SQL BEGIN DECLARE SECTION;
+    char outOutLangLanguage[9]; // host variable naming convention:
+                                // <param_mode><stored_proc_name><var_name>
+    sqlint16 outOutLangLanguageInd;
+  EXEC SQL END DECLARE SECTION;
+
+  cout << "\nCALL stored procedure named OUT_LANGUAGE " << endl;
+
+  outOutLangLanguageInd = -1;
+
+  EXEC SQL CALL OUT_LANGUAGE(:outOutLangLanguage:outOutLangLanguageInd);
+  EMB_SQL_CHECK("CALL OUT_LANGUAGE");
+
+  if (outOutLangLanguageInd == 0)
+  {
+    /********************************************************\
+    * Display the language of the stored procedures          *
+    \********************************************************/
+
+    strcpy(language, outOutLangLanguage);
+
+    cout << "Stored procedures are implemented in LANGUAGE "
+         << language << endl;
+  }
+  
+  return (0);
+} // Spclient::callOutLanguage
+
+double Spclient::callOutParameter()
+{
+  /********************************************************\
+  * Call OUT_PARAM stored procedure                        *
+  \********************************************************/
+
+  EXEC SQL BEGIN DECLARE SECTION;
+    double outOutParamMedian;
+    sqlint16 outOutParamMedianInd;
+  EXEC SQL END DECLARE SECTION;
+
+  cout << "\nCALL stored procedure named OUT_PARAM " << endl;
+  
+  // initialize variables
+  outOutParamMedian = -1; 
+  outOutParamMedianInd = -1;
+    
+  // OUT_PARAM is of parameter style SQL, so pass a null indicator
+  EXEC SQL CALL OUT_PARAM(:outOutParamMedian:outOutParamMedianInd);
+  EMB_SQL_CHECK("CALL OUT_PARAM");
+  
+  if (outOutParamMedianInd == 0)
+  {
+    cout << "Stored procedure returned successfully" << endl;
+
+    /***********************************************************\
+    * Display the median salary returned as an output parameter *
+    \***********************************************************/
+
+    cout << "Median salary returned from OUT_PARAM = "
+         << setw(8) << outOutParamMedian << endl;
+  }
+     
+  return outOutParamMedian;
+} // Spclient::callOutParameter
+
+int Spclient::callInParameters(double lowsal,
+                               double medsal,
+                               double highsal,
+                               char *dept)
+{
+  /********************************************************\
+  * Call IN_PARAMS stored procedure                        *
+  \********************************************************/
+
+  EXEC SQL BEGIN DECLARE SECTION;
+    // declare host variables for passing data to IN_PARAMS
+    double inInParamLowSal;
+    double inInParamMedSal;
+    double inInParamHighSal;
+    char inInParamDept[4];
+    // declare NULL indicators for each parameter
+    sqlint16 inInParamLowSalInd;
+    sqlint16 inInParamMedSalInd;
+    sqlint16 inInParamHighSalInd;
+    sqlint16 inInParamDeptInd;
+    // declare host variables for showing results of IN_PARAMS
+    double hvInParamDeptSumSalary;
+  EXEC SQL END DECLARE SECTION;
+  
+  // set the input parameters of the stored procedure      
+  strcpy(inInParamDept, dept);
+  inInParamLowSal = lowsal;
+  inInParamMedSal = medsal;
+  inInParamHighSal = highsal;
+  inInParamDeptInd = 0;
+  inInParamLowSalInd = 0;
+  inInParamMedSalInd = 0;
+  inInParamHighSalInd = 0;
+  
+    
+  EXEC SQL SELECT SUM(salary) INTO :hvInParamDeptSumSalary
+    FROM employee
+    WHERE workdept = :inInParamDept;
+  EMB_SQL_CHECK("SUM BEFORE");
+
+  cout << "\nSum of salaries for dept. " << inInParamDept << " = "
+       << setw(8) << hvInParamDeptSumSalary << " before calling IN_PARAMS " << endl;
+  cout << "CALL stored procedure named IN_PARAMS " << endl;
+
+  // IN_PARAMS is of parameter style SQL, so pass null indicators
+  EXEC SQL CALL IN_PARAMS(:inInParamLowSal:inInParamLowSalInd,
+                          :inInParamMedSal:inInParamMedSalInd,
+                          :inInParamHighSal:inInParamHighSalInd,
+                          :inInParamDept:inInParamDeptInd);
+  EMB_SQL_CHECK("CALL IN_PARAMS");
+
+  // check that the stored procedure executed successfully
+  if (sqlca.sqlcode == 0)
+  {
+    cout << "Stored procedure returned successfully" << endl;
+
+    /********************************************************\
+    * Display the sum salaries for the affected department   *
+    \********************************************************/
+
+    EXEC SQL SELECT SUM(salary) INTO :hvInParamDeptSumSalary
+      FROM employee
+      WHERE workdept =:inInParamDept;
+    EMB_SQL_CHECK("SUM AFTER");
+
+    cout << "Sum of salaries for dept. " << inInParamDept << " = "
+         << setw(8) << hvInParamDeptSumSalary << " after calling IN_PARAMS "
+         << endl;
+  }
+ 
+  return (0);
+} // Spclient::callInParameters
+
+int Spclient::callInoutParameter(double median)
+{
+  /********************************************************\
+  * Call INOUT_PARAM stored procedure                      *
+  \********************************************************/
+
+  EXEC SQL BEGIN DECLARE SECTION;
+    double inoutInOutParamMedian;
+    sqlint16 inoutInOutParamMedianInd;
+  EXEC SQL END DECLARE SECTION;
+
+  if (median < 0)
+  {
+    // salary was negative, indicating a probable error,
+    // so pass a null value to the stored procedure instead
+    // by setting inoutInOutParamMedianInd to a negative value
+    inoutInOutParamMedianInd = -1;
+  }
+  else
+  {
+    // salary was positive, so pass the value of median
+    // to the stored procedure by setting inoutInOutParamMedianInd to 0
+    inoutInOutParamMedian = median;
+    inoutInOutParamMedianInd = 0;
+  }
+
+  // INOUT_PARAM is of parameter style SQL, so pass null indicators
+  EXEC SQL CALL INOUT_PARAM(:inoutInOutParamMedian:inoutInOutParamMedianInd);
+  EMB_SQL_CHECK("CALL INOUT_PARAM");
+
+  // check that the stored procedure executed successfully
+  if (sqlca.sqlcode == 0 && inoutInOutParamMedianInd == 0)
+  {
+    cout << "Stored procedure returned successfully" << endl;
+    cout << "Median salary returned from INOUT_PARAM = "
+         << setw(8) << inoutInOutParamMedian << endl;
+  }  
+
+  return (0);
+} // Spclient::callInoutParameter
+
+int Spclient::callClobExtract(char *empno)
+{
+  /********************************************************\
+  * Call CLOB_EXTRACT stored procedure                     *
+  \********************************************************/
+
+  EXEC SQL BEGIN DECLARE SECTION;
+    // declare host variables for passing data to CLOB_EXTRACT
+    char inExtFromClobEmpNum[7];
+    char outExtFromClobResume[1001];
+    // declare NULL indicators for each parameter
+    sqlint16 inExtFromClobEmpNumInd;
+    sqlint16 outExtFromClobResumeInd;
+  EXEC SQL END DECLARE SECTION;
+  
+  if (empno == NULL)
+  {
+    inExtFromClobEmpNumInd = -1;
+  }
+  else
+  {
+    inExtFromClobEmpNumInd = 0;
+    strcpy(inExtFromClobEmpNum, empno);
+  }
+  
+  cout << "\nCALL stored procedure named CLOB_EXTRACT " << endl;
+
+  // CLOB_EXTRACT is of parameter style SQL, so pass null indicators
+  EXEC SQL CALL CLOB_EXTRACT(:inExtFromClobEmpNum:inExtFromClobEmpNumInd, 
+                             :outExtFromClobResume:outExtFromClobResumeInd);
+  EMB_SQL_CHECK("CALL CLOB_EXTRACT");
+
+  // check that the stored procedure executed successfully
+  if (sqlca.sqlcode == 0 && outExtFromClobResumeInd == 0)
+  {
+    cout << "Stored procedure returned successfully" << endl;
+    cout << "Resume section returned from CLOB_EXTRACT = \n"
+         << outExtFromClobResume << endl;
+  }
+  else
+  {
+    // print the error message
+    cout << "Stored procedure returned SQLCODE " << sqlca.sqlcode << endl;
+  }
+
+  return (0);
+} // Spclient::callClobExtract
+
+int Spclient::callDBINFO(char *job)
+{
+  /********************************************************\
+  * Call DBINFO_EXAMPLE stored procedure                   *
+  \********************************************************/
+
+  EXEC SQL BEGIN DECLARE SECTION;
+    char inDbinfoJob[9];
+    double outDbinfoSalary;
+    char outDbinfoDbName[129]; // name of database from DBINFO structure
+    char outDbinfoDbVersion[9]; // version of database from DBINFO structure
+    // declare NULL indicators for each parameter
+    sqlint16 inDbinfoJobInd;
+    sqlint16 outDbinfoSalaryInd;
+    sqlint16 outDbinfoDbNameInd;
+    sqlint16 outDbinfoDbVersionInd;
+  EXEC SQL END DECLARE SECTION;
+
+  strcpy(inDbinfoJob, job);
+  inDbinfoJobInd = 0;
+
+  cout << "\nCALL stored procedure named DBINFO_EXAMPLE " << endl;
+
+  // DBINFO_EXAMPLE is of parameter style SQL, so pass null indicators
+  EXEC SQL CALL DBINFO_EXAMPLE(:inDbinfoJob:inDbinfoJobInd, 
+                               :outDbinfoSalary:outDbinfoSalaryInd,
+                               :outDbinfoDbName:outDbinfoDbNameInd,
+                               :outDbinfoDbVersion:outDbinfoDbVersionInd);
+  EMB_SQL_CHECK("CALL DBINFO_EXAMPLE");
+  
+  if (sqlca.sqlcode == 0 && outDbinfoSalaryInd == 0)
+  {
+    cout << "Stored procedure returned successfully" << endl; 
+    cout << "Average salary for job " << inDbinfoJob << " = "
+         << setw(9) << outDbinfoSalary << endl;
+  }       
+  
+  if (outDbinfoDbNameInd == 0)
+  {
+    cout << "Database name from DBINFO structure = " ;
+    for (int i = 0; outDbinfoDbName[i] != ' '; i++) 
+      cout << outDbinfoDbName[i];
+  }
+  
+  if (outDbinfoDbVersionInd == 0)
+  {         
+    cout << "\nDatabase version from DBINFO structure = "
+         << outDbinfoDbVersion << endl;
+  }
+  
+  return (0);
+} // Spclient::callDBINFO
+
+int Spclient::callProgramTypeMain(char *job)
+{
+  /********************************************************\
+  * Call MAIN_EXAMPLE stored procedure                     *
+  \********************************************************/
+
+  EXEC SQL BEGIN DECLARE SECTION;
+    char inMainJob[9];
+    double outMainSalary;
+    // declare NULL indicators for each parameter
+    sqlint16 inMainJobInd;
+    sqlint16 outMainSalaryInd;
+  EXEC SQL END DECLARE SECTION;
+  
+  if (job == NULL)
+  {
+    inMainJobInd = -1;
+  }
+  else
+  {
+    strcpy(inMainJob, job);  
+    inMainJobInd = 0;
+  }
+    
+  cout << "\nCALL stored procedure named MAIN_EXAMPLE " << endl;
+    
+  // MAIN_EXAMPLE is of parameter style SQL, so pass null indicators
+  EXEC SQL CALL MAIN_EXAMPLE(:inMainJob:inMainJobInd, 
+                             :outMainSalary:outMainSalaryInd);
+  EMB_SQL_CHECK("CALL MAIN_EXAMPLE");
+
+  if (sqlca.sqlcode == 0)
+  {
+    cout << "Stored procedure returned successfully" << endl;
+    cout << "Average salary for job " << inMainJob << " = "
+         << setw(9) << outMainSalary << endl;
+  }
+  
+  return (0);
+} // Spclient::callProgramTypeMain
+
+int Spclient::callAllDataTypes()
+{
+  /********************************************************\
+  * Call ALL_DATA_TYPES stored procedure                   *
+  \********************************************************/
+
+  EXEC SQL BEGIN DECLARE SECTION;
+    // declare host variables for passing data to ALL_DATA_TYPES
+    sqlint16 inoutAllDataTypesSmallInt;
+    sqlint32 inoutAllDataTypesInteger;
+    sqlint64 inoutAllDataTypesBigInt;
+    float inoutAllDataTypesReal;
+    double inoutAllDataTypesDouble;
+    char outAllDataTypesChar[2];
+    char outAllDataTypesChars[16];
+    char outAllDataTypesVarchar[13];
+    char outAllDataTypesDate[11];
+    char outAllDataTypesTime[9];
+  EXEC SQL END DECLARE SECTION;
+
+  inoutAllDataTypesSmallInt = 32000;
+  inoutAllDataTypesInteger = 2147483000;
+  inoutAllDataTypesBigInt = 2147480000;
+  // maximum value of BIGINT is 9223372036854775807
+  // but some platforms only support 32-bit integers
+  inoutAllDataTypesReal = 100000;
+  inoutAllDataTypesDouble = 2500000;
+  
+  cout << "\nCALL stored procedure named ALL_DATA_TYPES " << endl;
+
+  // ALL_DATA_TYPES is of parameter style SQL
+  EXEC SQL CALL ALL_DATA_TYPES(:inoutAllDataTypesSmallInt, 
+                               :inoutAllDataTypesInteger,
+                               :inoutAllDataTypesBigInt, 
+                               :inoutAllDataTypesReal, 
+                               :inoutAllDataTypesDouble, 
+                               :outAllDataTypesChar, 
+                               :outAllDataTypesChars, 
+                               :outAllDataTypesVarchar,
+                               :outAllDataTypesDate, 
+                               :outAllDataTypesTime);
+  EMB_SQL_CHECK("CALL ALL_DATA_TYPES");
+
+  // check that the stored procedure executed successfully
+  if (sqlca.sqlcode == 0)
+  {
+    cout << "Stored procedure returned successfully" << endl;
+
+    /********************************************************\
+    * Display the sum salaries for the affected department   *
+    \********************************************************/
+
+    cout << "Value of SMALLINT = " << inoutAllDataTypesSmallInt << endl;
+    cout << "Value of INTEGER = " << inoutAllDataTypesInteger << endl;
+    cout << "Value of BIGINT = " << (int) inoutAllDataTypesBigInt << endl;
+    cout << "Value of REAL = " << inoutAllDataTypesReal << endl;
+    cout << "Value of DOUBLE = " << inoutAllDataTypesDouble << endl;
+    cout << "Value of CHAR(1) = " << outAllDataTypesChar << endl;
+    cout << "Value of CHAR(15) = " << outAllDataTypesChars << endl;
+    cout << "Value of VARCHAR(12) = " << outAllDataTypesVarchar << endl;
+    cout << "Value of DATE = " << outAllDataTypesDate << endl;
+    cout << "Value of TIME = " << outAllDataTypesTime << endl;
+  }
+  else
+  {
+    // print the error message
+    cout << "Stored procedure returned SQLCODE " << sqlca.sqlcode << endl;
+  }
+  return (0);
+} // Spclient::callAllDataTypes
+
+int main(int argc, char *argv[])
+{
+  int rc = 0;
+  CmdLineArgs check;
+  DbEmb db;
+
+  // check the command line arguments
+  rc = check.CmdLineArgsCheck1(argc, argv, db);
+  if (rc != 0)
+  {
+    return rc;
+  }
+
+  cout << "HOW TO CALL VARIOUS STORED PROCEDURES." << endl; 
+
+  // connect to database
+  rc = db.Connect();
+  if (rc != 0)
+  {
+    return rc;
+  }
+
+  // set the output mode
+  cout.setf(ios::fixed, ios::floatfield);
+  cout.precision(2);
+
+  // call the store procedures
+  Spclient spcli;
+  spcli.Call_StorProcs();
+
+  return (0);
+} // main
+// end of program: spclient.sqC

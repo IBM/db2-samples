@@ -1,0 +1,53 @@
+################################################
+#
+# Sample IBM DB2 Policy using Reference Policy syntax
+#
+# <summary>Sample IBM DB2 policy for SELinux</summary>
+# <desc>
+#   <p>
+#     Give apps that load libdb2.so the necessary permissions
+#   </p>
+# </desc>
+#
+################################################
+
+interface(`db2_application',`
+  gen_require(`
+    type db2_java_t;
+    type db2_shlib_t;
+    type db2_data_t;
+    type db2_file_t;
+    type db2_diag_t;
+    type db2_t;
+    ')
+
+  can_exec($1, db2_java_t)
+  can_exec($1, db2_shlib_t)
+  r_dir_file($1, db2_data_t)
+  r_dir_file($1, db2_file_t)
+  rw_dir_file($1, db2_diag_t)
+  rw_dir_file($1, tmpfs_t)
+
+  allow $1 db2_t:fd use;
+  allow $1 db2_t:msg { receive send };
+  allow $1 db2_t:msgq rw_msgq_perms;
+  allow $1 db2_t:sem rw_sem_perms;
+  allow $1 db2_t:shm rw_shm_perms;
+')
+
+################################################
+#
+# <summary>Sample IBM DB2 policy for SELinux</summary>
+# <desc>
+#   <p>
+#     Allow caller to execute DB2 shell scripts
+#     (e.g. dasprofile)
+#   </p>
+# </desc>
+#
+################################################
+
+interface(`db2_exec_db2_shell_scripts',`
+  allow $1 db2_shell_script_t:file r_file_perms;
+  can_exec($1,db2_shell_script_t)
+')

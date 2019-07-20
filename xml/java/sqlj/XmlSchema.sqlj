@@ -1,0 +1,263 @@
+//***************************************************************************
+// (c) Copyright IBM Corp. 2007 All rights reserved.
+// 
+// The following sample of source code ("Sample") is owned by International 
+// Business Machines Corporation or one of its subsidiaries ("IBM") and is 
+// copyrighted and licensed, not sold. You may use, copy, modify, and 
+// distribute the Sample in any form without payment to IBM, for the purpose of 
+// assisting you in the development of your applications.
+// 
+// The Sample code is provided to you on an "AS IS" basis, without warranty of 
+// any kind. IBM HEREBY EXPRESSLY DISCLAIMS ALL WARRANTIES, EITHER EXPRESS OR 
+// IMPLIED, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED WARRANTIES OF 
+// MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE. Some jurisdictions do 
+// not allow for the exclusion or limitation of implied warranties, so the above 
+// limitations or exclusions may not apply to you. IBM shall not be liable for 
+// any damages you suffer as a result of using, copying, modifying or 
+// distributing the Sample, even if IBM has been advised of the possibility of 
+// such damages.
+//***************************************************************************
+//
+// SOURCE FILE NAME: XmlSchema.sqlj
+//
+// SAMPLE: How to register an XML Schema
+// SAMPLE USAGE SCENARIO: Consider a user who needs to insert an XML type value
+// into the table. The user would like to ensure that the XML value conforms to a
+// deterministic XML schema.
+//
+// PROBLEM: User has schema's for all the XML values and like to validate the values
+// as per schema while inserting it to the tables.
+//
+// SOLUTION:
+// To achieve the goal, the sample will follow the following steps:
+// a) Register the primary XML schema
+// b) Add the XML schema documents to the primary XML schema to ensure that the
+//    schema is deterministic
+// c) Insert an XML value into an existing XML column and perform validation
+//
+// SQL Statements USED:
+//         INSERT 
+//
+// Stored Procedure USED
+//         SYSPROC.XSR_REGISTER
+//         SYSPROC.XSR_ADDSCHEMADOC
+//         SYSPROC.XSR_COMPLETE
+//
+// SQL/XML Function USED
+//         XMLVALIDATE
+//         XMLPARSE
+//
+// PREREQUISITE: copy product.xsd, order.xsd,
+//               customer.xsd, header.xsd Schema files, order.xml XML
+//               document from xml/data directory to working
+//               directory.
+//
+// OUTPUT FILE: XmlSchema.out (available in the online documentation)
+// Output will vary depending on the JDBC driver connectivity used.
+//***************************************************************************
+//
+// For more information on the sample programs, see the README file.
+//
+// For information on developing SQLJ applications, see the Application
+// Development Guide.
+//
+// For information on using SQL statements, see the SQL Reference.
+//
+// For the latest information on programming, compiling, and running DB2
+// applications, visit the DB2 application development website at
+//     http://www.software.ibm.com/data/db2/udb/ad
+//**************************************************************************/
+
+import java.io.*;
+import java.lang.*;
+import java.sql.*;
+import sqlj.runtime.*;
+import sqlj.runtime.ref.*;
+
+class XmlSchema
+{
+  private static DefaultContext ctx; //Default context for the sample 
+  private static String relSchema=new String("POSAMPLE"); //Relational Schema 
+  private static String schemaName=new String("order"); //XML Schema ID 
+  private static String schemaLocation= new String("http://www.test.com/order");
+  private static String primaryDocument= new String("order.xsd");// Primary schema name
+  private static String multipleSchema1= new String("header.xsd"); 
+  private static String multipleSchema2= new String("customer.xsd");
+  private static String multipleSchema3= new String("product.xsd");
+  private static String xmlDocName = new String("order.xml");
+  private static int shred = 0;
+  public static void main(String argv[])
+  {
+     int rc=0;
+     String url = "jdbc:db2:sample";
+     Connection con=null;
+    try
+    {
+      Class.forName("com.ibm.db2.jcc.DB2Driver").newInstance();
+      // connect to the 'sample' database
+      con = DriverManager.getConnection( url );
+      ctx= new DefaultContext(con);
+      // set the default context for the sample
+      DefaultContext.setDefaultContext(ctx); 
+      System.out.println();
+      // register the XML Schema
+      registerXmlSchema();
+      // insert the XML value validating according to the registered schema
+      insertValidatexml();
+      // drop the registered the schema 
+      #sql { DROP XSROBJECT POSAMPLE.ORDER };
+      System.out.println("SCHEMA DROPPED SUCCESSFULLY");
+      // delete the row inserted 
+      #sql { DELETE FROM PURCHASEORDER WHERE POID=10 };
+      System.out.println("ROW DELETED");
+      con.close();
+    }
+    catch (SQLException sqle)
+    {
+      System.out.println("Error Msg: "+ sqle.getMessage());
+      System.out.println("SQLState: "+sqle.getSQLState());
+      System.out.println("SQLError: "+sqle.getErrorCode());
+      System.out.println("Rollback the transaction and quit the program");
+      System.out.println();
+      try { DefaultContext.getDefaultContext().getConnection().rollback(); }
+      catch (Exception e)
+      {
+      }
+      System.exit(1);
+    }
+    catch(Exception e)
+    {}
+  }// main
+  
+  // This function will register the Primary XML Schema 
+  static void registerXmlSchema()
+  {
+    String xsdData = new String();
+    xsdData=returnFileValues(primaryDocument);
+    byte[] byteArray=xsdData.getBytes();
+    java.sql.Blob blobData = com.ibm.db2.jcc.t2zos.DB2LobFactory.createBlob(byteArray);   
+    try
+    {
+      // register primary XML Schema 
+      System.out.println("Registering main schema "+ primaryDocument +"...");
+      #sql { CALL SYSPROC.XSR_REGISTER (:relSchema,:schemaName,:schemaLocation,:blobData, NULL )};
+      // add XML Schema document to the primary schema 
+      System.out.println("  Adding XML Schema document "+ multipleSchema1 +"...");
+      addXmlSchemaDoc(multipleSchema1);
+      System.out.println("  Adding XML Schema document "+ multipleSchema2 +"...");
+      addXmlSchemaDoc(multipleSchema2);
+      System.out.println("  Adding XML Schema document " + multipleSchema3 +"...");
+      addXmlSchemaDoc(multipleSchema3);
+      System.out.println("  Completing XML Schema registeration");
+      // complete the registeration 
+      #sql { CALL SYSPROC.XSR_COMPLETE(:relSchema,:schemaName,NULL,:shred)};
+      System.out.println("Schema registered successfully"); 
+    }
+    catch (SQLException sqle)
+    {
+      System.out.println("Error Msg: "+ sqle.getMessage());
+      System.out.println("SQLState: "+sqle.getSQLState());
+      System.out.println("SQLError: "+sqle.getErrorCode());
+      System.out.println("Rollback the transaction and quit the program");
+      System.out.println();
+      try { DefaultContext.getDefaultContext().getConnection().rollback(); }
+      catch (Exception e)
+      {
+      }
+      System.exit(1);
+    }
+    catch(Exception e)
+    {}
+  }// registerXmlSchema
+  
+  // This function will ADD the Schema document to already registered schema.
+  // The Schema documents referred in the primary XML schema (using Import or include)
+  // should be added to the registered schema before completing the registeration. 
+  public static void addXmlSchemaDoc(String schemaDocName)
+  {
+    try
+    {
+      String xsdData = new String();
+      xsdData=returnFileValues(schemaDocName);
+      byte[] byteArray=xsdData.getBytes();
+      // Create a BLOB object
+      java.sql.Blob blobData = com.ibm.db2.jcc.t2zos.DB2LobFactory.createBlob(byteArray);
+      #sql { CALL XSR_ADDSCHEMADOC(:relSchema,:schemaName,:schemaLocation,:blobData, NULL )};   
+    }
+    catch (SQLException sqle)
+    {
+      System.out.println("Error Msg: "+ sqle.getMessage());
+      System.out.println("SQLState: "+sqle.getSQLState());
+      System.out.println("SQLError: "+sqle.getErrorCode());
+      System.out.println("Rollback the transaction and quit the program");
+      System.out.println();
+      try { DefaultContext.getDefaultContext().getConnection().rollback(); }
+      catch (Exception e)
+      {
+      }
+      System.exit(1);
+    }
+    catch(Exception e)
+    {}
+  }// addXmlSchemaDoc
+  
+  // this function will insert the XML value in the table validating it according 
+  // to the registered schema
+  public static void insertValidatexml()
+  {
+    try
+    {
+      int poid=10;
+      String status=new String("shipped");
+      String xmlData = new String();
+      xmlData=returnFileValues(xmlDocName);
+      System.out.println("  Inserting the following XML value validating it according to the schema posample.order");
+      System.out.println(xmlData);
+      byte[] byteArray=xmlData.getBytes();
+      java.sql.Blob blobData = com.ibm.db2.jcc.t2zos.DB2LobFactory.createBlob(byteArray);
+      #sql {INSERT INTO PURCHASEORDER(poid,status,porder) VALUES(:poid,:status,xmlvalidate(DOCUMENT cast(:blobData as XML) according to xmlschema id posample.order))};
+    }
+    catch (SQLException sqle)
+    {
+      System.out.println("Error Msg: "+ sqle.getMessage());
+      System.out.println("SQLState: "+sqle.getSQLState());
+      System.out.println("SQLError: "+sqle.getErrorCode());
+      System.out.println("Rollback the transaction and quit the program");
+      System.out.println();
+      try { DefaultContext.getDefaultContext().getConnection().rollback(); }
+      catch (Exception e)
+      {
+      }
+      System.exit(1);
+    }
+    catch(Exception e)
+    {}
+  }// insertValidatexml 
+    
+  // this function will Read a file in a buffer and return the String value to calling function 
+  public static String returnFileValues(String fileName)
+  {
+    String record = null;
+    try
+    {
+      FileReader fr     = new FileReader(fileName);
+      BufferedReader br = new BufferedReader(fr);
+      record = new String();
+      record = br.readLine();
+      String descReturn=record;
+      while ((record = br.readLine()) != null)
+          descReturn=descReturn+record;
+          return descReturn;
+    }
+    catch (IOException e)
+    {
+    // catch possible io errors from readLine()
+       System.out.println("     file " + fileName + "doesn't exist");
+       System.out.println("     Can not continue with insert, please verify "+fileName+" and try again .");
+       System.out.println("     Quitting program!");
+       System.out.println();
+       System.exit(-1);
+    }
+    return null;
+  }// returnFileValues
+}// XmlSchema

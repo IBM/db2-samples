@@ -1,0 +1,241 @@
+/****************************************************************************
+** (c) Copyright IBM Corp. 2007 All rights reserved.
+** 
+** The following sample of source code ("Sample") is owned by International 
+** Business Machines Corporation or one of its subsidiaries ("IBM") and is 
+** copyrighted and licensed, not sold. You may use, copy, modify, and 
+** distribute the Sample in any form without payment to IBM, for the purpose of 
+** assisting you in the development of your applications.
+** 
+** The Sample code is provided to you on an "AS IS" basis, without warranty of 
+** any kind. IBM HEREBY EXPRESSLY DISCLAIMS ALL WARRANTIES, EITHER EXPRESS OR 
+** IMPLIED, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED WARRANTIES OF 
+** MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE. Some jurisdictions do 
+** not allow for the exclusion or limitation of implied warranties, so the above 
+** limitations or exclusions may not apply to you. IBM shall not be liable for 
+** any damages you suffer as a result of using, copying, modifying or 
+** distributing the Sample, even if IBM has been advised of the possibility of 
+** such damages.
+*****************************************************************************
+**
+** SOURCE FILE NAME: inauth.sqc 
+**    
+** SAMPLE: How to display authorities at instance level
+**
+**         This program ends in ".sqc" even though it does not contain 
+**         embedded SQL statements. It links in  the embedded SQL utility
+**         file for database connection and disconnection, so it needs the 
+**         embedded SQL extension for the precompiler.
+**           
+** DB2 APIs USED:
+**         db2CfgGet -- GET DATABASE MANAGER CONFIGURATION
+**         sqluadau -- GET AUTHORIZATIONS
+**
+** OUTPUT FILE: inauth.out (available in the online documentation)
+*****************************************************************************
+**
+** For more information on the sample programs, see the README file.
+**
+** For information on developing C applications, see the Application
+** Development Guide.
+**
+** For information on DB2 APIs, see the Administrative API Reference.
+**
+** For the latest information on programming, building, and running DB2 
+** applications, visit the DB2 application development website: 
+**     http://www.software.ibm.com/data/db2/udb/ad
+****************************************************************************/
+
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+#include <sqlutil.h>
+#include <db2ApiDf.h>
+#include <sqlenv.h>
+#include "utilemb.h"
+
+int AuthorityGroupsAtInstanceLevelDisplay(void);
+int CurrentUserAuthoritiesAtInstanceLevelDisplay(void);
+
+int main(int argc, char *argv[])
+{
+  int rc = 0;
+  char dbAlias[SQL_ALIAS_SZ + 1];
+  char nodeName[SQL_INSTNAME_SZ + 1];
+  char user[USERID_SZ + 1];
+  char pswd[PSWD_SZ + 1];
+
+  /* check the command line arguments */
+  rc = CmdLineArgsCheck3(argc, argv, dbAlias, nodeName, user, pswd);
+  if (rc != 0)
+  {
+    return rc;
+  }
+
+  printf("\nTHIS SAMPLE SHOWS HOW TO DISPLAY AUTHORITIES\n");
+
+  /* attach to a local or remote instance */
+  rc = InstanceAttach(nodeName, user, pswd);
+  if (rc != 0)
+  {
+    return rc;
+  }
+
+  rc = AuthorityGroupsAtInstanceLevelDisplay();
+
+  /* detach from the local or remote instance */
+  rc = InstanceDetach(nodeName);
+  if (rc != 0)
+  {
+    return rc;
+  }
+
+  /* connect to the database */
+  rc = DbConn(dbAlias, user, pswd);
+  if (rc != 0)
+  {
+    return rc;
+  }
+
+  rc = CurrentUserAuthoritiesAtInstanceLevelDisplay();
+
+  /* disconnect from the database */
+  rc = DbDisconn(dbAlias);
+  if (rc != 0)
+  {
+    return rc;
+  }
+
+  return 0;
+} /* main */
+
+int AuthorityGroupsAtInstanceLevelDisplay(void)
+{
+  struct sqlca sqlca;
+  db2CfgParam cfgParameters[3];
+  db2Cfg cfgStruct;
+
+  printf("\n-----------------------------------------------------------");
+  printf("\nUSE THE DB2 API:\n");
+  printf("  db2CfgGet -- GET DATABASE MANAGER CONFIGURATION\n");
+  printf("TO DISPLAY AUTHORITY GROUPS AT INSTANCE LEVEL:\n");
+
+  /* initialize cfgParameters */
+  cfgParameters[0].flags = 0;
+  cfgParameters[0].token = SQLF_KTN_SYSADM_GROUP;
+  cfgParameters[0].ptrvalue = (char *)malloc(sizeof(char) * (15 + 1));
+  cfgParameters[1].flags = 0;
+  cfgParameters[1].token = SQLF_KTN_SYSCTRL_GROUP;
+  cfgParameters[1].ptrvalue = (char *)malloc(sizeof(char) * (15 + 1));
+  cfgParameters[2].flags = 0;
+  cfgParameters[2].token = SQLF_KTN_SYSMAINT_GROUP;
+  cfgParameters[2].ptrvalue = (char *)malloc(sizeof(char) * (15 + 1));
+
+  /* get three Config. Parameters */
+  strcpy(cfgParameters[0].ptrvalue, "");
+  strcpy(cfgParameters[1].ptrvalue, "");
+  strcpy(cfgParameters[2].ptrvalue, "");
+
+  /* initialize cfgStruct */
+  cfgStruct.numItems = 3;
+  cfgStruct.paramArray = cfgParameters;
+  cfgStruct.flags = db2CfgDatabaseManager | db2CfgDelayed;
+  cfgStruct.dbname = NULL;
+
+  printf("\n");
+
+  /* get database manager configuration */
+  db2CfgGet(db2Version970, (void *)&cfgStruct, &sqlca);
+  DB2_API_CHECK("DBM Config. -- Get");
+
+  printf("  SYSADM_GROUP   = %s\n", cfgParameters[0].ptrvalue);
+  printf("  SYSCTRL_GROUP  = %s\n", cfgParameters[1].ptrvalue);
+  printf("  SYSMAINT_GROUP = %s\n", cfgParameters[2].ptrvalue);
+
+  /* free the memory allocated */
+  free(cfgParameters[0].ptrvalue);
+  free(cfgParameters[1].ptrvalue);
+  free(cfgParameters[2].ptrvalue);
+
+  return 0;
+} /* AuthorityGroupsAtInstanceLevelDisplay */
+
+int CurrentUserAuthoritiesAtInstanceLevelDisplay(void)
+{
+  struct sqlca sqlca;
+  struct sql_authorizations currentUserAuthorities;
+
+  printf("\n-----------------------------------------------------------");
+  printf("\nUSE THE DB2 API:\n");
+  printf("  sqluadau -- Get Authorizations\n");
+  printf("TO DISPLAY CURRENT USER AUTHORITIES AT INSTANCE LEVEL:\n");
+
+  currentUserAuthorities.sql_authorizations_len = SQL_AUTHORIZATION_SIZE;
+
+  /* get current user authorities */
+  sqluadau(&currentUserAuthorities, &sqlca);
+  DB2_API_CHECK("current user authorities -- get");
+
+  printf("\n  User SYSADM authority    = ");
+  if (currentUserAuthorities.sql_sysadm_auth == 1)
+  {
+    printf("YES\n");
+  }
+  else
+  {
+    printf("NO\n");
+  }
+
+  printf("  User SYSCTRL authority   = ");
+  if (currentUserAuthorities.sql_sysctrl_auth == 1)
+  {
+    printf("YES\n");
+  }
+  else
+  {
+    printf("NO\n");
+  }
+
+  printf("  User SYSMAINT authority  = ");
+  if (currentUserAuthorities.sql_sysmaint_auth == 1)
+  {
+    printf("YES\n");
+  }
+  else
+  {
+    printf("NO\n");
+  }
+
+  printf("\n  Group SYSADM authority   = ");
+  if (currentUserAuthorities.sql_sysadm_grp_auth == 1)
+  {
+    printf("YES\n");
+  }
+  else
+  {
+    printf("NO\n");
+  }
+
+  printf("  Group SYSCTRL authority  = ");
+  if (currentUserAuthorities.sql_sysctrl_grp_auth == 1)
+  {
+    printf("YES\n");
+  }
+  else
+  {
+    printf("NO\n");
+  }
+
+  printf("  Group SYSMAINT authority = ");
+  if (currentUserAuthorities.sql_sysmaint_grp_auth == 1)
+  {
+    printf("YES\n");
+  }
+  else
+  {
+    printf("NO\n");
+  }
+
+  return 0;
+} /* CurrentUserAuthoritiesAtInstanceLevelDisplay */
+

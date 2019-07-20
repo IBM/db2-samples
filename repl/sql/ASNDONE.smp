@@ -1,0 +1,131 @@
+ /*********************************************************************/
+ /*                                                                   */
+ /*     IBM DataPropagator Relational Apply for Unix                  */
+ /*                                                                   */
+ /*     Sample ASNDONE program                                        */
+ /*                                                                   */
+ /*     Licensed Materials - Property of IBM                          */
+ /*                                                                   */
+ /*     (C) Copyright IBM Corp. 1997 All Rights Reserved              */
+ /*                                                                   */
+ /*     US Government Users Restricted Rights - Use, duplication      */
+ /*     or disclosure restricted by GSA ADP Schedule Contract         */
+ /*     with IBM Corp.                                                */
+ /*                                                                   */
+ /*********************************************************************/
+ /*     !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!                */
+ /*     PLEASE READ THE FOLLOWING BEFORE PROCEEDING...                */
+ /*     !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!                */
+ /*********************************************************************/
+ /*                                                                   */
+ /*     ASNDONE is invoked by the Apply program after set             */
+ /*     subscription processing completes, regardless of success      */
+ /*     or failure. You can modify ASNDONE to meet the requirements   */
+ /*     of your installation. For example, the user exit can examine  */
+ /*     the UOW table to discover rejected transactions and initiate  */
+ /*     further actions, such as issuing a message or generating an   */
+ /*     alert.                                                        */
+ /*                                                                   */
+ /*     NOTE: This sample program prints the input arguments and      */
+ /*     checks the status value.                                      */
+ /*                                                                   */
+ /*********************************************************************/
+ /*                                                                   */
+ /*     Modifying the ASNLOAD sample program:                         */
+ /*     -------------------------------------                         */
+ /*     - copy the sample ASNDONE.smp to ASNDONE.sqc in a working     */
+ /*       directory.                                                  */
+ /*                                                                   */
+ /*     - make your updates to the sample program (ASNDONE.sqc)       */
+ /*                                                                   */
+ /*     - prep, compile and link the sample program after the         */
+ /*       desired changes are made. Please refer to                   */
+ /*       DATABASE 2 Programming Guide for details.                   */
+ /*                                                                   */
+ /*     - place ASNDONE in a directory which is in the search         */
+ /*       path for programs and commands specified by the PATH        */
+ /*       environment variable.                                       */
+ /*                                                                   */
+ /*********************************************************************/
+ /*                                                                   */
+ /*     The parameters passed to ASNDONE are as follows:              */
+ /*     ------------------------------------------------              */
+ /*     - set name                                                    */
+ /*     - apply qualifier                                             */
+ /*     - whos_on_first value                                         */
+ /*     - control server                                              */
+ /*     - trace option                                                */
+ /*     - status value                                                */
+ /*                                                                   */
+ /*********************************************************************/
+ /*                                                                   */
+ /*                                                                   */
+ /*           NOTICE TO USERS OF THE SOURCE CODE EXAMPLE              */
+ /*                                                                   */
+ /* INTERNATIONAL BUSINESS MACHINES CORPORATION PROVIDES THE SOURCE   */
+ /* CODE EXAMPLE "AS IS" WITHOUT WARRANTY OF ANY KIND, EITHER         */
+ /* EXPRESSED OR IMPLIED, INCLUDING, BUT NOT LIMITED TO THE IMPLIED   */
+ /* WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR        */
+ /* PURPOSE. THE ENTIRE RISK AS TO THE QUALITY AND PERFORMANCE OF THE */
+ /* SOURCE CODE EXAMPLE IS WITH YOU. SHOULD ANY PART OF THE SOURCE    */
+ /* CODE EXAMPLE PROVES DEFECTIVE, YOU (AND NOT IBM) ASSUME THE       */
+ /* ENTIRE COST OF ALL NECESSARY SERVICING, REPAIR OR CORRECTION.     */
+ /*                                                                   */
+ /*********************************************************************/
+ /*********************************************************************/
+ /*  define                                                           */
+ /*********************************************************************/
+ #define yes           1
+ #define no            0
+
+ /*********************************************************************/
+ /*  include files                                                    */
+ /*********************************************************************/
+ #include <stdio.h>
+ #include <string.h>
+ #include <sqlutil.h>
+ #include <sql.h>
+ #include <sys/types.h>
+ #include <signal.h>
+
+ EXEC SQL INCLUDE SQLCA;
+
+ /*********************************************************************/
+ /* local variables                                                   */
+ /*********************************************************************/
+ short traceon;
+
+ EXEC SQL BEGIN DECLARE SECTION;
+ char setName[19];
+ char appQual[19];
+ char whosOnFirst[19];
+ char cntlServer[19];
+ char status[4];
+
+ EXEC SQL END DECLARE SECTION;
+
+ int main(int argc, char *argv[])
+ {
+
+  if (strcmp(argv[5], "yes") == 0)
+    traceon = yes;
+  else
+    traceon = no;
+
+  /* print out parameters passed in                                   */
+  if (traceon)
+    {
+     printf("\nASNDONE \n argc = %d, pgmname = %s"
+            "\n setName = %s, appQual = %s, whosOnFirst = %s"
+            "\n cntl_srvr = %s, trace_parm = %s, status = %s ",
+            argc, argv[0], argv[1], argv[2], argv[3], argv[4],
+            argv[5], argv[6]);
+     printf("\n");
+     fflush(stdout);
+    }
+
+  if (memcmp("-1", argv[6], 2) == 0)
+    printf ("\nASNDONE: status is -1");
+
+  return(0);
+ }

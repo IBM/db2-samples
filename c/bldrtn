@@ -1,0 +1,111 @@
+#! /bin/sh
+#############################################################################
+# (c) Copyright IBM Corp. 2007 All rights reserved. 
+# 
+# The following sample of source code ("Sample") is owned by International 
+# Business Machines Corporation or one of its subsidiaries ("IBM") and is 
+# copyrighted and licensed, not sold. You may use, copy, modify, and 
+# distribute the Sample in any form without payment to IBM, for the purpose of 
+# assisting you in the development of your applications.
+# 
+# The Sample code is provided to you on an "AS IS" basis, without warranty of 
+# any kind. IBM HEREBY EXPRESSLY DISCLAIMS ALL WARRANTIES, EITHER EXPRESS OR 
+# IMPLIED, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED WARRANTIES OF 
+# MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE. Some jurisdictions do 
+# not allow for the exclusion or limitation of implied warranties, so the above 
+# limitations or exclusions may not apply to you. IBM shall not be liable for 
+# any damages you suffer as a result of using, copying, modifying or 
+# distributing the Sample, even if IBM has been advised of the possibility of 
+# such damages.
+#############################################################################
+# SCRIPT: bldrtn
+# Builds C routines (stored procedures or UDFs) for Linux
+# Usage: bldrtn <prog_name> [ <db_name> ]
+
+# Select the compiler to use
+CC=gcc
+#CC=xlc_r
+
+# Set DB2PATH to where DB2 will be accessed.
+# The default is the standard instance path.
+DB2PATH=$HOME/sqllib
+
+# Default compiler/linker settings
+EXTRA_C_FLAGS=""
+SHARED_LIB_FLAG=""
+
+# Figure out which Linux architecture we are on
+HARDWAREPLAT=`uname -m`
+
+# Default to native bitwidth for the platform
+if [ "$HARDWAREPLAT" = "x86_64" ] || [ "$HARDWAREPLAT" = "ppc64" ] || 
+   [ "$HARDWAREPLAT" = "s390x" ] || [ "$HARDWAREPLAT" = "ia64" ] ||
+   [ "$HARDWAREPLAT" = "ppc64le" ]
+then
+  BITWIDTH=64
+else
+  # x86 is the only native 32-bit platform
+  BITWIDTH=32
+fi
+
+# Uncomment the next line to force a 32-bit application compile/link
+#BITWIDTH=32
+
+# Set flags for 32-bit compilation on non-native 32-bit platforms
+if [ $BITWIDTH = "32" ]
+then
+  LIB="lib32"
+  if [ "$HARDWAREPLAT" = "s390x" ]
+  then
+    EXTRA_C_FLAGS="-m31"
+  else
+    if [ "$HARDWAREPLAT" = "ia64" ]
+    then
+      # DB2 does not support 32-bit applications on Linux on IA64
+      BITWIDTH=64
+    else
+      EXTRA_C_FLAGS="-m32"
+    fi
+  fi
+fi
+
+# Set flags for 64-bit compilation
+if [ $BITWIDTH = "64" ]
+then
+  LIB="lib64"
+  if [ "$HARDWAREPLAT" != "ia64" ]
+  then
+    # gcc on ia64 does not support the -m64 flag
+    EXTRA_C_FLAGS="-m64"
+  fi
+fi
+
+if [ "$CC" = "xlc_r" ]
+then
+  SHARED_LIB_FLAG="-qmkshrobj"
+else
+  SHARED_LIB_FLAG="-shared"
+  EXTRA_C_FLAGS="$EXTRA_C_FLAGS -fpic"
+fi
+
+LINK_FLAGS="$EXTRA_C_FLAGS $SHARED_LIB_FLAG"
+
+# Set the runtime path.
+EXTRA_LFLAG="-Wl,-rpath,$DB2PATH/$LIB"
+
+# If an embedded SQL program, precompile and bind it.
+if [ -f $1".sqc" ]
+then
+  ./embprep $1 $2
+fi
+
+# Compile the program.
+$CC $EXTRA_C_FLAGS  -I$DB2PATH/include -c $1.c -D_REENTRANT
+
+# Link the program and create a shared library
+$CC $LINK_FLAGS -o $1 $1.o $EXTRA_LFLAG -L$DB2PATH/$LIB -ldb2 -lpthread
+
+# Copy the shared library to the function subdirectory.
+# The user must have write permission to this directory.
+rm -f $DB2PATH/function/$1
+cp $1 $DB2PATH/function

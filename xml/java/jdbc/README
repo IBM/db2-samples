@@ -1,0 +1,408 @@
+******************************************************************************
+* (c) Copyright IBM Corp. 2007 All rights reserved.
+* 
+* The following sample of source code ("Sample") is owned by International 
+* Business Machines Corporation or one of its subsidiaries ("IBM") and is 
+* copyrighted and licensed, not sold. You may use, copy, modify, and 
+* distribute the Sample in any form without payment to IBM, for the purpose of 
+* assisting you in the development of your applications.
+* 
+* The Sample code is provided to you on an "AS IS" basis, without warranty of 
+* any kind. IBM HEREBY EXPRESSLY DISCLAIMS ALL WARRANTIES, EITHER EXPRESS OR 
+* IMPLIED, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED WARRANTIES OF 
+* MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE. Some jurisdictions do 
+* not allow for the exclusion or limitation of implied warranties, so the above 
+* limitations or exclusions may not apply to you. IBM shall not be liable for 
+* any damages you suffer as a result of using, copying, modifying or 
+* distributing the Sample, even if IBM has been advised of the possibility of 
+* such damages.
+*
+******************************************************************************
+*
+*                    README for Java XML Samples
+*
+* For windows, the <install_path>\sqllib\samples\xml\java\jdbc directory and
+* for unix, <install_path>/sqllib/samples/xml/java/jdbc directory contain this
+* README file where <install_path> is the location of DB2 9.7 on your hard
+* drive. The default location for <install_path> is C:\Program Files\IBM for
+* windows and $HOME for unix based platform.
+*
+* This README describes how to build and run jdbc sample code for DB2 9.7.
+* The DB2 9.7 jdbc sample are located in the
+* <install_path>\sqllib\samples\xml\java\jdbc directory for windows platform
+* and <install_path>/sqllib/samples/java/xml/java/jdbc for unix based
+* platforms.
+*
+* Copy the files from this directory to your working directory prior to
+* building the sample programs. The sample programs directory is
+* typically read-only on most platforms and some samples produce output
+* files that require write permissions on the directory.
+*
+* WARNINGS:
+* 1. Some of these samples may change your database or database
+* manager configuration.  Execute the samples against a test database
+* only, such as the DB2 SAMPLE database.
+*
+*******************************************************************************
+*
+*           Prepare your DB2 sample development environment
+*
+*  1) Copy the files in <install_path>\sqllib\samples\xml\java\jdbc\* (for
+*     windows platform) or <install_path>/sqllib/samples/xml/java/jdbc/*
+*     (for UNIX based platform) to your working directory and ensure that
+*     directory has write permission.
+*
+*  2) Modify the CLASSPATH.
+*       For Windows include
+*         <install_path>\sqllib\java\db2java.zip,
+*         <install_path>\sqllib\java\db2jcc.jar,
+*         <install_path>\sqllib\java\db2jcc_license_cu.jar,
+*         <install_path>\sqllib\java\jdk\lib,
+*         <install_path>\sqllib\lib, <install_path>\sqllib\function
+*
+*       For UNIX based platform include
+*         <install_path>/sqllib/java/db2java.zip,
+*         <install_path>/sqllib/java/db2jcc.jar,
+*         <install_path>/sqllib/java/db2jcc_license_cu.jar,
+*         <install_path>/sqllib/java/jdk/lib,
+*         <install_path>/sqllib/lib,<install_path>/sqllib/function,
+*
+*     Modify the PATH.
+*       For Windows include
+*         <install_path>\sqllib\java\<jdkDirName>\bin
+*         <install_path>\sqllib\lib
+*       where <jdkDirName> is the name of the java directory.
+*
+*       For UNIX include
+*         <install_path>/sqllib/java/<jdkDirName>/bin
+*         <install_path>/sqllib/lib
+*       where <jdkDirName> is the name of the java directory.
+*
+*     Please make sure that JDK_PATH( db2
+*     database manager  configuration parameter) is
+*     pointing to the <install_path>\sqllib\java\<jdkDirName> for windows
+*     and <install_path>/sqllib/java/<jdkDirName> for unix platform.
+*
+*     To see the dbm cfg parameter value, run the following from db2
+*     command window (open the db2 command window from
+*     Start -> Run -> db2cmd for windows platform) and look for the value
+*     of JDK_PATH
+*
+*     db2 "get dbm cfg"
+*
+*  3) Start the Database Manager with the following command:
+*       db2start
+*
+*  4) Create the sample database with the following command:
+*       db2sampl -xml
+*
+*  5) Connect to the database with the following command:
+*      db2 "connect to sample"
+*
+*  6) To build Stored Procedures and User Defined Functions, ensure
+*     that you have write permission on the
+*    <install_path>\sqllib\function directory for windows platform.
+*
+*  7) cd to the directory containing the files copied in step 1.
+*
+*
+*******************************************************************************
+*
+*                       Building DB2 Samples
+*
+*   There are two ways to build DB2 samples: using a nmake utility for windows
+*   (make utility for unix based platform) or using the java compiler which
+*   comes along with the DB2 installation
+*
+*        o To build samples using the nmake utility for windows see
+*          'BUILDING SAMPLES USING nmake UTILITY on WINDOWS'.
+*        o To build samples using the make utility for unix see
+*          'BUILDING SAMPLES USING make UTILITY on UNIX'.
+*        o To build samples using the java compiler or when you do not
+*          have a compatible nmake utility see 'BUILDING
+*          SAMPLES USING JAVA COMPILER'.
+*
+* NOTE:
+*
+*    1. Some of the samples might need one or more data files at runtime.
+*       some of the samples may also need setup script to be run before
+*       running the sample.See the specific sample descriptions in
+*       "File Descriptions" section for more details.
+*
+*
+*    2. There are utility files available in this directory that are used
+*       by these samples for error checking. Please make sure that these
+*       files are present in you working directory. The information
+*       about these files can be found in "File Descriptions" section of
+*       this README.
+*
+*    3. Refer to the "File Descriptions" section in this README for
+*       information on specific samples and any special considerations
+*       relevant for each. The HEADER sections of these samples also
+*       provide further details on each sample.
+*
+*
+*         *** BUILDING SAMPLES USING nmake UTILITY on WINDOWS ***
+*
+*      If you have a compatible nmake utility on your system, you
+*      can use the makefile provided. Such a nmake utility may be
+*      provided by another language compiler.Modify the PATH
+*      variable to include the directory containing the nmake
+*      utility.
+*
+*      Depending on your environment, the makefile might have to be
+*      modified.For more details refer to the 'VARIABLES' section
+*      in the makefile.
+*
+*      Execute the appropriate 'nmake' command in your working
+*      directory:
+*
+*        nmake <app_name>  - Builds the program designated by <app_name>.
+*
+*        nmake all         - Builds all supplied sample programs
+*
+*        nmake srv         - Builds sample that can only be run on the
+*                             server, (stored procedure)
+*
+*        nmake all_client  - Builds all client samples (all programs in the
+*                            'call_rtn' and 'client_run' categories).
+*
+*        nmake call_rtn    - Builds client programs that call stored
+*                            procedure
+*
+*        nmake client_run  - Builds all programs that run completely on the
+*                            client (not ones that call stored procedure)
+*
+*        nmake clean       - Erases all intermediate files produced in the
+*                            build process.
+*
+*        nmake cleanall    - Erases all files produced in the build process
+*                            (all files except the original source files).
+*
+*******************************************************************************
+*
+*         *** BUILDING SAMPLES USING make UTILITY on UNIX ***
+*
+*      If you have a compatible make utility on your system, you
+*      can use the makefile provided. Modify the PATH
+*      variable to include the directory containing the make
+*      utility.
+*
+*      Depending on your environment, the makefile might have to be
+*      modified.For more details refer to the 'VARIABLES' section
+*      in the makefile.
+*
+*      Execute the appropriate 'make' command in your working
+*      directory:
+*
+*        make <app_name>   - Builds the program designated by <app_name>.
+*
+*        make all          - Builds all supplied sample programs
+*
+*        make srv          - Builds sample that can only be run on the server
+*                            (stored procedure)
+*
+*        make all_client   - Builds all client samples (all programs in the
+*                            'call_rtn' and 'client_run' categories).
+*
+*        make call_rtn     - Builds client programs that call stored procedure
+*
+*        make client_run   - Builds all programs that run completely on the
+*                            client (not ones that call stored procedure)
+*
+*        make clean        - Erases all intermediate files produced in the
+*                            build process.
+*
+*        make cleanall     - Erases all files produced in the build process
+*                            (all files except the original source files).
+*
+*******************************************************************************
+*
+*            *** BUILDING SAMPLES USING JAVA COMPILER ***
+*
+*      If you do not have a compatible make utility you can use
+*      the javac bytecode compiler to build JDBC programs
+*
+*
+*    These samples used classes in Util.java. Compile the Util.java program
+*    using the following command.
+*
+*       javac Util.java
+*
+*    To build a individual JDBC sample, use the following command
+*
+*       javac <program name>.java
+*
+*    To run the sample, use the following command
+*
+*       java <program name>
+*
+*******************************************************************************
+*
+*              Common file Descriptions
+* 
+* The following are the common files for JDBC samples. For more
+* information on these files, refer to the program source files.
+*
+*******************************************************************************
+*
+* Common files
+*
+* README        - This file.
+* makefile      - makefile for all files
+* Util.java     - utilities used by most programs
+*
+*******************************************************************************
+*
+*               JDBC Sample Descriptions
+*
+* The following are the JDBC sample files included with DB2. For more
+* information on the sample programs, refer to the program source files.
+*
+*******************************************************************************
+*
+* Sample Files
+*
+* XmlSchema.java        - How to register an XML schema to a database.
+*                         How to use this registered schema to validate an XML
+*                         value before inserting into a table.
+*                         PREREQUISITE: copy product.xsd, order.xsd,
+*                         customer.xsd, header.xsd Schema files, order.xml XML
+*                         document from xml/data directory to working
+*                         directory.
+*
+* XmlToTable.java       - How to insert the data from XML document to a
+*                         relational table using XML Constructor function and
+*                         SQL/XML functions.
+*                         PREREQUISITE: copy purchaseorder.xml XML document
+*                         from xml/data directory to the working directory.
+*
+* XmlDecomposition.java - How to decompose data stored in a XML file and
+*                         insert those into relational tables with constraints.
+*                         PREREQUISITE:run the script setupfordecomposition.db2
+*                         before running the sample. Run the script
+*                         cleanupfordecomposition.db2 after running the sample
+*                         to cleanup the object created for the samples. These
+*                         scripts can be found in xml/data directory. This
+*                         sample require bookdetails.xsd, booksreturned.xsd, bookdetails.xml,
+*                         booksreturned.del, booksreturned1.xml, booksreturned2.xml, 
+*                         booksreturned3.xml files at run time. Copy these files to your 
+*                         working directory before running the sample. These files can
+*                         be found in xml/data directory.
+*
+* RecXmlDecomp.java     - How to register a recursive XML schema to the XSR and
+*                         enable the same for decomposition.
+*                         PREREQUISITE: The instance document and the annotated
+*                         schema should exist in the same directory as the sample.
+*                         Copy recemp.xml, recemp.xsd from directory
+*                         <install_path>/sqllib/samples/xml/data in UNIX and
+*                         <install_path>\sqllib\samples\xml\data in Windows to the
+*                         working directory.
+*
+* RelToXmlDoc.java      - How to create XML object from data stored in
+*                         relational tables using various SQL/XML Constructor
+*                         functions. The XML object is created using stored
+*                         procedure.
+*                         PREREQUISITE: This sample uses a stored procedure.
+*                         Stored procedure should be registered before running
+*                         the sample. Follow the step given in the header of
+*                         the sample for more details. Run the cleanup.db2
+*                         and setupscript.db2 scripts before running this
+*                         simple.Run the cleanupscript.db2 script to cleanup
+*                         the database objects after running the sample.
+*                         These scripts can be found in xml/data directory.
+*
+* reltoxmlproc.db2      - Stored procedure used by the RelToXmlDoc.java sample.
+*
+* RelToXmlType.java     - How to create XML object from data stored in
+*                         relational tables using various SQL/XML Constructor
+*                         functions.
+*                         PREREQUISITE: Run the script setupscript.db2 before
+*                         running this simple. Run the cleanupscript.db2 script
+*                         to cleanup the database objects after running the
+*                         sample. These scripts can be found in xml/data
+*                         directory.
+*
+* XmlRead.java          - How to read XML data stored in tables.
+*
+* XmlInsert.java        - How to insert XML data into tables having an XML
+*                         column.
+*                         PREREQUISITE: copy the files expPrg1.xml and
+*                         expPrg.xml to working directory before running the
+*                         sample. These files can be found in xml/data
+*                         directory.
+*
+* XmlUpDel.java         - How to update and delete XML documents in tables.
+*                         PREREQUISITE: copy the files expPrg1.xml and
+*                         expPrg.xml to working directory before running the
+*                         sample. These files can be found in xml/data
+*                         directory.
+*
+* XmlRunstats.java      - How to perform runstats on a table with XML type
+*                         columns.
+*
+* XmlIndex.java         - How to create an index on a table with XML type
+*                         columns and how to query using XQUERY on the
+*                         index created.
+*
+* XmlConst.java         - How to put constraints on an XML column.
+*                         NOTE : This sample demonstrate the how to enforce the
+*                         constraints on an XML value. There are some statement
+*                         in the samples which are expected to fail because of
+*                         constraint violation so The sql error SQL803N,
+*                         SQL20305N and SQL20306N are expected.
+*
+* XsUpdate.java         - How to update an XML schema with a compatible schema.
+*                         PREREQUISITE: The original schema and the new schema
+*                         should be present in the same directory as the sample.
+*                         Copy prod.xsd, newprod.xsd from directory
+*                         <install_path>/xml/data to the working directory.
+* 
+* XmlCheckConstraint    - How to create check constraints on XML column 
+*		          validating XML document against single schema or 
+*                         multiple schemas
+*                         PREREQUISITE: boots.xsd and musicplayer.xsd schemas
+*                         must be copied from <install_path>/xml/data to 
+*                         current working directory where sample is being 
+*                         executed.
+* XmlTrig               - How to automate validation of XML documents while
+*                         insertion/updation using XML triggers.
+*                         PREREQUISITE: boots.xsd schema must be copied
+*                         from <install_path>/xml/data to current working
+*                         directory where sample is being executed.
+*
+* XmlUdfs               - How XML data type is supported in Scalar UDFs, Sourced
+*                         UDFs and SQL bodied UDFs.
+*
+* XmlMdc                - How to create an MDC table with XML column and how 
+*                         faster insert and faster delete options are supported
+*                         on MDC table having XML column.
+*
+*******************************************************************************
+*
+* Stored Procedure Samples
+*
+* Simple_XmlProc_Client.java - Client application that calls the stored
+*                              procedure.
+*                              PREREQUISITE: build the server
+*                             "Simple_XmlProc.java"and register the procedure
+*                              using spcat_xml.
+*
+* Simple_XmlProc.java        - Stored procedure functions built and run on the
+*                              server.
+*
+* spcat_xml                  - shell script that first calls
+*                              Simple_XmlProc_Drop.db2 and then calls
+*                              Simple_XmlProc_Create.db2. This file will be
+*                              found only for unix platforms.
+* spcat_xml.bat              - Batch file that first calls
+*                              Simple_XmlProc_Drop.db2 and then calls
+*                              Simple_XmlProc_Create.db2. This file
+*                              will be found only for windows platforms.
+*
+* Simple_XmlProc_Create.db2  - CLP script to issue CREATE PROCEDURE statement.
+*
+* Simple_XmlProc_Drop.db2    - CLP script to drop stored procedure from the
+*                              catalog.
+*
+*******************************************************************************

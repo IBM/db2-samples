@@ -1,0 +1,289 @@
+/****************************************************************************
+** (c) Copyright IBM Corp. 2007 All rights reserved.
+** 
+** The following sample of source code ("Sample") is owned by International 
+** Business Machines Corporation or one of its subsidiaries ("IBM") and is 
+** copyrighted and licensed, not sold. You may use, copy, modify, and 
+** distribute the Sample in any form without payment to IBM, for the purpose of 
+** assisting you in the development of your applications.
+** 
+** The Sample code is provided to you on an "AS IS" basis, without warranty of 
+** any kind. IBM HEREBY EXPRESSLY DISCLAIMS ALL WARRANTIES, EITHER EXPRESS OR 
+** IMPLIED, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED WARRANTIES OF 
+** MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE. Some jurisdictions do 
+** not allow for the exclusion or limitation of implied warranties, so the above 
+** limitations or exclusions may not apply to you. IBM shall not be liable for 
+** any damages you suffer as a result of using, copying, modifying or 
+** distributing the Sample, even if IBM has been advised of the possibility of 
+** such damages.
+*****************************************************************************
+**
+** SOURCE FILE NAME: dbrollfwd.sqc
+**
+** SAMPLE: How to perform rollforward after restore of a database
+**
+**         This program ends in ".sqc" even though it does not contain
+**         embedded SQL statements. It links in  the embedded SQL utility
+**         file for database connection and disconnection, so it needs the
+**         embedded SQL extension for the precompiler.
+**
+**         Note:
+**           You must be disconnected from the sample database to run
+**           this program. To ensure you are, enter 'db2 connect reset'
+**           on the command line prior to running dbrollfwd. 
+**
+** DB2 APIs USED:
+**         db2CfgSet -- Set Configuration
+**         db2Restore -- Restore Database
+**         db2Rollforward -- Rollforward Database
+**
+** OUTPUT FILE: dbrollfwd.out (available in the online documentation)
+*****************************************************************************
+**
+** For detailed information about database backup and database recovery, see
+** the Data Recovery and High Availability Guide and Reference. This manual
+** will help you to determine which database and table space recovery methods
+** are best suited to your business environment.
+**
+** For more information on the sample programs, see the README file.
+**
+** For information on developing C applications, see the Application
+** Development Guide.
+**
+** For information on using SQL statements, see the SQL Reference.
+**
+** For information on DB2 APIs, see the Administrative API Reference.
+**
+** For the latest information on programming, building, and running DB2
+** applications, visit the DB2 application development website:
+**     http://www.software.ibm.com/data/db2/udb/ad
+****************************************************************************/
+#include "utilrecov.c"
+  
+/* local function prototypes */ 
+int DbBackupRestoreAndRollforward(char *, char *, char *, char *, char *);
+
+int main(int argc, char *argv[]) 
+{
+  int rc = 0;
+  char nodeName[SQL_INSTNAME_SZ + 1] = { 0 };
+  char serverWorkingPath[SQL_PATH_SZ + 1] = { 0 };
+  sqluint16 savedLogRetainValue[252] = { 0 };
+  char rolledForwardDbAlias[SQL_ALIAS_SZ + 1] = { 0 };
+  char dbAlias[SQL_ALIAS_SZ + 1] = { 0 };
+  char user[USERID_SZ + 1] = { 0 };
+  char pswd[PSWD_SZ + 1] = { 0 };
+  
+  /* check the command line arguments */ 
+  rc = CmdLineArgsCheck3(argc, argv, dbAlias, nodeName, user, pswd);
+  CHECKRC(rc, "CmdLineArgsCheck3");
+  
+  printf("\nTHIS SAMPLE SHOWS HOW TO PERFORM ROLLFORWARD AFTER\n");
+  printf("RESTORE OF A DATABASE.\n");
+  strcpy(rolledForwardDbAlias, "RFDB");
+  
+  /* attach to a local or remote instance */ 
+  rc = InstanceAttach(nodeName, user, pswd);
+  CHECKRC(rc, "Instance Attach");
+  
+  /* get the server working path */ 
+  rc = ServerWorkingPathGet(dbAlias, serverWorkingPath);
+  CHECKRC(rc, "ServerWorkingPathGet");
+  
+  printf("\nNOTE: Backup images will be created on the server\n");
+  printf("      in the directory %s,\n", serverWorkingPath);
+  printf("      and will not be deleted by the program.\n");
+ 
+  /* save log retain value */
+  rc = DbLogRetainValueSave(dbAlias, savedLogRetainValue);
+  CHECKRC(rc, "DbLogRetainValueSave"); 
+
+  rc = DbBackupRestoreAndRollforward(dbAlias, rolledForwardDbAlias, user,
+                                     pswd, serverWorkingPath);
+  CHECKRC(rc, "DbBackupRestoreAndRollforward");
+
+  /* restore logarchmeth1 value */
+  rc = DbLogRetainValueRestore(dbAlias, savedLogRetainValue);
+  CHECKRC(rc, "DbLogRetainValueRestore");
+  
+  /* Detach from the local or remote instance */
+  rc = InstanceDetach(nodeName);
+  CHECKRC(rc, "InstanceDetach");
+
+  return 0;
+} /* end main */
+
+int DbBackupRestoreAndRollforward(char dbAlias[],
+                                  char rolledForwardDbAlias[],
+                                  char user[], char pswd[],
+                                  char serverWorkingPath[]) 
+{
+  int rc = 0;
+  struct sqlca sqlca = { 0 };
+  db2CfgParam cfgParameters[1] = { 0 };
+  db2Cfg cfgStruct = { 0 };
+  char restoreTimestamp[SQLU_TIME_STAMP_LEN + 1] = { 0 };
+  db2BackupStruct backupStruct = { 0 };
+  db2TablespaceStruct tablespaceStruct = { 0 };
+  db2MediaListStruct mediaListStruct = { 0 };
+  db2Uint32 backupImageSize = 0;
+  db2RestoreStruct restoreStruct = { 0 };
+  db2TablespaceStruct rtablespaceStruct = { 0 };
+  db2MediaListStruct rmediaListStruct = { 0 };
+  db2RfwdInputStruct rfwdInput = { 0 };
+  db2RfwdOutputStruct rfwdOutput = { 0 };
+  db2RollforwardStruct rfwdStruct = { 0 };
+  char rollforwardAppId[SQLU_APPLID_LEN + 1] = { 0 };
+  sqlint32 numReplies = 0;
+  struct sqlurf_info nodeInfo = { 0 };
+ 
+  printf("\n****************************\n");
+  printf("*** ROLLFORWARD RECOVERY ***\n");
+  printf("****************************\n");
+  printf("\nUSE THE DB2 APIs:\n");
+  printf("  db2CfgSet -- Set Configuration\n");
+  printf("  db2Backup -- Backup Database\n");
+  printf("  sqlecrea -- Create Database\n");
+  printf("  db2Restore -- Restore Database\n");
+  printf("  db2Rollforward -- Rollforward Database\n");
+  printf("  sqledrpd -- Drop Database\n");
+  printf("TO BACK UP, RESTORE, AND ROLLFORWARD A DATABASE.\n");
+  printf("\n  Update \'%s\' database configuration:\n", dbAlias);
+  printf("    - Enable the configuration parameter LOGARCHMETH1 \n");
+  printf("        i.e., set LOGARCHMETH1 = LOGRETAIN\n");
+  
+  /* initialize cfgParameters */ 
+  cfgParameters[0].flags = 0;
+  cfgParameters[0].token = SQLF_DBTN_LOGARCHMETH1;
+  cfgParameters[0].ptrvalue = "LOGRETAIN";
+  
+  /* initialize cfgStruct */ 
+  cfgStruct.numItems = 1;
+  cfgStruct.paramArray = cfgParameters;
+  cfgStruct.flags = db2CfgDatabase | db2CfgDelayed;
+  cfgStruct.dbname = dbAlias;
+  
+  /* get database configuration */ 
+  db2CfgSet(db2Version1010, (void *)&cfgStruct, &sqlca);
+  DB2_API_CHECK("Db Log Retain -- Enable");
+  rc = sqle_deactivate_db (dbAlias,
+                           NULL,
+                           NULL,
+                           NULL,
+                           &sqlca);
+
+  
+  /******************************/ 
+  /*    BACKUP THE DATABASE    */ 
+  /******************************/ 
+    
+  /* Calling the routine for database backup */ 
+  rc = DbBackup(dbAlias, user, pswd, serverWorkingPath, &backupStruct);
+  CHECKRC(rc, "DbBackup");
+  
+  /* To restore a remote database, you will first need to create an empty database
+     if the client's code page is different from the server's code page.
+     If this is the case, uncomment the call to DbCreate(). It will create
+     an empty database on the server with the server's code page. */ 
+    
+  /*
+  rc = DbCreate(dbAlias, rolledForwardDbAlias);
+  CHECKRC(rc, "DbCreate");
+  */ 
+    
+  /******************************/ 
+  /*    RESTORE THE DATABASE    */ 
+  /******************************/ 
+  strcpy(restoreTimestamp, backupStruct.oTimestamp);
+  rtablespaceStruct.tablespaces = NULL;
+  rtablespaceStruct.numTablespaces = 0;
+  rmediaListStruct.locations = &serverWorkingPath;
+  rmediaListStruct.numLocations = 1;
+  rmediaListStruct.locationType = SQLU_LOCAL_MEDIA;
+  restoreStruct.piSourceDBAlias = dbAlias;
+  restoreStruct.piTargetDBAlias = rolledForwardDbAlias;
+  restoreStruct.piTimestamp = restoreTimestamp;
+  restoreStruct.piTargetDBPath = NULL;
+  restoreStruct.piReportFile = NULL;
+  restoreStruct.piTablespaceList = &rtablespaceStruct;
+  restoreStruct.piMediaList = &rmediaListStruct;
+  restoreStruct.piUsername = user;
+  restoreStruct.piPassword = pswd;
+  restoreStruct.piNewLogPath = NULL;
+  restoreStruct.piVendorOptions = NULL;
+  restoreStruct.iVendorOptionsSize = 0;
+  restoreStruct.iParallelism = 1;
+  restoreStruct.iBufferSize = 1024;     /*  1024 x 4KB */
+  restoreStruct.iNumBuffers = 2;
+  restoreStruct.iCallerAction = DB2RESTORE_RESTORE;
+  restoreStruct.iOptions =
+  DB2RESTORE_OFFLINE | DB2RESTORE_DB | DB2RESTORE_NODATALINK |
+  DB2RESTORE_ROLLFWD;
+  
+  printf("\n  Restoring a database ...\n");
+  printf("    - source image alias     : %s\n", dbAlias);
+  printf("    - source image time stamp: %s\n", restoreTimestamp);
+  printf("    - target database        : %s\n", rolledForwardDbAlias);
+
+
+  /* The API db2Restore is used to restore a database that has been backed
+     up using the API db2Backup. */ 
+  db2Restore(db2Version1010, &restoreStruct, &sqlca);
+  DB2_API_CHECK("database restore -- start");
+  while (sqlca.sqlcode != 0)
+    
+  {
+    
+    /* continue the restore operation */ 
+    printf("\n  Continuing the restore operation...\n");
+   
+    /* Depending on the sqlca.sqlcode value, user action may be
+       required, such as mounting a new tape. */ 
+    restoreStruct.iCallerAction = DB2RESTORE_CONTINUE;
+    
+    /* restore the database */ 
+    db2Restore(db2Version1010, &restoreStruct, &sqlca);
+    DB2_API_CHECK("database restore -- continue");
+  }
+  printf("\n  Restore finished.\n");
+  
+  /******************************/ 
+  /*    ROLLFORWARD RECOVERY    */ 
+  /******************************/ 
+  printf("\n  Rolling forward database '%s'...\n", rolledForwardDbAlias);
+  rfwdInput.iVersion = SQLUM_RFWD_VERSION;
+  rfwdInput.piDbAlias = rolledForwardDbAlias;
+  rfwdInput.iCallerAction = DB2ROLLFORWARD_RFWD_STOP;
+  rfwdInput.piStopTime = SQLUM_INFINITY_TIMESTAMP;
+  rfwdInput.piUserName = user;
+  rfwdInput.piPassword = pswd;
+  rfwdInput.piOverflowLogPath = serverWorkingPath;
+  rfwdInput.iNumChngLgOvrflw = 0;
+  rfwdInput.piChngLogOvrflw = NULL;
+  rfwdInput.iConnectMode = DB2ROLLFORWARD_OFFLINE;
+  rfwdInput.piTablespaceList = NULL;
+  rfwdInput.iAllNodeFlag = DB2_ALL_NODES;
+  rfwdInput.iNumNodes = 0;
+  rfwdInput.piNodeList = NULL;
+  rfwdInput.piDroppedTblID = NULL;
+  rfwdInput.piExportDir = NULL;
+  rfwdInput.iNumNodeInfo = 1;
+  rfwdInput.iRollforwardFlags = DB2ROLLFORWARD_EMPTY_FLAG;
+  rfwdOutput.poApplicationId = rollforwardAppId;
+  rfwdOutput.poNumReplies = &numReplies;
+  rfwdOutput.poNodeInfo = &nodeInfo;
+  rfwdStruct.piRfwdInput = &rfwdInput;
+  rfwdStruct.poRfwdOutput = &rfwdOutput;
+  
+  /* rollforward database */ 
+  /* The API db2Rollforward rollforward recovers a database by
+     applying transactions recorded in the database log files. */ 
+  db2Rollforward(db2Version1010, &rfwdStruct, &sqlca);
+  DB2_API_CHECK("rollforward -- start");
+  printf("  Rollforward finished.\n");
+  
+  /* drop the restored database */ 
+  rc = DbDrop(rolledForwardDbAlias);
+  CHECKRC(rc, "DbDrop");
+  return 0;
+} /* DbBackupRestoreAndRollforward */

@@ -1,0 +1,15 @@
+<xsd:schema xmlns:xsd="http://www.w3.org/2001/XMLSchema" 
+ targetNamespace="http://www.test.com/header">
+
+<xsd:complexType name="headerType">
+<xsd:sequence>
+  <xsd:element name="Id"           type="xsd:integer" />
+  <xsd:element name="date"         type="xsd:date" />
+  <xsd:element name="description"  type="xsd:string" />
+  <xsd:element name="value"        type="xsd:integer" />
+  <xsd:element name="status"       type="xsd:string" />
+</xsd:sequence>
+</xsd:complexType>
+
+</xsd:schema>
+

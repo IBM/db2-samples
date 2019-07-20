@@ -1,0 +1,472 @@
+/****************************************************************************
+** (c) Copyright IBM Corp. 2007 All rights reserved.
+** 
+** The following sample of source code ("Sample") is owned by International 
+** Business Machines Corporation or one of its subsidiaries ("IBM") and is 
+** copyrighted and licensed, not sold. You may use, copy, modify, and 
+** distribute the Sample in any form without payment to IBM, for the purpose of 
+** assisting you in the development of your applications.
+** 
+** The Sample code is provided to you on an "AS IS" basis, without warranty of 
+** any kind. IBM HEREBY EXPRESSLY DISCLAIMS ALL WARRANTIES, EITHER EXPRESS OR 
+** IMPLIED, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED WARRANTIES OF 
+** MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE. Some jurisdictions do 
+** not allow for the exclusion or limitation of implied warranties, so the above 
+** limitations or exclusions may not apply to you. IBM shall not be liable for 
+** any damages you suffer as a result of using, copying, modifying or 
+** distributing the Sample, even if IBM has been advised of the possibility of 
+** such damages.
+*****************************************************************************
+**
+** SOURCE FILE NAME: tbloadcursor.sqc
+**    
+** SAMPLE: How to load data into a table using either the CURSOR or
+**         REMOTEFETCH media types.
+**         This sample program uses the following argument list:
+**
+**    tbloadcursor [dbAlias1 [dbAlias2] [user1 pswd1 [user2 pswd2]]]
+**
+**        - if dbAlias1 is not specified, a Load from CURSOR will be
+**          performed against database SAMPLE.
+**        - if dbAlias1 is specified but dbAlias2 is not, a Load from
+**          CURSOR will be performed against database dbAlias1.
+**        - if dbAlias1 and dbAlias2 are specified, a Load from
+**          REMOTEFETCH media will be performed against database dbAlias1
+**          by fetching from dbAlias2.
+**
+**          NOTE: You must explicitly bind tbloadcursor.bnd against both 
+**                databases (dbAlias1 and dbAlias2) when Load from REMOTEFETCH 
+**                media is performed.
+**           
+** DB2 API USED:    
+**         db2Load -- Loads data into a DB2 table
+**
+** STRUCTURES USED:
+**         sqlca 
+**
+*****************************************************************************
+**
+** For more information on the sample programs, see the README file.
+**
+** For information on developing C applications, see the Application
+** Development Guide.
+**
+** For information on using SQL statements, see the SQL Reference.
+**
+** For the latest information on programming, building, and running DB2 
+** applications, visit the DB2 application development website: 
+**     http://www.software.ibm.com/data/db2/udb/ad
+****************************************************************************/
+
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+#include <sqlenv.h>
+#include <sqlutil.h>
+#include <db2ApiDf.h>
+#include "utilemb.h"
+
+#ifndef TRUE
+  #define TRUE 1
+  #define FALSE 0
+#endif
+
+int CreateSourceTable();
+int CreateTargetTable();
+int DropSourceTable();
+int DropTargetTable();
+int InsertInitialValuesInSourceTable(void);
+int LoadData(int bDoRemoteFetch,
+             char *pDBName_source,
+             char *pUserID_source,
+             char *pPasswd_source);
+int DisplayTableContents(void);
+
+
+EXEC SQL BEGIN DECLARE SECTION;
+  char strStmt[256];
+  short c1;
+EXEC SQL END DECLARE SECTION;
+
+int main(int argc, char *argv[])
+{
+  int rc = 0;
+  int bDoRemoteFetch = FALSE;
+  char dbAlias_source[SQL_ALIAS_SZ + 1];
+  char user_source[USERID_SZ + 1];
+  char pswd_source[PSWD_SZ + 1];
+  char dbAlias_target[SQL_ALIAS_SZ + 1];
+  char user_target[USERID_SZ + 1];
+  char pswd_target[PSWD_SZ + 1];
+
+  /* check the command line arguments */
+  rc = CmdLineArgsCheck4(argc,
+                         argv,
+                         dbAlias_target,
+                         dbAlias_source, 
+                         user_target,
+                         pswd_target,
+                         user_source,
+                         pswd_source);
+  if (rc != 0)
+  {
+    return rc;
+  }
+
+  /* Deciding upon which method to be used : CURSOR or REMOTEFETCH media */
+  /* (if both dbAlias1 and db2Alias2 are specified, use REMOTEFETCH) */
+  bDoRemoteFetch = (argc == 3 || argc >= 5) ? TRUE : FALSE;
+
+  if (bDoRemoteFetch)
+    printf("\n  THIS SAMPLE SHOWS HOW TO LOAD USING REMOTEFETCH MEDIA TYPE \n");
+  else
+    printf("\n  THIS SAMPLE SHOWS HOW TO LOAD USING THE CURSOR MEDIA TYPE \n");
+
+  /* User/Password must be specified for REMOTEFETCH */
+  if (bDoRemoteFetch &&
+      (strlen(user_target)==0 ||
+       strlen(pswd_target)==0))
+  {
+    printf("\n (error: userid & password must be provided for REMOTEFETCH media type)");
+    return -1;
+  }
+
+  /* Create SOURCE table */
+  if (bDoRemoteFetch)
+    rc = DbConn(dbAlias_source, user_source, pswd_source);
+  else
+    rc = DbConn(dbAlias_target, user_target, pswd_target);
+  if (rc != 0)
+  {
+    return rc; 
+  }
+  (void) CreateSourceTable();
+  (void) InsertInitialValuesInSourceTable();
+
+
+  /* Create TARGET table */
+  if (bDoRemoteFetch)
+  {
+    rc = DbDisconn(dbAlias_source);
+    if (rc != 0)
+    {
+      return rc;
+    }
+    rc = DbConn(dbAlias_target, user_target, pswd_target);
+    if (rc != 0)
+    {
+      return rc;
+    }
+  }
+  (void) CreateTargetTable();
+
+
+  /* Perform the Load on TARGET DATABASE */
+  (void) LoadData(bDoRemoteFetch, dbAlias_source, user_source, pswd_source);
+
+
+  /* Drop table on TARGET DATABASE */
+  (void) DropTargetTable();
+
+
+  /* Drop table on SOURCE DATABASE */
+  if (bDoRemoteFetch)
+  {
+    rc = DbDisconn(dbAlias_target);
+    if (rc != 0)
+    {
+      return rc;
+    }
+    rc = DbConn(dbAlias_source, user_source, pswd_source);
+    if (rc != 0)
+    {
+      return rc;
+    }
+  }
+  (void) DropSourceTable();
+
+  /* Disconnect */
+  rc = DbDisconn(dbAlias_source);
+  if (rc != 0)
+  {
+    return rc;
+  }
+
+  return 0;
+} /* end main */
+
+
+/* This function creates a table MYSCHEMA1.SOURCE1 */
+int CreateSourceTable(void)
+{
+  struct sqlca sqlca;
+
+  /* create a new table 'MYSCHEMA1.SOURCE1' */
+  printf("\n  CREATE A NEW TABLE 'MYSCHEMA1.SOURCE1' BY INVOKING THE STATEMENT:"
+         "\n  -----------------------------------------------------------------"
+         "\n     CREATE TABLE MYSCHEMA1.SOURCE1 (c1 integer not null)\n\n");
+
+  EXEC SQL CREATE TABLE MYSCHEMA1.SOURCE1 (
+             C1 INTEGER NOT NULL);
+  EMB_SQL_CHECK("new table -- create");
+
+  EXEC SQL COMMIT;
+  EMB_SQL_CHECK("transaction -- commit");
+
+  return 0;
+}
+
+
+/* This function creates a tables MYSCHEMA1.TARGET1 */
+int CreateTargetTable()
+{
+  struct sqlca sqlca;
+
+  /* create a new table 'MYSCHEAM1.TARGET1' */
+  printf("\n  CREATE A NEW TABLE 'MYSCHEMA1.TARGET1' BY INVOKING THE STATEMENT:"
+         "\n  -----------------------------------------------------------------"
+         "\n       CREATE TABLE MYSCHEMA1.TARGET1 (c1 integer not null)\n");
+
+  EXEC SQL CREATE TABLE MYSCHEMA1.TARGET1 (
+             C1 INTEGER NOT NULL);
+  EMB_SQL_CHECK("new table -- create");
+
+  EXEC SQL COMMIT;
+  EMB_SQL_CHECK("transaction -- commit");
+  return 0;
+}
+
+
+/* This function inserts some values directly into table MYSCHEMA.SOURCE1 */
+int InsertInitialValuesInSourceTable(void)
+{
+  struct sqlca sqlca;
+
+  printf("  INSERT INITIAL VALUES INTO TABLE MYSCHEMA1.SOURCE1 BY INVOKING\n"
+         "  THE STATEMENT:\n"
+         "  ----------------------------------------------------------------\n"
+         "      INSERT INTO MYSCHEMA1.SOURCE1 VALUES (1), (2), (3), (4), (5)\n");
+
+  /* Insert initial values into table MYSCHEMA1.SOURCE1 */
+  strcpy(strStmt,
+         "INSERT INTO MYSCHEMA1.SOURCE1 VALUES (1), (2), (3), (4), (5)");
+  EXEC SQL EXECUTE IMMEDIATE :strStmt;
+  EMB_SQL_CHECK("insert -- MYSCHEMA1.SOURCE1");
+ 
+  EXEC SQL COMMIT;
+  EMB_SQL_CHECK("commit");
+
+  return 0;
+}
+
+
+/* This function demonstrates how to load data using the remotefetch media */
+/* type using the db2Load API                                              */
+int LoadData(int bDoRemoteFetch,
+             char *pDBName_source,
+             char *pUserID_source,
+             char *pPasswd_source)
+{
+  struct sqlca sqlca;
+
+  /* Statement for CURSOR or REMOTEFETCH media */
+  char *pSourceStatement = "select * from MYSCHEMA1.SOURCE1";
+  char actionString[256];
+
+  /* Declare the input and output structures needed to call the
+     db2Load API */
+  struct db2LoadStruct paramStruct;
+  struct db2LoadIn inputInfoStruct;
+  struct db2LoadOut outputInfoStruct;
+  struct sqlu_media_list mediaList;
+  union sqlu_media_list_targets mediaListTargets;
+  struct sqlu_statement_entry statementEntry;
+  struct sqlu_remotefetch_entry remotefetchEntry;
+
+  struct sqlchar *pAction;
+  char localMsgFileName[128];
+
+  /* Initialize the members of the structures to NULL or zero */
+  memset(&paramStruct, 0, sizeof(paramStruct));
+  memset(&mediaList, 0, sizeof(mediaList));
+  memset(&outputInfoStruct, 0, sizeof(outputInfoStruct));
+  memset(&inputInfoStruct, 0, sizeof(inputInfoStruct));
+  memset(&mediaListTargets, 0, sizeof(mediaListTargets));
+  memset(&statementEntry, 0, sizeof(statementEntry));
+  memset(&remotefetchEntry, 0, sizeof(remotefetchEntry));
+
+  printf(
+    "\n  INITIALIZE LOAD API STRUCTURES AND INVOKE THE LOAD API"
+    "\n  ------------------------------------------------------"
+    "\n  CREATE db2LoadStruct, db2LoadIn, db2LoadOut, "
+    "\n  paramStruct, inputInfoStruct, and outputInfoStruct RESPECTIVELY AND"
+    "\n  INITIALIZE THEIR MEMBERS TO ZERO OR NULL.\n");
+
+  printf(
+    "\n  CREATE sqlu_media_list, mediaList, remotefetchEntry or statementEntry,"
+    "\n  sqlu_media_list_targets UNION, and mediaListTargets. INITIALIZE THEIR"
+    "\n  MEMBERS TO ZERO OR NULL.\n");
+
+  /* Setup the input information structure */
+  printf("\n  SET UP THE db2LoadIn STRUCTURE 'inputInfoStruct'.\n");
+
+  inputInfoStruct.iRestartphase =  ' ';
+  inputInfoStruct.iStatsOpt = SQLU_STATS_NONE;
+  inputInfoStruct.iIndexingMode = SQLU_INX_AUTOSELECT;
+  inputInfoStruct.iNonrecoverable = SQLU_NON_RECOVERABLE_LOAD;
+  inputInfoStruct.iAccessLevel = SQLU_ALLOW_NO_ACCESS;
+  inputInfoStruct.iLockWithForce = SQLU_NO_FORCE;
+
+  /* From V9.0 onwards, the structure member iCheckPending is                 */
+  /* deprecated and replaced with iSetIntegrityPending. Also the              */
+  /* possible value to set this  variable SQLU_CHECK_PENDING_CASCADE_DEFERRED */
+  /* has been replaced with SQLU_SI_PENDING_CASCADE_DEFERRED.                 */
+
+  inputInfoStruct.iSetIntegrityPending = SQLU_SI_PENDING_CASCADE_DEFERRED;
+
+  if (bDoRemoteFetch)
+  {
+    /* Setup the REMOTEFETCH media */
+    printf("\n  SET UP remotefetchEntry, mediaListTargets, mediaList AND"
+           "\n  paramStruct.\n");
+
+    remotefetchEntry.pDatabaseName = pDBName_source;
+    remotefetchEntry.iDatabaseNameLen = strlen(pDBName_source);
+    if (strlen(pUserID_source) != 0)
+    {
+      remotefetchEntry.pUserID = pUserID_source;
+      remotefetchEntry.iUserIDLen = strlen(pUserID_source);
+    }
+    if (strlen(pPasswd_source) != 0)
+    {
+      remotefetchEntry.pPassword = pPasswd_source;
+      remotefetchEntry.iPasswordLen = strlen(pPasswd_source);
+    }
+    remotefetchEntry.pStatement = pSourceStatement;
+    remotefetchEntry.iStatementLen = strlen(pSourceStatement);
+    mediaListTargets.pRemoteFetch = &remotefetchEntry;
+    mediaList.media_type = SQLU_REMOTEFETCH;
+  }
+  else
+  {
+    /* Setup the CURSOR media */
+    printf("\n  SET UP statementEntry, mediaListTargets, mediaList AND"
+           "\n  paramStruct.\n");
+
+    statementEntry.pEntry = pSourceStatement;
+    statementEntry.length = strlen(pSourceStatement);
+    mediaListTargets.pStatement = &statementEntry;
+    mediaList.media_type = SQLU_SQL_STMT;
+  }
+  mediaList.sessions = 1;
+  mediaList.target = mediaListTargets;
+
+  /* Setup action string */
+  strcpy(actionString, "REPLACE INTO MYSCHEMA1.TARGET1");
+  pAction = (struct sqlchar *)malloc(sizeof(short) +
+                                     sizeof(actionString) + 1);
+  pAction->length = strlen(actionString);
+  strcpy(pAction->data, actionString);
+
+  /* Setup the parameter structure */
+  paramStruct.piSourceList = &mediaList;
+  paramStruct.piActionString = pAction;  
+  paramStruct.piFileType = SQL_CURSOR;
+   
+  strcpy(localMsgFileName, "tbloadcursor.MSG");
+  paramStruct.piLocalMsgFileName = localMsgFileName;
+  paramStruct.piLoadInfoIn = &inputInfoStruct;
+  paramStruct.poLoadInfoOut    = &outputInfoStruct;
+  paramStruct.iCallerAction = SQLU_INITIAL;
+
+  /* load data into the 'MYSCHEMA1.TARGET1' table by calling the db2Load API */
+  printf("\n  CALL THE DB2 API db2Load()\n");
+  db2Load (db2Version970, &paramStruct, &sqlca);     
+
+  DB2_API_CHECK("table -- load");
+
+  /* free memory allocated */
+  free(pAction);
+
+  /* Display the contents of table 'MYSCHEMA1.TARGET1' after loading data into it */
+  printf(
+    "\n  DISPLAY THE CONTENTS OF TABLE 'MYSCHEMA1.TARGET1' AFTER DATA IS LOADED INTO IT"
+    "\n  ------------------------------------------------------------------------------\n");
+  DisplayTableContents();
+
+  return 0;
+}
+
+
+/* This function displays the contents of the MYSCHEMA1.TARGET1 table */
+int DisplayTableContents()
+{
+  struct sqlca sqlca;
+  char *selectstmt = "SELECT * FROM MYSCHEMA1.TARGET1";
+  
+  printf("    %s\n\n", selectstmt);
+  printf("    C1\n");
+  printf("    ---\n");
+
+  /* Declare a CURSOR to store the results of the query specified by
+     'selectstmt' */
+  strcpy(strStmt,
+         selectstmt);
+  EXEC SQL PREPARE S1 FROM :strStmt;
+  EMB_SQL_CHECK("after prepare");
+
+  EXEC SQL DECLARE c1 CURSOR FOR s1;
+  EMB_SQL_CHECK("declare cursor");
+
+  EXEC SQL OPEN c1;
+  EMB_SQL_CHECK("cursor -- open");
+
+  /* Retrieve and display the results of the query */
+  EXEC SQL FETCH c1 INTO :c1;
+  EMB_SQL_CHECK("cursor -- fetch");
+
+  while (sqlca.sqlcode != 100)
+  {
+    printf("    %3d\n", c1);
+    EXEC SQL FETCH c1 INTO :c1;
+    EMB_SQL_CHECK("cursor -- fetch");
+  }
+
+  EXEC SQL CLOSE c1;
+  EMB_SQL_CHECK("cursor -- close");
+
+  return 0;
+}
+
+
+/* This function drops table MYSCHEMA1.SOURCE1 */
+int DropSourceTable()
+{
+  int rc = 0;
+  struct sqlca sqlca;
+
+  /* drop the table 'MYSCHEMA1.SOURCE1'*/
+  printf("\n  DROP TABLE MYSCHEMA1.SOURCE1\n");
+
+  EXEC SQL DROP TABLE MYSCHEMA1.SOURCE1;
+  EMB_SQL_CHECK("table MYSCHEMA1.SOURCE1 -- drop");
+
+  return 0;
+}
+
+/* This function drops table MYSCHEMA1.SOURCE1 */
+int DropTargetTable()
+{
+  int rc = 0;
+  struct sqlca sqlca;
+
+  /* drop the table 'MYSCHEMA1.TARGET1'*/
+  printf("\n  DROP TABLE MYSCHEMA1.TARGET1\n");
+
+  EXEC SQL DROP TABLE MYSCHEMA1.TARGET1;
+  EMB_SQL_CHECK("table MYSCHEMA1.TARGET1 -- drop");
+
+  return 0;
+}
+
+
