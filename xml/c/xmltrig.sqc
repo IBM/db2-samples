@@ -1,0 +1,562 @@
+/****************************************************************************
+** (c) Copyright IBM Corp. 2007 All rights reserved.
+** 
+** The following sample of source code ("Sample") is owned by International 
+** Business Machines Corporation or one of its subsidiaries ("IBM") and is 
+** copyrighted and licensed, not sold. You may use, copy, modify, and 
+** distribute the Sample in any form without payment to IBM, for the purpose of 
+** assisting you in the development of your applications.
+** 
+** The Sample code is provided to you on an "AS IS" basis, without warranty of 
+** any kind. IBM HEREBY EXPRESSLY DISCLAIMS ALL WARRANTIES, EITHER EXPRESS OR 
+** IMPLIED, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED WARRANTIES OF 
+** MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE. Some jurisdictions do 
+** not allow for the exclusion or limitation of implied warranties, so the above 
+** limitations or exclusions may not apply to you. IBM shall not be liable for 
+** any damages you suffer as a result of using, copying, modifying or 
+** distributing the Sample, even if IBM has been advised of the possibility of 
+** such damages.
+*****************************************************************************
+**
+** SAMPLE FILE NAME: xmltrig.sqc
+**
+** PURPOSE: This sample shows how triggers are used to enforce automatic
+**          validation while inserting/updating XML documents
+**
+** USAGE SCENARIO: When a customer places a purchase order request an entry
+**                 is made in the "customer" table by inserting customer
+**                 information and his history details. If the customer is
+**                 new, and is placing request for the first time with this 
+**                 supplier, then the history column in the "customer" table 
+**                 wil be NULL. If he's an old customer, data in "customer"
+**                 table info and history columns are inserted.
+**
+** PREREQUISITE: 
+**   On Unix   : copy boots.xsd from <install_path>/sqllib/samples/xml/data 
+**               directory to current directory.
+**   On Windows: copy boots.xsd from <install_path>/sqllib/samples/xml/data
+**               directory to current directory.
+**
+** EXECUTION: bldapp xmltrig
+**            xmltrig
+**
+** INPUTS: NONE
+**
+** OUTPUTS: The last trigger statement which uses XMLELEMENT on transition
+**          variable will fail. All other trigger statements will succeed.
+**
+** OUTPUT FILE: xmltrig.out (available in the online documentation)
+**
+** SQL STATEMENTS USED:
+**           CREATE TRIGGER
+**           INSERT
+**           DELETE
+**           DROP
+**
+** SQL/XML FUNCTIONS USED:
+**           XMLDOCUMENT
+**           XMLPARSE
+**           XMLVALIDATE
+**           XMLELEMENT
+**
+**
+*****************************************************************************
+** For more information about the command line processor (CLP) scripts,
+** see the README file.
+**
+** For information on using SQL statements, see the SQL Reference.
+**
+** For the latest information on programming, building, and running DB2
+** applications, visit the DB2 application development website:
+**     http://www.software.ibm.com/data/db2/udb/ad
+**
+*****************************************************************************
+** SAMPLE DESCRIPTION
+**
+*****************************************************************************
+** 1. Register boots.xsd schema with http://posample1.org namespace.
+**
+** 2. This sample consists of four different cases of create trigger
+**    statements to show automatic validation of xml documents with
+**    triggers.
+**
+**    Case1: This first trigger statement shows how to assign values to
+**    non-xml transition variables, how to validate XML documents and
+**    also to show that NULL values can be assigned to XML transition
+**    variables in triggers.
+**
+**    Case2: Create a BEFORE INSERT trigger to validate info column in
+**    "customer" table and insert a value for history column without 
+**    any validation
+**
+**    Case3: Create a BEFORE UPDATE trigger with ACCORDING TO clause used
+**    with WHEN clause.This trigger statement shows that only when WHEN
+**    condition is satisfied, the action part of the trigger will be
+**    executed.WHEN conditions are used with BEFORE UPDATE triggers.
+**
+**    Case4: Create a BEFORE INSERT trigger with XMLELEMENT function being
+**    used on a transition variable. This case results in a failure as only
+**    XMLVALIDATE function is allowed on transition variables.
+**
+** NOTE: In a typical real-time scenario, DBAs will create triggers and users
+**    will insert records using multiple insert/update statements, not just
+**    one insert statement as shown in this sample.
+****************************************************************************/
+/*      INCLUDE ALL HEADER FILES                                           */
+/***************************************************************************/
+
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+#include <sqlenv.h>
+#include <sqlutil.h>
+#include <sqlcodes.h>
+#include "utilemb.h"
+
+EXEC SQL INCLUDE SQLCA;
+
+/***************************************************************************/
+/*      DECLARE ALL HOST VARIABLES                                         */
+/***************************************************************************/
+EXEC SQL BEGIN DECLARE SECTION; /* Start of declare section */
+  char dbAlias[700];
+  char user[700];
+  char pswd[700];
+  short custid;
+  SQL TYPE IS XML AS CLOB( 100K ) info;
+  SQL TYPE IS XML AS CLOB( 10K ) history;
+  short null_ind = -1;
+  char RelSchema[1024];
+  char SchemaName[1024];
+  char SchemaLocation[1024];
+  char PrimaryDocument[1024];
+  short isshred=0;
+  SQL TYPE IS BLOB_FILE xsdfile;
+  SQL TYPE is BLOB(1M) *xsdobjp;
+  char stmt[16384];
+EXEC SQL END DECLARE SECTION; /* End of declare section */
+
+
+int main(int argc, char *argv[])
+{
+
+  int rc = 0;
+  struct sqlca sqlca;
+  int len;
+
+
+  /* check the command line arguments */
+  rc = CmdLineArgsCheck1(argc, argv, dbAlias, user, pswd);
+  if (rc != 0)
+  {
+    return rc;
+  }
+
+  printf("\n\nTHIS SAMPLE SHOWS HOW TO AUTOMATE XML DATA ");
+  printf("VALIDATION USING TRIGGERS\n");
+
+  /*************************************************************************/
+  /*                          Connect to SAMPLE database                   */
+  /*************************************************************************/
+ 
+  rc = DbConn(dbAlias, user, pswd);
+  if (rc != 0)
+  {
+    return rc;
+  }
+
+  /*************************************************************************/
+  /*            Register boots schema                                      */
+  /*************************************************************************/
+  
+
+  rc = registerxmlschema();
+  if (rc != 0)
+  {
+    return rc;
+  }
+
+
+  /*************************************************************************/
+  /*    Case1: This first trigger statement shows how to assign values to  */
+  /*    non-xml transition variables, how to validate XML documents and    */ 
+  /*    also to show that NULL values can be assigned to XML transition    */
+  /*    variables in triggers.                                             */       
+  /*************************************************************************/
+
+  printf("----------------------------------------------------------\n\n");
+
+  printf("\n\nCREATE TRIGGER TO VALIDATE XML DOC BEFORE INSERTING ");
+  printf("AND SETTING ONE XML COLUMN VALUE TO NULL\n");
+
+
+  printf("\n\nCREATE TRIGGER TR1 NO CASCADE BEFORE INSERT ON customer");
+  printf("\n REFERENCING NEW AS n");
+  printf("\nFOR EACH ROW MODE DB2SQL");
+  printf("\nBEGIN ATOMIC");
+  printf("\n set n.Cid = 5000");
+  printf("\n set n.info = xmlvalidate(n.info ACCORDING TO XMLSCHEMA ");
+  printf("ID customer");
+  printf("\n set n.history = NULL");
+  printf("\nEND");
+
+  /* Assigning value to one xml column and NULL to another xml column
+     value */
+  EXEC SQL CREATE TRIGGER TR1 NO CASCADE BEFORE INSERT ON CUSTOMER 
+  REFERENCING NEW AS n 
+  FOR EACH ROW MODE DB2SQL 
+  BEGIN ATOMIC 
+    set n.Cid = 5000; 
+    set n.info = xmlvalidate(n.info ACCORDING TO XMLSCHEMA
+				ID customer); 
+    set n.history = NULL; 
+  END;
+  EMB_SQL_CHECK("CREATE TRIGGER");
+
+  printf("\n\nUSE THE SQL STATEMENT: \n");
+  printf("   INSERT INTO   \n");
+  printf("TO INSERT DATA INTO CUSTOMER TABLE USING VALUES\n");
+
+  strcpy(stmt, "INSERT INTO customer VALUES (1008,xmlparse(document "\
+		"'<customerinfo Cid=\"1008\">"\
+		"<name>Larry Menard</name><addr country=\"Canada\">"\
+		"<street>223 Koramangala ring Road</street>"\
+		"<city>Toronto</city><prov-state>Ontario</prov-state>"\
+		"<pcode-zip>M4C 5K8</pcode-zip></addr><phone type=\"work\">"\
+		"905-555-9146</phone><phone type=\"home\">416-555-6121 "\
+		"</phone><assistant><name>Goose Defender</name><phone "\
+		"type=\"home\">416-555-1943</phone></assistant>"\
+		"</customerinfo>' preserve whitespace), NULL)");			
+		
+										
+  EXEC SQL EXECUTE IMMEDIATE :stmt;
+  EMB_SQL_CHECK("INSERT INTO CUSTOMER");
+
+  EXEC SQL COMMIT;
+  EMB_SQL_CHECK("COMMIT");
+
+  EXEC SQL SELECT Cid, info INTO :custid, :info 
+  FROM customer 
+  WHERE Cid = 5000;
+  EMB_SQL_CHECK("SELECT FROM CUSTOMER");
+
+  printf("\n\n SELECT Cid, info INTO :custid, :info FROM customer ");
+  printf("WHERE Cid = 5000\n\n");
+  printf("custid     info\n");
+  printf("------     ---- \n");
+  printf("%d     ", custid);
+
+  /* print info column data */
+  for(len = 0; len < info.length; len++)
+  {
+    printf("%c", info.data[len]);
+  }
+
+  EXEC SQL DROP TRIGGER TR1;
+  EMB_SQL_CHECK("DROP TRIGGER");
+
+  EXEC SQL COMMIT;
+  EMB_SQL_CHECK("COMMIT");
+
+  /*************************************************************************/
+  /*    Case2: Create a BEFORE INSERT trigger to validate info column in   */ 
+  /*    "customer" table and insert a value for history column without     */
+  /*    any validation                                                     */
+  /*************************************************************************/
+
+  printf("\n\n----------------------------------------------------------\n\n");
+  printf("\n\nCREATE TRIGGER TR1 NO CASCADE BEFORE INSERT ON customer");
+  printf("\n REFERENCING NEW AS n");
+  printf("\nFOR EACH ROW MODE DB2SQL");
+  printf("\nBEGIN ATOMIC");
+  printf("\n set n.Cid = 5001");
+  printf("\n set n.info = xmlvalidate(n.info ACCORDING TO XMLSCHEMA ");
+  printf("ID customer)");
+  printf("\n set n.history = \'<customerinfo ");
+  printf("Cid = \"1009\"><name>suzan</name></customerinfo>\'");
+  printf("\nEND\n\n");
+
+
+  /* Assinging values for both xml columns but validating only one column
+     data  */
+  EXEC SQL CREATE TRIGGER TR1 NO CASCADE BEFORE INSERT ON customer 
+  REFERENCING NEW AS n 
+  FOR EACH ROW MODE DB2SQL 
+  BEGIN ATOMIC 
+    set n.Cid = 5001; 
+    set n.info = xmlvalidate(n.info ACCORDING TO XMLSCHEMA ID customer); 
+    set n.history = '<customerinfo Cid = "1009"> \
+		<name>suzan</name></customerinfo>'; 
+  END; 	
+  EMB_SQL_CHECK("CREATE TRIGGER");
+
+  printf("\n\nUSE THE SQL STATEMENT: \n");
+  printf("   INSERT INTO   \n");
+  printf("TO INSERT DATA INTO CUSTOMER TABLE USING VALUES\n");
+
+  strcpy(stmt, "INSERT INTO CUSTOMER VALUES (1009, xmlparse(document "\
+                "'<customerinfo Cid=\"1009\">"\
+                "<name>Larry Menard</name><addr country"\
+                "=\"India\"><street>223 Koramangala ring Road</street>"\
+                "<city>Bangalore</city><prov-state>Ontario</prov-state>"\
+                "<pcode-zip>M4C 5K8</pcode-zip></addr><phone type=\"work\">"\
+                "905-555-9146</phone><phone type=\"home\">416-555-6121 "\
+                "</phone><assistant><name>Tim Luther</name><phone "\
+                "type=\"home\">416-555-1943</phone></assistant>"\
+                "</customerinfo>'), NULL)");
+
+
+  EXEC SQL EXECUTE IMMEDIATE :stmt;
+  EMB_SQL_CHECK("INSERT INTO CUSTOMER");
+
+  EXEC SQL COMMIT;
+  EMB_SQL_CHECK("COMMIT");
+
+  EXEC SQL SELECT Cid, info, history INTO :custid, :info, :history 
+  FROM customer WHERE Cid = 5001;
+  EMB_SQL_CHECK("SELECT FROM CUSTOMER");
+
+  printf("\n\n SELECT Cid, info, history INTO :custid, :info, :history");
+  printf(" FROM customer WHERE Cid = 5001\n\n");
+  printf("custid     info     history\n");
+  printf("------     ----     -------\n");
+  printf("%d     ", custid);
+
+  /* print info column data */
+  for(len = 0; len < info.length; len++)
+  {
+    printf("%c", info.data[len]);
+  }
+  
+  printf("            ");
+
+  /* print history column data */
+  for(len = 0; len < history.length; len++)
+  {
+    printf("%c", history.data[len]);
+  }
+
+  EXEC SQL COMMIT;
+  EMB_SQL_CHECK("COMMIT");
+
+  /*************************************************************************/
+  /*    Case3: Create a BEFORE UPDATE trigger with ACCORDING TO clause used*/
+  /*    with WHEN clause.This trigger statement shows that only when WHEN  */
+  /*    condition is satisfied, the action part of the trigger will be     */
+  /*    executed.WHEN conditions are used with BEFORE UPDATE triggers.     */
+  /*************************************************************************/
+
+  printf("\n\n----------------------------------------------------------\n\n");
+  printf("\n\nCREATE TRIGGER TR2 NO CASCADE BEFORE UPDATE ON customer");
+  printf("\n REFERENCING NEW AS n");
+  printf("\nFOR EACH ROW MODE DB2SQL");
+  printf("\nWHEN (n.info IS NOT VALIDATED ACCORDING TO XMLSCHEMA ID CUSTOMER)");
+  printf("\nBEGIN ATOMIC");
+  printf("\n set n.Cid = 5002");
+  printf("\n set n.info = xmlvalidate(n.info ACCORDING TO XMLSCHEMA ID customer)");
+  printf("\n set n.history = \'<customerinfo "); 
+  printf("Cid = \"1010\"><name>malaika</name></customerinfo>\'");
+  printf("\nEND");
+
+  /* using ACCORDING TO clause  in WHEN clause */
+  EXEC SQL CREATE TRIGGER TR2 NO CASCADE BEFORE UPDATE ON customer 
+  REFERENCING NEW AS n 
+  FOR EACH ROW MODE DB2SQL 
+  WHEN (n.info IS NOT VALIDATED ACCORDING TO XMLSCHEMA ID CUSTOMER) 
+  BEGIN ATOMIC 
+    set n.Cid = 5002; 
+    set n.info = xmlvalidate(n.info ACCORDING TO XMLSCHEMA ID customer); 
+    set n.history = '<customerinfo \
+			Cid = "1010"><name>malaika</name></customerinfo>'; 
+  END;
+  EMB_SQL_CHECK("CREATE TRIGGER");
+
+
+  printf("\n\nUSE THE SQL STATEMENT: \n");
+  printf("   UPDATE   \n");
+  printf("TO UPDATE DATA IN CUSTOMER TABLE WHERE Cid = 5001\n");
+
+  strcpy(stmt, "UPDATE CUSTOMER SET customer.info = XMLPARSE(document "\
+		"'<customerinfo Cid=\"1012\">"\
+		"<name> Russel</name><addr country"\
+		"=\"India\"><street>223 Koramangala ring Road</street>"\
+		"<city>Bangalore</city><prov-state>Karnataka</prov-state>"\
+		"<pcode-zip>M4C 5K8</pcode-zip></addr><phone type=\"work\">"\
+		"905-555-9146</phone><phone type=\"home\">416-555-6121 "\
+		"</phone><assistant><name>Vincent luther</name><phone "\
+		"type=\"home\">416-555-1943</phone></assistant>"\
+		"</customerinfo>' preserve whitespace) WHERE Cid=5001");			
+
+  EXEC SQL EXECUTE IMMEDIATE :stmt;
+  EMB_SQL_CHECK("UPDATE CUSTOMER INFO");
+
+  EXEC SQL COMMIT;
+  EMB_SQL_CHECK("COMMIT");
+
+  EXEC SQL SELECT Cid, info, history INTO :custid, :info, :history 
+  FROM customer 
+  WHERE Cid = 5002;
+  EMB_SQL_CHECK("SELECT FROM CUSTOMER");
+
+
+  printf("\n\n SELECT Cid, info, history INTO :custid, :info, :history ");
+  printf("FROM customer WHERE Cid = 5002\n\n");
+  printf("custid     info       history \n");
+  printf("------     ----       --------\n");
+  printf("%d     ", custid);
+
+  /* print the info column data */
+  for(len = 0; len < info.length; len++)
+  {
+    printf("%c", info.data[len]);
+  }
+
+  printf("            ");
+
+  /* print history column data */
+  for(len = 0; len < history.length; len++)
+  {
+    printf("%c", history.data[len]);
+  }
+
+
+  EXEC SQL DROP TRIGGER TR1;
+  EMB_SQL_CHECK("DROP TRIGGER");
+
+  EXEC SQL DROP TRIGGER TR2;
+  EMB_SQL_CHECK("DROP TRIGGER");
+
+  EXEC SQL COMMIT;
+  EMB_SQL_CHECK("COMMIT");
+
+  /* rollback all the changes made to the customer table */
+  EXEC SQL DELETE FROM CUSTOMER where Cid > 1005;  
+  EMB_SQL_CHECK("DELETE FROM CUSTOMER");
+
+  EXEC SQL COMMIT;
+  EMB_SQL_CHECK("COMMIT");
+
+  /*************************************************************************/
+  /*    Case4: Create a BEFORE INSERT trigger with XMLELEMENT function     */
+  /*    being used on a tranistion variable. This case results in a        */
+  /*    failure case, as only XMLVALIDATE function is allowed              */
+  /*    on transition variables.                                           */
+  /*************************************************************************/
+
+  /* create table boots */
+  EXEC SQL CREATE TABLE boots (Cid int, xmldoc1 XML, xmldoc2 XML);
+  EMB_SQL_CHECK("CREATE TABLE BOOTS");
+
+  printf("\n\n-----------------------------------------------\n\n");
+  printf("CREATE TRIGGER TR1 NO CASCADE BEFORE INSERT ON BOOTS");
+  printf("\nREFERENCING NEW as n");
+  printf("\nFOR EACH ROW MODE DB2SQL");
+  printf("\nBEGIN ATOMIC");
+  printf("\n set n.Cid=5004;");
+  printf("\n set n.xmldoc1 = XMLVALIDATE(xmldoc1 ACCORDING TO ");
+  printf("\n XMLSCHEMA URI 'http://posample1.org');");
+  printf("\n set n.xmldoc2 = XMLDOCUMENT(XMLELEMENT(name adidas, n.xmldoc2))");
+  printf("\nEND");
+
+  /* Trigger creation itself fails as XMLELEMENT is not allowed 
+  on transition variable */
+  EXEC SQL CREATE TRIGGER TR1 NO CASCADE BEFORE INSERT ON boots
+  REFERENCING NEW as n 
+  FOR EACH ROW MODE DB2SQL 
+  BEGIN ATOMIC 
+    set n.Cid=5004; 
+    set n.xmldoc1 = XMLVALIDATE(xmldoc1 ACCORDING TO XMLSCHEMA URI 
+                             'http://posample1.org');  
+    set n.xmldoc2 = XMLDOCUMENT(XMLELEMENT(name adidas, n.xmldoc2)); 
+  END;
+ 
+  printf("ERROR: SQL Code = %d\n", sqlca.sqlcode);
+  rc = sqlaintp(stmt, sizeof(stmt), 16384, &sqlca);
+  printf("%s", stmt);
+  
+  EXEC SQL ROLLBACK;
+  EMB_SQL_CHECK("ROLLBACK");
+
+  EXEC SQL DROP XSROBJECT POSAMPLE1.BOOTS;
+  EMB_SQL_CHECK("DROP XSROBJECT");
+
+
+  /*************************************************************************/
+  /*                  Disconnect from the database                         */
+  /*************************************************************************/
+
+
+  rc = DbDisconn(dbAlias);
+  if(rc != 0)
+  {
+    return rc;
+  }
+
+
+  return 0;
+}
+
+int registerxmlschema()
+{
+  struct sqlca sqlca;
+  FILE *testfile;
+
+  /* Initialize host variables for schema registration */
+  strcpy((char *)RelSchema,"POSAMPLE1");
+  strcpy((char *)SchemaName,"boots");
+  strcpy((char *)SchemaLocation, "http://www.test.com/order");
+  strcpy((char *)PrimaryDocument,"boots.xsd");
+  strcpy(xsdfile.name, PrimaryDocument);
+
+  xsdfile.name_length = strlen(xsdfile.name);
+  xsdfile.file_options = SQL_FILE_READ;
+
+
+  /* read the BLOB file into a BLOB variable */
+  if (xsdfile.name_length > 0)
+    {
+      testfile = fopen( xsdfile.name, "r" );
+      if ( testfile != NULL )
+        {
+          fclose( testfile );
+          if ((xsdobjp = (struct xsdobjp_t *)
+                                     malloc (sizeof (*xsdobjp))) != NULL )
+            {
+               memset(xsdobjp, 0, sizeof(*xsdobjp));
+               EXEC SQL VALUES (:xsdfile) INTO :*xsdobjp;
+            }
+        }
+      else
+        {
+           printf("fopen() error.\n");
+           printf("Error accessing file: %s \n", xsdfile.name);
+           exit(0);
+        }
+    }
+
+
+  printf("----------------------------------------------------------------\n");
+  printf("\nFilename : %s\n",xsdfile.name);
+  printf("XSD Data : %s\n",xsdobjp->data);
+  printf("CALLING SYSPROC.XSR_REGISTER TO REGISTER THE SCHEMA %s......\n\n",SchemaName);
+
+  /* call SYSPROC.XSR_REGISTER to register the primary schema */
+  EXEC SQL CALL SYSPROC.XSR_REGISTER(:RelSchema,
+                                     :SchemaName,
+                                     :SchemaLocation,
+                                     :*xsdobjp,
+                                     :*xsdobjp:null_ind );
+  EMB_SQL_CHECK("CALLING SYSPROC.XSR_REGISTER");
+
+  /* call SYSPROC.XSR_COMPLETE the complete the registeration of the schema */
+  printf("----------------------------------------------------------------\n");
+  printf("CALLING  SYSPROC.XSR_COMPLETE TO COMPLETE THE SCHEMA REGISTERATION.....\n\n");
+  EXEC SQL CALL SYSPROC.XSR_COMPLETE(:RelSchema,
+                                     :SchemaName,
+                                     :*xsdobjp:null_ind,
+                                     :isshred);
+  EMB_SQL_CHECK("CALLING SYSPROC.XSR_COMPLETE");
+  EXEC SQL COMMIT;
+  return 0;
+} /* registerxmlschema */
+

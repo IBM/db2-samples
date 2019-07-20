@@ -1,0 +1,548 @@
+/****************************************************************************
+** (c) Copyright IBM Corp. 2007 All rights reserved.
+**
+** The following sample of source code ("Sample") is owned by International
+** Business Machines Corporation or one of its subsidiaries ("IBM") and is
+** copyrighted and licensed, not sold. You may use, copy, modify, and
+** distribute the Sample in any form without payment to IBM, for the purpose of
+** assisting you in the development of your applications.
+**
+** The Sample code is provided to you on an "AS IS" basis, without warranty of
+** any kind. IBM HEREBY EXPRESSLY DISCLAIMS ALL WARRANTIES, EITHER EXPRESS OR
+** IMPLIED, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED WARRANTIES OF
+** MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE. Some jurisdictions do
+** not allow for the exclusion or limitation of implied warranties, so the above
+** limitations or exclusions may not apply to you. IBM shall not be liable for
+** any damages you suffer as a result of using, copying, modifying or
+** distributing the Sample, even if IBM has been advised of the possibility of
+** such damages.
+*****************************************************************************
+**                                                                           
+** SAMPLE FILE NAME    : ssv_backup_tbsp.sqc                                 
+**                                                                           
+** PURPOSE             : This sample demonstrates performing a tablespace    
+**                       backup in a massively parallel processing (MPP)     
+**                       environment.                                        
+**                                                                           
+** USAGE SCENARIO      : This sample demonstrates different options of       
+**                       performing tablespace BACKUPs in an MPP environment.
+**                       In an MPP environment, you can back up tablespaces  
+**                       on a single database partition, on several database 
+**                      partitions at once, or on all database partitions at
+**                       once.                                               
+**                                                                           
+** PREREQUISITE        : MPP setup with 3 database partitions:               
+**                         NODE 0: Catalog Node                              
+**                         NODE 1: Non-catalog node                          
+**                         NODE 2: Non-catalog node                          
+**                                                                           
+** EXECUTION           : ssv_backup_tbsp <log path> <store path>             
+**                                                                           
+** INPUTS              : <log path>   : Path to store the database logs.     
+**                       <store path> : Path to store backup images.         
+**                                                                           
+** OUTPUT              : Successful tablespace backups                       
+**                                                                           
+** OUTPUT FILE         : ssv_backup_tbsp.out                                 
+**                       (available in the online documentation)             
+**                                                                           
+** DB2 APIs USED       : db2Backup -- BACKUP DATABASE                        
+**                       db2CfgSet -- SET DATABASE CONFIGURATION             
+**                       db2CfgGet -- GET DATABASE CONFIGURATION             
+**                                                                           
+** SQL STATEMENTS USED : CREATE DATABASE PARTITION GROUP                     
+**                       CREATE TABLESPACE                                   
+**                       DROP TABLESPACE                                     
+**                       DROP DATABASE PARTITION GROUP                       
+*****************************************************************************
+**For more information on the sample programs, see the README file.          
+**For information on using SQL statements, see the SQL Reference.            
+**                                                                           
+**For the latest information on programming, building, and running DB2       
+**applications, visit the DB2 application development website:               
+**http://www.software.ibm.com/data/db2/udb/ad                                
+*****************************************************************************
+
+*****************************************************************************
+** SAMPLE DESCRIPTION                                                        
+*****************************************************************************
+** 1.  Back up a tablespace on a set of specified database partitions        
+**     (database partition 1 and database partition 2.)                      
+** 2.  Back up a tablespace on all database partitions at once.              
+****************************************************************************/
+
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+#include <sqlenv.h>
+#include <sqlutil.h>
+#include <db2ApiDf.h>
+#include "utilemb.h"
+
+/* function declarations */ 
+int PrepareDatabase(char *, char *, char *, char *);
+int BackupTablespaceOnASetOfPartitions(char *, char *, char *, char *);
+int BackupTablespaceOnAllPartitions(char *, char *, char *, char *);
+
+char logPath[SQL_PATH_SZ + 1] = { 0 };
+
+int main(int argc, char *argv[])
+{
+  int rc = 0;
+  struct sqlca sqlca = { 0 };
+
+  char dbAlias[SQL_ALIAS_SZ + 1];
+  char user[USERID_SZ + 1];
+  char pswd[PSWD_SZ + 1];
+  char restoredDbAlias[SQL_ALIAS_SZ + 1] = { 0 };
+  char workingPath[SQL_PATH_SZ + 1] = { 0 };
+
+  /* Check the command line arguments */
+  switch (argc)
+  {
+    case 3:
+      strcpy(logPath, argv[1]);
+      strcpy(workingPath, argv[2]);
+      strcpy(dbAlias, "SAMPLE");
+      strcpy(user, "");
+      strcpy(pswd, "");
+      break;
+
+    case 4:
+      strcpy(logPath, argv[2]);
+      strcpy(workingPath, argv[3]);
+      strcpy(dbAlias, argv[1]);
+      strcpy(user, "");
+      strcpy(pswd, "");
+      break;
+
+    case 6:
+      strcpy(logPath, argv[4]);
+      strcpy(workingPath, argv[5]);
+      strcpy(dbAlias, argv[1]);
+      strcpy(user, argv[2]);
+      strcpy(pswd, argv[3]);
+      break;
+
+    default:
+      printf("\nUSAGE: %s "
+             "[dbAlias [user pswd]] "
+             "<log path> <working path>\n",
+             argv[0]);
+      printf("       The 'log path' & 'working path' mentioned above has to be"
+             " absolute & must exist.\n");
+      rc = 1;
+      break;
+  }
+  if (rc != 0)
+  {
+    return rc;
+  }
+
+  printf("\nTHIS SAMPLE SHOWS HOW TO PERFORM TABLESPACE BACKUP IN AN "
+         "MPP ENVIRONMENT.\n");
+
+/*****************************************************************************/
+/*   SETUP                                                                   */
+/*****************************************************************************/
+  printf("\n***************************************************************");
+  printf("\n*   SETUP                                                     *");
+  printf("\n***************************************************************\n");
+
+  /* Connect to database */
+  rc = DbConn(dbAlias, user, pswd);
+  if (rc != 0)
+  {
+    return rc;
+  }
+
+  /* Create a database partition group on database partitions 1 and 2. */
+
+  printf("\nUse the SQL command\n");
+  printf("  CREATE DATABASE PARTITION GROUP\n");
+  printf("To create database partition group.\n\n");
+
+  printf("Execute:\n");
+  printf("  CREATE DATABASE PARTITION GROUP dbpgroup ON DBPARTITIONNUMS (1, 2)");
+
+  EXEC SQL CREATE DATABASE PARTITION GROUP dbpgroup ON DBPARTITIONNUMS (1, 2);
+  EMB_SQL_CHECK("CREATE DATABASE PARTITION -- Invoke");
+
+  /* Create a tablespace on the partition group above created. */
+
+  printf("\n\nUse the SQL command\n");
+  printf("  CREATE TABLESPACE\n");
+  printf("To create a tablespace.\n\n");
+
+  printf("Execute:\n");
+  printf("  CREATE TABLESPACE t1 IN dbpgroup\n");
+
+  EXEC SQL CREATE TABLESPACE t1 IN dbpgroup;
+  EMB_SQL_CHECK("CREATE TABLESPACE -- Invoke");
+
+  /* Disconnect from database */
+  rc = DbDisconn(dbAlias);
+  if (rc != 0)
+  {
+    return rc;
+  }
+
+  rc = PrepareDatabase(dbAlias, user, pswd, workingPath);
+  
+  if(rc != 0)
+  {
+    return rc;
+  }
+
+/*****************************************************************************/
+/* 1. Back up a tablespace on a specified set of database partitions.        */
+/*****************************************************************************/
+  printf("\n*************************************************************"
+         "******************");
+  printf("\n* 1. Backup tablespace on a set of database partitions."
+         " (NODE 1 and NODE 2).  *");
+  printf("\n*************************************************************"
+         "******************\n");
+  rc = BackupTablespaceOnASetOfPartitions(dbAlias, user, pswd, workingPath);
+
+  if(rc != 0)
+  {
+    return rc;
+  }
+  
+/*****************************************************************************/
+/* 2. Back up a tablespace on all database partitions at once.               */
+/*****************************************************************************/
+  printf("\n***************************************************************");
+  printf("\n*2. Backup tablespace on all database partitions.             *");
+  printf("\n***************************************************************\n");
+  rc = BackupTablespaceOnAllPartitions(dbAlias, user, pswd, workingPath);
+
+  if(rc != 0)
+  {
+    return rc;
+  }
+  
+/*****************************************************************************/
+/*   CLEANUP                                                                 */
+/*****************************************************************************/
+  printf("\n***************************************************************");
+  printf("\n*   CLEANUP                                                   *");
+  printf("\n***************************************************************\n");
+  /* Connect to database */
+  rc = DbConn(dbAlias, user, pswd);
+  if (rc != 0)
+  {
+    return rc;
+  }
+
+  /* Drop the tablespace T1 */
+  printf("\nUse the SQL command\n");
+  printf("  DROP TABLESPACE\n");
+  printf("To drop a tablespace.\n\n");
+
+  printf("Execute:\n");
+  printf("  DROP TABLESPACE t1");
+
+  EXEC SQL DROP TABLESPACE t1;
+  EMB_SQL_CHECK("DROP TABLESPACE -- Invoke");
+
+  /* Drop the database partition group dbpgroup */
+  printf("\n\nUse the SQL command\n");
+  printf("  DROP DATABASE PARTITION GROUP\n");
+  printf("To drop a database partition group.\n\n");
+
+  printf("Execute:\n");
+  printf("  DROP DATABASE PARTITION GROUP dbpgroup\n");
+
+  EXEC SQL DROP DATABASE PARTITION GROUP dbpgroup;
+  EMB_SQL_CHECK("DROP DATABASE PARTITION GROUP -- Invoke");
+
+  /* Disconnect from database */
+  rc = DbDisconn(dbAlias);
+  if (rc != 0)
+  {
+    return rc;
+  }
+
+  return 0;
+} /* end main */
+
+/*****************************************************************************/
+/* Function: PrepareDatabase                                                 */
+/* Prepare database for tablespace backup                                    */
+/*****************************************************************************/
+int PrepareDatabase(char dbAlias[], 
+                    char user[], 
+                    char pswd[],
+                    char workingPath[])
+{
+
+  int rc = 0;
+  struct sqlca sqlca = { 0 };
+  db2BackupStruct backupStruct = { 0 };
+  db2BackupMPPOutputStruct backupMPPOutputStruct[3] = { 0, 0, 0 };
+  db2MediaListStruct mediaListStruct = { 0 };
+  db2CfgParam cfgParameters[1] = { 0 };
+  db2Cfg cfgStruct = { 0 };
+  char archValue[SQL_PATH_SZ + 5] = { 0 };
+
+  /* Before performing a tablespace backup, the database must be made       */
+  /* recoverable. This will make the logs available which are necessary to  */
+  /* restore/rollforward the tablespace. Without making the database        */
+  /* recoverable, tablespace can not be backed up.                          */
+  /* To make the database recoverable, set the LOGARCHMETH1 configuration   */
+  /* parameter and take a full backup of the database.                      */
+
+  printf("\n**********************************************************"
+         "*************");
+  printf("\nTo perform a tablespace backup, the database must be made "
+         " recoverable.\n  To make the database recoverable, set the "
+         " LOGARCHMETH1 configuration\n  parameter and take a full backup"
+         " of the database.\n");
+  printf("************************************************************"
+         "***********\n");
+
+  printf("\nUse following commands to make the database recoverable:\n"
+         "  UPDATE DB CFG FOR SAMPLE USING logarchmeth1 disk:%s\n"
+         "  BACKUP DB sample ON ALL DBPARTITIONNUMS\n", logPath);
+
+  printf("\n    Update \'%s\'  database configuration:\n", dbAlias);
+  printf("    - Set the database configuration parameter LOGARCHMETH1\n");
+  printf("        i.e., set LOGARCHMETH1  = disk:%s\n", logPath);
+
+  /* Initialize cfgParameters */ 
+
+  strcpy(archValue, "disk:");
+  strcat(archValue, logPath);
+  /* SQLF_DBTN_LOGARCHMETH1 is a token of the updatable database       */
+  /* configuration parameter 'logarchmeth1'; it is used to update the  */
+  /* database configuration file                                       */
+  cfgParameters[0].flags = 0;
+  cfgParameters[0].token = SQLF_DBTN_LOGARCHMETH1;
+  cfgParameters[0].ptrvalue = (char *)archValue;
+
+  /* Initialize cfgStruct */
+  cfgStruct.numItems = 1;
+  cfgStruct.paramArray = cfgParameters;
+  cfgStruct.flags = db2CfgDatabase | db2CfgImmediate;
+  cfgStruct.dbname = dbAlias;
+
+  printf("\n***********************************************\n");
+  printf("***       UPDATE DB CFG PARAMETER           ***\n");
+  printf("***********************************************\n");
+  printf("\nUSE THE DB2 APIs:\n");
+  printf("  db2CfgSet -- Update db config\n");
+  printf("TO UPDATE THE DATABASE CONFIGURATION PARAMETERS.\n");
+
+  /* Set database configuration */
+  db2CfgSet(db2Version970, (void *)&cfgStruct, &sqlca);
+  DB2_API_CHECK("Update DB config");
+
+  printf("\n****************************\n");
+  printf("*** BACK UP THE DATABASE ***\n");
+  printf("****************************\n");
+  printf("\nUSE THE DB2 APIs:\n");
+  printf("  db2Backup -- Backup Database\n");
+  printf("TO BACK UP THE DATABASE.\n");
+
+  backupStruct.piDBAlias = dbAlias;
+  backupStruct.piUsername = user;
+  backupStruct.piPassword = pswd;
+  backupStruct.piVendorOptions = NULL;
+  backupStruct.iVendorOptionsSize = 0;
+  backupStruct.iCallerAction = DB2BACKUP_BACKUP;
+
+  /* DB2BACKUP_MPP & DB2BACKUP_DB specifies database level backup in an     */
+  /* MPP environment.                                                       */
+  backupStruct.iOptions = DB2BACKUP_MPP | DB2BACKUP_OFFLINE | DB2BACKUP_DB;
+  backupStruct.iAllNodeFlag = DB2_ALL_NODES;
+  backupStruct.piNodeList = NULL;
+  backupStruct.iNumMPPOutputStructs = 3;
+  backupStruct.poMPPOutputStruct = backupMPPOutputStruct;
+
+  /*******************************/
+  /*    BACK UP THE DATABASE    */
+  /*******************************/
+  printf("\n    Backing up the '%s' database...\n", dbAlias);
+
+  mediaListStruct.locations = &workingPath;
+  mediaListStruct.numLocations = 1;
+  mediaListStruct.locationType = SQLU_LOCAL_MEDIA;
+
+  backupStruct.piMediaList = &mediaListStruct;
+
+  /* The API db2Backup creates a backup copy of a database.             */
+  /* This API automatically establishes a connection to the specified   */
+  /* database. (This API can also be used to create a backup copy of a  */
+  /* table space).                                                      */
+  db2Backup(db2Version970, &backupStruct, &sqlca);
+  DB2_API_CHECK("Database -- Backup");
+
+  printf("  Backup finished.\n");
+  printf("    - backup image path      : %s\n", mediaListStruct.locations[0]);
+  printf("    - backup image time stamp: %s\n", backupStruct.oTimestamp);
+
+  return rc;
+
+}
+
+/*****************************************************************************/
+/* Function: BackupDatabaseOnASetOfPartitions		                       */
+/* Back up the database on a set of database partitions specified.           */
+/*****************************************************************************/
+int BackupTablespaceOnASetOfPartitions(char dbAlias[], 
+                                  char user[], 
+                                  char pswd[],
+                                  char workingPath[])
+{
+  int rc = 0;
+  struct sqlca sqlca = { 0 };
+  db2BackupStruct backupStruct = { 0 };
+  db2BackupMPPOutputStruct backupMPPOutputStruct[3] = { 0, 0, 0 };
+  db2MediaListStruct mediaListStruct = { 0 };
+  db2TablespaceStruct tablespaceStruct = { 0 };
+  char *tablespaceList[20] = {"T1"};
+
+  printf("\n******************************\n");
+  printf("*** BACK UP THE TABLESPACE ***\n");
+  printf("******************************\n");
+  printf("\nUSE THE DB2 APIs:\n");
+  printf("  db2Backup -- Backup Database\n");
+  printf("TO BACK UP THE TABLESPACE.\n");
+
+  backupStruct.piDBAlias = dbAlias;
+  backupStruct.piUsername = user;
+  backupStruct.piPassword = pswd;
+  backupStruct.piVendorOptions = NULL;
+  backupStruct.iVendorOptionsSize = 0;
+  backupStruct.iCallerAction = DB2BACKUP_BACKUP;
+
+  /* DB2BACKUP_MPP & DB2BACKUP_TABLESPACE specifies tablespace level backup */
+  /* in an MPP environment.                                                 */
+  backupStruct.iOptions = DB2BACKUP_MPP |
+                          DB2BACKUP_OFFLINE |
+                          DB2BACKUP_TABLESPACE;
+
+  /* DB2_NODE_LIST specifies that the backup will be performed on the list  */
+  /* of database partitions supplied as parameters.                         */
+  backupStruct.iAllNodeFlag = DB2_NODE_LIST;
+
+  /* Total number of database partitions that will take part in backup.     */
+  backupStruct.iNumNodes = 2;
+  backupStruct.piNodeList = (SQL_PDB_NODE_TYPE *)
+                              malloc(2 * sizeof(SQL_PDB_NODE_TYPE));
+
+    if (backupStruct.piNodeList == NULL)
+  {
+    printf("\nInsufficient memory.\n");
+    return 1;
+  }
+  
+  /* NODE 1 & NODE 2 will be backed up.*/
+  backupStruct.piNodeList[0] = 0;
+  backupStruct.piNodeList[1] = 1;
+  backupStruct.iNumMPPOutputStructs = 2;
+  backupStruct.poMPPOutputStruct = backupMPPOutputStruct;
+
+  /***********************************/
+  /*    BACK UP THE TABLESPACE T1    */
+  /***********************************/
+  printf("\n    Backing up the '%s' tablespace...\n", *tablespaceList);
+
+  tablespaceStruct.tablespaces = tablespaceList;
+  tablespaceStruct.numTablespaces = 1;
+
+  mediaListStruct.locations = &workingPath;
+  mediaListStruct.numLocations = 1;
+  mediaListStruct.locationType = SQLU_LOCAL_MEDIA;
+
+  backupStruct.piTablespaceList = &tablespaceStruct;
+  backupStruct.piMediaList = &mediaListStruct;
+
+  /* The API db2Backup is used to create a backup copy of a table space. */
+  db2Backup(db2Version970, &backupStruct, &sqlca);
+  DB2_API_CHECK("Tablespace -- Backup");
+
+  printf("  Backup finished.\n");
+  printf("    - backup image path      : %s\n", mediaListStruct.locations[0]);
+  printf("    - backup image time stamp: %s\n", backupStruct.oTimestamp);
+
+  free(backupStruct.piNodeList);
+  
+  return rc;
+
+}
+
+/*****************************************************************************/
+/* Function: BackupDatabaseOnAllOfPartitions		                       */
+/* Back up the database on all database partitions at once.                  */
+/*****************************************************************************/
+int BackupTablespaceOnAllPartitions(char dbAlias[], 
+                                char user[], 
+                                char pswd[],
+                                char workingPath[])
+{
+  int rc = 0;
+  struct sqlca sqlca = { 0 };
+  db2BackupStruct backupStruct = { 0 };
+  db2BackupMPPOutputStruct backupMPPOutputStruct[3] = { 0, 0, 0 };
+  db2MediaListStruct mediaListStruct = { 0 };
+  db2TablespaceStruct tablespaceStruct = { 0 };
+  char *tablespaceList[20] = {"T1"};
+
+  printf("\n******************************\n");
+  printf("*** BACK UP THE TABLESPACE ***\n");
+  printf("******************************\n");
+  printf("\nUSE THE DB2 APIs:\n");
+  printf("  db2Backup -- Backup Database\n");
+  printf("TO BACK UP THE TABLESPACE.\n");
+
+  backupStruct.piDBAlias = dbAlias;
+  backupStruct.piUsername = user;
+  backupStruct.piPassword = pswd;
+  backupStruct.piVendorOptions = NULL;
+  backupStruct.iVendorOptionsSize = 0;
+  backupStruct.iCallerAction = DB2BACKUP_BACKUP;
+
+  /* DB2BACKUP_MPP & DB2BACKUP_TABLESPACE specifies tablespace level backup */
+  /* in an MPP environment.                                                 */
+  backupStruct.iOptions = DB2BACKUP_MPP |
+                          DB2BACKUP_OFFLINE |
+                          DB2BACKUP_TABLESPACE;
+
+  /* DB2_ALL_NODES specifies that the backup will be performed on all       */
+  /* database partitions                                                    */
+  backupStruct.iAllNodeFlag = DB2_ALL_NODES;
+  backupStruct.piNodeList = NULL;
+
+  /* Total number of database partitions that will take part in backup.     */
+  backupStruct.iNumMPPOutputStructs = 3;
+  backupStruct.poMPPOutputStruct = backupMPPOutputStruct;
+
+  /*******************************/
+  /*    BACK UP THE TABLESPACE    */
+  /*******************************/
+  printf("\n    Backing up the '%s' tablespace...\n", *tablespaceList);
+
+  tablespaceStruct.tablespaces = tablespaceList;
+  tablespaceStruct.numTablespaces = 1;
+
+  mediaListStruct.locations = &workingPath;
+  mediaListStruct.numLocations = 1;
+  mediaListStruct.locationType = SQLU_LOCAL_MEDIA;
+
+  backupStruct.piTablespaceList = &tablespaceStruct;
+  backupStruct.piMediaList = &mediaListStruct;
+
+  /* The API db2Backup is used to create a backup copy of a table space. */
+  db2Backup(db2Version970, &backupStruct, &sqlca);
+  DB2_API_CHECK("Tablespace -- Backup");
+
+  printf("  Backup finished.\n");
+  printf("    - backup image path      : %s\n", mediaListStruct.locations[0]);
+  printf("    - backup image time stamp: %s\n", backupStruct.oTimestamp);
+
+  return rc;
+
+}

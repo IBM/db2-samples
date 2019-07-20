@@ -1,0 +1,90 @@
+#!/bin/ksh
+#############################################################################
+# (c) Copyright IBM Corp. 2007 All rights reserved.
+#
+# The following sample of source code ("Sample") is owned by International
+# Business Machines Corporation or one of its subsidiaries ("IBM") and is
+# copyrighted and licensed, not sold. You may use, copy, modify, and
+# distribute the Sample in any form without payment to IBM, for the purpose of
+# assisting you in the development of your applications.
+#
+# The Sample code is provided to you on an "AS IS" basis, without warranty of
+# any kind. IBM HEREBY EXPRESSLY DISCLAIMS ALL WARRANTIES, EITHER EXPRESS OR
+# IMPLIED, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED WARRANTIES OF
+# MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE. Some jurisdictions do
+# not allow for the exclusion or limitation of implied warranties, so the above
+# limitations or exclusions may not apply to you. IBM shall not be liable for
+# any damages you suffer as a result of using, copying, modifying or
+# distributing the Sample, even if IBM has been advised of the possibility of
+# such damages.
+#############################################################################
+# SCRIPT: bldsqlj
+# Builds Java embedded SQL (SQLJ) applications and applets on UNIX
+# Usage: bldsqlj prog_name  (requires hardcoding user ID and password)
+#        bldsqlj prog_name userid password
+#        bldsqlj prog_name userid password server_name
+#        bldsqlj prog_name userid password server_name port_number
+#        bldsqlj prog_name userid password server_name port_number db_name
+#
+#        Defaults:
+#          userid      = $USER variable requires updating if used
+#          password    = $PSWD variable requires updating if used
+#          server_name = $SERVER variable set to local hostname
+#          port_number = $PORTNUM variable set to 50000
+#          db_name     = $DB variable set to "sample"
+
+# To hardcode user ID (USER) and password (PSWD)
+# Replace "NULL" with the correct values in quotes
+USER="NULL"
+PSWD="NULL"
+# You can replace the defaults for each of the following
+# with a new value. Note that the PORTNUM number cannot
+# be one already used by another process.
+SERVER=`hostname`
+PORTNUM=50000
+DB="sample"
+
+
+# Translate and compile the SQLJ source file
+# and bind the package to the database.
+ if ( [ $# -eq 1 ]  && [ $USER != "NULL" ] && [ $PSWD != "NULL" ] ) || ( [ $# -ge 3 ]  && [ $# -le 6 ] ) 
+ then
+    # Remove .sqlj extension
+    progname=${1%.sqlj}
+
+    sqlj "${progname}.sqlj"
+
+    if [ $# -eq 1 ]
+    then
+       db2sqljcustomize -url jdbc:db2://$SERVER:$PORTNUM/$DB \
+       -user $USER -password $PSWD -longpkgname "${progname}_SJProfile0"
+    elif [ $# -eq  3 ]
+    then
+       db2sqljcustomize -url jdbc:db2://$SERVER:$PORTNUM/$DB -user $2 -password $3 \
+       -longpkgname "${progname}_SJProfile0"
+    elif [ $# -eq 4 ]
+    then
+       db2sqljcustomize -url jdbc:db2://$4:$PORTNUM/$DB -user $2 -password $3 \
+       -longpkgname "${progname}_SJProfile0"
+    elif [ $# -eq 5 ]
+    then
+       db2sqljcustomize -url jdbc:db2://$4:$5/$DB -user $2 -password $3 \
+       -longpkgname "${progname}_SJProfile0"
+    else
+       db2sqljcustomize -url jdbc:db2://$4:$5/$6 -user $2 -password $3 \
+       -longpkgname "${progname}_SJProfile0"
+    fi
+ else
+    echo 'Usage: bldsqlj prog_name (requires hardcoding user ID and password)'
+    echo '       bldsqlj prog_name userid password'
+    echo '       bldsqlj prog_name userid password server_name'
+    echo '       bldsqlj prog_name userid password server_name port_number'
+    echo '       bldsqlj prog_name userid password server_name port_number db_name'
+    echo ''
+    echo '       Defaults:'
+    echo '         userid      = '$USER
+    echo '         password    = '$PSWD
+    echo '         server_name = '$SERVER
+    echo '         port_number = '$PORTNUM
+    echo '         db_name     = '$DB
+ fi

@@ -1,0 +1,52 @@
+# ===================
+# NEW ATTRIBUTE TYPES
+# ===================
+dn: cn=schema
+changetype: modify
+add: attributetypes
+attributetypes: ( 1.3.18.0.2.6.9001 NAME 'IIInstanceName' 
+                 DESC 'Name of DB2 instance, as set by II' 
+                 EQUALITY 2.5.13.2 ORDERING 2.5.13.3 SUBSTR 2.5.13.4 
+                 SYNTAX 1.3.6.1.4.1.1466.115.121.1.15 SINGLE-VALUE
+                 USAGE userApplications )
+
+dn: cn=schema
+changetype: modify
+add: attributetypes
+attributetypes: ( 1.3.18.0.2.6.9002 NAME 'IIDatabaseName' 
+                 DESC 'Name of DB2 database, as set by II' 
+                 EQUALITY 2.5.13.2 ORDERING 2.5.13.3 SUBSTR 2.5.13.4 
+                 SYNTAX 1.3.6.1.4.1.1466.115.121.1.15 SINGLE-VALUE
+                 USAGE userApplications )
+
+dn: cn=schema
+changetype: modify
+add: attributetypes
+attributetypes: ( 1.3.18.0.2.6.9003 NAME 'IIRemoteServerName' 
+                 DESC 'Name of the remote data source as set by II' 
+                 EQUALITY 2.5.13.2 ORDERING 2.5.13.3 SUBSTR 2.5.13.4 
+                 SYNTAX 1.3.6.1.4.1.1466.115.121.1.15 SINGLE-VALUE
+                 USAGE userApplications )
+
+dn: cn=schema
+changetype: modify
+add: attributetypes
+attributetypes: ( 1.3.18.0.2.6.9004 NAME 'IIRemotePassword' 
+                 DESC 'Password (encrypted and encoded) for the remote server' 
+                 EQUALITY 2.5.13.2 ORDERING 2.5.13.3 SUBSTR 2.5.13.4 
+                 SYNTAX 1.3.6.1.4.1.1466.115.121.1.15 SINGLE-VALUE
+                 USAGE userApplications )
+
+# ===================
+# NEW OBJECT CLASSES 
+# ===================
+
+dn: cn=schema
+changetype: modify
+add: objectclasses
+objectclasses: ( 1.3.18.0.2.6.9010 NAME 'IIUserMapping' 
+                DESC 'II user mapping' 
+                SUP 'top'
+                STRUCTURAL MUST (IIRemoteServerName) 
+                           MAY  (IIInstanceName $ IIDatabaseName $ uid $ IIRemotePassword))
+

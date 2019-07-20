@@ -1,0 +1,968 @@
+/****************************************************************************
+** (c) Copyright IBM Corp. 2007 All rights reserved.
+** 
+** The following sample of source code ("Sample") is owned by International 
+** Business Machines Corporation or one of its subsidiaries ("IBM") and is 
+** copyrighted and licensed, not sold. You may use, copy, modify, and 
+** distribute the Sample in any form without payment to IBM, for the purpose of 
+** assisting you in the development of your applications.
+** 
+** The Sample code is provided to you on an "AS IS" basis, without warranty of 
+** any kind. IBM HEREBY EXPRESSLY DISCLAIMS ALL WARRANTIES, EITHER EXPRESS OR 
+** IMPLIED, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED WARRANTIES OF 
+** MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE. Some jurisdictions do 
+** not allow for the exclusion or limitation of implied warranties, so the above 
+** limitations or exclusions may not apply to you. IBM shall not be liable for 
+** any damages you suffer as a result of using, copying, modifying or 
+** distributing the Sample, even if IBM has been advised of the possibility of 
+** such damages.
+*****************************************************************************
+**
+** SOURCE FILE NAME: evm.sqC
+**
+** SAMPLE: How to create and parse file, pipe, and table event monitors.
+**
+** SQL STATEMENTS USED:
+**         CONNECT
+**         COMMIT
+**         DROP TABLE
+**         CREATE EVENT MONITOR
+**         SET EVENT MONITOR STATE
+**         DROP EVENT MONITOR
+**         PREPARE
+**         DECLARE
+**         OPEN
+**         FETCH
+**         CLOSE
+**
+** OUTPUT FILE: evm.out (available in the online documentation)
+*****************************************************************************
+**
+** For more information on the sample programs, see the README file.
+**
+** For information on developing C++ applications, see the Application
+** Development Guide.
+**
+** For information on using SQL statements, see the SQL Reference.
+**
+** For information on Event Monitors, see the System Monitor Guide and
+** Reference.
+**
+** For the latest information on programming, building, and running DB2
+** applications, visit the DB2 application development website:
+**     http://www.software.ibm.com/data/db2/udb/ad
+****************************************************************************/
+
+#include <sqlmon.h>
+#include "utilemb.h"
+
+// Depending on the platform and compiler being used, either use the new
+// <iostream> includes or the old <iostream.h> includes.
+#if ((__cplusplus >= 199711L) && !defined DB2HP && !defined DB2AIX) || \
+    (DB2LINUX && (__LP64__ || (__GNUC__ >= 3)))
+  #include <iostream>
+  #include <iomanip>
+  #include <fstream>
+  using std::ios;
+  using std::ifstream;
+#else
+  #include <iostream.h>
+  #include <iomanip.h>
+  #include <fstream.h>
+#endif
+
+#ifdef DB2NT              // Windows
+  #include "utilsnap.cxx" // Contains the Snapshot class to parse the event
+                          // monitor stream
+
+#else                     // UNIX
+  #include "utilsnap.C"
+  #include <unistd.h>     // Contains unlink function (to delete files)
+#endif
+
+// Boolean data type
+#ifndef Boolean
+  typedef int Boolean;
+  #ifndef false
+    #define false 0
+  #endif
+  #ifndef true
+    #define true 1
+  #endif
+#endif
+
+// The following define allows us to change the endian notation of the event
+// monitor files read by this sample (ie. to reverse the byte order of the 
+// header data that is parsed).
+#if defined(__PPC__) || defined(__s390__) || defined(__s390x__)
+  #undef LITTLE_ENDIAN
+#elif defined(WIN32)
+  #define LITTLE_ENDIAN
+#endif
+
+#define MAX_EVENT_DATA_SIZE 35072
+#define MAX_FILE_LOCATION_SIZE 255
+
+// Byte swap macros
+#define SWAP2(s) ((((s) >> 8) & 0xFF) | (((s) << 8) & 0xFF00))
+
+#define SWAP4(l) ((((l) >> 24) & 0xFF) | ((((l) & 0xFF0000) >> 8) & 0xFF00) \
+                      | (((l) & 0xFF00) << 8) | ((l) << 24))
+
+#define SWAP8(where)                                             \
+{                                                                \
+  sqluint32 temp;                                                \
+  temp = SWAP4(*(sqluint32 *)(where));                           \
+  *(sqluint32 *)(where) = SWAP4(*(((sqluint32 *) (where)) + 1)); \
+  *(((sqluint32 *) (where)) + 1) = temp;                         \
+}
+
+// Event monitor file extension
+#ifdef WIN32
+  #define EVENT_FILE_EXT ".EVT"
+#else
+  #define EVENT_FILE_EXT ".evt"
+#endif
+
+char *usage =
+"evm: Event Monitor code sample - Print an Event Monitor stream.     \n"
+"                                                                    \n"
+"Usage:                                                              \n"
+"                                                                    \n"
+"   evm [file] | [file <streamLocation>] | [pipe] | [table]          \n"
+"                                                                    \n"
+"Where:                                                              \n"
+"                                                                    \n"
+"       The first argument specifies whether the example stream      \n"
+"       is a file, pipe, or table stream.                            \n"
+"                                                                    \n"
+"       NOTE: Pipe streams are supported by this sample application  \n"
+"             only on AIX.                                           \n"
+"                                                                    \n"
+"       The second argument (if file is specified as the first       \n"
+"       argument) is the path containing existing event monitor      \n"
+"       output files.                                                \n"
+"                                                                    \n";
+
+typedef enum streamType {filestream, pipestream, tablestream} streamType;
+
+class EventMonitor
+{
+  public:
+    int HeaderByteReverse(sqlm_header_info *pHeader);
+    int DataByteReverse(char *dataBuf, sqluint32 dataSize);
+    int EvmArgsRead(int argc, char *argv[]);
+    int GetNextFileName(char *location);
+    int FileDriver();
+    #ifdef DB2AIX
+      int PipeDriver();
+    #endif
+    int TableDriver();
+    int ReadFile();
+
+    char fileName[MAX_FILE_LOCATION_SIZE]; // The location and the name of
+                                           // the file (full path)
+    char *diagpath;   // Path to where event monitor files will be written
+
+    streamType type;  // The type of event monitor stream to demonstrate:
+                      // file, pipe, or table
+  private:
+    Boolean needByteReversal; // True if running on a machine with a 
+                              // different memory model than the file format
+
+    char dataBuf[MAX_EVENT_DATA_SIZE]; // Data buffer that contains
+                                       // individual events read one by one
+                                       // from the event monitor files
+    sqlm_event_log_stream_header
+      eventLogStreamHeader;       // Struct to hold event monitor log header
+
+    sqlm_header_info headerInfo;  // Struct to hold event monitor header
+                                  // information
+};
+
+int main(int argc, char *argv[])
+{
+  int rc = 0;
+  struct sqlca sqlca;
+
+  char nodeName[SQL_INSTNAME_SZ + 1];
+  char dbAlias[SQL_ALIAS_SZ + 1];
+  char user[USERID_SZ + 1];
+  char pswd[PSWD_SZ + 1];
+
+  EventMonitor evm; // An instance of the event monitor class
+
+  #ifdef DB2NT
+    char *db2path;      // path where DB2 is installed
+    char *db2instance;  // DB2 instance directory
+  #else
+    char *home; // instance owners home directory
+  #endif
+
+  // The following variables are for querying the dbm cfg for diagpath
+  db2CfgParam cfgParameters[1];
+  db2Cfg cfgStruct;
+
+  // Initialize cfgParameters
+  cfgParameters[0].flags = 0;
+  cfgParameters[0].token = SQLF_KTN_DIAGPATH;
+  cfgParameters[0].ptrvalue = 
+    (char *)malloc(sizeof(char) * (SQL_FFDCPATH_SZ + 1));
+
+  // Initialize cfgStruct
+  cfgStruct.numItems = 1;
+  cfgStruct.paramArray = cfgParameters;
+  cfgStruct.flags = db2CfgDatabaseManager;
+  cfgStruct.dbname = dbAlias;
+
+  // Try getting the diagpath from db2CfgGet
+  db2CfgGet(db2Version970, (void *)&cfgStruct, &sqlca);
+  DB2_API_CHECK("DBM Config. Defaults -- Get");
+
+  evm.diagpath = cfgStruct.paramArray[0].ptrvalue;
+
+  // If diagpath wasn't obtainable from db2CfgGet, set diagpath to the
+  // default value (operating system dependent)
+  if(evm.diagpath[0] == '\0')
+  {
+    #ifdef DB2NT
+      db2path = getenv("DB2PATH");
+      db2instance = getenv("DB2INSTANCE");
+      if(db2path == NULL || db2instance == NULL)
+      {
+        cout << endl << "Error getting the diagpath, exiting.";
+        return 1;
+      }
+      sprintf(evm.diagpath, "%s\\%s\\", db2path, db2instance);
+    #else
+      home = getenv("HOME");
+      if(home == NULL)
+      {
+        cout << endl << "Error getting the diagpath, exiting.";
+        return 1;
+      }
+      sprintf(evm.diagpath, "%s/sqllib/db2dump/", home);
+    #endif
+  }
+
+  // Parse the command line arguments
+  rc = evm.EvmArgsRead(argc, argv);
+
+  if(rc != 0)
+    return rc;
+
+  // Decide what type of event monitor stream to demonstrate based on the
+  // supplied command line arguments, or parse a supplied filename
+  switch(evm.type)
+  {
+    case filestream:
+      if(argc == 3)
+      {
+        cout << "File supplied" << endl << endl;
+        evm.ReadFile();
+      }
+      else
+      {
+        cout << endl << "File driver" << endl << endl;
+        evm.FileDriver();
+      }
+      break;
+    #ifdef DB2AIX
+      case pipestream:
+        cout << endl << "Pipe driver" << endl << endl;
+        evm.PipeDriver();
+        break;
+    #endif
+    case tablestream:
+      cout << endl << "Table driver" << endl << endl;
+      evm.TableDriver();
+      break;
+  }
+  return rc;
+} // main
+
+int EventMonitor::EvmArgsRead(int argc, char *argv[])
+{
+  int rc = 0;
+
+  switch(argc)
+  {
+    case 2:
+      if(strcmp(argv[1], "file") == 0  || strcmp(argv[1], "FILE") == 0)
+      {
+        // set file driver to be the active driver
+        type = filestream;
+      }
+      else if(strcmp(argv[1], "table") == 0 || strcmp(argv[1], "TABLE") == 0)
+      {
+        // set table driver to be the active driver
+        type = tablestream;
+      }
+      #ifdef DB2AIX
+        else if(strcmp(argv[1], "pipe") == 0 || strcmp(argv[1], "PIPE") == 0)
+        {
+          // set pipe driver to be the active driver
+          type = pipestream;
+        }
+      #endif
+      else
+      {
+        cerr << "First argument is invalid.";
+        cerr << endl << endl << usage;
+        rc = 1;
+      }
+      break;
+
+    case 3:
+      if(strcmp(argv[1], "file") == 0  || strcmp(argv[1], "FILE") == 0)
+      {
+        type = filestream;
+
+        strncpy(fileName, argv[2], sizeof(char)*MAX_FILE_LOCATION_SIZE);
+        // need to make sure there is enough room for \xxxxxxxx.evt, (13
+        // chars)
+        fileName[sizeof(char)*MAX_FILE_LOCATION_SIZE-13] = '\0';
+      }
+      else // something invalid for first argument
+      {
+        cerr << "First argument is invalid.";
+        cerr << endl << endl << usage;
+        rc = 1;
+      }
+      break;
+
+    default: // less than 2 or more than 3 arguments supplied.
+      cerr << "Incorrect number of arguments supplied.";
+      cerr << endl << endl << usage;
+      rc = 1;
+      break;
+  }
+  return rc;
+} // EventMonitor::EvmArgsRead
+
+int EventMonitor::FileDriver()
+{
+  int rc;
+  struct sqlca sqlca;
+
+  char stmt[512];
+  char buf[512];
+
+  EXEC SQL CONNECT TO SAMPLE;
+  EMB_SQL_CHECK("connect");
+
+  sprintf(stmt, 
+          "CREATE EVENT MONITOR dlmon FOR STATEMENTS WRITE TO FILE '%s' MAXFILESIZE 32",
+          diagpath);
+
+  EXEC SQL PREPARE Stmt FROM :stmt;
+  EMB_SQL_CHECK("prepare");
+
+  EXEC SQL EXECUTE Stmt;
+  EMB_SQL_CHECK("create dlmon");
+
+  EXEC SQL COMMIT;
+  EMB_SQL_CHECK("commit");
+
+  EXEC SQL SET EVENT MONITOR dlmon STATE 1;
+  EMB_SQL_CHECK("set dlmon state 1");
+
+  EXEC SQL COMMIT;
+  EMB_SQL_CHECK("commit");
+
+  cout << "Generating events:" << endl;
+  cout << "0                                                 100" << endl;
+  cout << "|--------------------------------------------------|"
+       << endl << " ";
+
+  for(int i = 0; i < 50; i++)
+  {
+    EXEC SQL COMMIT;  // dummy statement to generate events
+    EMB_SQL_CHECK("commit");
+    cout << "*" << flush;
+  }
+  cout << endl;
+
+  EXEC SQL SET EVENT MONITOR dlmon STATE 0;
+  EMB_SQL_CHECK("set dlmon state 0");
+
+  EXEC SQL DROP EVENT MONITOR dlmon;
+  EMB_SQL_CHECK("drop dlmon");
+
+  EXEC SQL COMMIT;
+  EMB_SQL_CHECK("commit");
+
+  strcpy(fileName, diagpath);
+  rc = ReadFile();
+
+  if(rc != 0)
+    return rc;
+
+  // removes files created by the event monitor
+  sprintf(buf, "%s00000000%s", diagpath, EVENT_FILE_EXT);
+  unlink(buf);
+  sprintf(buf, "%s00000001%s", diagpath, EVENT_FILE_EXT);
+  unlink(buf);
+  sprintf(buf, "%s00000002%s", diagpath, EVENT_FILE_EXT);
+  unlink(buf);
+
+
+  return rc;
+} // EventMonitor::FileDriver
+
+#ifdef DB2AIX
+int EventMonitor::PipeDriver()
+{
+  int rc = 0;
+  struct sqlca sqlca;
+
+  int pid;  // process id
+
+  char stmt[512];
+  char buf[512];
+
+  Snapshot ss;
+
+  // Create the pipe
+  sprintf(buf, "%spipe", diagpath);
+  mkfifo(buf, S_IWUSR | S_IRUSR);
+
+  pid = fork();
+  if(pid == 0) // parent will generate events
+  {
+    EXEC SQL CONNECT TO SAMPLE;
+    EMB_SQL_CHECK("connect");
+
+    sprintf(stmt, 
+            "CREATE EVENT MONITOR dlmon FOR STATEMENTS WRITE TO PIPE '%s'",
+            buf);
+
+    EXEC SQL PREPARE Stmt FROM :stmt;
+    EMB_SQL_CHECK("prepare");
+
+    EXEC SQL EXECUTE Stmt;
+    EMB_SQL_CHECK("create dlmon");
+
+    EXEC SQL COMMIT;
+    EMB_SQL_CHECK("commit");
+
+    EXEC SQL SET EVENT MONITOR dlmon STATE 1;
+    EMB_SQL_CHECK("set dlmon state 1");
+
+    EXEC SQL COMMIT;
+    EMB_SQL_CHECK("commit");
+
+    for(int i = 0; i < 50; i++)
+    {
+      EXEC SQL COMMIT;  // dummy statement to generate events
+      EMB_SQL_CHECK("commit");
+    }
+
+    // the asterisk symbol, "*" means that no more events will be generated
+    // for the purpose of this sample
+    ofstream outFile(buf, ios::binary);
+    outFile.write("*", 1);
+    outFile.close();
+
+    // wait for child to exit before cleaning up event monitor
+    waitpid(pid, NULL, WNOHANG);
+
+    EXEC SQL DROP EVENT MONITOR dlmon;
+    EMB_SQL_CHECK("drop dlmon");
+
+    EXEC SQL COMMIT;
+    EMB_SQL_CHECK("commit");
+
+    // removes the pipe that was made using mkfifo
+    unlink(buf);
+
+    return rc;
+  } // end parent
+
+  else // child will parse and print events
+  {
+    EXEC SQL CONNECT TO SAMPLE;
+    EMB_SQL_CHECK("connect");
+
+    ifstream inFile(buf, ios::binary);
+    if(inFile.fail())
+    {
+      cerr << "Error: Unable to read pipe at the specified location."
+           << endl;
+      return 1;
+    }
+
+    inFile.read((char *) (&eventLogStreamHeader),
+                sizeof(eventLogStreamHeader));
+
+    while(inFile)
+    {
+      if(inFile.peek() == '*') // check if no more events will be generated
+      {
+        break;
+      }
+      else
+      {
+        inFile.read((char *) (&headerInfo), sizeof(headerInfo));
+      }
+      if(!inFile.eof())
+      {
+        if(headerInfo.size > MAX_EVENT_DATA_SIZE)
+        {
+          cerr << endl
+               << "Error: incompatible or corrupted event stream." << endl
+               << "Next event data has size: " << headerInfo.size
+               << "!" << "(max is: " << MAX_EVENT_DATA_SIZE << ")" << endl;
+          return 1;
+        }
+
+        inFile.read((char *) (&dataBuf), headerInfo.size);
+
+        ss.ParseMonitorStream(" ",
+                              dataBuf,
+                              dataBuf+headerInfo.size);
+      }
+    }
+    inFile.close();
+
+    return rc;
+  } // end child
+} // EventMonitor::PipeDriver
+#endif
+
+int EventMonitor::TableDriver()
+{
+  int rc = 0;
+  struct sqlca sqlca;
+
+  char c1[] =
+    "(SELECT agent_id, appl_id, territory_code FROM CONNHEADER_dlmon)";
+  char c2[] =
+    "(SELECT event_monitor_name, message, message_time FROM CONTROL_dlmon)";
+
+  EXEC SQL BEGIN DECLARE SECTION;
+    // CONNHEADER_dlmon
+    sqlint32 agent_id;
+    char appl_id[32+1];
+    sqlint32 territory_code;
+
+    // CONTROL_dlmon
+    char event_monitor_name[128+1];
+    char message[128+1];
+    char message_time[26+1];
+  EXEC SQL END DECLARE SECTION;
+
+  EXEC SQL CONNECT TO SAMPLE;
+  EMB_SQL_CHECK("connect");
+
+  EXEC SQL CREATE EVENT MONITOR dlmon
+    FOR STATEMENTS, DEADLOCKS WITH DETAILS, CONNECTIONS
+    WRITE TO TABLE
+      CONNHEADER (TABLE CONNHEADER_dlmon,
+        INCLUDES (AGENT_ID,
+                  APPL_ID,
+                  APPL_NAME,
+                  TERRITORY_CODE)),
+      DEADLOCK (TABLE DEADLOCK_dlmon),
+      DLCONN (TABLE CONNECTIONS_dlmon,
+        EXCLUDES (LOCK_OBJECT_NAME,
+                  LOCK_OBJECT_TYPE,
+                  TABLESPACE_NAME)),
+      STMT (TABLE STMT_dlmon,
+        INCLUDES (AGENT_ID,
+                  APPL_ID,
+                  CREATOR,
+                  INT_ROWS_DELETED,
+                  INT_ROWS_INSERTED,
+                  INT_ROWS_UPDATED,
+                  ROWS_READ,
+                  ROWS_WRITTEN,
+                  SQLCODE,
+                  SQLSTATE,
+                  SQLWARN,
+                  START_TIME,
+                  STMT_OPERATION,
+                  STMT_TEXT)),
+      CONN, CONTROL (TABLE CONTROL_dlmon,
+                       INCLUDES (EVENT_MONITOR_NAME,
+                                 MESSAGE,
+                                 MESSAGE_TIME))
+    BUFFERSIZE 8 NONBLOCKED MANUALSTART;
+  EMB_SQL_CHECK("create");
+
+  EXEC SQL COMMIT;
+  EMB_SQL_CHECK("commit");
+
+  EXEC SQL SET EVENT MONITOR dlmon STATE 1;
+  EMB_SQL_CHECK("set dlmon state 1");
+
+  EXEC SQL COMMIT;
+  EMB_SQL_CHECK("commit");
+
+  cout << "Generating events:" << endl;
+  cout << "0                                                 100" << endl;
+  cout << "|--------------------------------------------------|"
+       << endl << " ";
+
+  for(int i = 0; i < 50; i++)
+  {
+    EXEC SQL COMMIT;  // dummy statement to generate events
+    EMB_SQL_CHECK("commit");
+    cout << "*" << flush;
+  }
+  cout << endl;
+
+  EXEC SQL PREPARE S1 FROM :c1;
+  EMB_SQL_CHECK("prepare");
+
+  EXEC SQL PREPARE S2 FROM :c2;
+  EMB_SQL_CHECK("prepare");
+
+  EXEC SQL DECLARE connheader_dlmon CURSOR FOR S1;
+  EMB_SQL_CHECK("declare");
+
+  EXEC SQL DECLARE control_dlmon CURSOR FOR S2;
+  EMB_SQL_CHECK("declare");
+
+  EXEC SQL OPEN connheader_dlmon;
+  EMB_SQL_CHECK("open");
+
+  EXEC SQL OPEN control_dlmon;
+  EMB_SQL_CHECK("open");
+
+  EXEC SQL FETCH connheader_dlmon INTO :agent_id, :appl_id, :territory_code;
+  EMB_SQL_CHECK("fetch");
+
+  cout <<
+    "\nSELECT agent_id, appl_id, territory_code FROM connheader_dlmon\n\n";
+  cout <<
+    "AGENT_ID             APPL_ID                          TERRITORY_CODE\n";
+  cout <<
+    "-------------------- -------------------------------- --------------\n";
+
+  while(sqlca.sqlcode != 100)
+  {
+    cout << setw(20) << agent_id << setw(37) << appl_id << setw(11)
+         << territory_code << "\n";
+
+    EXEC SQL FETCH connheader_dlmon
+             INTO :agent_id, :appl_id, :territory_code;
+    EMB_SQL_CHECK("fetch");
+  }
+  EXEC SQL CLOSE connheader_dlmon;
+  EMB_SQL_CHECK("close");
+
+  EXEC SQL FETCH control_dlmon
+           INTO :event_monitor_name, :message, :message_time;
+  EMB_SQL_CHECK("fetch");
+
+  cout <<
+    "\nSELECT event_monitor_name, message, message_time FROM control_dlmon\n\n";
+  cout <<
+    "EVENT_MONITOR_NAME   MESSAGE                          MESSAGE_TIME\n";
+  cout <<
+    "-------------------- -------------------------------- -----------------------------\n";
+
+  while(sqlca.sqlcode != 100)
+  {
+    cout << setw(20) << event_monitor_name << setw(33) << message << setw(30)
+         << message_time << "\n";
+
+    EXEC SQL FETCH control_dlmon
+             INTO :event_monitor_name, :message, :message_time;
+    EMB_SQL_CHECK("fetch");
+  }
+  EXEC SQL CLOSE control_dlmon;
+  EMB_SQL_CHECK("close");
+
+  EXEC SQL SET EVENT MONITOR dlmon STATE 0;
+  EMB_SQL_CHECK("set dlmon state 0");
+
+  EXEC SQL DROP EVENT MONITOR dlmon;
+  EMB_SQL_CHECK("drop dlmon");
+
+  EXEC SQL DROP TABLE CONNHEADER_dlmon;
+  EMB_SQL_CHECK("drop table");
+  EXEC SQL DROP TABLE DEADLOCK_dlmon;
+  EMB_SQL_CHECK("drop table");
+  EXEC SQL DROP TABLE CONNECTIONS_dlmon;
+  EMB_SQL_CHECK("drop table");
+  EXEC SQL DROP TABLE STMT_dlmon;
+  EMB_SQL_CHECK("drop table");
+  EXEC SQL DROP TABLE CONN_dlmon;
+  EMB_SQL_CHECK("drop table");
+  EXEC SQL DROP TABLE CONTROL_dlmon;
+  EMB_SQL_CHECK("drop table");
+
+  EXEC SQL COMMIT;
+  EMB_SQL_CHECK("commit");
+
+  return rc;
+} // EventMonitor::TableDriver
+
+// Build a fully qualified Event Monitor filename
+// A File Event Monitor writes to files that are created into the directory
+// identified by its target.  When initially turned on, it starts writing to
+// file: 00000000.evt, when this file is full (as specified by the
+// MAXFILESIZE parameter on create event monitor), it moves on to file:
+// 00000001.evt, and so on.
+int EventMonitor::GetNextFileName(char *location)
+{
+  int rc = 0;
+
+  static int fileNumber = -1; // Used in generating the filename, needs
+                              // to be static since this function will
+                              // be called multiple times.
+  int path_sep = MAX_FILE_LOCATION_SIZE;  // Path separation character 
+                                          // location
+  char fileName[MAX_FILE_LOCATION_SIZE];  // Full filename (path + filename)
+
+  fileNumber++; // Increment the file number (begins at 0)
+
+  // Build the full filename (path + filename)
+
+  // Case one: location ends in EVENT_FILE_EXT and this is the first time
+  // that this function is being entered.  This case only applies when the
+  // user passes a filename to be processed.  Return the location which
+  // already contains the filename.  (i.e. /path/00000000.EVT was specified,
+  // return it)
+  if(strcmp(&location[strlen(location)-4], EVENT_FILE_EXT) == 0)
+  {
+    if(fileNumber == 0)
+    {
+      return rc;
+    }
+
+  // Case two: location ends in EVENT_FILE_EXT, increment the
+  // filename. (i.e. /path/00000000.EVT to /path/00000001.EVT)
+    for(int i=0; i < MAX_FILE_LOCATION_SIZE; i++)
+    {
+      if(location[i] == PATH_SEP[0])
+      {
+        path_sep = i;
+      }
+    }
+    location[path_sep+1] = '\0';
+    sprintf(fileName, "%s%.8d%s", location, fileNumber, EVENT_FILE_EXT);
+  }
+
+  // Case three: location ends in PATH_SEP, append the filename.
+  // (i.e. /path/ to /path/00000000.EVT)
+  else if(strcmp(&location[strlen(location)-1], PATH_SEP) == 0)
+  {
+    sprintf(fileName, "%s%.8d%s", location, fileNumber, EVENT_FILE_EXT);
+  }
+
+  // Case four: location does not end with PATH_SEP or EVENT_FILE_EXT,
+  // assume that a directory name has been provided.  Append PATH_SEP and
+  // the filename. (i.e. /path to /path/00000000.EVT)
+  else
+  {
+    sprintf(fileName, "%s%s%.8d%s", location, PATH_SEP, fileNumber,
+            EVENT_FILE_EXT);
+  }
+  strncpy(location, fileName, sizeof(char)*MAX_FILE_LOCATION_SIZE);
+
+  return rc;
+} // EventMonitor::GetNextFileName
+
+// This routine byte reverses the event header or the element header
+// using the macros defined in this file to restore it to its original
+// endian format.
+int EventMonitor::HeaderByteReverse(sqlm_header_info *pHeader)
+{
+  int rc = 0;
+
+  pHeader->size = SWAP4(pHeader->size);
+  pHeader->type = SWAP2(pHeader->type);
+  pHeader->element = SWAP2(pHeader->element);
+
+  return rc;
+} // EventMonitor::HeaderByteReverse
+
+// This routine reverses the event data or the element data.
+// An event is considered to be an element.
+int EventMonitor::DataByteReverse(char *dataBuf, sqluint32 dataSize)
+{
+  int rc = 0;
+
+  sqlm_header_info *pElemHeader = NULL;
+  char *pElemData = NULL;
+  sqluint32 dataOffset = 0;
+  sqluint32 elemDataSize  = 0;
+  sqluint32 elemHeaderSize = sizeof(sqlm_header_info);
+
+  // for each of the elements in the datastream that are numeric, perform
+  // byte reversal
+  while(dataOffset < dataSize)
+  {
+    // byte reverse the element header
+    pElemHeader = (sqlm_header_info *) (dataBuf + dataOffset);
+
+    rc = HeaderByteReverse(pElemHeader);
+
+    if(rc != 0)
+      return rc;
+
+    // remember the element data's size...it will be byte reversed
+    // before we skip to the next element
+    elemDataSize = pElemHeader->size;
+
+    // byte reverse the element data
+    pElemData = (char *) (dataBuf + dataOffset + elemHeaderSize);
+
+    if(pElemHeader->type == SQLM_TYPE_HEADER)
+    {
+      rc = DataByteReverse(pElemData, pElemHeader->size);
+
+      if(rc != 0)
+        return rc;
+    }
+    else
+    {
+      switch(pElemHeader->type)
+      {
+        case SQLM_TYPE_16BIT:
+        case SQLM_TYPE_U16BIT:
+          *(sqluint16 *)(pElemData) = SWAP2(*(short *)(pElemData));
+          break;
+        case SQLM_TYPE_32BIT:
+        case SQLM_TYPE_U32BIT:
+          *(sqluint32 *)(pElemData) = SWAP4(*(sqluint32 *)(pElemData));
+          break;
+        case SQLM_TYPE_64BIT:
+        case SQLM_TYPE_U64BIT:
+          SWAP8(pElemData);
+          break;
+        default:
+          break; // not a numeric type, do nothing
+      }
+    }
+    dataOffset = dataOffset + elemHeaderSize + elemDataSize;
+  }
+  return rc;
+} // EventMonitor::DataByteReverse
+
+int EventMonitor::ReadFile()
+{
+  int rc = 0;
+  Snapshot ss; // This class parses the event monitor data
+
+  rc = GetNextFileName(fileName); // This function should not be
+                                  // called before EvmArgsRead.  It
+                                  // assumes that fileName is in a
+                                  // specific format.
+
+  if(rc != 0)
+    return rc;
+
+  ifstream inFile(fileName, ios::in | ios::binary);
+  if (!inFile)
+  {
+    cerr << "Error: Unable to read event monitor data at the specified "
+         << "location."
+         << endl;
+    return 1;
+  }
+  else
+  {
+    inFile.close();
+    inFile.open(fileName, ios::out | ios::binary);
+  }
+
+  inFile.read((char *) (&eventLogStreamHeader),
+              sizeof(eventLogStreamHeader));
+
+  while(inFile)
+  {
+    inFile.read((char *) (&headerInfo), sizeof(headerInfo));
+
+    if(!inFile.eof())
+    {
+      switch(eventLogStreamHeader.byte_order)
+      {
+        case SQLM_BIG_ENDIAN:
+          #ifdef LITTLE_ENDIAN
+            needByteReversal = true;
+          #else
+            needByteReversal = false;
+          #endif
+          break;
+
+        case SQLM_LITTLE_ENDIAN:
+          #ifdef LITTLE_ENDIAN
+            needByteReversal = false;
+          #else
+            needByteReversal = true;
+          #endif
+          break;
+
+        default:
+          cerr << endl
+               << "Error: Unexpected memory model specified in stream."
+               << endl;
+          rc = 1;
+          break;
+      }
+
+      if(needByteReversal == true)
+      {
+        rc = HeaderByteReverse(&headerInfo);
+
+        if(rc != 0)
+          return rc;
+      }
+
+      if(headerInfo.size > MAX_EVENT_DATA_SIZE)
+      {
+        cerr << endl
+             << "Error: incompatible or corrupted event stream." << endl
+             << "Next event data has size: " << headerInfo.size
+             << "!" << "(max is: " << MAX_EVENT_DATA_SIZE << ")" << endl;
+        return 1;
+      }
+
+      inFile.read((char *) (&dataBuf), headerInfo.size);
+
+      if(needByteReversal == true)
+      {
+        rc = DataByteReverse(dataBuf, headerInfo.size);
+
+        if(rc != 0)
+          return rc;
+      }
+
+      ss.ParseMonitorStream(" ",
+                            dataBuf,
+                            dataBuf+headerInfo.size);
+    }
+    if(inFile.eof())
+    {
+      inFile.clear();
+      inFile.close();
+      rc = GetNextFileName(fileName);
+
+      if(rc != 0)
+        return rc;
+
+      inFile.open(fileName, ios::binary);
+
+      inFile.open(fileName, ios::in | ios::binary);
+      if (!inFile)
+      {
+        // file doesn't exist
+      }
+      else //file exists
+      {
+        inFile.close();
+        inFile.open(fileName, ios::out | ios::binary);
+      }
+    }
+  }
+
+  if(!inFile.eof())
+    inFile.close();
+
+  return 0;
+} // EventMonitor::ReadFile
+

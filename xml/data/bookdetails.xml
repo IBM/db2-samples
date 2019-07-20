@@ -1,0 +1,30 @@
+<?xml version="1.0" encoding="UTF-8" ?> 
+<book isbn="111111-1" title="My First XML Book"> 
+	<author>Padma Kota</author> 
+	<authID>532</authID>
+	<price>956</price>
+	<!-- this book does not have a preface -->
+	 <chapter number="1" title="Introducing XML">
+	 	 <ChapterContent>XML is fun to learn... 
+	 	 	<ChapterSummary>We have touched on a great number of ...</ChapterSummary>...  </ChapterContent>
+	 </chapter> 
+	 <chapter number="2" title="Basic XML Syntax">
+	 	 <ChapterContent>XML can be used with...
+	 	 	<ChapterSummary>We've shown the basic syntax that is required for all XML ...</ChapterSummary>...</ChapterContent> 
+	 </chapter> 
+	 <chapter number="3" title="The Document Object Model">
+	 	 <ChapterContent>The term Document object model...
+	 	 	<ChapterSummary> DOM provides a natural, object-oriented ...</ChapterSummary>...</ChapterContent> 
+	 </chapter> 
+	 <chapter number="4" title="Data Modelling">
+	 	<ChapterContent>The design of the XML for our applications will affect ...
+	 		<ChapterSummary>XML documents that will be used... </ChapterSummary>...</ChapterContent>
+	 </chapter>
+	 <chapter number="5" title="XML Data Binding">
+	 	<ChapterContent>XML Data Binding is the process of ...
+	 	<ChapterSummary>So with Data Binding feature we can ...</ChapterSummary>...</ChapterContent>
+	 </chapter>
+	 <chapter number="6" title="Further Reading">
+	 	<ChapterContent>List of books...</ChapterContent>
+	 </chapter>
+</book>

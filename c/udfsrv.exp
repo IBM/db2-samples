@@ -1,0 +1,6 @@
+ScalarUDF
+ScratchpadScUDF
+ClobScalarUDF
+ScUDFReturningErr
+TableUDF
+TblUDFClobFromFile

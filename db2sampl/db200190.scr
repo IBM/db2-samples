@@ -1,0 +1,87 @@
+:userdoc.
+:prolog.
+:docprof layout=1 pagenum=no style=ibmxagd.
+:eprolog.
+.*********************************
+:h3.Resume:  James H. Walker
+.*********************************
+:h3.Personal Information
+:dl compact tsize=20 termhi=0 break=fit.
+:dt.Address:
+:dd.3500 Steeles Ave
+.br
+Mellonville, Idaho 83757
+:dt.Phone:
+:dd.(208) 725-7325
+:dt.Birthdate:
+:dd.June 25, 1952
+:dt.Sex:
+:dd.Male
+:dt.Marital Status:
+:dd.Single
+:dt.Height:
+:dd.5'11"
+:dt.Weight:
+:dd.166 lbs.
+:edl.
+.*********************************
+:h3.Department Information
+:dl compact tsize=20 termhi=0 break=fit.
+:dt.Employee Number:
+:dd.000190
+:dt.Dept Number:
+:dd.D11
+:dt.Manager:
+:dd.Irving Stern
+:dt.Position:
+:dd.Designer
+:dt.Phone:
+:dd.(208) 385-2986
+:dt.Hire Date:
+:dd.1974-07-26
+:edl.
+.*********************************
+:h3.Education
+:dl tsize=20 termhi=0 break=fit.
+:dt.1974
+:dd.Computer Studies, B.Sc.
+.br
+University of Massachusetts
+.*********************************
+:dt.1972
+:dd.Linguistic Anthropology, B.A.
+.br
+University of Toronto
+:edl.
+.*********************************
+:h3.Work History
+:dl tsize=20 termhi=0 break=none.
+.*********************************
+:dt.6/87 - present
+:dd.Microcode Design
+.br
+Optimizing algorithms for mathematical functions.
+.*********************************
+:dt.4/77 - 5/87
+:dd.Printer Technical Support
+.br
+Installing and supporting laser printers.
+.*********************************
+:dt.9/74 - 3/77
+:dd.Maintenance Programming
+.br
+Patching assembly language compiler for mainframes.
+.*********************************
+:edl.
+.*********************************
+:h3.Interests
+.*********************************
+:ul compact.
+:li.Wine tasting
+:li.Skiing
+:li.Swimming
+:li.Dancing
+:eul.
+.*********************************
+:euserdoc.
+.*********************************

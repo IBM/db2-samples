@@ -1,0 +1,339 @@
+/****************************************************************************
+** (c) Copyright IBM Corp. 2007 All rights reserved.
+** 
+** The following sample of source code ("Sample") is owned by International 
+** Business Machines Corporation or one of its subsidiaries ("IBM") and is 
+** copyrighted and licensed, not sold. You may use, copy, modify, and 
+** distribute the Sample in any form without payment to IBM, for the purpose of 
+** assisting you in the development of your applications.
+** 
+** The Sample code is provided to you on an "AS IS" basis, without warranty of 
+** any kind. IBM HEREBY EXPRESSLY DISCLAIMS ALL WARRANTIES, EITHER EXPRESS OR 
+** IMPLIED, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED WARRANTIES OF 
+** MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE. Some jurisdictions do 
+** not allow for the exclusion or limitation of implied warranties, so the above 
+** limitations or exclusions may not apply to you. IBM shall not be liable for 
+** any damages you suffer as a result of using, copying, modifying or 
+** distributing the Sample, even if IBM has been advised of the possibility of 
+** such damages.
+*****************************************************************************
+**
+** SOURCE FILE NAME: dbinspec.sqc
+**
+** SAMPLE: How to check architectural integrity with the DB2 API db2Inspect
+**
+**         This program will create files ResultOutput.txt and
+**         ResultOutput2.txt in the DB2 diagnostic directory.  To obtain
+**         this value, the db2CfgGet API is used to query SQLF_KTN_DIAGPATH.
+**         If a value is not obtained, the default directory is used:
+**         (X\sqllib\DB2\ in the case of Windows or X/sqllib/db2dump/ in the
+**         case of UNIX, where X is the directory where DB2 is installed).
+**         The files FormattedOutput.txt and FormattedOutput2.txt are the
+**         formatted versions of ResultOutput.txt and ResultOutput2.txt and
+**         are created in the current working directory.
+**
+** DB2 API USED:
+**         db2CfgGet
+**         db2Inspect -- Check architectural integrity
+**
+** STRUCTURES USED:
+**         db2InspectStruct
+**         sqlca
+**
+** OUTPUT FILE: dbinspec.out (available in the online documentation)
+*****************************************************************************
+**
+** For more information on the sample programs, see the README file.
+**
+** For information on developing C applications, see the Application
+** Development Guide.
+**
+** For information on using SQL statements, see the SQL Reference.
+**
+** For information on DB2 APIs, see the Administrative API Reference.
+**
+** For the latest information on programming, building, and running DB2
+** applications, visit the DB2 application development website:
+**     http://www.software.ibm.com/data/db2/udb/ad
+****************************************************************************/
+
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+#include <sqlutil.h>
+#include <sqlenv.h>
+#include <db2ApiDf.h>
+#include "utilemb.h"
+
+/* Function that checks the achitectural integrity of the STAFF table */
+int CheckTableIntegrity(void);
+
+/* Function that checks the achitectural integrity of the SAMPLE database */
+int CheckDatabaseIntegrity(void);
+
+EXEC SQL BEGIN DECLARE SECTION;
+  char tableName[128];
+  char schemaName[128];
+EXEC SQL END DECLARE SECTION;
+
+char *diagpath;
+
+int main(int argc, char *argv[])
+{
+  int rc = 0;
+  struct sqlca sqlca;
+
+  char nodeName[SQL_INSTNAME_SZ + 1];
+  char dbAlias[SQL_ALIAS_SZ + 1];
+  char user[USERID_SZ + 1];
+  char pswd[PSWD_SZ + 1];
+
+  /* The following cmd variables are used to store commands that will be
+     executed by this sample.  Their lengths are long enough to hold
+     reasonably long pathnames. */
+  char cmd1[256];
+  char cmd2[256];
+  char cmd3[256];
+  char cmd4[256];
+
+  #if (defined(DB2NT))
+    char *db2path; /* path where db2 is installed */
+    char *db2instance;
+  #else
+    char *home; /* instance owners home directory */
+  #endif
+
+  /* The following variables are for querying the dbm cfg for diagpath */
+  db2CfgParam cfgParameters[1];
+  db2Cfg cfgStruct;
+
+  /* Check the command line arguments */
+  rc = CmdLineArgsCheck3(argc, argv, dbAlias, nodeName, user, pswd);
+  if (rc != 0)
+  {
+    return rc;
+  }
+
+  printf("\n  THIS SAMPLE SHOWS HOW TO CHECK ARCHITECTURAL INTEGRITY USING"
+         "\n  THE DB2 API db2Inspect\n");
+
+  /* Connect to database */
+  rc = DbConn(dbAlias, user, pswd);
+  if (rc != 0)
+  {
+    return rc;
+  }
+
+  /* Initialize cfgParameters */
+  cfgParameters[0].flags = 0;
+  cfgParameters[0].token = SQLF_KTN_DIAGPATH;
+  cfgParameters[0].ptrvalue =
+    (char *)malloc(sizeof(char) * (SQL_FFDCPATH_SZ + 1));
+
+  /* Initialize cfgStruct */
+  cfgStruct.numItems = 1;
+  cfgStruct.paramArray = cfgParameters;
+  cfgStruct.flags = db2CfgDatabaseManager;
+  cfgStruct.dbname = dbAlias;
+
+  /* Try getting the diagpath from db2CfgGet */
+  db2CfgGet(db2Version1010, (void *)&cfgStruct, &sqlca);
+  DB2_API_CHECK("DBM Config. Defaults -- Get");
+
+  diagpath = cfgStruct.paramArray[0].ptrvalue;
+
+  /* If diagpath wasn't obtainable from db2CfgGet, set diagpath to the
+     default value (operating system dependent) */
+  if(diagpath[0] == '\0')
+  {
+    #if(defined(DB2NT))
+      db2path = getenv("DB2PATH");
+      db2instance = getenv("DB2INSTANCE");
+      if(db2path == NULL || db2instance == NULL)
+      {
+        printf("\nError getting the diagpath, exiting.");
+        return 1;
+      }
+      sprintf(diagpath, "%s\\%s\\", db2path, db2instance);
+    #else
+      home = getenv("HOME");
+      if(home == NULL)
+      {
+        printf("\nError getting the diagpath, exiting.");
+        return 1;
+      }
+      sprintf(diagpath, "%s/sqllib/db2dump/", home);
+    #endif
+  }
+
+  #if (defined(DB2NT))
+    sprintf(cmd1, "del \"%sResultOutput.txt\"", diagpath);
+    sprintf(cmd2, "del \"%sResultOutput2.txt\"", diagpath);
+    sprintf(cmd3, "del FormattedOutput.txt");
+    sprintf(cmd4, "del FormattedOutput2.txt");
+  #else
+    sprintf(cmd1, "rm -f %sResultOutput.txt", diagpath);
+    sprintf(cmd2, "rm -f %sResultOutput2.txt", diagpath);
+    sprintf(cmd3, "rm -f FormattedOutput.txt");
+    sprintf(cmd4, "rm -f FormattedOutput2.txt");
+  #endif
+
+  /* Delete the files Resultoutput.txt, ResultOutput2.txt,
+     FormattedOutput.txt and FormattedOutput2.txt if they already exist */
+  printf(
+    "\n  DELETE FILES 'ResultOutput.txt' AND 'ResultOutput2.txt' FROM THE"
+    " DIAGNOSTIC"
+    "\n  DATA DIRECTORY (%s), AND FILES 'FormattedOutput.txt'"
+    "\n  AND 'FormattedOutput2.txt' FROM THE CURRENT WORKING DIRECTORY,"
+    " IF THEY EXIST\n\n", diagpath);
+  rc = system(cmd1);
+  rc = system(cmd2);
+  rc = system(cmd3);
+  rc = system(cmd4);
+
+  rc = CheckTableIntegrity();
+  rc = CheckDatabaseIntegrity();
+
+  /* Disconnect from the database */
+  rc = DbDisconn(dbAlias);
+  if (rc != 0)
+  {
+    return rc;
+  }
+  return 0;
+} /* main */
+
+/* This function demonstrates how to check the achitectural integrity of the
+   STAFF table */
+int CheckTableIntegrity(void)
+{
+  int rc = 0;
+  struct sqlca sqlca;
+
+  /* Declare and initialize a 'db2InspectStruct' structure 'inspectstruct' */
+  db2InspectStruct inspectStruct = {0};
+
+  char cmd1[256];
+
+  sprintf(cmd1, "db2inspf \"%sResultOutput.txt\" FormattedOutput.txt", diagpath);
+
+  printf("  DEMONSTRATE HOW TO CHECK THE ARCHITECTURAL INTEGRITY OF THE"
+         " TABLE 'STAFF'\n");
+  printf("\n  CREATE A db2InspectStruct STRUCTURE 'inspectStruct' AND"
+         " INITIALIZE ITS"
+         "\n  MEMBERS TO ZERO\n");
+
+  /* Assign values to the members of the structure 'inspectStruct' */
+  printf(
+    "\n  ASSIGN VALUES TO THE MEMBERS OF THE db2InspectStruct STRUCTURE"
+    " 'inspectStruct'");
+
+  inspectStruct.iAction = DB2INSPECT_ACT_CHECK_TABLE;
+  inspectStruct.piTableName = "STAFF";
+
+  EXEC SQL SELECT tabschema INTO :schemaName
+    FROM syscat.tables
+    WHERE tabname = 'STAFF';
+  EMB_SQL_CHECK("Table schema name -- Get");
+
+  inspectStruct.piSchemaName = schemaName;
+  inspectStruct.iBeginCheckOption = DB2INSPECT_BEGIN_FROM_START;
+  inspectStruct.iAllNodeFlag = DB2_ALL_NODES;
+  inspectStruct.piResultsName = "ResultOutput.txt";
+  inspectStruct.piDataFileName = NULL;
+  inspectStruct.iObjectErrorState = DB2INSPECT_ERROR_STATE_ALL;
+  inspectStruct.iLevelObjectData = DB2INSPECT_LEVEL_NORMAL;
+  inspectStruct.iLevelObjectBlkMap = DB2INSPECT_LEVEL_NORMAL;
+  inspectStruct.iLevelObjectIndex = DB2INSPECT_LEVEL_NORMAL;
+  inspectStruct.iLevelObjectLong = DB2INSPECT_LEVEL_NORMAL;
+  inspectStruct.iLevelObjectLOB = DB2INSPECT_LEVEL_NORMAL;
+  inspectStruct.iLevelExtentMap = DB2INSPECT_LEVEL_NORMAL;
+  inspectStruct.iKeepResultfile = DB2INSPECT_RESFILE_KEEP_ALWAYS;
+  inspectStruct.iLimitErrorReported = DB2INSPECT_LIMIT_ERROR_DEFAULT;
+
+  printf(
+    "\n  CALL THE DB2 API 'db2Inspect' TO CHECK THE ARCHITECTURAL"
+    " INTEGRITY"
+    "\n  OF THE TABLE 'STAFF' WHICH STORES THE RESULTS IN THE FILE"
+    " 'ResultOutput.txt'\n");
+
+  /* Use the DB2 API db2Inspect */
+  db2Inspect(db2Version1010, (void *)&inspectStruct, &sqlca);
+  DB2_API_CHECK("DB -- INSPECT");
+
+  /* Invoke the db2inspf command to format the result file
+     'ResultOutput.txt' */
+    printf(
+      "\n  FORMAT THE UNFORMATTED RESULT FILE"
+      " 'ResultOutput.txt' AND"
+      "\n  SAVE IT IN A FILE 'FormattedOutput.txt' BY ISSUING THE COMMAND:\n"
+      "\n    %s\n",cmd1);
+    rc = system(cmd1);
+
+  return 0;
+} /* CheckTableIntegrity */
+
+/* This function demonstrates how to check the achitectural integrity of the
+   SAMPLE database */
+int CheckDatabaseIntegrity(void)
+{
+  int rc = 0;
+  struct sqlca sqlca;
+
+  /* Declare and initialize a 'db2InspectStruct' structure 'inspectstruct' */
+  db2InspectStruct inspectStruct = {0};
+
+  char cmd1[256];
+
+  sprintf(cmd1, "db2inspf \"%sResultOutput2.txt\" FormattedOutput2.txt", diagpath);
+
+  printf(
+    "\n  DEMONSTRATE HOW TO CHECK THE ARCHITECTURAL INTEGRITY OF THE"
+    " DATABASE 'SAMPLE'\n");
+  printf(
+    "\n  CREATE A db2InspectStruct STRUCTURE 'inspectStruct' AND INITIALIZE"
+    " ITS"
+    "\n  MEMBERS TO ZERO\n");
+
+  /* Assign values to the members of the structure 'inspectStruct' */
+  printf(
+    "\n  ASSIGN VALUES TO THE MEMBERS OF THE db2InspectStruct STRUCTURE"
+    " 'inspectStruct'");
+
+  inspectStruct.iAction = DB2INSPECT_ACT_CHECK_DB;
+  inspectStruct.iBeginCheckOption = DB2INSPECT_BEGIN_FROM_START;
+  inspectStruct.iAllNodeFlag = DB2_ALL_NODES;
+  inspectStruct.piResultsName = "ResultOutput2.txt";
+  inspectStruct.piDataFileName = NULL;
+  inspectStruct.iObjectErrorState = DB2INSPECT_ERROR_STATE_ALL;
+  inspectStruct.iLevelObjectData = DB2INSPECT_LEVEL_NORMAL;
+  inspectStruct.iLevelObjectBlkMap = DB2INSPECT_LEVEL_NORMAL;
+  inspectStruct.iLevelObjectIndex = DB2INSPECT_LEVEL_NORMAL;
+  inspectStruct.iLevelObjectLong = DB2INSPECT_LEVEL_NORMAL;
+  inspectStruct.iLevelObjectLOB = DB2INSPECT_LEVEL_NORMAL;
+  inspectStruct.iLevelExtentMap = DB2INSPECT_LEVEL_NORMAL;
+  inspectStruct.iKeepResultfile = DB2INSPECT_RESFILE_KEEP_ALWAYS;
+  inspectStruct.iLimitErrorReported = DB2INSPECT_LIMIT_ERROR_DEFAULT;
+
+  printf(
+    "\n  CALL THE DB2 API 'db2Inspect' TO CHECK THE ARCHITECTURAL"
+    " INTEGRITY"
+    "\n  OF THE DATABASE 'SAMPLE' WHICH STORES THE RESULTS IN THE FILE"
+    "\n  'ResultOutput2.txt'\n");
+
+  /* Use the DB2 API db2Inspect */
+  db2Inspect(db2Version1010, (void *)&inspectStruct, &sqlca);
+  DB2_API_CHECK("DB -- INSPECT");
+
+  /* Invoke the db2inspf command to format the result file
+     'ResultOutput2.txt' */
+    printf(
+      "\n  FORMAT THE UNFORMATTED RESULT FILE"
+      " 'ResultOutput2.txt' AND"
+      "\n  SAVE IT IN A FILE 'FormattedOutput2.txt' BY ISSUING THE COMMAND:"
+      "\n\n    %s\n",cmd1);
+    rc = system(cmd1);
+
+  return 0;
+} /* CheckDatabaseIntegrity */
+

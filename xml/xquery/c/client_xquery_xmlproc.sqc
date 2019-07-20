@@ -1,0 +1,179 @@
+/****************************************************************************
+** (c) Copyright IBM Corp. 2007 All rights reserved.
+** 
+** The following sample of source code ("Sample") is owned by International 
+** Business Machines Corporation or one of its subsidiaries ("IBM") and is 
+** copyrighted and licensed, not sold. You may use, copy, modify, and 
+** distribute the Sample in any form without payment to IBM, for the purpose of 
+** assisting you in the development of your applications.
+** 
+** The Sample code is provided to you on an "AS IS" basis, without warranty of 
+** any kind. IBM HEREBY EXPRESSLY DISCLAIMS ALL WARRANTIES, EITHER EXPRESS OR 
+** IMPLIED, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED WARRANTIES OF 
+** MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE. Some jurisdictions do 
+** not allow for the exclusion or limitation of implied warranties, so the above 
+** limitations or exclusions may not apply to you. IBM shall not be liable for 
+** any damages you suffer as a result of using, copying, modifying or 
+** distributing the Sample, even if IBM has been advised of the possibility of 
+** such damages.
+*****************************************************************************
+**
+** SOURCE FILE NAME: client_xquery_xmlproc.sqc
+**
+** SAMPLE: Call a stored procedure with XML type parameters
+**
+** This file contains one function that call stored procedure:
+**         callxquery_proc gives the solution for following scenario:
+**         Some of the suppliers have extended the promotional price date for
+**         their products. Getting all the customer's Information who purchased
+**         these products in the extended period will help the financial department
+**         to return the excess amount paid by those customers. The supplier
+**         information along with extended date's for the products is provided
+**         in an XML document and the customer wants to have the information
+**         of all the customers who has paid the excess amount by purchasing those
+**         products in the extended period.
+**
+**         This procedure will return an XML document containing customer info
+**         along with the the excess amount paid by them.
+**
+**         The file "utilemb.sqC" contains functions for error-checking and
+**         rolling back a transaction in case of error. This file must be
+**         compiled and its object file linked in to the "client_xquery_xmlproc" 
+**         program.
+**
+** SQL STATEMENTS USED:
+**         CALL
+**         CONNECT
+**         ROLLBACK
+**         SELECT INTO
+**
+** STRUCTURES USED:
+**         sqlca
+**         sqlda
+**
+** EXTERNAL DEPENDENCIES:
+**        Ensure existence of database for precompile purposes.
+**        Ensure that the stored procedures called from this program have
+**        been built and cataloged with the database (see the instructions in
+**        xquery_xmlproc.sqc).
+**        Precompile with the SQL precompiler (PREP in DB2)
+**        Bind to a database (BIND in DB2)
+**        Compile and link loop with the compiler supported on your platform.
+**
+** OUTPUT FILE: client_xquery_xmlproc.out (available in the online documentation)
+*****************************************************************************
+**
+** For more information on the sample programs, see the README file.
+**
+** For information on developing C applications, see the Application
+** Development Guide.
+**
+** For information on using SQL statements, see the SQL Reference.
+**
+** For the latest information on programming, building, and running DB2
+** applications, visit the DB2 application development website:
+**     http://www.software.ibm.com/data/db2/udb/ad
+****************************************************************************/
+
+#include <stdio.h>
+#include <stdlib.h>
+#include <sql.h>
+#include <sqlda.h>
+#include <sqlca.h>
+#include <string.h>
+#include <sqlenv.h>
+#include <sqludf.h>
+#include "utilemb.h"
+
+EXEC SQL INCLUDE SQLCA;
+
+int main(int argc, char *argv[])
+{
+  int rc = 0;
+  char dbAlias[9];
+  char user[128 + 1];
+  char pswd[19];
+
+  /* check the command line arguments */
+  rc = CmdLineArgsCheck1(argc, argv, dbAlias, user, pswd);
+  if (rc != 0)
+  {
+    return rc;
+  }
+
+  /* connect to database */
+  rc = DbConn(dbAlias, user, pswd);
+  if (rc != 0)
+  {
+    return rc;
+  }
+
+  /* call the procedure */
+  callxquery_proc();
+
+  /* Roll back stored procedure actions to preserve
+     the state of the database */
+  EXEC SQL ROLLBACK;
+  EMB_SQL_CHECK("ROLLBACK");
+  printf("\nStored procedure rolled back\n");
+
+  /* Disconnect from Remote Database */
+  EXEC SQL CONNECT RESET;
+  EMB_SQL_CHECK("CONNECT RESET");
+  return 0;
+}
+
+int callxquery_proc()
+{
+  /********************************************************\
+  * Call Supp_XML_Proc_C stored procedure                  *
+  \********************************************************/
+
+  EXEC SQL BEGIN DECLARE SECTION;
+   SQL TYPE IS XML AS CLOB(5000) outXML;
+   SQL TYPE IS XML AS CLOB(5000) inXML; 
+   sqlint32 outRet;    
+   sqlint16 outXML_ind;
+   sqlint16 inXML_ind;
+   sqlint16 outRet_ind;
+   sqlint32 i;
+  EXEC SQL END DECLARE SECTION;
+
+   /* initialize variables */
+   outXML_ind = -1;
+   outRet = -6666;
+   outRet_ind = -1;
+   
+   /* assign the input data to the inXML variable */ 
+   inXML_ind = 0;
+   strcpy(inXML.data, "<Suppliers><Supplier id=\"100\">"
+                      "<Products> <Product id=\"100-100-01\"><ExtendedDate>2006-01-02"
+                      "</ExtendedDate></Product> <Product id= \"100-101-01\"><Extended"
+                      "Date>2006-08-02</ExtendedDate></Product></Products> </Supplier>"
+                      "<Supplier id=\"101\"> <Products><Product id=\"100-103-01\"> "
+                      "<ExtendedDate>2006-09-22</ExtendedDate> </Product> </Products> "
+                      "</Supplier> </Suppliers>");
+   inXML.length = strlen(inXML.data);
+   
+   printf("\n \n");
+   printf("==============================================\n");
+   printf("calling the stored procedure Supp_XML_Proc_C \n");  
+   printf("==============================================\n");
+   printf("\n");
+   /* calling the procedure */
+   EXEC SQL CALL Supp_XML_Proc_C( :inXML:inXML_ind,
+                                  :outXML:outXML_ind,
+                                  :outRet:outRet_ind);
+
+   if (outXML_ind == 0 && outRet_ind == 0 && outRet == 0)
+   {
+     printf("\n called Successfully.\n");
+     printf("\n Customers Information : \n"); 
+     for (i = 0; i < outXML.length; i++)
+     {
+        printf("%c", outXML.data[i]);
+     }
+   }
+ 
+  return 0;
+} /* end of program: client_xquery_xmlproc.sqc */

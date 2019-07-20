@@ -1,0 +1,482 @@
+/****************************************************************************
+** (c) Copyright IBM Corp. 2007 All rights reserved.
+** 
+** The following sample of source code ("Sample") is owned by International 
+** Business Machines Corporation or one of its subsidiaries ("IBM") and is 
+** copyrighted and licensed, not sold. You may use, copy, modify, and 
+** distribute the Sample in any form without payment to IBM, for the purpose of 
+** assisting you in the development of your applications.
+** 
+** The Sample code is provided to you on an "AS IS" basis, without warranty of 
+** any kind. IBM HEREBY EXPRESSLY DISCLAIMS ALL WARRANTIES, EITHER EXPRESS OR 
+** IMPLIED, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED WARRANTIES OF 
+** MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE. Some jurisdictions do 
+** not allow for the exclusion or limitation of implied warranties, so the above 
+** limitations or exclusions may not apply to you. IBM shall not be liable for 
+** any damages you suffer as a result of using, copying, modifying or 
+** distributing the Sample, even if IBM has been advised of the possibility of 
+** such damages.
+*****************************************************************************
+**
+** SOURCE FILE NAME: lobstoxml.sqc
+**
+** SAMPLE: How to move LOB data into an XML column using IMPORT and EXPORT 
+**
+** PREREQUISITE: Create a directory "lobdatadir" in the DB2 home directory
+**
+** DB2 APIs USED:
+**         db2Export -- Export
+**         db2Import -- Import
+**
+** SQL STATEMENTS USED:
+**         PREPARE
+**         DECLARE CURSOR
+**         OPEN
+**         FETCH
+**         CLOSE
+**         CREATE TABLE
+**         INSERT INTO 
+**         DROP
+**
+** OUTPUT FILE: lobstoxml.out (available in the online documentation)
+*****************************************************************************
+**
+** For more information on the sample programs, see the README file.
+**
+** For information on developing C applications, see the Application
+** Development Guide.
+**
+** For information on using SQL statements, see the SQL Reference.
+**
+** For information on DB2 APIs, see the Administrative API Reference.
+**
+** For the latest information on programming, building, and running DB2
+** applications, visit the DB2 application development website:
+**     http://www.software.ibm.com/data/db2/udb/ad
+****************************************************************************/
+
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+#include <sqlenv.h>
+#include <sqlutil.h>
+#include <db2ApiDf.h>
+#include "utilemb.h"
+
+int DataExport(char *);
+int TbImport(char *);
+
+/* support functions */
+int ExportedDataDisplay(char *);
+int ImportedDataDisplay(void);
+
+EXEC SQL BEGIN DECLARE SECTION;
+  char strStmt[256];
+  short cid;
+  SQL TYPE IS XML AS CLOB(50K) info;
+EXEC SQL END DECLARE SECTION;
+
+int main(int argc, char *argv[])
+{
+  int rc = 0;
+  char dbAlias[SQL_ALIAS_SZ + 1];
+  char user[USERID_SZ + 1];
+  char pswd[PSWD_SZ + 1];
+  char dataFileName[256];
+
+  /* check the command line arguments */
+  rc = CmdLineArgsCheck1(argc, argv, dbAlias, user, pswd);
+  if (rc != 0)
+  {
+    return rc;
+  }
+
+  printf("\n HOW TO MOVE LOB DATA INTO AN XML COLUMN USING IMPORT AND EXPORT.\n");
+
+  /* connect to database */
+  rc = DbConn(dbAlias, user, pswd);
+  if (rc != 0)
+  {
+    return rc;
+  }
+  
+  #if(defined(DB2NT))
+  sprintf(dataFileName, "%s%slobdata.del", getenv("DB2PATH"), PATH_SEP);
+  #else /* UNIX */
+  sprintf(dataFileName, "%s%slobdata.del", getenv("HOME"), PATH_SEP);
+  #endif
+
+  rc = DataExport(dataFileName);
+  rc = TbImport(dataFileName);
+ 
+  /* disconnect from the database */
+  rc = DbDisconn(dbAlias);
+  if (rc != 0)
+  {
+    return rc;
+  }
+
+  return 0;
+} /* main */
+
+int ExportedDataDisplay(char *dataFileName)
+{
+  struct sqlca sqlca = {0};
+  FILE *fp;
+  char buffer[100];
+  int maxChars = 100;
+  int numChars;
+  int charNb;
+
+  fp = fopen(dataFileName, "r");
+  if (fp == NULL)
+  {
+    return 1;
+  }
+
+  printf("\n  The content of the file '%s' is:\n", dataFileName);
+  printf("    ");
+  numChars = fread(buffer, 1, maxChars, fp);
+  while (numChars > 0)
+  {
+    for (charNb = 0; charNb < numChars; charNb++)
+    {
+      if (buffer[charNb] == '\n')
+      {
+        printf("\n");
+        if (charNb < numChars - 1)
+        {
+          printf("    ");
+        }
+      }
+      else
+      {
+        printf("%c", buffer[charNb]);
+      }
+    }
+    numChars = fread(buffer, 1, maxChars, fp);
+  }
+
+  if (ferror(fp))
+  {
+    fclose(fp);
+    return 1;
+  }
+  else
+  {
+    fclose(fp);
+  }
+
+  return 0;
+} /* ExportedDataDisplay */
+
+int ImportedDataDisplay(void)
+{
+  struct sqlca sqlca = {0};
+
+  printf("\n  SELECT * FROM customer_xml ORDER BY cid\n");
+  printf("    CID      INFO      \n");
+  printf("    -------- --------------\n");
+
+  strcpy(strStmt, "SELECT * FROM customer_xml ORDER BY cid");
+
+  EXEC SQL PREPARE stmt FROM :strStmt;
+  EMB_SQL_CHECK("statement -- prepare");
+
+  EXEC SQL DECLARE c0 CURSOR FOR stmt;
+
+  EXEC SQL OPEN c0;
+  EMB_SQL_CHECK("cursor -- open");
+
+  EXEC SQL FETCH c0 INTO :cid, :info;
+  EMB_SQL_CHECK("cursor -- fetch");
+
+  while(sqlca.sqlcode != 100)
+  {
+    printf("    %8d %-s\n", cid, info.data); 
+    EXEC SQL FETCH c0 INTO :cid, :info;
+    EMB_SQL_CHECK("cursor -- fetch");
+  }
+
+  EXEC SQL CLOSE c0;
+
+  return 0;
+} /* ImportedDataDisplay */
+
+int DataExport(char *dataFileName)
+{
+  int rc = 0;
+  struct sqlca sqlca = {0};
+  struct sqldcol dataDescriptor = {0};
+  char actionString[256],sqlstmt[1000];
+  struct sqllob *pAction = {0};
+  char msgFileName[128],temp[256];
+  struct db2ExportOut outputInfo = {0};
+  struct db2ExportIn inputinfo = {0};
+  struct db2ExportStruct exportParmStruct = {0};
+  struct sqlchar *fileTypeMod = NULL;
+  struct sqlu_media_entry *pPathList={0};
+  struct sqlu_location_entry *psLocationEntry={0};
+  union sqlu_media_list_targets listTargetsLobPath={0},listTargetsLobFile={0};
+  struct sqlu_media_list mediaListLobPath={0},mediaListLobFile={0};
+
+  /* create a table CUSTOMER_LOB with LOB column */
+  printf("\n  CREATE TABLE customer_lob(Cid SMALLINT,");
+  printf("\n                        Info CLOB(50K))\n");
+
+  EXEC SQL CREATE TABLE customer_lob(Cid SMALLINT, Info CLOB(500));
+  EMB_SQL_CHECK("customer_lob -- create");
+
+  /* Insert LOB data into the table */
+  printf("\n Inserting multiple rows of LOB data...\n");
+
+  strcpy(sqlstmt,"INSERT INTO customer_lob VALUES(1001,'<customerinfo Cid=\"1001\"><name>Kathy Smith</name><addr country=\"Canada\"><street>25 EastCreek</street><city>Toronto</city><prov-state>Ontario</prov-state><pcode-zip>M8X-3T6</pcode-zip></addr><phone type=\"work\">416-555-1358</phone></customerinfo>')");
+  EXEC SQL  EXECUTE IMMEDIATE :sqlstmt;
+
+strcpy(sqlstmt,"INSERT INTO customer_lob VALUES(1002,'<customerinfo Cid=\"1002\"><name>Jim Noodle</name> <addr country=\"Canada\"> <street>25 EastCreek</street><city>Markham</city><prov-state>Ontario</prov-state><pcode-zip>N9C-3T6</pcode-zip></addr><phone type=\"work\">905-555-7258</phone></customerinfo>')");
+  EXEC SQL  EXECUTE IMMEDIATE :sqlstmt;
+
+strcpy(sqlstmt,"INSERT INTO customer_lob VALUES(1003,'<customerinfo Cid=\"1003\"><name>Robert Shoemaker</name><addr country=\"Canada\"><street>1596 Baseline</street><city>Aurora</city><prov-state>Ontario</prov-state><pcode-zip>N8X-7F8</pcode-zip></addr><phone type=\"work\">905-555-7258</phone><phone type=\"home\">416-555-2937</phone><phone type=\"cell\">905-555-8743</phone><phone type=\"cottage\">613-555-3278</phone></customerinfo>')");
+  EXEC SQL  EXECUTE IMMEDIATE :sqlstmt;
+
+strcpy(sqlstmt,"INSERT INTO customer_lob VALUES(1004,'<customerinfo Cid=\"1004\"><name>Matt Foreman</name><addr country=\"Canada\"><street>1596 Baseline</street><city>Toronto</city><prov-state>Ontario</prov-state><pcode-zip>M3Z-5H9</pcode-zip></addr><phone type=\"work\">905-555-4789</phone><phone type=\"home\">416-555-3376</phone></customerinfo>')");
+  EXEC SQL  EXECUTE IMMEDIATE :sqlstmt;
+
+  printf("\n Multiple rows Inserted ");
+
+  printf("\n-----------------------------------------------------------");
+  printf("\nUSE THE DB2 API:\n");
+  printf("  db2Export -- Export\n");
+  printf("TO EXPORT DATA TO A FILE.\n");
+
+  printf("\n  Be sure to complete all table operations and release\n");
+  printf("  all locks before starting an export operation. This\n");
+  printf("  can be done by issuing a COMMIT after closing all\n");
+  printf("  cursors opened WITH HOLD, or by issuing a ROLLBACK.\n");
+  printf("  Please refer to the 'Administrative API Reference'\n");
+  printf("  for the details.\n");
+
+  /* export data */
+  dataDescriptor.dcolmeth = SQL_METH_D;
+  strcpy(actionString, "SELECT Cid, Info FROM customer_lob ORDER BY Cid");
+  pAction = (struct sqllob *)malloc(sizeof(sqluint32) +
+                                     sizeof(actionString) + 1);
+  pAction->length = strlen(actionString);
+  strcpy(pAction->data, actionString);
+  strcpy(msgFileName, "tbexport.MSG");
+
+  /* LOB Path Specification */
+  pPathList=(struct sqlu_media_entry *)malloc(sizeof(struct sqlu_media_entry));
+  #if(defined(DB2NT))
+  sprintf(pPathList->media_entry, "%s%slobdatadir", getenv("DB2PATH"), PATH_SEP);
+  #else /* UNIX */
+  sprintf(pPathList->media_entry, "%s%slobdatadir", getenv("HOME"), PATH_SEP);
+  #endif
+  
+  listTargetsLobPath.media = pPathList;
+  mediaListLobPath.media_type = 'L';
+  mediaListLobPath.sessions = 1;
+  mediaListLobPath.target = listTargetsLobPath;
+
+  /* LOBFILE base name specification */
+  psLocationEntry=(struct sqlu_location_entry *)malloc(sizeof(struct sqlu_location_entry));
+  strcpy(psLocationEntry->location_entry,"lobfiles");
+  listTargetsLobFile.location = psLocationEntry;
+  mediaListLobFile.media_type = 'C';
+  mediaListLobFile.sessions = 1;
+  mediaListLobFile.target = listTargetsLobFile;
+  
+  /* File Type Modifier for Export Utility */  
+  strcpy(temp,"LOBSINSEPFILES");
+  fileTypeMod = (struct sqlchar *) malloc(sizeof(short) + sizeof (temp) + 1);
+  fileTypeMod->length = strlen(temp);
+  strcpy(fileTypeMod->data,temp);
+
+  /* Export Data */ 
+  exportParmStruct.piDataFileName    = dataFileName;
+  exportParmStruct.piLobPathList     = &mediaListLobPath;
+  exportParmStruct.piLobFileList     = &mediaListLobFile; 
+  exportParmStruct.piDataDescriptor  = &dataDescriptor;
+  exportParmStruct.piActionString    = pAction;
+  exportParmStruct.piFileType        = SQL_DEL;
+  exportParmStruct.piFileTypeMod     = fileTypeMod;
+  exportParmStruct.piMsgFileName     = msgFileName;
+  exportParmStruct.iCallerAction     = SQLU_INITIAL;
+  exportParmStruct.poExportInfoOut   = &outputInfo;
+  exportParmStruct.piExportInfoIn    = NULL;
+  exportParmStruct.piXmlPathList     = NULL;
+  exportParmStruct.piXmlFileList     = NULL;
+
+  printf("\n  Export data.\n");
+  printf("    client destination file name: %s\n", dataFileName);
+  printf("    action                      : %s\n", actionString);
+  printf("    client message file name    : %s\n", msgFileName);
+
+  /*Performing Export data */
+  printf("\n EXPORT TO lobdata.del OF DEL LOBS TO lobdatadir LOBFILE lobfiles \n"); 
+  printf("   MODIFIED BY LOBSINSEPFILES SELECT * FROM customer_lob \n");
+  db2Export(db2Version970,
+            &exportParmStruct,
+            &sqlca);
+
+  DB2_API_CHECK("data -- export");
+
+  /* free memory allocated */
+  free(pAction);
+  free(pPathList);
+  free(fileTypeMod);
+  free(psLocationEntry);
+
+  /* drop the table CUSTOMER_LOB */
+  printf("\n  DROP TABLE customer_lob");
+
+  EXEC SQL DROP TABLE customer_lob;
+  EMB_SQL_CHECK("customer_lob -- drop");
+
+  /* display exported data */
+  rc = ExportedDataDisplay(dataFileName);
+
+  return 0;
+} /* DataExport */
+
+int TbImport(char *dataFileName)
+{
+   int rc = 0;
+   int totalLength = 0;
+   struct sqlca sqlca = {0};
+   struct sqldcol dataDescriptor = {0};
+   char actionString[256];
+   struct sqlchar *pAction = {0};
+   char msgFileName[128];
+   struct db2ImportIn inputInfo = {0};
+   struct db2ImportOut outputInfo = {0};
+   struct db2ImportStruct importParmStruct = {0};
+   int commitcount = 10;
+   int whiteSpace = 1;
+   unsigned short xmlParse = whiteSpace;
+   struct sqlchar *fileTypeMod = NULL;
+   struct sqlu_media_entry *pPathList = {0};
+   union sqlu_media_list_targets listTargetsLobPath = {0};
+   struct sqlu_media_list mediaListLobPath = {0};
+   struct db2DMUXmlValidate xmlValidate = {0};
+   struct db2DMUXmlValidateSchema schemaArgs = {0};
+   struct db2Char schemaName = {0};
+   char temp[256];
+
+   printf("\n  CREATE TABLE customer_xml(Cid INT,");
+   printf("\n                        Info XML))\n");
+
+   EXEC SQL CREATE TABLE customer_xml(Cid INT, Info XML);
+   EMB_SQL_CHECK("customer_xml -- create");
+
+   printf("\n-----------------------------------------------------------");
+   printf("\nUSE THE DB2 API:\n");
+   printf("  db2Import -- Import\n");
+   printf("TO IMPORT DATA TO A TABLE.\n");
+ 
+   /* import table */
+   dataDescriptor.dcolmeth = SQL_METH_D;
+   strcpy(actionString, "INSERT INTO customer_xml");
+   pAction = (struct sqlchar *)malloc(sizeof(short) + sizeof(actionString) + 1);
+   pAction->length = strlen(actionString);
+   strcpy(pAction->data, actionString);
+   strcpy(msgFileName, "tbimport.MSG");
+
+   /* Setup db2ImportIn structure */
+
+   /* Lob Path Specification */  
+   pPathList=(struct sqlu_media_entry *)malloc(sizeof(struct sqlu_media_entry));
+   #if(defined(DB2NT))
+   sprintf(pPathList->media_entry, "%s%slobdatadir", getenv("DB2PATH"), PATH_SEP);
+   #else /* UNIX */
+   sprintf(pPathList->media_entry, "%s%slobdatadir", getenv("HOME"), PATH_SEP);
+   #endif
+
+   listTargetsLobPath.media = pPathList;
+   mediaListLobPath.media_type = 'L';
+   mediaListLobPath.sessions = 1;
+   mediaListLobPath.target = listTargetsLobPath;
+
+   /* File Type Modifier for Import Utility */
+   strcpy(temp,"XMLCHAR");
+   fileTypeMod = (struct sqlchar *) malloc(sizeof(short) + sizeof (temp) + 1);
+   fileTypeMod->length = strlen(temp);
+   strcpy(fileTypeMod->data,temp);
+   
+   /* Schema  Specification */
+   schemaName.iLength = 8;
+   schemaName.pioData=malloc(9);
+   strcpy(schemaName.pioData,"customer");
+   schemaArgs.piSchema = &schemaName;
+   xmlValidate.iUsing = DB2DMU_XMLVAL_SCHEMA;
+   xmlValidate.piSchemaArgs =&schemaArgs;
+
+   /* Import input Structure */
+   inputInfo.iRowcount = inputInfo.iRestartcount = 0;
+   inputInfo.iSkipcount = inputInfo.iWarningcount = 0;
+   inputInfo.iNoTimeout = 0;
+   inputInfo.iAccessLevel = SQLU_ALLOW_NO_ACCESS;
+   inputInfo.piCommitcount = &commitcount;
+   inputInfo.piXmlParse = &xmlParse;
+   inputInfo.piXmlValidate = &xmlValidate;
+
+   printf("\n  Import table.\n");
+   printf("    client source file name: %s\n", dataFileName);
+   printf("    action                  : %s\n", actionString);
+   printf("    client message file name: %s\n", msgFileName);
+
+   importParmStruct.piFileType        = SQL_DEL;
+   importParmStruct.piFileTypeMod     = fileTypeMod;
+   importParmStruct.piDataFileName    = dataFileName;
+   importParmStruct.piLobPathList     = &mediaListLobPath;
+   importParmStruct.piDataDescriptor  = &dataDescriptor;
+   importParmStruct.piActionString    = pAction;
+   importParmStruct.piMsgFileName     = msgFileName;
+   importParmStruct.piImportInfoIn    = &inputInfo;
+   importParmStruct.poImportInfoOut   = &outputInfo;
+   importParmStruct.piNullIndicators  = NULL;
+   importParmStruct.iCallerAction     = SQLU_INITIAL;
+   importParmStruct.piXmlPathList     = NULL;
+
+   printf("\n-----------------------------------------------------------");
+   printf("\nUSE THE DB2 API:\n");
+   printf("  db2Import -- Import\n");
+   printf("TO IMPORT DATA TO A FILE.\n");
+
+   /* import table */
+   printf("\n IMPORT FROM lobdata.del OF DEL LOBS FROM lobdatadir MODIFIED BY XMLCHAR \n");
+   printf("   XMLVALIDATE USING SCHEMA customer INSERT INTO customer_xml \n");
+   db2Import(db2Version970,
+            &importParmStruct,
+            &sqlca);
+
+   EXEC SQL COMMIT;
+
+   /* free memory allocated */
+   free(pAction);
+   free(pPathList);
+   free(fileTypeMod);
+   free(schemaName.pioData);
+
+   /* display import info */
+   printf("\n  Import info.\n");
+   printf("    rows read     : %ld\n", (int)outputInfo.oRowsRead);
+   printf("    rows skipped  : %ld\n", (int)outputInfo.oRowsSkipped);
+   printf("    rows inserted : %ld\n", (int)outputInfo.oRowsInserted);
+   printf("    rows updated  : %ld\n", (int)outputInfo.oRowsUpdated);
+   printf("    rows rejected : %ld\n", (int)outputInfo.oRowsRejected);
+   printf("    rows committed: %ld\n", (int)outputInfo.oRowsCommitted);
+
+
+   /* display content of the new table */
+   rc = ImportedDataDisplay();
+
+   /* drop new table */
+   printf("\n  DROP TABLE customer_xml\n");
+
+   EXEC SQL DROP TABLE customer_xml;
+   EMB_SQL_CHECK("customer_xml -- drop");
+
+   return 0;
+} /* TbImport */
+

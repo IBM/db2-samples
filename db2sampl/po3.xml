@@ -1,0 +1,20 @@
+<PurchaseOrder PoNum="5002" OrderDate="2004-02-29" Status="Shipped" >
+  <item>
+    <partid>100-100-01</partid>
+    <name>Snow Shovel, Basic 22 inch</name>
+    <quantity>3</quantity>
+    <price>9.99</price>
+  </item>
+  <item>
+    <partid>100-101-01</partid>
+    <name>Snow Shovel, Deluxe 24 inch</name>
+    <quantity>5</quantity>
+    <price>19.99</price>
+  </item>
+  <item>
+    <partid>100-201-01</partid>
+    <name>Ice Scraper, Windshield 4 inch</name>
+    <quantity>5</quantity>
+    <price>3.99</price>
+    </item>
+</PurchaseOrder>

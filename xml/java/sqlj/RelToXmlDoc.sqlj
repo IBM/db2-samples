@@ -1,0 +1,318 @@
+//***************************************************************************
+// (c) Copyright IBM Corp. 2007 All rights reserved.
+// 
+// The following sample of source code ("Sample") is owned by International 
+// Business Machines Corporation or one of its subsidiaries ("IBM") and is 
+// copyrighted and licensed, not sold. You may use, copy, modify, and 
+// distribute the Sample in any form without payment to IBM, for the purpose of 
+// assisting you in the development of your applications.
+// 
+// The Sample code is provided to you on an "AS IS" basis, without warranty of 
+// any kind. IBM HEREBY EXPRESSLY DISCLAIMS ALL WARRANTIES, EITHER EXPRESS OR 
+// IMPLIED, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED WARRANTIES OF 
+// MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE. Some jurisdictions do 
+// not allow for the exclusion or limitation of implied warranties, so the above 
+// limitations or exclusions may not apply to you. IBM shall not be liable for 
+// any damages you suffer as a result of using, copying, modifying or 
+// distributing the Sample, even if IBM has been advised of the possibility of 
+// such damages.
+//***************************************************************************
+//
+// SOURCE FILE NAME: RelToXmlDoc.sqlj
+//
+// SAMPLE USER SCENARIO : Purchase order database uses relational tables to store the
+//         orders of different customers. This data can be returned as an XML object 
+//         to the application. The XML object can be created using the XML constructor
+//         functions on the server side.
+//         To achieve this, the user can
+//           1. Create a stored procedure to implement the logic to create the XML
+//              object using XML constructor functions.
+//           2. Register the above stored procedure to the database.
+//           3. Call the procedure whenever all the PO data is needed as XML 
+//              instead of using complex joins.
+//
+// SAMPLE : This sample basically demonstrates two things
+//           1. Using joins on relational data
+//           2. Using constructor function to get purchaseorder data as an XML object
+// 
+// PREQUISITES : 1. Create the sample database with the following command:
+//                  db2sampl -xml
+//               2. Copy setupscript.db2 and cleanupscript.db2 from 
+//                  the samples/xml/data directory to the current working directory
+//               3. Connect to sample database.
+//                  Create the pre-requisite tables by running the command:
+//                    RelToXmlScrpt
+//                  Alternatively,you can run the command:
+//                    db2 -tvf setupscript.db2
+//               4. Create the stored procedure reltoxmlproc by running the command:
+//                    reltoxmlprocScrpt
+//                  Alternatively, you can run the command:
+//                    db2 -td@ -f reltoxmlproc.db2
+//
+// EXECUTION : 1. Follow the steps in the README to setup your SQLJ environment.
+//             2. This sample uses classes in Util.sqlj. 
+//                Compile the Util.sqlj program using the following :
+//                   bldsqlj Util <userid> <password> <server_name> <port_number> <db_name>
+//             3. Compile the sample using:
+//                   bldsqlj RelToXmlDoc <userid> <password> <server_name> <port_number> <db_name>
+//             4. Run the sample as:
+//                   java RelToXmlDoc
+//             5. Perform a clean up once the sample has been executed using:
+//                   db2 -tvf cleanupscript.db2
+//
+// SQL Statements USED:
+//         SELECT
+//         
+// SQL/XML Functions Used :
+//         XMLELEMENT
+//	   XMLATTRIBUTES
+//         XMLCONCAT
+//         XMLNAMESPACES
+//         XMLCOMMENT
+//
+// JAVA 2 CLASSES USED:
+//         Statement
+//         ResultSet
+//
+// Classes used from Util.sqlj are:
+//         Db
+//         Data
+//
+// OUTPUT FILE: RelToXmlDoc.out (available in the online documentation)
+//***************************************************************************
+//
+// For more information on the sample programs, see the README file.
+//
+// For information on developing SQLJ applications, see the Application
+// Development Guide.
+//
+// For information on using SQL statements, see the SQL Reference.
+//
+// For the latest information on programming, compiling, and running DB2
+// applications, visit the DB2 application development website at
+//     http://www.software.ibm.com/data/db2/udb/ad
+//**************************************************************************/
+
+import java.lang.*;
+import java.sql.*;
+import sqlj.runtime.*;
+import sqlj.runtime.ref.*;
+
+
+#sql iterator Tb_cursor(int, 
+                        int,
+                        String,
+                        String, 
+                        int,
+                        double, 
+                        String, 
+                        String,
+                        String, 
+                        String, 
+                        String,
+                        int);
+
+class RelToXmlDoc
+{
+  public static void main(String argv[])
+  {
+    try
+    {
+      Db db = new Db(argv);
+
+      System.out.println();
+      System.out.println(
+        "THIS SAMPLE SHOWS HOW TO CONVERT DATA IN RELATIONAL TABLES\n" + 
+        "INTO A XML DOCUMENT USING THE XML CONSTRUCTOR FUNCTIONS");
+
+      // connect to the 'sample' database
+      DefaultContext ctx = db.getDefaultContext();
+
+      // select the purchaseorder data using joins
+      execQuery();
+      
+      // function to call the stored procedure which will
+      // select purchaseorder data using XMLconstructors
+      callRelToXmlProc(ctx);
+  
+      // disconnect from the 'sample' database
+      db.disconnect();
+    }
+    catch (Exception e)
+    {
+  	System.out.println(e);
+    }
+  } // main
+
+  static void execQuery()
+  {
+    try
+    {
+      Tb_cursor cur1;
+      System.out.println();
+      System.out.println(
+        "----------------------------------------------------------\n" +
+        "USE SQL SELECT:\n" +
+        "  Statement\n" +
+        "TO EXECUTE THE QUERY WITH XML CONSTRUCTORS.");
+
+      // execute the query
+      System.out.println();
+      System.out.println(
+        "  Execute Statement:\n" +
+        "SELECT po.CustID, po.PoNum, po.OrderDate, po.Status,\n" +
+        "       count(l.ProdID) as Items, sum(p.Price) as total,\n" +
+        "       po.Comment, c.Name, c.Street, c.City, c.Province, c.PostalCode\n" +
+        "  FROM PurchaseOrder_relational as po, CustomerInfo_relational as c,\n" +
+        "       Lineitem_relational as l, Products_relational as p\n" +
+        "  WHERE po.CustID = c.CustID and po.PoNum = l.PoNum and l.ProdID = p.ProdID\n" +
+        "  GROUP BY po.PoNum,po.CustID,po.OrderDate,po.Status,c.Name,\n" +
+        "           c.Street, c.City,c.Province, c.PostalCode,po.Comment\n" +
+        "  ORDER BY po.CustID,po.OrderDate\n");
+     
+      #sql cur1 = {
+	SELECT po.CustID, po.PoNum, po.OrderDate, po.Status,
+               count(l.ProdID) as Items, sum(p.Price) as total,
+               po.Comment, c.Name, c.Street, c.City, c.Province, c.PostalCode
+          FROM PurchaseOrder_relational as po, CustomerInfo_relational as c,
+               Lineitem_relational as l, Products_relational as p 
+          WHERE po.CustID = c.CustID and po.PoNum = l.PoNum and l.ProdID = p.ProdID 
+          GROUP BY po.PoNum,po.CustID,po.OrderDate,po.Status,c.Name, 
+                   c.Street, c.City,c.Province, c.PostalCode,po.Comment
+          ORDER BY po.CustID,po.OrderDate};
+
+      System.out.println();
+      System.out.println("  Results:\n" +
+                         "    CustId   PoNum    OrderDate     Status" +
+                         "    \t Items     Total_Price  Comment\n" +
+                         "    \t\t Name \t\t Street  \t City  \t Province \t PostalCode\n" +
+                         "    -----------------------------------------------------------------------------\n"); 
+
+      int CustID = 0;
+      int PoNum = 0;
+      String OrderDate = "";
+      String Status = "";
+      int Items = 0;
+      double Price = 0;
+      String Comment = "";
+      String Name = "";
+      String Street= "";
+      String City = "";
+      String Province = "";
+      int PostalCode = 0;
+
+      // Read the data
+      #sql {FETCH :cur1 INTO :CustID, :PoNum, :OrderDate, :Status, :Items, 
+            :Price, :Comment, :Name, :Street, :City, :Province, :PostalCode};
+     
+      while (true)
+      {
+        if (cur1.endFetch())
+        {
+           break;
+        }
+        System.out.println("    " +
+                           Data.format(CustID, 8) + " " +
+                           Data.format(PoNum, 8) + " " +
+                           Data.format(OrderDate, 11) + " " +
+ 			   Data.format(Status, 50) + " " +
+                           Data.format(Items, 5) + " " +
+                           Data.format(Price,6,2) + " " +
+                           Data.format(Comment, 200) + " " +
+                           Data.format(Name, 20) + " " +
+                           Data.format(Street, 20) + " " +
+                           Data.format(City, 20) + " " +
+                           Data.format(Province, 20) + " "  + 
+                           Data.format(PostalCode, 8));
+        #sql {FETCH :cur1 INTO :CustID, :PoNum, :OrderDate, :Status, :Items, 
+              :Price, :Comment, :Name, :Street, :City, :Province, :PostalCode};
+       }
+       // close the cursor
+       cur1.close();
+    }
+    catch (Exception e)
+    {
+      System.out.println(e);
+    }
+  } //execQuery
+
+  public static void callRelToXmlProc(ConnectionContext ctx)
+  {
+    ResultSet rs;
+    ExecutionContext execCtx = ctx.getExecutionContext();
+    
+    String procName = "RELTOXMLPROC";
+
+    try
+    {
+      // call the stored procedure
+      System.out.println();
+      System.out.println("Call stored procedure named " + procName);
+      #sql{ CALL RELTOXMLPROC()};
+
+      System.out.println(procName + " completed successfully");
+      if ((rs = execCtx.getNextResultSet()) != null)
+      {
+        fetchAll(rs);
+
+        // close ResultSet
+        rs.close();
+      }
+    }    
+    catch (SQLException e)
+    {
+      System.out.println(e.getMessage());
+    }
+  } // callRelToXmlProc
+
+  public static void fetchAll(ResultSet rs)
+  {
+    try
+    {
+      System.out.println(
+        "=============================================================");
+
+      // retrieve the  number, types and properties of the
+      // resultset's columns
+      ResultSetMetaData stmtInfo = rs.getMetaData();
+     
+      String PurchaseOrder = "";
+      int numOfColumns = stmtInfo.getColumnCount();
+      int r = 0;
+
+      while (rs.next())
+      {
+        r++;
+        System.out.println("Row: " + r + ": \n");
+        for (int i = 1; i <= numOfColumns; i++)
+        {
+          if (i == 1 || i == 2)
+          {
+            System.out.print(Data.format(rs.getInt(i), 8));
+          }
+          if (i == 3)
+          {
+            System.out.print(rs.getString(i));
+          }
+          if (i == 4)
+          {
+	    PurchaseOrder = rs.getString(i);
+            System.out.print(Data.format(PurchaseOrder, 600));
+          }
+          if (i != numOfColumns)
+          {
+            System.out.print(", ");
+          }
+        }
+        System.out.print("\n\n");
+      }
+    }
+    catch (Exception e)
+    {
+      System.out.println("Error: fetchALL: exception");
+      System.out.println(e.getMessage());
+    }
+  } // fetchAll
+} // RelToXmlDoc
+
+

@@ -1,0 +1,150 @@
+/****************************************************************************
+** (c) Copyright IBM Corp. 2007 All rights reserved.
+** 
+** The following sample of source code ("Sample") is owned by International 
+** Business Machines Corporation or one of its subsidiaries ("IBM") and is 
+** copyrighted and licensed, not sold. You may use, copy, modify, and 
+** distribute the Sample in any form without payment to IBM, for the purpose of 
+** assisting you in the development of your applications.
+** 
+** The Sample code is provided to you on an "AS IS" basis, without warranty of 
+** any kind. IBM HEREBY EXPRESSLY DISCLAIMS ALL WARRANTIES, EITHER EXPRESS OR 
+** IMPLIED, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED WARRANTIES OF 
+** MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE. Some jurisdictions do 
+** not allow for the exclusion or limitation of implied warranties, so the above 
+** limitations or exclusions may not apply to you. IBM shall not be liable for 
+** any damages you suffer as a result of using, copying, modifying or 
+** distributing the Sample, even if IBM has been advised of the possibility of 
+** such damages.
+*****************************************************************************
+**
+** SOURCE FILE NAME: tbcreate.sqc 
+**    
+** SAMPLE: How to create and drop tables 
+**
+** SQL STATEMENTS USED:
+**         INCLUDE 
+**         CREATE TABLE 
+**         DROP TABLE
+**
+** OUTPUT FILE: tbcreate.out (available in the online documentation)
+*****************************************************************************
+**
+** For more information on the sample programs, see the README file.
+**
+** For information on developing C applications, see the Application
+** Development Guide.
+**
+** For information on using SQL statements, see the SQL Reference.
+**
+** For the latest information on programming, building, and running DB2 
+** applications, visit the DB2 application development website: 
+**     http://www.software.ibm.com/data/db2/udb/ad
+****************************************************************************/
+
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+#include <sqlenv.h>
+#include <sqlutil.h>
+#include "utilemb.h"
+
+int TbCreate(void);
+int TbDrop(void);
+
+EXEC SQL INCLUDE SQLCA;
+
+int main(int argc, char *argv[])
+{
+  int rc = 0;
+  char dbAlias[SQL_ALIAS_SZ + 1];
+  char user[USERID_SZ + 1];
+  char pswd[PSWD_SZ + 1];
+
+  /* check the command line arguments */
+  rc = CmdLineArgsCheck1(argc, argv, dbAlias, user, pswd);
+  if (rc != 0)
+  {
+    return rc;
+  }
+
+  printf("\nTHIS SAMPLE SHOWS HOW TO CREATE AND DROP TABLES.\n");
+
+  /* connect to database */
+  rc = DbConn(dbAlias, user, pswd);
+  if (rc != 0)
+  {
+    return rc;
+  }
+
+  /* get ORG table schema name */
+
+  rc = TbCreate();
+  rc = TbDrop();
+
+  /* disconnect from database */
+  rc = DbDisconn(dbAlias);
+  if (rc != 0)
+  {
+    return rc;
+  }
+
+  return 0;
+} /* main */
+
+int TbCreate(void)
+{
+  int rc = 0;
+
+  printf("\n-----------------------------------------------------------");
+  printf("\nUSE THE SQL STATEMENT\n");
+  printf("  CREATE TABLE\n");
+  printf("TO CREATE A TABLE:\n");
+
+  /* create the table */
+  printf("\n  Execute the statement\n");
+  printf("    CREATE TABLE schname.tbname(Col1 SMALLINT,\n");
+  printf("                                Col2 CHAR(7),\n");
+  printf("                                Col3 VARCHAR(7),\n");
+  printf("                                Col4 DEC(9, 2),\n");
+  printf("                                Col5 DATE,\n");
+  printf("                                Col6 BLOB(5000),\n");
+  printf("                                Col7 CLOB(5000))\n");
+
+  EXEC SQL CREATE TABLE schname.tbname(col1 SMALLINT,
+                                       col2 CHAR(7),
+                                       col3 VARCHAR(7),
+                                       col4 DEC(9, 2),
+                                       col5 DATE,
+                                       col6 BLOB(5000),
+                                       col7 CLOB(5000));
+  EMB_SQL_CHECK("Table -- Create");
+
+  EXEC SQL COMMIT;
+  EMB_SQL_CHECK("Transaction -- Commit");
+
+  return rc;
+} /* Tbcreate */
+
+int TbDrop(void)
+{
+  int rc = 0;
+
+  printf("\n-----------------------------------------------------------");
+  printf("\nUSE THE SQL STATEMENT\n");
+  printf("  DROP\n");
+  printf("TO DROP A TABLE:\n");
+
+  /* drop the table */
+  printf("\n  Execute the statement\n");
+  printf("    DROP TABLE schname.tbname\n");
+
+  EXEC SQL DROP TABLE schname.tbname;
+  EMB_SQL_CHECK("Table -- Drop");
+
+  EXEC SQL COMMIT;
+  EMB_SQL_CHECK("Transaction -- Commit");
+
+  return rc;
+} /* Tbdrop */
+

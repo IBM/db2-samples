@@ -1,0 +1,708 @@
+//***************************************************************************
+// (c) Copyright IBM Corp. 2007 All rights reserved.
+// 
+// The following sample of source code ("Sample") is owned by International 
+// Business Machines Corporation or one of its subsidiaries ("IBM") and is 
+// copyrighted and licensed, not sold. You may use, copy, modify, and 
+// distribute the Sample in any form without payment to IBM, for the purpose of 
+// assisting you in the development of your applications.
+// 
+// The Sample code is provided to you on an "AS IS" basis, without warranty of 
+// any kind. IBM HEREBY EXPRESSLY DISCLAIMS ALL WARRANTIES, EITHER EXPRESS OR 
+// IMPLIED, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED WARRANTIES OF 
+// MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE. Some jurisdictions do 
+// not allow for the exclusion or limitation of implied warranties, so the above 
+// limitations or exclusions may not apply to you. IBM shall not be liable for 
+// any damages you suffer as a result of using, copying, modifying or 
+// distributing the Sample, even if IBM has been advised of the possibility of 
+// such damages.
+//***************************************************************************
+//
+// SOURCE FILE NAME: XmlIndex.sqlj
+//
+// SAMPLE: How to create index on xml columns in different ways.
+//
+// SQL Statements USED:
+//         SELECT
+//         FETCH
+//
+// Classes used from Util.sqlj are:
+//         Db
+//         Data
+//         SqljException
+//
+// OUTPUT FILE: XmlIndex.out (available in the online documentation)
+// Output will vary depending on the JDBC driver connectivity used.
+//***************************************************************************
+//
+// For more information on the sample programs, see the README file.
+//
+// For information on developing SQLJ applications, see the Application
+// Development Guide.
+//
+// For information on using SQL statements, see the SQL Reference.
+//
+// For the latest information on programming, compiling, and running DB2
+// applications, visit the DB2 application development website at
+//     http://www.software.ibm.com/data/db2/udb/ad
+//**************************************************************************/
+
+import java.lang.*;
+import java.sql.*;
+import java.io.*;
+import sqlj.runtime.*;
+import sqlj.runtime.ref.*;
+import com.ibm.db2.jcc.DB2Xml;
+
+// Define the iterator to use in the functions
+#sql iterator Positioned_Iterator(Object);
+
+class XmlIndex
+{
+  public static void main(String argv[])
+  {
+
+    int rc = 0;
+    String url = "jdbc:db2:sample";
+    Connection con = null;
+    DefaultContext ctx = null;
+    try
+    {
+      Class.forName("com.ibm.db2.jcc.DB2Driver").newInstance();
+
+      // connect to the 'sample' database
+      con = DriverManager.getConnection( url );
+
+      // get the default context
+      ctx = new DefaultContext(con);
+
+      // set the default context for the sample
+      DefaultContext.setDefaultContext(ctx);
+      System.out.println();
+    }
+    catch(Exception e)
+    {
+      SqljException sqljExc = new SqljException(e);
+      sqljExc.handle();
+      System.exit(1);
+    }
+
+    System.out.println(
+               "THIS SAMPLE SHOWS HOW TO CREATE INDEX ON XML COLUMNS");
+
+
+    //Different ways to create an index on XML columns
+    createAndInsertIntoTable();
+    createIndex();
+    createIndexwithSelf();
+    createIndexonTextnode();
+    createIndexwith2Paths();
+    createIndexwithNamespace();
+    createIndexwith2Datatypes();
+    createIndexuseAnding();
+    createIndexuseAndingOrOring();
+    createIndexwithDateDatatype();
+    createIndexWithCommentNode();
+
+    // drop all tables and indices
+    dropall();
+  } // main
+
+  // This function creates a table and inserts rows 
+  // having xml data into table
+  static void createAndInsertIntoTable()
+  {
+    try
+    {
+      System.out.println();
+      System.out.println(
+          "-------------------------------------------------\n" +
+          "USE SQL statement: \n" +
+          "CREATE TABLE " +
+          "TO CREATE A TABLE. " );
+    
+
+      System.out.println();
+      System.out.println(
+         "Execute Statement:" +
+         " CREATE TABLE COMPANY(id INT, docname VARCHAR(20), doc XML)");
+
+      // create table called 'company' 
+      #sql {CREATE TABLE COMPANY(id INT, docname VARCHAR(20), doc XML)};
+
+
+      // insert row1 into table 
+      System.out.println();	
+      System.out.println("INSERT row1 into table \n");
+      #sql {
+            INSERT INTO company values (1, 'doc1', xmlparse  
+            (document '<company name = "Company1"> <emp id = "31201" 
+             salary = "60000" gender = "Female" DOB = "10-10-80"> 
+             <name><first>Laura </first><last>Brown</last></name> 
+             <dept id = "M25">Finance</dept><!-- good --></emp> 
+             </company>'))};
+
+      //insert row2 into table
+      System.out.println("INSERT row2 into table \n");
+      #sql {
+           INSERT INTO company values (2, 'doc2', xmlparse ( 
+           document '<company name = "Company2"><emp id = "31664" 
+           salary = "60000" gender = "Male" DOB = "09-12-75"><name>  
+           <first>Chris</first><last>Murphy</last></name>  
+           <dept id = "M55">Marketing</dept></emp><emp id = "42366" 
+           salary = "50000" gender = "Female" DOB = "08-21-70"><name> 
+           <first>Nicole</first><last>Murphy</last></name>  
+           <dept id = "K55">Sales</dept></emp>  </company>')) };
+
+    }
+    catch(Exception e)
+    {
+      SqljException sqljExc = new SqljException(e);
+      sqljExc.handle();
+      System.exit(1);
+    }
+  } // createAndInsertIntoTable
+
+  // This function creates an index on an xml attribute 
+  // and shows how to use XQUERY on the index
+  static void createIndex()
+  {
+    try
+    {
+
+      Object data = null;
+
+      // declare an iterator
+      Positioned_Iterator cur1 = null;
+
+      // create index on xml column 
+      System.out.println("create index on attribute \n");
+      System.out.println("CREATE INDEX empindex1 ON company(doc) "+
+                  "GENERATE KEY USING XMLPATTERN '/company/emp/@*'"+
+                  "AS SQL VARCHAR(25). \n");
+      #sql {
+           CREATE INDEX empindex1 ON company(doc) GENERATE KEY USING 
+           XMLPATTERN '/company/emp/@*' AS SQL VARCHAR(25)} ;
+
+
+      // example query using above index
+      System.out.println("for $i in db2-fn:xmlcolumn('COMPANY.DOC')" +
+                      "/company/emp[@id='42366'] return $i/name\n");  
+      #sql cur1 = 
+           {SELECT XMLQUERY('for $i in db2-fn:xmlcolumn("COMPANY.DOC")
+                   /company/emp[@id = "42366"] return $i/name' passing 
+                   company.doc as "doc") from company};
+
+      #sql {FETCH :cur1 into :data};
+
+      System.out.println("---------------------------------------------");
+      while (true)
+      {
+        #sql {FETCH :cur1 into :data};
+
+        if (cur1.endFetch())
+        {
+          break;
+        }        
+
+        // print the result as an XML string
+        System.out.println();
+        System.out.println(((com.ibm.db2.jcc.DB2Xml)data).getDB2XmlString());
+        System.out.println();
+      }  
+      System.out.println("---------------------------------------------");
+      cur1.close();
+    }
+    catch (SQLException sqle)
+    {
+      System.err.println("Error Msg: "+ sqle.getMessage());
+      System.out.println("SQLState: "+sqle.getSQLState());
+      System.out.println("SQLError: "+sqle.getErrorCode());
+      System.out.println("Rollback the transaction and quit the program");
+      System.out.println();
+      try { DefaultContext.getDefaultContext().getConnection().rollback(); }
+      catch (Exception e)
+      {
+      }
+      System.exit(1);
+    }
+    catch(Exception e)
+    {}
+  } // createIndex
+
+  // This function creates an index with self or descendent forward axis
+  // and shows how XQUERY uses an index
+  static void createIndexwithSelf()
+  {
+    try
+    {
+      Object data = null;
+
+      // declare an iterator
+      Positioned_Iterator cur1 = null;
+
+      System.out.println("create index with self or descendent " +
+                         "forward axis \n");
+      System.out.println("CREATE INDEX empindex2 ON company(doc) GENERATE"+
+                         "KEY USINGXMLPATTERN '//@salary' AS SQL DOUBLE\n");
+      #sql {
+            CREATE INDEX empindex2 ON company(doc)  GENERATE KEY USING
+            XMLPATTERN '//@salary' AS SQL DOUBLE  };
+      System.out.println("---------------------------------------------");
+
+      #sql cur1 = {SELECT XMLQUERY('for $i in db2-fn:xmlcolumn
+                  ("COMPANY.DOC") /company/emp[@salary > 35000] return 
+                   <salary>{$i/@salary}</salary>' passing by ref 
+                   company.doc as "doc") from company};
+  
+      #sql {FETCH :cur1 into :data};
+      while (true)
+      {
+         #sql {FETCH :cur1 into :data};
+
+         if (cur1.endFetch())
+         {
+            break;
+         }
+
+        // print the resulr as an XML string
+        System.out.println();
+        System.out.println(((com.ibm.db2.jcc.DB2Xml)data).getDB2XmlString());
+        System.out.println();
+      }
+      System.out.println("---------------------------------------------");
+      cur1.close();
+    }
+    catch(Exception e)
+    {
+      System.out.println(e);
+    }
+  } // createIndexwithSelf
+
+  // This function creates an index on a text mode and 
+  // shows how to use XQUERY on the index
+  static void createIndexonTextnode()
+  {
+    try
+    {
+     
+      Object data = null;
+
+      // declare an iterator
+      Positioned_Iterator cur1 = null;
+
+      System.out.println("create index on a text mode\n");
+      System.out.println("CREATE INDEX empindex3 ON company(doc) GENERATE"+
+           "KEY USING XMLPATTERN '/company/emp/dept/text()'" + 
+           " AS SQL VARCHAR(30)\n");  
+      System.out.println("---------------------------------------------");
+
+      #sql {
+            CREATE INDEX empindex3 ON company(doc) GENERATE KEY USING 
+            XMLPATTERN '/company/emp/dept/text()' AS SQL VARCHAR(30) };
+
+      #sql cur1 = {SELECT XMLQUERY('for $i in db2-fn:xmlcolumn
+                   ("COMPANY.DOC")/company/emp[dept/text() = "Finance" 
+                   or dept/text() = "Marketing"] return $i/name' passing
+                   by ref company.doc as "doc") from company};
+
+      #sql {FETCH :cur1 into :data};
+    
+      while (true)
+      {
+         #sql {FETCH :cur1 into :data};
+         if (cur1.endFetch())
+         {
+            break;
+         }
+         // print the resulr as an XML string
+         System.out.println();
+         System.out.println(((com.ibm.db2.jcc.DB2Xml)data).getDB2XmlString());
+         System.out.println();
+     }
+     System.out.println("---------------------------------------------");
+     cur1.close();
+    }
+    catch (Exception e)
+    {
+      System.out.println(e);
+    }
+  } // createIndexonTextnode
+
+  // This function creates an index when 2 paths are qualified
+  // by an XML and shows how we can use XQUERY on the index 
+  static void createIndexwith2Paths()
+  {
+    try
+    {
+      Object data = null;
+
+      // declare an iterator
+      Positioned_Iterator cur1 = null;
+
+      System.out.println("create index when 2 paths are qualified"+
+                         " by an XML \n");
+      System.out.println("CREATE INDEX empindex4 ON company(doc) GENERATE "+
+                      "KEY USING XMLPATTERN '//@id' AS SQL VARCHAR(25)\n");
+      System.out.println("---------------------------------------------");
+
+      #sql {
+             CREATE INDEX empindex4 ON company(doc) GENERATE KEY USING 
+             XMLPATTERN '//@id' AS SQL VARCHAR(25)  };
+
+      #sql cur1 = {SELECT XMLQUERY('for $i in db2-fn:xmlcolumn
+                   ("COMPANY.DOC")/company/emp[@id="31201"]  return $i/name' 
+                    passing by ref company.doc as "doc") from company};
+
+      #sql {FETCH :cur1 into :data};
+
+      while (true)
+      {
+         #sql {FETCH :cur1 into :data};
+
+         if (cur1.endFetch())
+         {
+            break;
+         }
+
+        // print the resulr as an XML string
+        System.out.println();
+        System.out.println(((com.ibm.db2.jcc.DB2Xml)data).getDB2XmlString());
+        System.out.println();
+      }
+      System.out.println("---------------------------------------------");
+      cur1.close();
+
+      #sql cur1 = {SELECT XMLQUERY('for $i in db2-fn:xmlcolumn("COMPANY.DOC")
+                  /company/emp[dept/@id="K55"]  return $i/name' passing by 
+                  ref company.doc as "doc") from company};
+
+      #sql {FETCH :cur1 into :data};
+
+      System.out.println("---------------------------------------------");
+      while (true)
+      {
+         #sql {FETCH :cur1 into :data};
+ 
+         if (cur1.endFetch())
+         {
+            break;
+         }
+ 
+        // print the resulr as an XML string
+        System.out.println();
+        System.out.println(((com.ibm.db2.jcc.DB2Xml)data).getDB2XmlString());
+        System.out.println();
+      }
+ 
+      System.out.println("---------------------------------------------");
+      cur1.close();
+    }
+    catch (Exception e)
+    {
+      System.out.println(e);
+    }
+  } // createIndexwith2Paths
+
+  // This function creates index with namespace
+  static void createIndexwithNamespace()
+  {
+    try
+    {
+      System.out.println("create index with namespace \n");
+      System.out.println("CREATE INDEX empindex ON company(doc) GENERATE"+ 
+                "KEY USING  XMLPATTERN 'declare default element"+
+                "namespace \"http://www.mycompany.com/\";declare"+
+                "namespace m=\"http://www.mycompanyname.com/\";"+
+                "/company/emp/ @m:id' AS SQL VARCHAR(30)\n"); 
+      System.out.println("---------------------------------------------");
+      #sql {
+                 CREATE INDEX empindex ON company(doc) GENERATE KEY USING
+                 XMLPATTERN 'declare default element namespace 
+                 "http://www.mycompany.com/";declare namespace
+                 m="http://www.mycompanyname.com/";/company/emp/ 
+                 @m:id' AS SQL VARCHAR(30)};
+
+    }
+    catch (Exception e)
+    { 
+      System.out.println(e);
+    }
+  } // createIndexwithNamespace
+
+  // This function creates index with different data types
+  static void createIndexwith2Datatypes()
+  {
+    try
+    {
+      System.out.println("create same index with different data types \n");
+      System.out.println("CREATE INDEX empindex5 ON company(doc)" +
+              "GENERATE KEY  USING XMLPATTERN '/companyt/emp/@id'"+
+              "AS SQL VARCHAR(10)\n");
+      System.out.println("---------------------------------------------");
+      #sql {
+          CREATE INDEX empindex5 ON company(doc)  GENERATE KEY 
+          USING XMLPATTERN '/companyt/emp/@id' AS SQL VARCHAR(10)};
+
+
+      System.out.println("CREATE INDEX empindex6 ON company(doc)" +
+              "GENERATE KEY USING XMLPATTERN '/companyt/emp/@id'"+
+              " AS SQL DOUBLE");
+      #sql {
+          CREATE INDEX empindex6 ON company(doc) GENERATE KEY 
+          USING XMLPATTERN '/companyt/emp/@id' AS SQL DOUBLE};
+
+    }
+    catch(Exception e)
+    {
+      System.out.println(e);
+    }
+  } // createIndexwith2Datatypes
+
+  // This function creates an index using joins and also 
+  // shows how to use an XQUERY on the index created
+  static void createIndexuseAnding()
+  {
+    try
+    {
+
+      Object data = null;
+
+      // declare an iterator
+      Positioned_Iterator cur1 = null;
+
+      System.out.println("create index using joins (Anding) \n");
+
+      System.out.println("CREATE INDEX empindex7 ON company(doc) "+
+           "GENERATE KEY USING  XMLPATTERN '/company/emp/name/last'"+
+           "AS SQL VARCHAR(100)\n");  
+      System.out.println("---------------------------------------------");
+      #sql {
+          CREATE INDEX empindex7 ON company(doc) GENERATE KEY USING 
+          XMLPATTERN '/company/emp/name/last' AS SQL VARCHAR(100)};
+
+      System.out.println("CREATE INDEX deptindex on company(doc)"+
+         "GENERATE KEY USING XMLPATTERN '/company/emp/dept/text()'"+
+         "AS SQL VARCHAR(30)\n");
+      System.out.println("---------------------------------------------");
+
+      #sql {
+          CREATE INDEX deptindex on company(doc) GENERATE KEY USING  
+          XMLPATTERN '/company/emp/dept/text()' AS SQL VARCHAR(30)};
+
+      #sql cur1 = {SELECT XMLQUERY('for $i in db2-fn:xmlcolumn
+                   ("COMPANY.DOC")/company/emp[name/last="Murphy" 
+                   and dept/text()="Sales"] return  $i/name/last' 
+                   passing by ref company.doc as "doc") from company};
+
+       #sql {FETCH :cur1 into :data};
+       while (true)
+       {
+          #sql {FETCH :cur1 into :data};
+          if (cur1.endFetch())
+          {
+            break;
+          }
+      
+          // print the resulr as an XML string
+          System.out.println();
+          System.out.println(((com.ibm.db2.jcc.DB2Xml)data).getDB2XmlString());
+          System.out.println();
+       }
+       System.out.println("---------------------------------------------");
+       cur1.close();
+    }
+    catch(Exception e)
+    {
+      System.out.println(e);
+    }
+  } // createIndexuseAnding
+
+  // This function creates an index using joins (ANDing or ORing)
+  // and shows how to use XMLQUERY on the index created
+  static void createIndexuseAndingOrOring()
+  {
+    try
+    { 
+       Object data = null;
+ 
+       // declare an iterator
+       Positioned_Iterator cur1 = null;
+
+       System.out.println("create index using joins (Anding or Oring ) \n");
+    
+       System.out.println("CREATE INDEX empindex8 ON company(doc)"+
+              "GENERATE KEY USING XMLPATTERN '/company/emp/@salary'"+
+              "AS SQL DOUBLE");
+       #sql {
+          CREATE INDEX empindex8 ON company(doc) GENERATE KEY USING 
+          XMLPATTERN '/company/emp/@salary' AS SQL DOUBLE};
+
+       System.out.println("CREATE INDEX empindex9 ON company(doc)"+
+           "GENERATE KEY USING XMLPATTERN '/company/emp/dept'"+
+           " AS SQL VARCHAR(25)\n");
+
+       #sql {
+          CREATE INDEX empindex9 ON company(doc) GENERATE KEY USING 
+          XMLPATTERN '/company/emp/dept' AS SQL VARCHAR(25)};
+
+       System.out.println("CREATE INDEX empindex10 ON company(doc)"+
+         "GENERATE KEY USING  XMLPATTERN '/company/emp/name/last' "+
+         "AS SQL VARCHAR(25)\n");
+
+       System.out.println("---------------------------------------------");
+       #sql {
+          CREATE INDEX empindex10 ON company(doc) GENERATE KEY USING 
+          XMLPATTERN '/company/emp/name/last' AS SQL VARCHAR(25)};
+
+       #sql cur1 = {SELECT XMLQUERY(
+          'for $i in db2-fn:xmlcolumn("COMPANY.DOC")/company/emp
+          [@salary > 50000 and dept="Finance"]/name[ last = "Brown"]
+           return $i/last') from company};
+
+       #sql {FETCH :cur1 into :data};
+       while (true)
+       {
+         #sql {FETCH :cur1 into :data};
+
+         if (cur1.endFetch())
+         {
+            break;
+         }
+       
+         // print the resulr as an XML string
+        System.out.println();
+        System.out.println(((com.ibm.db2.jcc.DB2Xml)data).getDB2XmlString());
+        System.out.println();
+       }
+       System.out.println("---------------------------------------------");
+       cur1.close();
+    }
+    catch(Exception e)
+    {
+      System.out.println(e);
+    }
+  } // createIndexuseAndingOrOring
+
+  // This function create an index with Date datatype and
+  // shows how to use an XMLQUERY on the index created
+  static void createIndexwithDateDatatype()
+  {
+    try
+    {
+
+      Object data = null;
+
+      // declare an iterator
+      Positioned_Iterator cur1 = null;
+
+      System.out.println("create index with Date Data type \n");
+
+      System.out.println("CREATE INDEX empindex11 ON company(doc)"+
+            "GENERATE KEY USING  XMLPATTERN '/company/emp/@DOB'"+
+            "as SQL DATE\n");
+      System.out.println("-----------------------------------------");
+      #sql {
+          CREATE INDEX empindex11 ON company(doc) GENERATE KEY USING 
+          XMLPATTERN '/company/emp/@DOB' as SQL DATE};
+
+      #sql cur1 = {SELECT XMLQUERY('for $i in db2-fn:xmlcolumn("COMPANY.DOC")
+              /company/emp[@DOB < "11-11-78"] return $i/name') from company};
+   
+      #sql {FETCH :cur1 into :data};
+      while (true)
+      {
+         #sql {FETCH :cur1 into :data};
+
+         if (cur1.endFetch())
+         {
+            break;
+         }
+        // print the resulr as an XML string
+        System.out.println();
+        System.out.println(((com.ibm.db2.jcc.DB2Xml)data).getDB2XmlString());
+        System.out.println();
+      }
+      System.out.println("-----------------------------------------");
+      cur1.close();
+    }
+    catch(Exception e)
+    {
+      System.out.println(e);
+    }
+  } // createIndexwithDateDatatype
+
+  // This function creates an index with comment node and also
+  // shows how to use XMLQUERY on the index created
+  static void createIndexWithCommentNode()
+  {
+    try
+    {
+      Object data = null;
+
+      // declare an iterator
+      Positioned_Iterator cur1 = null;
+
+      System.out.println("create index with Comment Node \n");
+
+      System.out.println("CREATE INDEX empindex12 ON company(doc)"+
+            "GENERATE KEY USING  XMLPATTERN '/company//comment()'"+
+            "as SQL VARCHAR HASHED\n");
+      System.out.println("-----------------------------------------");
+      #sql {
+            CREATE INDEX empindex12 ON company(doc) GENERATE KEY USING
+            XMLPATTERN '/company/emp/@DOB' as SQL DATE};
+
+      #sql cur1 = {SELECT XMLQUERY('for $i in db2-fn:xmlcolumn("COMPANY.DOC")
+                   /company/emp[comment() = " good "] return $i/name') 
+                   from company};
+
+      #sql {FETCH :cur1 into :data};
+      while (true)
+      {
+         #sql {FETCH :cur1 into :data};
+         if (cur1.endFetch())
+         {
+            break;
+         }
+         // print the result as an XML string
+         System.out.println();
+         System.out.println(((com.ibm.db2.jcc.DB2Xml)data).getDB2XmlString());
+         System.out.println();
+      }
+      System.out.println("-----------------------------------------");
+      cur1.close();
+    }
+    catch(Exception e)
+    {
+      System.out.println(e);
+    }
+  } // createIndexWithCommentNode
+
+  // This function drops all the indexes created and 
+  // also drops the 'company' table
+  static void dropall()
+  {
+    try
+    {
+      System.out.println("drop table \n");
+      #sql {DROP INDEX "EMPINDEX1"};
+      #sql {DROP INDEX "EMPINDEX2"};
+      #sql {DROP INDEX "EMPINDEX3"};
+      #sql {DROP INDEX "EMPINDEX4"};
+      #sql {DROP INDEX "EMPINDEX5"};
+      #sql {DROP INDEX "EMPINDEX6"};
+      #sql {DROP INDEX "EMPINDEX7"};
+      #sql {DROP INDEX "EMPINDEX8"};
+      #sql {DROP INDEX "EMPINDEX9"};
+      #sql {DROP INDEX "EMPINDEX10"};
+      #sql {DROP INDEX "EMPINDEX11"};
+      #sql {DROP INDEX "EMPINDEX12"};
+      #sql {DROP TABLE "COMPANY"};
+    }
+    catch (Exception e)
+    {
+      System.out.println(e);
+    }
+  } // dropall
+}

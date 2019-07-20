@@ -1,0 +1,309 @@
+/****************************************************************************
+** (c) Copyright IBM Corp. 2007 All rights reserved.
+** 
+** The following sample of source code ("Sample") is owned by International 
+** Business Machines Corporation or one of its subsidiaries ("IBM") and is 
+** copyrighted and licensed, not sold. You may use, copy, modify, and 
+** distribute the Sample in any form without payment to IBM, for the purpose of 
+** assisting you in the development of your applications.
+** 
+** The Sample code is provided to you on an "AS IS" basis, without warranty of 
+** any kind. IBM HEREBY EXPRESSLY DISCLAIMS ALL WARRANTIES, EITHER EXPRESS OR 
+** IMPLIED, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED WARRANTIES OF 
+** MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE. Some jurisdictions do 
+** not allow for the exclusion or limitation of implied warranties, so the above 
+** limitations or exclusions may not apply to you. IBM shall not be liable for 
+** any damages you suffer as a result of using, copying, modifying or 
+** distributing the Sample, even if IBM has been advised of the possibility of 
+** such damages.
+*****************************************************************************
+**
+** SOURCE FILE NAME: xmlconst.sqc
+**
+** SAMPLE: How to create an index using UNIQUE constraint on an xml column
+**
+**           This is a tutorial sample shows where and when indexing fails when
+**           unique constraint is applied.
+** NOTE :  1) This sample demonstrate the how to enforce the
+**            constraints on an XML value. There are some statement
+**            in the samples which are expected to fail because of 
+**            constraint violation so The sql error SQL803N and 
+**            SQL20305N are expected.
+**
+**         2) Primary key, unique constraint, or unique index are not supported
+**            for XML column in the Database Partitioning Feature available with
+**            DB2 Enterprise Server Edition for Linux, UNIX, and Windows.
+**
+** SQL STATEMENTS USED:
+**         INSERT
+**         INDEX
+**         CREATE
+**         DROP
+**
+** OUTPUT FILE: xmconst.out (available in the online documentation)
+*****************************************************************************
+**
+** For more information on the sample programs, see the README file.
+**
+** For information on developing C applications, see the Application
+** Development Guide.
+**
+** For information on using SQL statements, see the SQL Reference.
+**
+** For the latest information on programming, building, and running DB2
+** applications, visit the DB2 application development website:
+**     http://www.software.ibm.com/data/db2/udb/ad
+****************************************************************************/
+
+
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+#include <sqlenv.h>
+#include <sqlutil.h>
+#include <sqlcodes.h>
+#include "utilemb.h"
+
+EXEC SQL BEGIN DECLARE SECTION;
+  char dbAlias[100];
+  char user[100];
+  char pswd[100];
+  char stmt[700];
+EXEC SQL END DECLARE SECTION;
+
+int main(int argc, char *argv[])
+{
+  int rc = 0;
+  struct sqlca sqlca;
+
+  /* check the command line arguments */
+  rc = CmdLineArgsCheck1(argc, argv, dbAlias, user, pswd);
+  if (rc != 0)
+  {
+    return rc;
+  }
+ 
+  printf("THIS SAMPLE SHOWS HOW TO CREATE AN INDEX" \
+               "USING UNIQUE CONSTRAINT ON AN XML COLUMN\n");
+
+  /* connect to database */
+  rc = DbConn(dbAlias, user, pswd);
+  if (rc != 0)
+  {
+    return rc;
+  }
+
+  /* indexing XML columns using UNIQUE constraint */
+  rc = TbindexUniqueConstraint1();
+  rc = TbindexUniqueConstraint2();
+  rc = TbindexVarcharConstraint();
+  rc = TbindexVarcharConstraint1();
+  
+  /* disconnect from the database */
+  rc = DbDisconn(dbAlias);
+  if(rc != 0)
+  {
+    return rc;
+  }
+
+  return 0;
+}
+
+int TbindexUniqueConstraint1()
+{
+  struct sqlca sqlca;
+
+  /* create table */
+  printf("create table called company to perform index operation\n");
+
+  EXEC SQL CREATE TABLE COMPANY(ID int, DOCNAME VARCHAR(20), DOC XML);
+  EMB_SQL_CHECK("CREATE TABLE COMPANY");
+
+  /* create unique index */
+  printf("CREATE UNIQUE INDEX \n");
+
+  EXEC SQL CREATE UNIQUE INDEX empindex on company(doc)  GENERATE KEY 
+                USING XMLPATTERN '/company/emp/@id' AS SQL  DOUBLE;
+  EMB_SQL_CHECK("CREATE UNIQUE INDEX");
+
+  printf("insert row1 into table \n");
+
+  strcpy(stmt, "insert into company values (1, 'doc1', xmlparse "
+               "(document '<company name=\"Company1\"> "
+               " <emp id=\"31201\" salary=\"60000\" gender=\"Female\">"
+               "<name><first>Laura </first><last>Brown</last></name> "
+               "<dept id=\"M25\">Finance</dept></emp></company>'))");
+  EXEC SQL EXECUTE IMMEDIATE :stmt;
+  EMB_SQL_CHECK("INSERT INTO COMPANY");
+
+  printf("This insert gives Unique voilation error because of id = \"31201\" \n");
+
+  strcpy(stmt, " Insert into company values (1, 'doc1', xmlparse "
+               " (document '<company name=\"Company1\"> "
+               " <emp id=\"31201\" salary=\"60000\" gender=\"Female\">"
+               " <name><first>Laura </first><last>Brown</last></name> "
+               " <dept id=\"M25\">Finance</dept></emp></company>'))");
+  EXEC SQL EXECUTE IMMEDIATE :stmt;
+  EMB_SQL_CHECK("INSERT INTO COMPANY");
+ 
+  /* drop index */
+  printf("Drop the index \n"); 
+  EXEC SQL DROP INDEX "EMPINDEX1";
+  EMB_SQL_CHECK("DROP INDEX");
+
+  /* drop the table */
+  printf("drop the table \n");
+  EXEC SQL DROP TABLE "COMPANY";
+  EMB_SQL_CHECK("DROP TABLE");
+
+return 0;
+}
+
+
+int TbindexUniqueConstraint2()
+{
+struct sqlca sqlca;
+
+  /* create table */
+  printf("create table called company to perform index operation\n");
+
+  EXEC SQL CREATE TABLE COMPANY(ID int, DOCNAME VARCHAR(20), DOC XML);
+  EMB_SQL_CHECK("CREATE TABLE COMPANY");
+
+  /* create index */
+  printf("create unique index \n");
+  EXEC SQL CREATE UNIQUE INDEX empindex on company(doc) GENERATE 
+         KEY USING XMLPATTERN '/company/emp/@id' AS SQL  DOUBLE;
+  EMB_SQL_CHECK("CREATE UNIQUE INDEX");
+
+  printf("No index entry is inserted because \"ABCDE\" ");
+  printf("cannot be cast to DOUBLE data type \n");
+
+  strcpy(stmt, "Insert into company values (1, 'doc1', xmlparse"
+               "(document '<company name=\"Company1\">"
+               "<emp id=\"ABCDE\" salary=\"60000\" gender=\"Female\">"
+               " <name><first>Laura </first><last>Brown</last></name>"
+               " <dept id=\"M25\">Finance</dept></emp></company>'))");
+  EXEC SQL EXECUTE IMMEDIATE :stmt;
+  EMB_SQL_CHECK("INSERT INTO COMPANY");
+
+  printf("insert succeeds because  no index entry is inserted ");
+  printf(" since \"ABCDE\" cannot be cast to the DOUBLE data type. \n");
+
+  strcpy(stmt, "Insert into company values (1, 'doc1', xmlparse "
+               " (document '<company name=\"Company1\"> "
+               "<emp id=\"ABCDE\" "
+               "salary=\"60000\" gender=\"Female\"><name><first>Laura"
+               " </first><last>Brown</last></name><dept id=\"M25\"> "
+               "Finance</dept></emp> </company>'))");
+  EXEC SQL EXECUTE IMMEDIATE :stmt;
+  EMB_SQL_CHECK("INSERT INTO COMPANY");
+
+  /* drop index */
+  printf("drop the index \n");
+  EXEC SQL DROP INDEX "EMPINDEX";
+  EMB_SQL_CHECK("DROP INDEX");
+
+  /* drop table */
+  printf("drop the table \n");
+
+  EXEC SQL DROP TABLE "COMPANY";
+  EMB_SQL_CHECK("DROP TABLE");
+ return 0;
+}
+
+int TbindexVarcharConstraint()
+{
+  struct sqlca sqlca;
+
+  /* create table */
+  printf("create table called company to perform index operation\n");
+
+  EXEC SQL CREATE TABLE COMPANY(ID int, DOCNAME VARCHAR(20), DOC XML);
+  EMB_SQL_CHECK("CREATE TABLE COMPANY");
+
+  /* create index with varchar constraint */
+  printf("create unique index with varchar constraint\n");
+
+  EXEC SQL CREATE UNIQUE INDEX empindex1 on company(doc)  
+     GENERATE KEY USING XMLPATTERN '/company/emp/@id' AS SQL VARCHAR(4);
+  EMB_SQL_CHECK("CREATE UNIQUE INDEX");
+
+  printf("insert statement succeeds because the length of \"312\" < 4.\n");
+
+  strcpy(stmt, "Insert into company values (1, 'doc1', xmlparse "
+               " (document '<company name=\"Company1\"><emp id=\"312\""
+               " salary=\"60000\" gender=\"Female\"><name><first>Laura"
+               " </first><last>Brown</last></name><dept id=\"M25\">"
+               "Finance</dept></emp></company>'))");
+  EXEC SQL EXECUTE IMMEDIATE :stmt;
+  EMB_SQL_CHECK("INSERT INTO COMPANY");
+  
+  printf("insert statement fails because the length of \"31202\" > 4. \n");
+
+  strcpy(stmt, " Insert into company values (1, 'doc1', xmlparse "
+               "(document '<company name=\"Company1\"><emp id=\"31202\""
+               " salary=\"60000\" gender=\"Female\"><name><first>Laura "
+               "</first><last>Brown</last></name><dept id=\"M25\">"
+               "Finance</dept></emp></company>'))");
+  EXEC SQL EXECUTE IMMEDIATE :stmt;
+  EMB_SQL_CHECK("INSERT INTO COMPANY");
+
+  /* drop index */
+  printf("drop index \n");
+
+  EXEC SQL DROP INDEX "EMPINDEX1"; 
+  EMB_SQL_CHECK("DROP INDEX");
+
+  /* drop table */ 
+  printf("drop table \n");
+  EXEC SQL DROP TABLE "COMPANY";
+  EMB_SQL_CHECK("DROP TABLE");
+
+}
+
+int TbindexVarcharConstraint1()
+{
+  struct sqlca sqlca;
+
+  /* create table */
+  EXEC SQL CREATE TABLE COMPANY(ID int, DOCNAME VARCHAR(20), DOC XML);
+
+  /* insert row into table. */
+  strcpy(stmt, " INSERT INTO company values (1, 'doc1', xmlparse"
+               "(document '<company name=\"Company1\"><emp id=\"312\" "
+               "salary=\"60000\" gender=\"Female\"><name><first>Laura"
+               "</first><last>Brown</last></name><dept id=\"M25\">"
+               "Finance</dept></emp></company>'))");    
+
+  EXEC SQL EXECUTE IMMEDIATE :stmt;
+  EMB_SQL_CHECK("INSERT INTO COMPANY");
+
+  printf("insert row2 into table \n");
+  
+  strcpy(stmt, "INSERT INTO company values (1, 'doc1', xmlparse"
+               "(document '<company name=\"Company1\"><emp id=\"3120212\" "
+               "  salary=\"60000\" gender=\"Female\"><name><first>Laura"
+               "</first><last>Brown</last></name><dept id=\"M25\">"
+               "Finance</dept></emp></company>'))");
+
+  EXEC SQL EXECUTE IMMEDIATE :stmt;
+  EMB_SQL_CHECK("INSERT INTO COMPANY");
+
+  printf("create index with Varchar constraint fails because ");
+  printf("the length of \"31202\" > 4");
+
+  EXEC SQL CREATE UNIQUE INDEX empindex1 on company(doc)
+           GENERATE KEY USING XMLPATTERN '/company/emp/@id' AS SQL VARCHAR(4);
+  EMB_SQL_CHECK("CREATE UNIQUE INDEX");
+
+
+  /* drop index */
+  EXEC SQL DROP INDEX "EMPINDEX1";
+
+  /* drop table */
+  EXEC SQL DROP TABLE "COMPANY";
+
+
+ return 0;
+}

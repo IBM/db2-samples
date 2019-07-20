@@ -1,0 +1,344 @@
+******************************************************************************
+* (c) Copyright IBM Corp. 2007 All rights reserved.
+* 
+* The following sample of source code ("Sample") is owned by International 
+* Business Machines Corporation or one of its subsidiaries ("IBM") and is 
+* copyrighted and licensed, not sold. You may use, copy, modify, and 
+* distribute the Sample in any form without payment to IBM, for the purpose of 
+* assisting you in the development of your applications.
+* 
+* The Sample code is provided to you on an "AS IS" basis, without warranty of 
+* any kind. IBM HEREBY EXPRESSLY DISCLAIMS ALL WARRANTIES, EITHER EXPRESS OR 
+* IMPLIED, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED WARRANTIES OF 
+* MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE. Some jurisdictions do 
+* not allow for the exclusion or limitation of implied warranties, so the above 
+* limitations or exclusions may not apply to you. IBM shall not be liable for 
+* any damages you suffer as a result of using, copying, modifying or 
+* distributing the Sample, even if IBM has been advised of the possibility of 
+* such damages.
+*
+******************************************************************************
+*
+*               README for CLI Samples
+*
+* The <install_path>/sqllib/samples/cli directory contains this README file
+* where <install_path> is the location of DB2 9.7 on your hard drive.
+* The default location for <install_path> is $HOME.
+*
+* This README describes how to build and run CLI sample code for DB2 9.7.
+* The DB2 9.7 sample code and build files for CLI are located in the
+* following directory:
+*
+*    <install_path>/sqllib/samples/cli
+*
+* Copy the sample files from this directory to a working directory prior to
+* building the sample programs. The sample program directories are typically
+* read-only on most platforms and some samples produce output files that
+* require write permissions on the directory.
+*
+* WARNING: Some of these samples may change your database or database manager
+*          configuration.  Execute the samples against a test database
+*          only, such as the DB2 SAMPLE database.
+*
+******************************************************************************
+*
+*               Prepare your DB2 sample development environment
+*
+* 1) Copy the files in <install_path>/sqllib/samples/cli/* to a working
+*    directory and ensure that directory has write permission.
+*
+* 2) Start the Database Manager with the following command:
+*      db2start
+*
+* 3) Create the sample database with the following command:
+*      db2sampl
+*
+* 4) Connect to the database with the following command:
+*      db2 connect to sample
+*
+* 5) To build Stored Procedures and User Defined Functions, ensure that you
+*    have write permission on the <install_path>/sqllib/function directory.
+*
+* 6) cd to the directory containing the files copied in Step 1.
+*
+******************************************************************************
+*
+*                            Building DB2 Samples
+*
+* There are two ways to build DB2 samples: using a make utility or using the
+* build files that are included with the DB2 sample programs.
+*
+*       o To build samples using the make utility see 'BUILDING SAMPLES
+*         USING make UTILITY'.
+*       o To build samples using the build files or when you do not have a
+*         compatible make utility see 'BUILDING SAMPLES USING BUILD FILES'.
+*
+******************************************************************************
+*
+*                  *** BUILDING SAMPLES USING make UTILITY ***
+*
+* If you have a compatible make utility on your system, you can use
+* the makefile provided. Such a make utility may be provided by another
+* language compiler. Modify the PATH variable to include the directory
+* containing the make utility.
+*
+* Depending on your environment, the makefile might have to be modified.
+* For more details refer to the 'VARIABLES' section in the makefile.
+*
+* Execute the appropriate 'make' command in your working directory:
+*
+*       o make <prog_name> - builds the sample identified by <prog_name>
+*                            Do not include the file extension for the
+*                            program name.  E.g. make DbAuth
+*                            For any dependencies refer to the individual
+*                            sample.
+*       o make srv         - builds only samples that can be run on the
+*                            server, including routines (stored procedures
+*                            and User Defined Functions).
+*       o make rtn         - builds only routines.
+*       o make call_rtn    - builds only client programs that call routines.
+*       o make client_run  - builds only programs that run completely on the
+*                            client (not ones that call routines).
+*       o make all_client  - builds all client samples (all programs in the
+*                            'call_rtn' and 'client_run' categories).
+*       o make all         - builds all supplied sample programs
+*
+* NOTE: Create a database with name SAMPLE2 before running 'make all' as
+*       some of the samples require two databases. Create second database
+*       with the following commands:
+*
+*          db2 connect reset            -- To disconnect from sample database
+*          db2 create database sample2  -- Create second database
+*          db2 connect to sample        -- Reconnect to sample database
+*
+******************************************************************************
+*
+*                   *** BUILDING SAMPLES USING BUILD FILES ***
+*
+* As an alternative to the makefile, the build files included with the DB2
+* samples can be used to build the CLI sample programs.
+*
+* Building Standalone Samples:
+*       o bldapp     <prog_name>
+*                    <prog_name> - the name of the sample program without
+*                                  extension.
+*         For any additional dependencies refer to the individual sample.
+*
+* Building and Executing Stored Procedures:
+*       o Build stored procedure server and copy the resulting binary file to
+*         the sqllib/function directory with the following command:
+*         bldrtn     <prog_name>
+*                    <prog_name> - Name of the sample program without
+*                                  extension.
+*       o Catalog stored procedures with the following command:
+*         spcat
+*       o Build stored procedure client with the following command:
+*         bldapp     <prog_name>
+*                    <prog_name> - Name of the sample program without
+*                                  extension.
+*
+* Building and Executing User Defined Functions:
+*      o Build UDF server and copy the resulting binary file to the
+*        sqllib/function directory with the following command:
+*        bldrtn     <prog_name>
+*                   <prog_name>  - Name of the sample program without
+*                                  extension.
+*      o Catalog User Defined Functions with the following command:
+*        udfcat
+*      o Build UDF client with the following command:
+*        bldapp     <prog_name>
+*                   <prog_name>  - Name of the sample program without
+*                                  extension.
+*
+******************************************************************************
+*
+*              Common file Descriptions
+* 
+* The following are the common files for CLI samples. For more
+* information on these files, refer to the program source files.
+*
+******************************************************************************
+*
+* Common files
+*
+* README        - this file
+* makefile      - makefile for all files
+*
+******************************************************************************
+*
+* Batch files
+*
+* bldapp        - Builds application programs
+* bldmc         - Builds multi-connection application programs
+* bldrtn        - Builds routines (stored procedures and UDFs)
+* embprep       - Precompiles and binds embedded SQL programs
+*
+******************************************************************************
+*
+* Common Utility Function files
+*
+* utilcli.c     - Utility functions used by DB2 CLI samples.
+* utilcli.h     - Header file for utilcli.c.
+*
+******************************************************************************
+*
+*               Samples Design
+*
+* Most of the CLI sample programs are organized to reflect an object-based
+* design of the distinct levels of DB2. The level to which a sample belongs
+* is indicated by a two character identifier at the beginning of the sample
+* name. These levels show a hierarchical structure. The Installation image
+* level is the top level of DB2. Below this level, an application can access
+* different instances, an instance can have different databases, etc. Here
+* are the DB2 levels demonstated by the CLI samples:
+*
+* Identifier     DB2 Level
+*
+*     il        Installation Image Level.
+*     cl        Client Level.
+*     in        Instance Level.
+*     db        Database Level.
+*     tb        Table Level.
+*     dt        Data Type Level.
+*
+******************************************************************************
+*
+*               Other Samples
+*
+* Besides the samples organized in the DB2 Level design, other samples show
+* specific kinds of application methods:
+*
+* Identifier     Application Method
+*
+*     sp        Stored Procedures.
+*     ud        User Defined Functions.
+*
+******************************************************************************
+*
+*               CLI Sample Descriptions
+*
+* The following are the CLI sample files included with DB2. For more
+* information on the sample programs, refer to the program source
+* files.
+*
+******************************************************************************
+*
+* Installation Image Level (programs that deal with the installation image
+*                          level of DB2)
+*
+* ilinfo.c      - How to get and set installation level information
+*
+******************************************************************************
+*
+* ADMIN_CMD stored procedure samples (program files that deal with using
+*                                     SQL ADMIN_CMD() Stored Procedures)
+*
+* admincmd_autoconfigure.c - How to autoconfigure a database
+* admincmd_contacts.c      - How to add, update and drop contacts and
+*                            contactgroups
+* admincmd_export.c        - How to export data
+* admincmd_describe.c      - How to describe table and indexes
+* admincmd_import.c        - How to import data
+* admincmd_onlinebackup.c  - How to perform online backup
+* admincmd_updateconfig.c  - How to update, reset the Database configuration
+*                            and Database Manager Configuration Parameters
+* admincmd_quiesce.c       - How to quiesce tablespaces and database
+* ssv_db_cfg.c             - How to update db cfg parameters in an MPP
+*                            environment.
+*
+******************************************************************************
+*
+* Client Level (program files that deal with the client level of DB2)
+*
+* cli_info.c    - How to get and set client level information
+* clihandl.c    - How to allocate and free handles
+* clisqlca.c    - How to work with SQLCA data
+*
+******************************************************************************
+*
+* Instance Level (program files that deal with the instance level of DB2)
+*
+* getdbmcfgparams.c - How to get DBM CFG Parameters
+* ininfo.c          - How to get and set instance level information
+*
+******************************************************************************
+*
+* Database Level (program files that deal with database objects in DB2)
+*
+* dbcongui.c       - How to connect to a database with a graphical user
+*                    interface (GUI)
+* dbconn.c         - How to connect and disconnect from a database
+* dbinfo.c         - How to get and set information at a database level
+* dbmcon.c         - How to connect and disconnect from multiple databases
+* dbmconx.c        - How to connect and disconnect from multiple databases
+*                    with embedded SQL
+* dbmconx1.h       - header file for dbmconx1.sqc
+* dbmconx1.sqc     - embedded SQL file for the dbmconx program
+* dbmconx2.h       - header file for dbmconx2.sqc
+* dbmconx2.sqc     - embedded SQL file for the dbmconx program
+* dbnative.c       - How to translate a statement that contains an ODBC
+*                    escape clause to a data source specific format
+* dbuse.c          - How to use database objects
+* dbusemx.sqc      - How to use database objects with embedded SQL
+* dbxamon.c        - Show and roll back indoubt transactions
+* getdbcfgparams.c - How to get DB CFG Parameters
+* trustedcontext.c - How to establish an explicit trusted connection and
+*                    switching of the user.
+*
+******************************************************************************
+*
+* Table Level (program files that deal with table objects in DB2)
+*
+* getmessage.c  - How to get error message in the required locale with token
+*                 replacement. The tokens can be programmatically obtained by
+*                 invoking Sqlaintp using JNI.
+* tbast.c       - How to use staging table for updating deferred AST
+* tbcompress.c  - How to create tables with null and default value
+*                 compression option
+* tbconstr.c    - How to work with table constraints
+* tbcreate.c    - How to create and drop tables
+* tbinfo.c      - How to get and set information at a table level
+* tbload.c      - How to insert data using the CLI LOAD utility
+* tbmod.c       - How to modify information in a table
+* tbonlineinx.c - How to create and reorg indexes on a table
+* tbread.c      - How to read information in a table
+* tbrunstats.c  - How to perform runstats on a table
+* tbtemp.c      - How to use a declared temporary table
+* tbumqt.c      - How to use user materialized query tables (summary tables)
+*
+******************************************************************************
+*
+* Data Type Level (programs that deal with data types)
+*
+* dtinfo.c      - How to get information about data types
+* dtlob.c       - How to read and write LOB data
+* dtudt.c       - How to create/use/drop user defined distinct types
+*
+******************************************************************************
+*
+* Stored Procedure Level
+*
+* Stored Procedures (program files that demonstrate stored procedures)
+*
+* spcreate.db2  - CLP script to issue CREATE PROCEDURE statements
+* spdrop.db2    - CLP script to drop stored procedures from the catalog
+* spcat         - CLP script that first calls spdrop.db2 and then calls
+*                 spcreate.db2
+* spclient.c    - Client application to call stored procedures in spserver
+* spclires.c    - Client application that demonstrates the difference between
+*                 SQLMoreResults and SQLNextResult for multiple result sets
+* spserver.c    - Stored procedure functions built and run on the server
+* spserver.exp  - Export file for spserver
+* spcall.c      - client program for calling stored procedures
+*
+******************************************************************************
+*
+* User-defined Function (UDF) Level
+*
+* UDFs (program files that demonstrate user defined functions)
+*
+* udfcli.c      - Client application which calls the user defined function
+*                 in udfsrv
+* udfsrv.c      - User defined function ScalarUDF called by udfcli.c sample
+* udfsrv.exp    - Export file for udfsrv
+******************************************************************************

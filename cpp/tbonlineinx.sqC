@@ -1,0 +1,542 @@
+/****************************************************************************
+** (c) Copyright IBM Corp. 2007 All rights reserved.
+** 
+** The following sample of source code ("Sample") is owned by International 
+** Business Machines Corporation or one of its subsidiaries ("IBM") and is 
+** copyrighted and licensed, not sold. You may use, copy, modify, and 
+** distribute the Sample in any form without payment to IBM, for the purpose of 
+** assisting you in the development of your applications.
+** 
+** The Sample code is provided to you on an "AS IS" basis, without warranty of 
+** any kind. IBM HEREBY EXPRESSLY DISCLAIMS ALL WARRANTIES, EITHER EXPRESS OR 
+** IMPLIED, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED WARRANTIES OF 
+** MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE. Some jurisdictions do 
+** not allow for the exclusion or limitation of implied warranties, so the above 
+** limitations or exclusions may not apply to you. IBM shall not be liable for 
+** any damages you suffer as a result of using, copying, modifying or 
+** distributing the Sample, even if IBM has been advised of the possibility of 
+** such damages.
+*****************************************************************************
+**
+** SOURCE FILE NAME: tbonlineinx.sqC 
+**    
+** SAMPLE: How to create and reorg indexes on a table
+**
+** SQL STATEMENTS USED:
+**         INCLUDE 
+**         CREATE BUFFERPOOL
+**         CREATE INDEX 
+**         CREATE TABLE 
+**         CREATE TABLESPACE
+**         DROP BUFFERPOOL
+**         DROP INDEX
+**         DROP TABLE
+**         DROP TABLESPACE
+**
+** DB2 APIs USED:
+**         db2Reorg -- Reorganize a Table or Index
+**
+** SQL STRUCTURES USED:
+**         sqlca
+**
+** OUTPUT FILE: tbonlineinx.out (available in the online documentation)
+*****************************************************************************
+**
+** For more information on the sample programs, see the README file.
+**
+** For information on developing C++ applications, see the Application
+** Development Guide.
+**
+** For information on using SQL statements, see the SQL Reference.
+**
+** For the latest information on programming, compiling, and running DB2
+** applications, visit the DB2 application development website at
+**     http://www.software.ibm.com/data/db2/udb/ad
+****************************************************************************/
+
+#include <string.h>
+#include <sqlenv.h>
+#include <sqlutil.h>
+#include <db2ApiDf.h>
+#include "utilemb.h"
+#if ((__cplusplus >= 199711L) && !defined DB2HP && !defined DB2AIX) || \
+    (DB2LINUX && (__LP64__ || (__GNUC__ >= 3)) )
+   #include <iomanip>
+   #include <iostream>
+   using namespace std; 
+#else
+   #include <iomanip.h>
+   #include <iostream.h>
+#endif
+
+EXEC SQL INCLUDE SQLCA;
+
+EXEC SQL BEGIN DECLARE SECTION;
+  short len;
+  char stmt[200];
+  char tableName[129];
+  char schemaName[129];
+EXEC SQL END DECLARE SECTION;
+
+class TbOnlineInx
+{
+  public:
+    int CreateIndex();
+    int CreateLargeIndex();
+    int ReorgIndex();
+
+  private:  
+    int DropIndex();
+    int SchemaNameGet();
+};
+
+// How to create an index on a table with different levels
+// of access to the table like read-write, read-only, no access 
+int TbOnlineInx::CreateIndex()
+{
+  int rc = 0;
+
+  cout << "\n-----------------------------------------------------------";
+  cout << "\nUSE THE SQL STATEMENT\n";
+  cout << "  CREATE INDEX\n";
+  cout << "TO CREATE AN INDEX\n";
+
+  // create an online index with read-write access to the table 
+  cout << "\nTo create an index on a table allowing read-write access\n";
+  cout << "to the table, use the following SQL command:\n\n";
+  cout << "  CREATE INDEX INDEX1 ON EMPLOYEE (LASTNAME ASC)\n";
+  strcpy(stmt, "CREATE INDEX INDEX1 ON EMPLOYEE (LASTNAME ASC)");
+
+  EXEC SQL EXECUTE IMMEDIATE :stmt;
+  EMB_SQL_CHECK("Index -- Create");
+
+  EXEC SQL COMMIT;
+  EMB_SQL_CHECK("Transaction -- Commit");
+
+  rc = DropIndex();
+  if (rc != 0)
+  {
+    return rc;
+  }
+
+  // create an index on a table while allowing only read access to it 
+  cout << "\nTo create an index on a table allowing only read access\n";
+  cout << "to the table, use the following two SQL commands:\n\n"; 
+
+  cout << "  LOCK TABLE EMPLOYEE IN SHARE MODE\n";
+  cout << "  CREATE INDEX INDEX1 ON EMPLOYEE (LASTNAME ASC)\n";
+  
+  strcpy(stmt, "LOCK TABLE EMPLOYEE IN SHARE MODE");
+  
+  EXEC SQL EXECUTE IMMEDIATE :stmt;
+  EMB_SQL_CHECK("Lock -- Table");
+
+  EXEC SQL COMMIT;
+  EMB_SQL_CHECK("Transaction -- Commit");
+
+  strcpy(stmt, "CREATE INDEX INDEX1 ON EMPLOYEE (LASTNAME ASC)");
+
+  EXEC SQL EXECUTE IMMEDIATE :stmt;
+  EMB_SQL_CHECK("Index -- Create");
+
+  EXEC SQL COMMIT;
+  EMB_SQL_CHECK("Transaction -- Commit");
+
+  rc = DropIndex();
+  if (rc != 0)
+  {
+    return rc;
+  }
+ 
+  // create an online index allowing no access to the table 
+  cout << "\nTo create an index on a table allowing no access to the \n";
+  cout << "table (only uncommitted readers allowed), use the \n";
+  cout << "following two SQL statements:\n\n";
+  
+  cout << "  LOCK TABLE EMPLOYEE IN EXCLUSIVE MODE\n";
+  cout << "  CREATE INDEX INDEX1 ON EMPLOYEE (LASTNAME ASC)\n";
+  strcpy(stmt, "LOCK TABLE EMPLOYEE IN EXCLUSIVE MODE");
+
+  EXEC SQL EXECUTE IMMEDIATE :stmt;
+  EMB_SQL_CHECK("Lock -- Table");
+
+  EXEC SQL COMMIT;
+  EMB_SQL_CHECK("Transaction -- Commit");
+
+  strcpy(stmt, "CREATE INDEX INDEX1 ON EMPLOYEE (LASTNAME ASC)"); 
+  
+  EXEC SQL EXECUTE IMMEDIATE :stmt;
+  EMB_SQL_CHECK("Index -- Create");
+
+  EXEC SQL COMMIT;
+  EMB_SQL_CHECK("Transaction -- Commit");
+
+  return rc;
+} // TbOnlineInx::CreateIndex 
+
+// To create large indexes with index key part extending upto 8192 bytes 
+int TbOnlineInx::CreateLargeIndex()
+{
+  int rc = 0;
+
+  cout << "\n-----------------------------------------------------------";
+  
+  cout<<"\nTo create large indexes with index key part extending \n";
+  cout<<"upto 8192 bytes:";
+  cout<<"\n\nUSE THE SQL STATEMENTS:";
+  cout<<"\n  CREATE BUFFERPOOL";
+  cout<<"\n  COMMIT";
+  cout<<"\nTO CREATE A BUFFER POOL";
+  cout<<"\n\n  CREATE BUFFERPOOL bupl32k SIZE 300 PAGESIZE 32K";
+  cout<<"\n  COMMIT";
+
+  // Create bufferpool with 32K pagesize 
+  EXEC SQL CREATE BUFFERPOOL bupl32k SIZE 300 PAGESIZE 32K;
+  EMB_SQL_CHECK("Bufferpool -- Create");
+
+  EXEC SQL COMMIT;
+  EMB_SQL_CHECK("Transaction -- Commit");
+  
+  cout<<"\n\nUSE THE SQL STATEMENTS:";
+  cout<<"\n  CREATE TABLESPACE";
+  cout<<"\n  COMMIT";
+  cout<<"\nTO CREATE A TABLESPACE";
+
+  cout<<"\n\n  CREATE TABLESPACE tbsp32k";
+  cout<<"\n    PAGESIZE 32k";
+  cout<<"\n    MANAGED BY DATABASE";
+  cout<<"\n    USING (FILE 'tbsp32k' 300)";
+  cout<<"\n    BUFFERPOOL bupl32k";
+  cout<<"\n  COMMIT";
+
+  // Create tablespace using above created bufferpool
+  EXEC SQL CREATE TABLESPACE tbsp32k
+             PAGESIZE 32k
+             MANAGED BY DATABASE
+             USING (FILE 'tbsp32k' 300)
+             BUFFERPOOL bupl32k;
+  EMB_SQL_CHECK("Tablespace -- Create");
+ 
+  EXEC SQL COMMIT;
+  EMB_SQL_CHECK("Transaction -- Commit");
+
+  cout<<"\n\nUSE THE SQL STATEMENTS:";
+  cout<<"\n  CREATE TABLE";
+  cout<<"\n  COMMIT";
+  cout<<"\nTO CREATE TABLE";
+
+  cout<<"\n\n  CREATE TABLE inventory_ident (dept INTEGER,";
+  cout<<"\n    serial_numbers VARCHAR(8190) NOT NULL)";
+  cout<<"\n    IN tbsp32k";
+  cout<<"\n  COMMIT";
+  
+  // Create table 
+  EXEC SQL CREATE TABLE inventory_ident (dept INTEGER,
+                                         serial_numbers VARCHAR(8190) NOT NULL)
+             IN tbsp32k;
+  EMB_SQL_CHECK("Table -- Create");
+
+  EXEC SQL COMMIT;
+  EMB_SQL_CHECK("Transaction -- Commit");
+
+  cout<<"\n\nUSE THE SQL STATEMENTS:";
+  cout<<"\n  CREATE SYSTEM TEMPORARY TABLESPACE";
+  cout<<"\n  COMMIT";
+  cout<<"\nTO CREATE TEMPORARY TABLESPACE";
+
+  cout<<"\n\nTo create a system temporary tablespace that can be used";
+  cout<<"\nin case the sort heap overflows, use the following ";
+  cout<<"\nSQL statement:";
+  cout<<"\n\n  CREATE SYSTEM TEMPORARY TABLESPACE tmptbsp32k";
+  cout<<"\n    PAGESIZE 32K";
+  cout<<"\n    MANAGED BY SYSTEM";
+  cout<<"\n    USING ('tmp_tbsp_32k')";
+  cout<<"\n    EXTENTSIZE 2";
+  cout<<"\n    BUFFERPOOL bupl32k";
+  cout<<"\n  COMMIT";
+
+  // Create a system temporary table space with 32K pages. 
+  // When the INDEXSORT database configuration parameter is set to Yes
+  // (which is the default), then that data is sorted before it is passed
+  // to index manager. If sort heap is big enough for the amount of data
+  // being sorted, the sort will occur entirely in memory.  However, just
+  // in case we need to spill to disk, DB2 will ensure that there is a 
+  // system temporary tablespace with a large enough page size to spill to.
+  EXEC SQL CREATE SYSTEM TEMPORARY TABLESPACE tmptbsp32k
+             PAGESIZE 32K
+             MANAGED BY SYSTEM
+             USING ('tmp_tbsp_32k')
+             EXTENTSIZE 2
+             BUFFERPOOL bupl32k;
+  EMB_SQL_CHECK("Temporary Tablespace -- Create");
+
+  EXEC SQL COMMIT;
+  EMB_SQL_CHECK("Transaction -- Commit");
+
+  cout<<"\n\nThere is an upper bound on index key length based on";
+  cout<<" the page size.";
+  cout<<"\nThe maximum length of the index key part can be:";
+  cout<<"\n  1024 bytes for 1K page size";
+  cout<<"\n  2048 bytes for 8K page size";
+  cout<<"\n  4096 bytes for 16K page size";
+  cout<<"\n  8192 bytes for 32K page size";
+
+  cout<<"\n\nUSE THE SQL STATEMENTS:";
+  cout<<"\n  CREATE INDEX";
+  cout<<"\n  COMMIT";
+  cout<<"\nTO CREATE AN INDEX";
+  
+  cout<<"\n\nTo create an index on the 'serial_numbers column' of";
+  cout<<"\n'inventory_ident' table, use the following SQL command: ";
+  cout<<"\n\n  CREATE INDEX inventory_serial_number_index_ident";
+  cout<<"\n    ON inventory_ident (serial_numbers)";
+  cout<<"\n  COMMIT";
+
+  // Create an index on the serial_numbers column 
+  // The upper bound for an index key length is variable based on  
+  // page size. The maximum length of an index key part can be:    
+  // 1024 bytes for 1K page size, 
+  // 2048 bytes for 8K page size,
+  // 4096 bytes for 16K page size,
+  // 8192 bytes for 32K page size, 
+  // and, the index name can be upto 128 chars  
+  EXEC SQL CREATE INDEX inventory_serial_number_index_ident
+             ON inventory_ident (serial_numbers);
+  EMB_SQL_CHECK("Index -- Create");
+
+  EXEC SQL COMMIT;
+  EMB_SQL_CHECK("Transaction -- Commit");
+
+  cout<<endl<<endl<<"USE THE SQL STATEMENT";
+  cout<<endl<<"  DROP";
+  cout<<endl<<"TO DROP THE INDEX";
+  cout<<endl<<endl<<"  Execute the statement";
+  cout<<endl<<"    DROP INDEX inventory_serial_number_index_ident";
+
+  EXEC SQL DROP INDEX inventory_serial_number_index_ident;
+  EMB_SQL_CHECK("Index -- Drop");
+ 
+  EXEC SQL COMMIT;
+  EMB_SQL_CHECK("Transaction -- Commit");
+ 
+  cout<<endl<<endl<<"USE THE SQL STATEMENT";
+  cout<<endl<<"  DROP";
+  cout<<endl<<"TO DROP THE TABLE";
+  cout<<endl<<endl<<"  Execute the statement";
+  cout<<endl<<"    DROP TABLE inventory_ident";
+
+  EXEC SQL DROP TABLE inventory_ident;
+  EMB_SQL_CHECK("Table -- Drop");
+
+  EXEC SQL COMMIT;
+  EMB_SQL_CHECK("Transaction -- Commit");
+
+  cout<<endl<<endl<<"USE THE SQL STATEMENT";
+  cout<<endl<<"  DROP";
+  cout<<endl<<"TO DROP THE TABLESPACE";
+  cout<<endl<<endl<<"  Execute the statement";
+  cout<<endl<<"    DROP TABLESPACE tmptbsp32k";
+
+  EXEC SQL DROP TABLESPACE tmptbsp32k;
+  EMB_SQL_CHECK("Tablespace -- Drop");
+
+  EXEC SQL COMMIT;
+  EMB_SQL_CHECK("Transaction -- Commit");
+
+  cout<<endl<<endl<<"USE THE SQL STATEMENT";
+  cout<<endl<<"  DROP";
+  cout<<endl<<"TO DROP THE TABLESPACE";
+  cout<<endl<<endl<<"  Execute the statement";
+  cout<<endl<<"    DROP TABLESPACE tbsp32k";
+
+  EXEC SQL DROP TABLESPACE tbsp32k;
+  EMB_SQL_CHECK("Tablespace -- Drop");
+
+  EXEC SQL COMMIT;
+  EMB_SQL_CHECK("Transaction -- Commit");
+
+  cout<<endl<<endl<<"USE THE SQL STATEMENT";
+  cout<<endl<<"  DROP";
+  cout<<endl<<"TO DROP THE BUFFERPOOL";
+  cout<<endl<<endl<<"  Execute the statement";
+  cout<<endl<<"    DROP BUFFERPOOL bupl32k"<<endl;
+
+  EXEC SQL DROP BUFFERPOOL bupl32k;
+  EMB_SQL_CHECK("Bufferpool -- Drop");
+  
+  EXEC SQL COMMIT;
+  EMB_SQL_CHECK("Transaction -- Commit");
+ 
+  return rc; 
+  } // TbOnlineInx::CreateLargeIndex 
+
+// How to reorg an index on a table with different levels of
+// access to the table like read-write, read-only, no access
+int TbOnlineInx::ReorgIndex()
+{
+  int rc = 0;
+  struct sqlca sqlca;
+  char fullTableName[258];
+  db2ReorgStruct paramStruct;
+  db2Uint32 versionNumber = db2Version970;
+
+  cout << "\n-----------------------------------------------------------";
+
+  cout << "\nUSE THE DB2 APIs:\n";
+  cout << "  db2Reorg -- Reorganize a Table or Index\n";
+  cout << "TO REORGANIZE A TABLE OR INDEX.\n";
+
+  // get fully qualified name of the table
+  strcpy(tableName, "EMPLOYEE");
+  rc = SchemaNameGet();
+  if (rc != 0)
+  {
+    return rc;
+  }
+
+  strcpy(fullTableName, schemaName);
+  strcat(fullTableName, ".");
+  strcat(fullTableName, tableName);
+
+  cout << "  Reorganize all indexes defined on table : " << fullTableName << endl;
+
+  // setup parameters
+  memset(&paramStruct, '\0', sizeof(paramStruct));
+  paramStruct.reorgObject.tableStruct.pTableName = fullTableName;
+  paramStruct.reorgObject.tableStruct.pOrderByIndex = NULL;
+  paramStruct.reorgObject.tableStruct.pSysTempSpace = NULL;
+  paramStruct.reorgType = DB2REORG_OBJ_INDEXESALL;
+  paramStruct.nodeListFlag = DB2_ALL_NODES;
+  paramStruct.numNodes = 0;
+  paramStruct.pNodeList = NULL;
+
+  cout << "  \nReorganize the indexes on a table allowing read-write\n";
+  cout << "  access to the table (set reorgFlags to DB2REORG_ALLOW_WRITE)\n";
+
+  paramStruct.reorgFlags = DB2REORG_ALLOW_WRITE;
+
+  // reorganize index 
+  rc = db2Reorg(versionNumber, &paramStruct, &sqlca);
+  DB2_API_CHECK("index -- reorganize");
+
+  cout << "  \nReorganize the indexes on a table allowing read-only\n";
+  cout << "  access to the table (set reorgFlags to DB2REORG_ALLOW_READ)\n";
+
+  paramStruct.reorgFlags = DB2REORG_ALLOW_READ;
+
+  // reorganize index 
+  rc = db2Reorg(versionNumber, &paramStruct, &sqlca);
+  DB2_API_CHECK("index -- reorganize");
+
+  cout << "  \nReorganize the indexes on a table allowing no access\n";
+  cout << "  to the table (set reorgFlags to DB2REORG_ALLOW_NONE)\n";
+
+  paramStruct.reorgFlags = DB2REORG_ALLOW_NONE;
+
+  // reorganize index 
+  rc = db2Reorg(versionNumber, &paramStruct, &sqlca);
+  DB2_API_CHECK("index -- reorganize");
+
+  rc = DropIndex();
+  if (rc != 0)
+  {
+    return rc;
+  }
+
+  return rc;
+} // TbOnlineInx::ReorgIndex
+
+// How to drop the index on a table 
+int TbOnlineInx::DropIndex()
+{
+  int rc = 0;
+
+  cout << "\nUSE THE SQL STATEMENT\n";
+  cout << "  DROP\n";
+  cout << "TO DROP AN INDEX:\n";
+
+  // drop the indexes 
+  cout << "\n  Execute the statement\n";
+  cout << "    DROP INDEX INDEX1\n";
+
+  EXEC SQL DROP INDEX INDEX1;
+  EMB_SQL_CHECK("Index -- Drop");
+
+  EXEC SQL COMMIT;
+  EMB_SQL_CHECK("Transaction -- Commit");
+
+  cout << "\n-----------------------------------------------------------";
+
+  return rc;
+} // TbOnlineInx::DropIndex 
+
+int TbOnlineInx::SchemaNameGet()
+{
+  struct sqlca sqlca;
+
+  // get table schema name 
+  EXEC SQL SELECT tabschema INTO :schemaName
+    FROM syscat.tables
+    WHERE tabname = :tableName;
+  EMB_SQL_CHECK("table schema name -- get");
+
+  // get rid of spaces from the end of schemaName 
+  strtok(schemaName, " ");
+
+  return 0;
+} // TbOnlineInx::SchemaNameGet 
+
+int main(int argc, char *argv[])
+{
+  int rc = 0;
+  CmdLineArgs check;
+  TbOnlineInx onlinx;
+  DbEmb db;
+
+  // check the command line arguments
+  rc = check.CmdLineArgsCheck1(argc, argv, db);
+  if (rc != 0)
+  {
+    return rc;
+  }
+
+  cout << "\nTHIS SAMPLE SHOWS HOW TO CREATE AND REORG ONLINE INDEXES\n";
+  cout << "ON TABLES.\n";
+
+  // connect to database
+  rc = db.Connect();
+  if (rc != 0)
+  {
+    return rc;
+  }
+
+  // create online index on a table 
+  rc = onlinx.CreateIndex();
+  if (rc != 0)
+  {
+    return rc;
+  }  
+ 
+  // create large index on a table
+  rc = onlinx.CreateLargeIndex();
+  if (rc != 0)
+  {
+    return rc;
+  }
+
+  // reorg online index on a table 
+  rc = onlinx.ReorgIndex();
+  if (rc != 0)
+  {
+    return rc;
+  }
+
+  // disconnect from the databas
+  rc = db.Disconnect();
+  if (rc != 0)
+  {
+    return rc;
+  }
+
+  return 0;
+} // main 

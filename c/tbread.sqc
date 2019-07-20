@@ -1,0 +1,2101 @@
+/****************************************************************************
+** (c) Copyright IBM Corp. 2007 All rights reserved.
+** 
+** The following sample of source code ("Sample") is owned by International 
+** Business Machines Corporation or one of its subsidiaries ("IBM") and is 
+** copyrighted and licensed, not sold. You may use, copy, modify, and 
+** distribute the Sample in any form without payment to IBM, for the purpose of 
+** assisting you in the development of your applications.
+** 
+** The Sample code is provided to you on an "AS IS" basis, without warranty of 
+** any kind. IBM HEREBY EXPRESSLY DISCLAIMS ALL WARRANTIES, EITHER EXPRESS OR 
+** IMPLIED, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED WARRANTIES OF 
+** MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE. Some jurisdictions do 
+** not allow for the exclusion or limitation of implied warranties, so the above 
+** limitations or exclusions may not apply to you. IBM shall not be liable for 
+** any damages you suffer as a result of using, copying, modifying or 
+** distributing the Sample, even if IBM has been advised of the possibility of 
+** such damages.
+*****************************************************************************
+**
+** SOURCE FILE NAME: tbread.sqc 
+**    
+** SAMPLE: How to read tables 
+**
+** SQL STATEMENTS USED:
+**         DECLARE CURSOR 
+**         OPEN
+**         FETCH
+**         CLOSE
+**         PREPARE
+**         DESCRIBE
+**         SELECT
+**
+** OUTPUT FILE: tbread.out (available in the online documentation)
+*****************************************************************************
+**
+** For more information on the sample programs, see the README file.
+**
+** For information on developing C applications, see the Application
+** Development Guide.
+**
+** For information on using SQL statements, see the SQL Reference.
+**
+** For the latest information on programming, building, and running DB2 
+** applications, visit the DB2 application development website: 
+**     http://www.software.ibm.com/data/db2/udb/ad
+****************************************************************************/
+
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+#include <sqlenv.h>
+#include <sqlcodes.h>
+#include <sqlutil.h>
+#include "utilemb.h"
+
+EXEC SQL BEGIN DECLARE SECTION;
+  short deptnumb;
+  short maxDeptnumb;
+  char deptname[15];
+  char orgDeptname[15];
+  short manager;
+  char division[11];
+  char location[14];
+  char deptno[4];
+  char departmentDeptname[30];
+  char mgrno[7];
+  short mgrnoInd;
+  char admrdept[4];
+  char departmentLocation[17];
+  short departmentLocationInd;
+  char job[9];
+  short jobInd;
+  short edlevel;
+  short edlevelInd;
+  double comm;
+  double commSum;
+  short commSumInd;
+  char rcteDeptno[4];
+  char rcteDeptname[30];
+  char rcteAdmrdept[4];
+  char strStmt[100];
+  double avgSalary;
+EXEC SQL END DECLARE SECTION;
+
+/* methods to perform SELECT */
+int TbSelectUsingFetchIntoHostVariables(void);
+int TbSelectUsingFetchIntoSQLDA(void);
+int TbSelectUsingDeclareCursor(void);
+int TbSelectUsingPrepareDeclareCursor(void);
+int TbSelectUsingPrepareDescribeDeclareCursor(void);
+
+/* the support functions for TbSelectUsingPrepareDescribeDeclareCursor */
+int SqldaInit(struct sqlda **, int);
+int ColTitlesDisplay(struct sqlda *);
+short DisplayDataLenGet(short, short);
+int RowDataMemoryAlloc(struct sqlda *);
+int RowDataDisplay(struct sqlda *);
+int CellDataDisplay(char *, short, short *, short, short);
+int RowDataMemoryFree(struct sqlda *);
+
+/* SELECT types */
+int TbMostSimpleSubselect(void);
+int TbBasicSubselect(void);
+int TbGroupBySubselect(void);
+int TbSubselect(void);
+int TbRowSubselect(void);
+int TbFullselect(void);
+int TbSelectStatement(void);
+int TbBasicSubselectFromMultipleTables(void);
+int TbBasicSubselectFromJoinedTable(void);
+int TbBasicSubselectUsingSubquery(void);
+int TbBasicSubselectUsingCorrelatedSubquery(void);
+int TbSubselectUsingGroupingSets(void);
+int TbSubselectUsingRollup(void);
+int TbSubselectUsingCube(void);
+int TbSelectStatementUsingRecursiveCommonTableExpression(void);
+int TbSelectUsingQuerySampling(void);
+
+/* support functions for SELECT types */
+int OrgTbContentDisplay(void);
+int DepartmentTbContentDisplay(void);
+int EmployeeTbPartialContentDisplay(void);
+
+int main(int argc, char *argv[])
+{
+  int rc = 0;
+  char dbAlias[SQL_ALIAS_SZ + 1];
+  char user[USERID_SZ + 1];
+  char pswd[PSWD_SZ + 1];
+
+  /* check the command line arguments */
+  rc = CmdLineArgsCheck1(argc, argv, dbAlias, user, pswd);
+  if (rc != 0)
+  {
+    return rc;
+  }
+
+  printf("\nTHIS SAMPLE SHOWS HOW TO READ TABLES.\n");
+
+  printf("\n  THE SAMPLE DEMONSTRATES:\n");
+  printf("    - METHODS TO PERFORM SELECT\n");
+  printf("    - SELECT TYPES\n");
+  printf("  ALL METHODS APPLY TO ALL TYPES, EXCEPT FOR THE\n");
+  printf("  'TbRowSubselect' TYPE WHERE THE FOLLOWING METHODS\n");
+  printf("  DESCRIBED IN THE dbuse SAMPLE APPLY:\n");
+  printf("    StaticStmtWithHostVarsInvoke\n");
+  printf("    CompoundStmtInvoke\n");
+
+  printf("\n  METHODS TO PERFORM SELECT.\n");
+  printf("    SELECT HAS TWO IMPORTANT PARTS:\n");
+  printf("      -DECLARE CURSOR\n");
+  printf("      -FETCH CURSOR\n");
+  printf("    THERE ARE THREE METHODS TO DECLARE A CURSOR:\n");
+  printf("      -SIMPLE DECLARE CURSOR\n");
+  printf("      -PREPARE-DECLARE CURSOR\n");
+  printf("      -PREPARE-DESCRIBE-DECLARE CURSOR\n");
+  printf("    THERE ARE TWO METHODS TO FETCH A CURSOR:\n");
+  printf("      -FETCH INTO HOST VARIABLES\n");
+  printf("      -FETCH INTO SQLDA\n");
+
+  /* connect to database */
+  rc = DbConn(dbAlias, user, pswd);
+  if (rc != 0)
+  {
+    return rc;
+  }
+
+  /* methods to perform SELECT */
+  printf("\n***************************************\n");
+  printf("    METHODS TO PERFORM SELECT\n");
+  printf("***************************************\n");
+  rc = TbSelectUsingFetchIntoHostVariables();
+  rc = TbSelectUsingFetchIntoSQLDA();
+  rc = TbSelectUsingDeclareCursor();
+  rc = TbSelectUsingPrepareDeclareCursor();
+  rc = TbSelectUsingPrepareDescribeDeclareCursor();
+
+  /* select types */
+  printf("\n***************************************\n");
+  printf("    SELECT TYPES\n");
+  printf("**************************************\n");
+  rc = TbMostSimpleSubselect();
+  rc = TbBasicSubselect();
+  rc = TbGroupBySubselect();
+  rc = TbSubselect();
+  rc = TbRowSubselect();
+  rc = TbFullselect();
+  rc = TbSelectStatement();
+  rc = TbBasicSubselectFromMultipleTables();
+  rc = TbBasicSubselectFromJoinedTable();
+  rc = TbBasicSubselectUsingSubquery();
+  rc = TbBasicSubselectUsingCorrelatedSubquery();
+  rc = TbSubselectUsingGroupingSets();
+  rc = TbSubselectUsingRollup();
+  rc = TbSubselectUsingCube();
+  rc = TbSelectStatementUsingRecursiveCommonTableExpression();
+  rc = TbSelectUsingQuerySampling();
+  
+  /* disconnect from the database */
+  rc = DbDisconn(dbAlias);
+  if (rc != 0)
+  {
+    return rc;
+  }
+
+  return 0;
+} /* main */
+
+int TbSelectUsingFetchIntoHostVariables(void)
+{
+  int rc = 0;
+  struct sqlca sqlca;
+
+  printf("\n-----------------------------------------------------------");
+  printf("\nUSE THE SQL STATEMENTS:\n");
+  printf("  DECLARE CURSOR\n");
+  printf("  OPEN\n");
+  printf("  FETCH\n");
+  printf("  CLOSE\n");
+  printf("TO PERFORM SELECT USING FETCH INTO HOST VARIABLES.\n");
+
+  printf("\n  Perform:\n");
+  printf("    SELECT deptnumb, deptname FROM org\n");
+  printf("\n  Results:\n");
+  printf("    DEPTNUMB DEPTNAME\n");
+  printf("    -------- --------------\n");
+
+  /* declare cursor */
+  EXEC SQL DECLARE c0 CURSOR FOR SELECT deptnumb, deptname FROM org;
+
+  /* open cursor */
+  EXEC SQL OPEN c0;
+  EMB_SQL_CHECK("cursor -- open");
+
+  /* fetch cursor */
+  EXEC SQL FETCH c0 INTO :deptnumb, :deptname;
+  EMB_SQL_CHECK("cursor -- fetch");
+
+  while (sqlca.sqlcode != 100)
+  {
+    printf("    %8d %-14s\n", deptnumb, deptname);
+
+    EXEC SQL FETCH c0 INTO :deptnumb, :deptname;
+    EMB_SQL_CHECK("cursor -- fetch");
+  }
+
+  /* close cursor */
+  EXEC SQL CLOSE c0;
+  EMB_SQL_CHECK("cursor -- close");
+
+  return 0;
+} /* TbSelectUsingFetchIntoHostVariables */
+
+int TbSelectUsingFetchIntoSQLDA(void)
+{
+  int rc = 0;
+  struct sqlca sqlca;
+  struct sqlda *pSqlda = NULL;
+  short deptnumbInd = 0;
+  short deptnameInd = 0;
+
+  printf("\n-----------------------------------------------------------");
+  printf("\nUSE THE SQL STATEMENTS:\n");
+  printf("  DECLARE CURSOR\n");
+  printf("  OPEN\n");
+  printf("  FETCH\n");
+  printf("  CLOSE\n");
+  printf("TO PERFORM SELECT USING FETCH INTO SQLDA.\n");
+
+  printf("\n  Perform:\n");
+  printf("    SELECT deptnumb, deptname FROM org\n");
+  printf("\n  Results:\n");
+  printf("    DEPTNUMB DEPTNAME\n");
+  printf("    -------- --------------\n");
+
+  /* declare cursor */
+  EXEC SQL DECLARE c1 CURSOR FOR SELECT deptnumb, deptname FROM org;
+
+  /* open cursor */
+  EXEC SQL OPEN c1;
+  EMB_SQL_CHECK("cursor -- open");
+
+  /* initialize SQLDA structure */
+  pSqlda = (struct sqlda *)malloc(SQLDASIZE(2)); /* two variables */
+  strncpy(pSqlda->sqldaid, "SQLDA   ", sizeof(pSqlda->sqldaid));
+  pSqlda->sqldabc = (sqlint32)SQLDASIZE(2);
+  pSqlda->sqln = 2; /* two variables */
+  pSqlda->sqld = 2;
+
+  pSqlda->sqlvar[0].sqltype = SQL_TYP_NSMALL;
+  pSqlda->sqlvar[0].sqllen = sizeof(short);
+  pSqlda->sqlvar[0].sqldata = (char *)&deptnumb;
+  pSqlda->sqlvar[0].sqlind = (short *)&deptnumbInd;
+
+  pSqlda->sqlvar[1].sqltype = SQL_TYP_NCSTR;
+  pSqlda->sqlvar[1].sqllen = 15;
+  pSqlda->sqlvar[1].sqldata = (char *)&deptname;
+  pSqlda->sqlvar[1].sqlind = (short *)&deptnameInd;
+
+  /* fetch cursor */
+  EXEC SQL FETCH c1 USING DESCRIPTOR :*pSqlda;
+  EMB_SQL_CHECK("cursor -- fetch");
+
+  while (sqlca.sqlcode != 100)
+  {
+    printf("    %8d %-14s\n", deptnumb, deptname);
+
+    EXEC SQL FETCH c1 USING DESCRIPTOR :*pSqlda;
+    EMB_SQL_CHECK("cursor -- fetch");
+  }
+
+  /* close cursor */
+  EXEC SQL CLOSE c1;
+  EMB_SQL_CHECK("cursor -- close");
+
+  /* free memory allocated */
+  free(pSqlda);
+
+  return 0;
+} /* TbSelectUsingFetchIntoSQLDA */
+
+int TbSelectUsingDeclareCursor(void)
+{
+  int rc = 0;
+  struct sqlca sqlca;
+
+  printf("\n-----------------------------------------------------------");
+  printf("\nUSE THE SQL STATEMENTS:\n");
+  printf("  DECLARE CURSOR\n");
+  printf("  OPEN\n");
+  printf("  FETCH\n");
+  printf("  CLOSE\n");
+  printf("TO PERFORM SELECT USING DECLARE CURSOR.\n");
+
+  printf("\n  Perform:\n");
+  printf("    SELECT deptnumb, deptname FROM org\n");
+  printf("\n  Results:\n");
+  printf("    DEPTNUMB DEPTNAME\n");
+  printf("    -------- --------------\n");
+
+  /* declare cursor */
+  EXEC SQL DECLARE c2 CURSOR FOR SELECT deptnumb, deptname FROM org;
+
+  /* open cursor */
+  EXEC SQL OPEN c2;
+  EMB_SQL_CHECK("cursor -- open");
+
+  /* fetch cursor */
+  EXEC SQL FETCH c2 INTO :deptnumb, :deptname;
+  EMB_SQL_CHECK("cursor -- fetch");
+
+  while (sqlca.sqlcode != 100)
+  {
+    printf("    %8d %-14s\n", deptnumb, deptname);
+
+    EXEC SQL FETCH c2 INTO :deptnumb, :deptname;
+    EMB_SQL_CHECK("cursor -- fetch");
+  }
+
+  /* close cursor */
+  EXEC SQL CLOSE c2;
+  EMB_SQL_CHECK("cursor -- close");
+
+  return 0;
+} /* TbSelectUsingDeclareCursor */
+
+int TbSelectUsingPrepareDeclareCursor(void)
+{
+  int rc = 0;
+  struct sqlca sqlca;
+
+  printf("\n-----------------------------------------------------------");
+  printf("\nUSE THE SQL STATEMENTS:\n");
+  printf("  PREPARE\n");
+  printf("  DECLARE CURSOR\n");
+  printf("  OPEN\n");
+  printf("  FETCH\n");
+  printf("  CLOSE\n");
+  printf("TO PERFORM SELECT USING PREPARE-DECLARE CURSOR.\n");
+
+  printf("\n  Perform:\n");
+  printf("    SELECT deptnumb, deptname FROM org\n");
+  printf("\n  Results:\n");
+  printf("    DEPTNUMB DEPTNAME\n");
+  printf("    -------- --------------\n");
+
+  strcpy(strStmt, "SELECT deptnumb, deptname FROM org");
+
+  EXEC SQL PREPARE stmt1 FROM :strStmt;
+  EMB_SQL_CHECK("statement -- prepare");
+
+  /* declare cursor */
+  EXEC SQL DECLARE c3 CURSOR FOR stmt1;
+
+  /* open cursor */
+  EXEC SQL OPEN c3;
+  EMB_SQL_CHECK("cursor -- open");
+
+  /* fetch cursor */
+  EXEC SQL FETCH c3 INTO :deptnumb, :deptname;
+  EMB_SQL_CHECK("cursor -- fetch");
+
+  while (sqlca.sqlcode != 100)
+  {
+    printf("    %8d %-14s\n", deptnumb, deptname);
+
+    EXEC SQL FETCH c3 INTO :deptnumb, :deptname;
+    EMB_SQL_CHECK("cursor -- fetch");
+  }
+
+  /* close cursor */
+  EXEC SQL CLOSE c3;
+  EMB_SQL_CHECK("cursor -- close");
+
+  return 0;
+} /* TbSelectUsingPrepareDeclareCursor */
+
+int TbSelectUsingPrepareDescribeDeclareCursor(void)
+{
+  int rc = 0;
+  struct sqlca sqlca;
+  struct sqlda *pSqlda = NULL;
+  int numCols;
+
+  printf("\n-----------------------------------------------------------");
+  printf("\nUSE THE SQL STATEMENTS:\n");
+  printf("  PREPARE\n");
+  printf("  DESCRIBE\n");
+  printf("  DECLARE CURSOR\n");
+  printf("  OPEN\n");
+  printf("  FETCH\n");
+  printf("  CLOSE\n");
+  printf("TO PERFORM SELECT USING PREPARE-DESCRIBE-DECLARE CURSOR.\n");
+
+  strcpy(strStmt, "SELECT * FROM staff WHERE id <= 30");
+  printf("\n  Perform:\n");
+  printf("    %s\n", strStmt);
+  printf("\n");
+
+  /* -------------------------------------- */
+  /* determine the number of output columns */
+  /* -------------------------------------- */
+
+  EXEC SQL PREPARE stmt2 FROM :strStmt;
+  EMB_SQL_CHECK("statement -- prepare");
+
+  rc = SqldaInit(&pSqlda, 1);
+  if (rc != 0)
+  {
+    return rc;
+  }
+
+  EXEC SQL DESCRIBE stmt2 INTO :*pSqlda;
+  if (sqlca.sqlcode != 0 &&
+      sqlca.sqlcode != SQL_RC_W236 &&
+      sqlca.sqlcode != SQL_RC_W237 &&
+      sqlca.sqlcode != SQL_RC_W238 && sqlca.sqlcode != SQL_RC_W239)
+  {
+    EMB_SQL_CHECK("statement -- describe");
+  }
+
+  numCols = (int)pSqlda->sqld;
+  free(pSqlda);
+
+  /* ---------------- */
+  /* invoke statement */
+  /* ---------------- */
+
+  if (numCols > 0)
+  {
+    if (sqlca.sqlcode == 0 || sqlca.sqlcode == SQL_RC_W236)
+    {
+      rc = SqldaInit(&pSqlda, numCols);
+      if (rc != 0)
+      {
+        return rc;
+      }
+    }
+    if (sqlca.sqlcode == SQL_RC_W237 ||
+        sqlca.sqlcode == SQL_RC_W238 ||
+        sqlca.sqlcode == SQL_RC_W239)
+    {
+      rc = SqldaInit(&pSqlda, numCols * 2);
+      if (rc != 0)
+      {
+        return rc;
+      }
+    }
+
+    EXEC SQL DESCRIBE stmt2 INTO :*pSqlda;
+    EMB_SQL_CHECK("statement -- describe");
+
+    rc = ColTitlesDisplay(pSqlda);
+
+    EXEC SQL DECLARE c4 CURSOR FOR stmt2;
+
+    EXEC SQL OPEN c4;
+    EMB_SQL_CHECK("cursor -- open");
+
+    rc = RowDataMemoryAlloc(pSqlda);
+    if (rc != 0)
+    {
+      return rc;
+    }
+
+    EXEC SQL FETCH c4 USING DESCRIPTOR :*pSqlda;
+    EMB_SQL_CHECK("cursor -- fetch");
+
+    while (sqlca.sqlcode != 100)
+    {
+      rc = RowDataDisplay(pSqlda);
+
+      EXEC SQL FETCH c4 USING DESCRIPTOR :*pSqlda;
+      EMB_SQL_CHECK("cursor -- fetch");
+    }
+
+    EXEC SQL CLOSE c4;
+    EMB_SQL_CHECK("cursor -- close");
+
+    rc = RowDataMemoryFree(pSqlda);
+    free(pSqlda);
+  }
+
+  return 0;
+} /* TbSelectUsingPrepareDescribeDeclareCursor */
+
+int SqldaInit(struct sqlda **ppSqlda, int size)
+{
+  int rc = 0;
+
+  *ppSqlda = (struct sqlda *)malloc(SQLDASIZE(size));
+  if (*ppSqlda == NULL)
+  {
+    return 1;
+  }
+
+  memcpy((*ppSqlda)->sqldaid, "SQLDA   ", 8);
+  (*ppSqlda)->sqldabc = (sqlint32) SQLDASIZE(size);
+  (*ppSqlda)->sqln = size;
+  (*ppSqlda)->sqld = 0;
+
+  return 0;
+} /* SqldaInit */
+
+int ColTitlesDisplay(struct sqlda *pSqlda)
+{
+  int rc = 0;
+  short colNb;
+  short numCols;
+  short colDataLen;
+  short colTitleLen;
+  short colWidth;
+  char colTitle[129];
+
+  numCols = pSqlda->sqld;
+  for (colNb = 0; colNb < numCols; colNb++)
+  {
+    colDataLen = DisplayDataLenGet(pSqlda->sqlvar[colNb].sqltype,
+                                   pSqlda->sqlvar[colNb].sqllen);
+
+    colTitleLen = pSqlda->sqlvar[colNb].sqlname.length;
+    colWidth = max(colDataLen, colTitleLen);
+
+    strcpy(colTitle, pSqlda->sqlvar[colNb].sqlname.data);
+    printf("%-*s", colWidth, colTitle);
+    printf(" | ");
+  }
+  printf("\n");
+
+  return 0;
+} /* ColTitlesDisplay */
+
+short DisplayDataLenGet(short sqlDataType, short sqlDataSize)
+{
+  short displayDataLen;
+
+  switch (sqlDataType)
+  {
+    case SQL_TYP_DATE:
+    case SQL_TYP_NDATE:
+    case SQL_TYP_TIME:
+    case SQL_TYP_NTIME:
+    case SQL_TYP_STAMP:
+    case SQL_TYP_NSTAMP:
+    case SQL_TYP_VARCHAR:
+    case SQL_TYP_NVARCHAR:
+    case SQL_TYP_CHAR:
+    case SQL_TYP_NCHAR:
+    case SQL_TYP_LONG:
+    case SQL_TYP_NLONG:
+    case SQL_TYP_CSTR:
+    case SQL_TYP_NCSTR:
+    case SQL_TYP_LSTR:
+    case SQL_TYP_NLSTR:
+      displayDataLen = sqlDataSize;
+      break;
+    case SQL_TYP_FLOAT:
+    case SQL_TYP_NFLOAT:
+      /* 3 chars for every byte +  */
+      /* 1 char for sign +         */
+      /* 1 digit for decimal point */
+      displayDataLen = (short)(3 * sqlDataSize + 1 + 1);
+      break;
+    case SQL_TYP_INTEGER:
+    case SQL_TYP_NINTEGER:
+    case SQL_TYP_SMALL:
+    case SQL_TYP_NSMALL:
+      /* 3 chars for every byte + */
+      /* 1 char for sign */
+      displayDataLen = (short)(3 * sqlDataSize + 1);
+      break;
+    case SQL_TYP_DECIMAL:
+    case SQL_TYP_NDECIMAL:
+      displayDataLen = (short)(((char *)&sqlDataSize)[0]) + /* precision */
+                       (short)1 + /* decimal point */
+                       (short)1; /* sign */
+      break;
+    case SQL_TYP_CGSTR:
+    case SQL_TYP_NCGSTR:
+    case SQL_TYP_VARGRAPH:
+    case SQL_TYP_NVARGRAPH:
+    case SQL_TYP_GRAPHIC:
+    case SQL_TYP_NGRAPHIC:
+    case SQL_TYP_LONGRAPH:
+    case SQL_TYP_NLONGRAPH:
+      displayDataLen = 30;
+      break;
+    case SQL_TYP_BLOB:
+    case SQL_TYP_NBLOB:
+    case SQL_TYP_CLOB:
+    case SQL_TYP_NCLOB:
+    case SQL_TYP_DBCLOB:
+    case SQL_TYP_NDBCLOB:
+      displayDataLen = 30;
+      break;
+    default:
+      displayDataLen = 0;
+      break;
+  }
+
+  return displayDataLen;
+} /* DisplayDataLenGet */
+
+int RowDataMemoryAlloc(struct sqlda *pSqlda)
+{
+  int rc = 0;
+  short colNb;
+  short numCols;
+  unsigned int memSize;
+  short precision;
+
+  numCols = pSqlda->sqld;
+  for (colNb = 0; colNb < numCols; colNb++)
+  {
+    /* allocate sqlind memory */
+    if (pSqlda->sqlvar[colNb].sqltype & 1)
+    {
+      pSqlda->sqlvar[colNb].sqlind = (short *)malloc(sizeof(short));
+      if (pSqlda->sqlvar[colNb].sqlind == NULL)
+      {
+        return 1;
+      }
+      memset(pSqlda->sqlvar[colNb].sqlind, '\0', sizeof(short));
+    }
+    /* allocate sqldata memory */
+    switch (pSqlda->sqlvar[colNb].sqltype)
+    {
+      case SQL_TYP_DATE:
+      case SQL_TYP_NDATE:
+      case SQL_TYP_TIME:
+      case SQL_TYP_NTIME:
+      case SQL_TYP_STAMP:
+      case SQL_TYP_NSTAMP:
+      case SQL_TYP_VARCHAR:
+      case SQL_TYP_NVARCHAR:
+      case SQL_TYP_CHAR:
+      case SQL_TYP_NCHAR:
+      case SQL_TYP_LONG:
+      case SQL_TYP_NLONG:
+      case SQL_TYP_CSTR:
+      case SQL_TYP_NCSTR:
+      case SQL_TYP_LSTR:
+      case SQL_TYP_NLSTR:
+        pSqlda->sqlvar[colNb].sqltype = SQL_TYP_NCSTR;
+        memSize = (unsigned int)pSqlda->sqlvar[colNb].sqllen;
+        break;
+      case SQL_TYP_FLOAT:
+      case SQL_TYP_NFLOAT:
+      case SQL_TYP_INTEGER:
+      case SQL_TYP_NINTEGER:
+      case SQL_TYP_SMALL:
+      case SQL_TYP_NSMALL:
+        memSize = (unsigned int)pSqlda->sqlvar[colNb].sqllen;
+        break;
+      case SQL_TYP_DECIMAL:
+      case SQL_TYP_NDECIMAL:
+        precision = (short)(((char *)&(pSqlda->sqlvar[colNb].sqllen))[0]);
+        memSize = (unsigned int)(precision / 2 + 1);
+        break;
+      case SQL_TYP_CGSTR:
+      case SQL_TYP_NCGSTR:
+      case SQL_TYP_VARGRAPH:
+      case SQL_TYP_NVARGRAPH:
+      case SQL_TYP_GRAPHIC:
+      case SQL_TYP_NGRAPHIC:
+      case SQL_TYP_LONGRAPH:
+      case SQL_TYP_NLONGRAPH:
+        memSize = (unsigned int)(2 * pSqlda->sqlvar[colNb].sqllen);
+        break;
+      case SQL_TYP_BLOB:
+      case SQL_TYP_NBLOB:
+      case SQL_TYP_CLOB:
+      case SQL_TYP_NCLOB:
+        memSize = GETSQLDALONGLEN(pSqlda, colNb);
+        break;
+      case SQL_TYP_DBCLOB:
+      case SQL_TYP_NDBCLOB:
+        memSize = 2 * GETSQLDALONGLEN(pSqlda, colNb);
+        break;
+      default:
+        memSize = 0;
+        break;
+    }
+    pSqlda->sqlvar[colNb].sqldata = (char *)malloc(memSize);
+    if (pSqlda->sqlvar[colNb].sqldata == NULL)
+    {
+      return 1;
+    }
+    memset(pSqlda->sqlvar[colNb].sqldata, '\0', memSize);
+  }
+
+  return 0;
+} /* RowDataMemoryAlloc */
+
+int RowDataDisplay(struct sqlda *pSqlda)
+{
+  int rc = 0;
+  short colNb;
+  short numCols;
+  short colDataLen;
+  short colTitleLen;
+  short colWidth;
+
+  numCols = pSqlda->sqld;
+  for (colNb = 0; colNb < numCols; colNb++)
+  {
+    colDataLen = DisplayDataLenGet(pSqlda->sqlvar[colNb].sqltype,
+                                   pSqlda->sqlvar[colNb].sqllen);
+
+    colTitleLen = pSqlda->sqlvar[colNb].sqlname.length;
+    colWidth = max(colDataLen, colTitleLen);
+
+    rc = CellDataDisplay(pSqlda->sqlvar[colNb].sqldata,
+                         pSqlda->sqlvar[colNb].sqltype,
+                         pSqlda->sqlvar[colNb].sqlind,
+                         pSqlda->sqlvar[colNb].sqllen,
+                         colWidth);
+    printf(" | ");
+  }
+  printf("\n");
+
+  return 0;
+} /* RowDataDisplay */
+
+int CellDataDisplay(char *sqldata,
+                    short sqltype,
+                    short *sqlind,
+                    short sqllen,
+                    short colWidth)
+{
+  int rc = 0;
+  char buf[100];
+  struct lstr
+  {
+    char len;
+    char *data;
+  } *pLstr;
+  int i;
+  short precision;
+  short scale;
+  short numBytes;
+  short top;
+  short bottom;
+  short byteNb;
+  short digNb;
+  struct lob
+  {
+    sqlint32 len;
+    char *data;
+  } *pLob;
+
+  if (sqltype & 1 && *sqlind < 0)
+  {
+    printf("%-*s", colWidth, " -");
+  }
+  else
+  {
+    switch (sqltype)
+    {
+      case SQL_TYP_DATE:
+      case SQL_TYP_NDATE:
+      case SQL_TYP_TIME:
+      case SQL_TYP_NTIME:
+      case SQL_TYP_STAMP:
+      case SQL_TYP_NSTAMP:
+      case SQL_TYP_VARCHAR:
+      case SQL_TYP_NVARCHAR:
+      case SQL_TYP_CHAR:
+      case SQL_TYP_NCHAR:
+      case SQL_TYP_LONG:
+      case SQL_TYP_NLONG:
+      case SQL_TYP_CSTR:
+      case SQL_TYP_NCSTR:
+        printf("%-*.*s", colWidth, colWidth, sqldata);
+        break;
+      case SQL_TYP_LSTR:
+      case SQL_TYP_NLSTR:
+        pLstr = (struct lstr *)sqldata;
+        for (i = 0; i < (int)pLstr->len; i++)
+        {
+          printf("%c", (pLstr->data)[i]);
+        }
+        while (i < colWidth)
+        {
+          printf(" ");
+          i = i + 1;
+        }
+        break;
+      case SQL_TYP_FLOAT:
+      case SQL_TYP_NFLOAT:
+        printf("%*f", colWidth, *((double *)sqldata));
+        break;
+      case SQL_TYP_INTEGER:
+      case SQL_TYP_NINTEGER:
+        printf("%*ld", colWidth, *((long *)sqldata));
+        break;
+      case SQL_TYP_SMALL:
+      case SQL_TYP_NSMALL:
+        printf("%*d", colWidth, *((short *)sqldata));
+        break;
+      case SQL_TYP_DECIMAL:
+      case SQL_TYP_NDECIMAL:
+        precision = (short)(((char *)&sqllen)[0]);
+        scale = (short)(((char *)&sqllen)[1]);
+
+        /* adjust the precision to odd value */
+        if ((precision % 2) == 0)
+        {
+          precision = precision + 1;
+        }
+
+        /* calculate numBytes */
+        numBytes = (short)(precision + 1) / 2;
+
+        /* determine the sign using bottom of the last byte */
+        bottom = *(sqldata + numBytes - 1) & 0x000F;
+        i = 0;
+        if (bottom == 0x000D || bottom == 0x000B)
+        {
+          buf[i] = '-';
+          i++;
+        }
+        else
+        {
+          buf[i] = ' ';
+          i++;
+        }
+
+        /* prepare the decimal number */
+        digNb = 0;
+        if (digNb == precision - scale)
+        {
+          buf[i] = '.';
+          i++;
+        }
+
+        /* (top + bottom) from first (numBytes - 1) bytes ... */
+        for (byteNb = 0; byteNb < numBytes - 1; byteNb = byteNb + 1)
+        {
+          top = *(sqldata + byteNb) & 0x00F0;
+          top = top >> 4;
+          bottom = *(sqldata + byteNb) & 0x000F;
+          buf[i] = top + '0';
+          i++;
+          digNb++;
+          if (digNb == precision - scale)
+          {
+            buf[i] = '.';
+            i++;
+          }
+          buf[i] = bottom + '0';
+          i++;
+          digNb++;
+          if (digNb == precision - scale)
+          {
+            buf[i] = '.';
+            i++;
+          }
+        }
+
+        /* ... and top of the last byte (bottom is the sign) */
+        top = *(sqldata + byteNb) & 0x00F0;
+        top = top >> 4;
+        buf[i] = top + '0';
+        i++;
+        digNb++;
+        if (digNb == precision - scale)
+        {
+          buf[i] = '.';
+          i++;
+        }
+
+        /* display decimal number */
+        buf[i] = '\0';
+        printf("%*s", colWidth, buf);
+        break;
+      case SQL_TYP_CGSTR:
+      case SQL_TYP_NCGSTR:
+      case SQL_TYP_VARGRAPH:
+      case SQL_TYP_NVARGRAPH:
+      case SQL_TYP_GRAPHIC:
+      case SQL_TYP_NGRAPHIC:
+      case SQL_TYP_LONGRAPH:
+      case SQL_TYP_NLONGRAPH:
+        sprintf(buf, "Graphic data length: %5ld", sqllen);
+        printf("%-*s", colWidth, buf);
+        break;
+      case SQL_TYP_BLOB:
+      case SQL_TYP_NBLOB:
+      case SQL_TYP_CLOB:
+      case SQL_TYP_NCLOB:
+      case SQL_TYP_DBCLOB:
+      case SQL_TYP_NDBCLOB:
+        pLob = (struct lob *)sqldata;
+        if (*sqlind == 0)
+        {
+          sprintf(buf, "LOB length: %10ld", (long)pLob->len);
+        }
+        else
+        {
+          sprintf(buf, "Truncated LOB length: %10ld", (long)pLob->len);
+        }
+        printf("%-*s", colWidth, buf);
+        break;
+      default:
+        printf("%-*s", colWidth, "?");
+        break;
+    }
+  }
+
+  return 0;
+} /* CellDataDisplay */
+
+int RowDataMemoryFree(struct sqlda *pSqlda)
+{
+  int rc = 0;
+  short colNb;
+
+  for (colNb = 0; colNb < pSqlda->sqld; colNb++)
+  {
+    free(pSqlda->sqlvar[colNb].sqldata);
+    if (pSqlda->sqlvar[colNb].sqltype & 1)
+    {
+      free(pSqlda->sqlvar[colNb].sqlind);
+    }
+  }
+
+  return 0;
+} /* RowDataMemoryFree */
+
+int TbMostSimpleSubselect(void)
+{
+  int rc = 0;
+  struct sqlca sqlca;
+
+  printf("\n-----------------------------------------------------------");
+  printf("\nUSE THE SQL STATEMENTS:\n");
+  printf("  DECLARE CURSOR\n");
+  printf("  OPEN\n");
+  printf("  FETCH\n");
+  printf("  CLOSE\n");
+  printf("TO PERFORM A SIMPLE SUBSELECT.\n");
+
+  /* display ORG table content */
+  rc = OrgTbContentDisplay();
+
+  printf("\n  Perform:\n");
+  printf("    SELECT deptnumb, deptname FROM org\n");
+  printf("\n  Results:\n");
+  printf("    DEPTNUMB DEPTNAME\n");
+  printf("    -------- --------------\n");
+
+  /* declare cursor */
+  EXEC SQL DECLARE c5 CURSOR FOR SELECT deptnumb, deptname FROM org;
+
+  /* open cursor */
+  EXEC SQL OPEN c5;
+  EMB_SQL_CHECK("cursor -- open");
+
+  /* fetch cursor */
+  EXEC SQL FETCH c5 INTO :deptnumb, :deptname;
+  EMB_SQL_CHECK("cursor -- fetch");
+
+  while (sqlca.sqlcode != 100)
+  {
+    printf("    %8d %-14s\n", deptnumb, deptname);
+
+    EXEC SQL FETCH c5 INTO :deptnumb, :deptname;
+    EMB_SQL_CHECK("cursor -- fetch");
+  }
+
+  /* close cursor */
+  EXEC SQL CLOSE c5;
+  EMB_SQL_CHECK("cursor -- close");
+
+  return 0;
+} /* TbMostSimpleSubselect */
+
+int TbBasicSubselect(void)
+{
+  int rc = 0;
+  struct sqlca sqlca;
+
+  printf("\n-----------------------------------------------------------");
+  printf("\nUSE THE SQL STATEMENTS:\n");
+  printf("  DECLARE CURSOR\n");
+  printf("  OPEN\n");
+  printf("  FETCH\n");
+  printf("  CLOSE\n");
+  printf("TO PERFORM SUBSELECT USING A WHERE CLAUSE.\n");
+
+  /* display ORG table content */
+  rc = OrgTbContentDisplay();
+
+  printf("\n  Perform:\n");
+  printf("    SELECT deptnumb, deptname FROM org WHERE deptnumb < 30\n");
+  printf("\n  Results:\n");
+  printf("    DEPTNUMB DEPTNAME\n");
+  printf("    -------- --------------\n");
+
+  /* declare cursor */
+  EXEC SQL DECLARE c6 CURSOR FOR
+    SELECT deptnumb, deptname FROM org WHERE deptnumb < 30;
+
+  /* open cursor */
+  EXEC SQL OPEN c6;
+  EMB_SQL_CHECK("cursor -- open");
+
+  /* fetch cursor */
+  EXEC SQL FETCH c6 INTO :deptnumb, :deptname;
+  EMB_SQL_CHECK("cursor -- fetch");
+
+  while (sqlca.sqlcode != 100)
+  {
+    printf("    %8d %-14s\n", deptnumb, deptname);
+
+    EXEC SQL FETCH c6 INTO :deptnumb, :deptname;
+    EMB_SQL_CHECK("cursor -- fetch");
+  }
+
+  /* close cursor */
+  EXEC SQL CLOSE c6;
+  EMB_SQL_CHECK("cursor -- close");
+
+  return 0;
+} /* TbBasicSubselect */
+
+int TbGroupBySubselect(void)
+{
+  int rc = 0;
+  struct sqlca sqlca;
+
+  printf("\n-----------------------------------------------------------");
+  printf("\nUSE THE SQL STATEMENTS:\n");
+  printf("  DECLARE CURSOR\n");
+  printf("  OPEN\n");
+  printf("  FETCH\n");
+  printf("  CLOSE\n");
+  printf("TO PERFORM 'GROUP BY' SUBSELECT.\n");
+
+  /* display ORG table content */
+  rc = OrgTbContentDisplay();
+
+  printf("\n  Perform:\n");
+  printf("    SELECT division, MAX(deptnumb) FROM org GROUP BY division\n");
+  printf("\n  Results:\n");
+  printf("    DIVISION   MAX(DEPTNUMB)\n");
+  printf("    ---------- --------------\n");
+
+  /* declare cursor */
+  EXEC SQL DECLARE c7 CURSOR FOR
+    SELECT division, MAX(deptnumb) FROM org GROUP BY division;
+
+  /* open cursor */
+  EXEC SQL OPEN c7;
+  EMB_SQL_CHECK("cursor -- open");
+
+  /* fetch cursor */
+  EXEC SQL FETCH c7 INTO :division, :maxDeptnumb;
+  EMB_SQL_CHECK("cursor -- fetch");
+
+  while (sqlca.sqlcode != 100)
+  {
+    printf("    %-10s %14d\n", division, maxDeptnumb);
+
+    EXEC SQL FETCH c7 INTO :division, :maxDeptnumb;
+    EMB_SQL_CHECK("cursor -- fetch");
+  }
+
+  /* close cursor */
+  EXEC SQL CLOSE c7;
+  EMB_SQL_CHECK("cursor -- close");
+
+  return 0;
+} /* TbGroupBySubselect */
+
+int TbSubselect(void)
+{
+  int rc = 0;
+  struct sqlca sqlca;
+
+  printf("\n-----------------------------------------------------------");
+  printf("\nUSE THE SQL STATEMENTS:\n");
+  printf("  DECLARE CURSOR\n");
+  printf("  OPEN\n");
+  printf("  FETCH\n");
+  printf("  CLOSE\n");
+  printf("TO PERFORM SUBSELECT.\n");
+
+  /* display ORG table content */
+  rc = OrgTbContentDisplay();
+
+  printf("\n  Perform:\n");
+  printf("    SELECT division, MAX(deptnumb)\n");
+  printf("      FROM org\n");
+  printf("      WHERE location NOT IN 'New York'\n");
+  printf("      GROUP BY division HAVING division LIKE '%%ern'\n");
+  printf("\n  Results:\n");
+  printf("    DIVISION   MAX(DEPTNUMB)\n");
+  printf("    ---------- --------------\n");
+
+  /* declare cursor */
+  EXEC SQL DECLARE c8 CURSOR FOR
+    SELECT division, MAX(deptnumb)
+      FROM org
+      WHERE location NOT IN 'New York'
+      GROUP BY division HAVING division LIKE '%ern';
+
+  /* open cursor */
+  EXEC SQL OPEN c8;
+  EMB_SQL_CHECK("cursor -- open");
+
+  /* fetch cursor */
+  EXEC SQL FETCH c8 INTO :division, :maxDeptnumb;
+  EMB_SQL_CHECK("cursor -- fetch");
+
+  while (sqlca.sqlcode != 100)
+  {
+    printf("    %-10s %14d\n", division, maxDeptnumb);
+
+    EXEC SQL FETCH c8 INTO :division, :maxDeptnumb;
+    EMB_SQL_CHECK("cursor -- fetch");
+  }
+
+  /* close cursor */
+  EXEC SQL CLOSE c8;
+  EMB_SQL_CHECK("cursor -- close");
+
+  return 0;
+} /* TbSubselect */
+
+int TbRowSubselect(void)
+{
+  int rc = 0;
+  struct sqlca sqlca;
+
+  printf("\n-----------------------------------------------------------");
+  printf("\nUSE THE SQL STATEMENTS:\n");
+  printf("  DECLARE CURSOR\n");
+  printf("  OPEN\n");
+  printf("  FETCH\n");
+  printf("  CLOSE\n");
+  printf("TO PERFORM 'ROW' SUBSELECT.\n");
+
+  /* display ORG table content */
+  rc = OrgTbContentDisplay();
+
+  printf("\n  Perform:\n");
+  printf("    SELECT deptnumb, deptname INTO :deptnumb, :deptname\n");
+  printf("      FROM org\n");
+  printf("      WHERE location = 'New York'\n");
+  printf("\n  Results:\n");
+  printf("    DEPTNUMB DEPTNAME\n");
+  printf("    -------- --------------\n");
+
+  /* declare cursor */
+  EXEC SQL
+    SELECT deptnumb, deptname INTO :deptnumb, :deptname
+      FROM org
+      WHERE location = 'New York';
+
+  printf("    %8d %-14s\n", deptnumb, deptname);
+
+  return 0;
+} /* TbRowSubselect */
+
+int TbFullselect(void)
+{
+  int rc = 0;
+  struct sqlca sqlca;
+
+  printf("\n-----------------------------------------------------------");
+  printf("\nUSE THE SQL STATEMENTS:\n");
+  printf("  DECLARE CURSOR\n");
+  printf("  OPEN\n");
+  printf("  FETCH\n");
+  printf("  CLOSE\n");
+  printf("TO PERFORM FULLSELECT.\n");
+
+  /* display ORG table content */
+  rc = OrgTbContentDisplay();
+
+  printf("\n  Perform:\n");
+  printf("    SELECT deptnumb, deptname\n");
+  printf("      FROM org\n");
+  printf("      WHERE deptnumb < 20 UNION VALUES(7, 'New Deptname')\n");
+  printf("\n  Results:\n");
+  printf("    DEPTNUMB DEPTNAME\n");
+  printf("    -------- --------------\n");
+
+  /* declare cursor */
+  EXEC SQL DECLARE c9 CURSOR FOR
+    SELECT deptnumb, deptname
+      FROM org
+      WHERE deptnumb < 20 UNION VALUES(7, 'New Deptname');
+
+  /* open cursor */
+  EXEC SQL OPEN c9;
+  EMB_SQL_CHECK("cursor -- open");
+
+  /* fetch cursor */
+  EXEC SQL FETCH c9 INTO :deptnumb, :deptname;
+  EMB_SQL_CHECK("cursor -- fetch");
+
+  while (sqlca.sqlcode != 100)
+  {
+    printf("    %8d %-14s\n", deptnumb, deptname);
+
+    EXEC SQL FETCH c9 INTO :deptnumb, :deptname;
+    EMB_SQL_CHECK("cursor -- fetch");
+  }
+
+  /* close cursor */
+  EXEC SQL CLOSE c9;
+  EMB_SQL_CHECK("cursor -- close");
+
+  return 0;
+} /* TbFullselect */
+
+int TbSelectStatement(void)
+{
+  int rc = 0;
+  struct sqlca sqlca;
+
+  printf("\n-----------------------------------------------------------");
+  printf("\nUSE THE SQL STATEMENTS:\n");
+  printf("  DECLARE CURSOR\n");
+  printf("  OPEN\n");
+  printf("  FETCH\n");
+  printf("  CLOSE\n");
+  printf("TO PERFORM SELECT STATEMENT.\n");
+
+  /* display ORG table content */
+  rc = OrgTbContentDisplay();
+
+  printf("\n  Perform:\n");
+  printf("    WITH new_org(new_deptnumb, new_deptname)\n");
+  printf("      AS(SELECT deptnumb, deptname\n");
+  printf("           FROM org\n");
+  printf("           UNION VALUES(7, 'New Dept 1'),\n");
+  printf("                       (77, 'New Dept 2'),\n");
+  printf("                       (777, 'New Dept 3'))\n");
+  printf("      SELECT new_deptnumb, new_deptname\n");
+  printf("        FROM new_org\n");
+  printf("        WHERE new_deptnumb > 70\n");
+  printf("        ORDER BY new_deptname\n");
+  printf("\n  Results:\n");
+  printf("    NEW_DEPTNUMB NEW_DEPTNAME\n");
+  printf("    ------------ ------------\n");
+
+  /* declare cursor */
+  EXEC SQL DECLARE c10 CURSOR FOR
+    WITH new_org(new_deptnumb, new_deptname)
+      AS(SELECT deptnumb, deptname
+           FROM org
+           UNION VALUES(7, 'New Dept 1'),
+                       (77, 'New Dept 2'),
+                       (777, 'New Dept 3'))
+      SELECT new_deptnumb, new_deptname
+        FROM new_org
+        WHERE new_deptnumb > 70
+        ORDER BY new_deptname;
+
+  /* open cursor */
+  EXEC SQL OPEN c10;
+  EMB_SQL_CHECK("cursor -- open");
+
+  /* fetch cursor */
+  EXEC SQL FETCH c10 INTO :deptnumb, :deptname;
+  EMB_SQL_CHECK("cursor -- fetch");
+
+  while (sqlca.sqlcode != 100)
+  {
+    printf("    %12d %-18s\n", deptnumb, deptname);
+
+    EXEC SQL FETCH c10 INTO :deptnumb, :deptname;
+    EMB_SQL_CHECK("cursor -- fetch");
+  }
+
+  /* close cursor */
+  EXEC SQL CLOSE c10;
+  EMB_SQL_CHECK("cursor -- close");
+
+  return 0;
+} /* TbSelectStatement */
+
+int TbBasicSubselectFromMultipleTables(void)
+{
+  int rc = 0;
+  struct sqlca sqlca;
+
+  printf("\n-----------------------------------------------------------");
+  printf("\nUSE THE SQL STATEMENTS:\n");
+  printf("  DECLARE CURSOR\n");
+  printf("  OPEN\n");
+  printf("  FETCH\n");
+  printf("  CLOSE\n");
+  printf("TO PERFORM SUBSELECT FROM MULTIPLE TABLES.\n");
+
+  /* display ORG table content */
+  rc = OrgTbContentDisplay();
+
+  /* display DEPARTMENT table content */
+  rc = DepartmentTbContentDisplay();
+
+  printf("\n  Perform:\n");
+  printf("    SELECT deptnumb, o.deptname, deptno, d.deptname\n");
+  printf("      FROM org o, department d\n");
+  printf("      WHERE deptnumb <= 15 AND deptno LIKE '%%11'\n");
+  printf("\n  Results:\n");
+  printf("    DEPTNUMB ORG.DEPTNAME   DEPTNO DEPARTMENT.DEPTNAME\n");
+  printf("    -------- -------------- ------ ---------------------\n");
+
+  /* declare cursor */
+  EXEC SQL DECLARE c11 CURSOR FOR
+    SELECT deptnumb, o.deptname, deptno, d.deptname
+      FROM org o, department d
+      WHERE deptnumb <= 15 AND deptno LIKE '%11';
+
+  /* open cursor */
+  EXEC SQL OPEN c11;
+  EMB_SQL_CHECK("cursor -- open");
+
+  /* fetch cursor */
+  EXEC SQL FETCH c11 INTO :deptnumb, :orgDeptname, :deptno,
+                          :departmentDeptname;
+  EMB_SQL_CHECK("cursor -- fetch");
+
+  while (sqlca.sqlcode != 100)
+  {
+    printf("    %8d %-14s %-6s %-14s\n",
+           deptnumb, orgDeptname, deptno, departmentDeptname);
+
+    EXEC SQL FETCH c11 INTO :deptnumb, :orgDeptname, :deptno,
+                            :departmentDeptname;
+    EMB_SQL_CHECK("cursor -- fetch");
+  }
+
+  /* close cursor */
+  EXEC SQL CLOSE c11;
+  EMB_SQL_CHECK("cursor -- close");
+
+  return 0;
+} /* TbBasicSelectFromMultipleTables */
+
+int TbBasicSubselectFromJoinedTable(void)
+{
+  int rc = 0;
+  struct sqlca sqlca;
+
+  printf("\n-----------------------------------------------------------");
+  printf("\nUSE THE SQL STATEMENTS:\n");
+  printf("  DECLARE CURSOR\n");
+  printf("  OPEN\n");
+  printf("  FETCH\n");
+  printf("  CLOSE\n");
+  printf("TO PERFORM SUBSELECT FROM A JOINED TABLE.\n");
+
+  /* display ORG table content */
+  rc = OrgTbContentDisplay();
+
+  /* display DEPARTMENT table content */
+  rc = DepartmentTbContentDisplay();
+
+  printf("\n  Perform:\n");
+  printf("    SELECT deptnumb, manager, deptno, mgrno\n");
+  printf("      FROM org INNER JOIN department\n");
+  printf("      ON manager = INTEGER(mgrno)\n");
+  printf("      WHERE deptnumb BETWEEN 20 AND 100\n");
+  printf("\n  Results:\n");
+  printf("    DEPTNUMB MANAGER DEPTNO MGRNO\n");
+  printf("    -------- ------- ------ ------\n");
+
+  /* declare cursor */
+  EXEC SQL DECLARE c12 CURSOR FOR
+    SELECT deptnumb, manager, deptno, mgrno
+      FROM org INNER JOIN department
+      ON manager = INTEGER(mgrno)
+      WHERE deptnumb BETWEEN 20 AND 100;
+
+  /* open cursor */
+  EXEC SQL OPEN c12;
+  EMB_SQL_CHECK("cursor -- open");
+
+  /* fetch cursor */
+  EXEC SQL FETCH c12 INTO :deptnumb, :manager, :deptno, :mgrno;
+  EMB_SQL_CHECK("cursor -- fetch");
+
+  while (sqlca.sqlcode != 100)
+  {
+    printf("    %8d %7d %-6s %-6s\n", deptnumb, manager, deptno, mgrno);
+
+    EXEC SQL FETCH c12 INTO :deptnumb, :manager, :deptno, :mgrno;
+    EMB_SQL_CHECK("cursor -- fetch");
+  }
+
+  /* close cursor */
+  EXEC SQL CLOSE c12;
+  EMB_SQL_CHECK("cursor -- close");
+
+  return 0;
+} /* TbBasicSubselectFromJoinedTable */
+
+int TbBasicSubselectUsingSubquery(void)
+{
+  int rc = 0;
+  struct sqlca sqlca;
+
+  printf("\n-----------------------------------------------------------");
+  printf("\nUSE THE SQL STATEMENTS:\n");
+  printf("  DECLARE CURSOR\n");
+  printf("  OPEN\n");
+  printf("  FETCH\n");
+  printf("  CLOSE\n");
+  printf("TO PERFORM SUBSELECT USING SUBQUERY.\n");
+
+  /* display ORG table content */
+  rc = OrgTbContentDisplay();
+
+  printf("\n  Perform:\n");
+  printf("    SELECT deptnumb, deptname\n");
+  printf("      FROM org\n");
+  printf("      WHERE deptnumb < (SELECT AVG(deptnumb) FROM org)\n");
+  printf("\n  Results:\n");
+  printf("    DEPTNUMB DEPTNAME\n");
+  printf("    -------- --------------\n");
+
+  /* declare cursor */
+  EXEC SQL DECLARE c13 CURSOR FOR
+    SELECT deptnumb, deptname
+      FROM org
+      WHERE deptnumb < (SELECT AVG(deptnumb) FROM org);
+
+  /* open cursor */
+  EXEC SQL OPEN c13;
+  EMB_SQL_CHECK("cursor -- open");
+
+  /* fetch cursor */
+  EXEC SQL FETCH c13 INTO :deptnumb, :deptname;
+  EMB_SQL_CHECK("cursor -- fetch");
+
+  while (sqlca.sqlcode != 100)
+  {
+    printf("    %8d %-14s\n", deptnumb, deptname);
+
+    EXEC SQL FETCH c13 INTO :deptnumb, :deptname;
+    EMB_SQL_CHECK("cursor -- fetch");
+  }
+
+  /* close cursor */
+  EXEC SQL CLOSE c13;
+  EMB_SQL_CHECK("cursor -- close");
+
+  return 0;
+} /* TbBasicSubselectUsingSubquery */
+
+int TbBasicSubselectUsingCorrelatedSubquery(void)
+{
+  int rc = 0;
+  struct sqlca sqlca;
+
+  printf("\n-----------------------------------------------------------");
+  printf("\nUSE THE SQL STATEMENTS:\n");
+  printf("  DECLARE CURSOR\n");
+  printf("  OPEN\n");
+  printf("  FETCH\n");
+  printf("  CLOSE\n");
+  printf("TO PERFORM SUBSELECT USING CORRELATED SUBQUERY.\n");
+
+  /* display ORG table content */
+  rc = OrgTbContentDisplay();
+
+  printf("\n  Perform:\n");
+  printf("    SELECT deptnumb, deptname\n");
+  printf("      FROM org o1\n");
+  printf("      WHERE deptnumb > (SELECT AVG(deptnumb)\n");
+  printf("                          FROM org o2\n");
+  printf("                          WHERE o2.division = o1.division)\n");
+  printf("\n  Results:\n");
+  printf("    DEPTNUMB DEPTNAME\n");
+  printf("    -------- --------------\n");
+
+  /* delcare cursor */
+  EXEC SQL DECLARE c14 CURSOR FOR
+    SELECT deptnumb, deptname
+      FROM org o1
+      WHERE deptnumb > (SELECT AVG(deptnumb)
+                          FROM org o2
+                          WHERE o2.division = o1.division);
+
+  /* open cursor */
+  EXEC SQL OPEN c14;
+  EMB_SQL_CHECK("cursor -- open");
+
+  /* fetch cursor */
+  EXEC SQL FETCH c14 INTO :deptnumb, :deptname;
+  EMB_SQL_CHECK("cursor -- fetch");
+
+  while (sqlca.sqlcode != 100)
+  {
+    printf("    %8d %-14s\n", deptnumb, deptname);
+
+    EXEC SQL FETCH c14 INTO :deptnumb, :deptname;
+    EMB_SQL_CHECK("cursor -- fetch");
+  }
+
+  /* close cursor */
+  EXEC SQL CLOSE c14;
+  EMB_SQL_CHECK("cursor -- close");
+
+  return 0;
+} /* TbBasicSubselectUsingCorrelatedSubquery */
+
+int TbSubselectUsingGroupingSets(void)
+{
+  int rc = 0;
+  struct sqlca sqlca;
+
+  printf("\n-----------------------------------------------------------");
+  printf("\nUSE THE SQL STATEMENTS:\n");
+  printf("  DECLARE CURSOR\n");
+  printf("  OPEN\n");
+  printf("  FETCH\n");
+  printf("  CLOSE\n");
+  printf("TO PERFORM SUBSELECT USING GROUPING SETS.\n");
+
+  rc = EmployeeTbPartialContentDisplay();
+
+  printf("\n  Perform:\n");
+  printf("    SELECT job, edlevel, SUM(comm)\n");
+  printf("      FROM employee\n");
+  printf("      WHERE job IN('DESIGNER', 'FIELDREP')\n");
+  printf("      GROUP BY GROUPING SETS((job, edlevel), (job))\n");
+  printf("\n  Results:\n");
+  printf("    JOB      EDLEVEL SUM(COMM)\n");
+  printf("    -------- ------- ----------\n");
+
+  /* declare cursor */
+  EXEC SQL DECLARE c15 CURSOR FOR
+    SELECT job, edlevel, SUM(comm)
+      FROM employee
+      WHERE job IN('DESIGNER', 'FIELDREP')
+      GROUP BY GROUPING SETS((job, edlevel), (job));
+
+  /* open cursor */
+  EXEC SQL OPEN c15;
+  EMB_SQL_CHECK("cursor -- open");
+
+  /* fetch cursor */
+  EXEC SQL FETCH c15 INTO :job:jobInd, :edlevel:edlevelInd,
+                          :commSum:commSumInd;
+  EMB_SQL_CHECK("cursor -- fetch");
+
+  while (sqlca.sqlcode != 100)
+  {
+    if (jobInd >= 0)
+    {
+      printf("    %-8s", job);
+    }
+    else
+    {
+      printf("    %-8s", "-");
+    }
+    if (edlevelInd >= 0)
+    {
+      printf(" %7d", edlevel);
+    }
+    else
+    {
+      printf(" %7s", "-");
+    }
+    if (commSumInd >= 0)
+    {
+      printf(" %10.2f", commSum);
+    }
+    else
+    {
+      printf(" %10s", "-");
+    }
+    printf("\n");
+
+    EXEC SQL
+      FETCH c15 INTO :job:jobInd, :edlevel:edlevelInd, :commSum:commSumInd;
+    EMB_SQL_CHECK("cursor -- fetch");
+  }
+
+  /* close cursor */
+  EXEC SQL CLOSE c15;
+  EMB_SQL_CHECK("cursor -- close");
+
+  return 0;
+} /* TbSubselectUsingGroupingSets */
+
+int TbSubselectUsingRollup(void)
+{
+  int rc = 0;
+  struct sqlca sqlca;
+
+  printf("\n-----------------------------------------------------------");
+  printf("\nUSE THE SQL STATEMENTS:\n");
+  printf("  DECLARE CURSOR\n");
+  printf("  OPEN\n");
+  printf("  FETCH\n");
+  printf("  CLOSE\n");
+  printf("TO PERFORM SUBSELECT USING ROLLUP.\n");
+
+  rc = EmployeeTbPartialContentDisplay();
+
+  printf("\n  Perform:\n");
+  printf("    SELECT job, edlevel, SUM(comm)\n");
+  printf("      FROM employee\n");
+  printf("      WHERE job IN('DESIGNER', 'FIELDREP')\n");
+  printf("      GROUP BY ROLLUP(job, edlevel)\n");
+  printf("\n  Results:\n");
+  printf("    JOB      EDLEVEL SUM(COMM)\n");
+  printf("    -------- ------- ----------\n");
+
+  /* declare cursor */
+  EXEC SQL DECLARE c16 CURSOR FOR
+    SELECT job, edlevel, SUM(comm)
+      FROM employee
+      WHERE job IN('DESIGNER', 'FIELDREP')
+      GROUP BY ROLLUP(job, edlevel);
+
+  /* open cursor */
+  EXEC SQL OPEN c16;
+  EMB_SQL_CHECK("cursor -- open");
+
+  /* fetch cursor */
+  EXEC SQL FETCH c16 INTO :job:jobInd, :edlevel:edlevelInd,
+                          :commSum:commSumInd;
+  EMB_SQL_CHECK("cursor -- fetch");
+
+  while (sqlca.sqlcode != 100)
+  {
+    if (jobInd >= 0)
+    {
+      printf("    %-8s", job);
+    }
+    else
+    {
+      printf("    %-8s", "-");
+    }
+    if (edlevelInd >= 0)
+    {
+      printf(" %7d", edlevel);
+    }
+    else
+    {
+      printf(" %7s", "-");
+    }
+    if (commSumInd >= 0)
+    {
+      printf(" %10.2f", commSum);
+    }
+    else
+    {
+      printf(" %10s", "-");
+    }
+    printf("\n");
+
+    EXEC SQL FETCH c16
+      INTO :job:jobInd, :edlevel:edlevelInd, :commSum:commSumInd;
+    EMB_SQL_CHECK("cursor -- fetch");
+  }
+
+  /* close cursor */
+  EXEC SQL CLOSE c16;
+  EMB_SQL_CHECK("cursor -- close");
+
+  return 0;
+} /* TbSubselectUsingRollup */
+
+int TbSubselectUsingCube(void)
+{
+  int rc = 0;
+  struct sqlca sqlca;
+
+  printf("\n-----------------------------------------------------------");
+  printf("\nUSE THE SQL STATEMENTS:\n");
+  printf("  DECLARE CURSOR\n");
+  printf("  OPEN\n");
+  printf("  FETCH\n");
+  printf("  CLOSE\n");
+  printf("TO PERFORM SUBSELECT USING CUBE.\n");
+
+  rc = EmployeeTbPartialContentDisplay();
+
+  printf("\n  Perform:\n");
+  printf("    SELECT job, edlevel, SUM(comm)\n");
+  printf("      FROM employee\n");
+  printf("      WHERE job IN('DESIGNER', 'FIELDREP')\n");
+  printf("      GROUP BY CUBE(job, edlevel)\n");
+  printf("\n  Results:\n");
+  printf("    JOB      EDLEVEL SUM(COMM)\n");
+  printf("    -------- ------- ----------\n");
+
+  /* declare cursor */
+  EXEC SQL DECLARE c17 CURSOR FOR
+    SELECT job, edlevel, SUM(comm)
+      FROM employee
+      WHERE job IN('DESIGNER', 'FIELDREP')
+      GROUP BY CUBE(job, edlevel);
+
+  /* open cursor */
+  EXEC SQL OPEN c17;
+  EMB_SQL_CHECK("cursor -- open");
+
+  /* fetch cursor */
+  EXEC SQL FETCH c17 INTO :job:jobInd, :edlevel:edlevelInd,
+                          :commSum:commSumInd;
+  EMB_SQL_CHECK("cursor -- fetch");
+
+  while (sqlca.sqlcode != 100)
+  {
+    if (jobInd >= 0)
+    {
+      printf("    %-8s", job);
+    }
+    else
+    {
+      printf("    %-8s", "-");
+    }
+    if (edlevelInd >= 0)
+    {
+      printf(" %7d", edlevel);
+    }
+    else
+    {
+      printf(" %7s", "-");
+    }
+    if (commSumInd >= 0)
+    {
+      printf(" %10.2f", commSum);
+    }
+    else
+    {
+      printf(" %10s", "-");
+    }
+    printf("\n");
+
+    EXEC SQL
+      FETCH c17 INTO :job:jobInd, :edlevel:edlevelInd, :commSum:commSumInd;
+    EMB_SQL_CHECK("cursor -- fetch");
+  }
+
+  /* close cursor */
+  EXEC SQL CLOSE c17;
+  EMB_SQL_CHECK("cursor -- close");
+
+  return 0;
+} /* TbSubselectUsingCube */
+
+int TbSelectStatementUsingRecursiveCommonTableExpression(void)
+{
+  int rc = 0;
+  struct sqlca sqlca;
+
+  printf("\n-----------------------------------------------------------");
+  printf("\nUSE THE SQL STATEMENTS:\n");
+  printf("  DECLARE CURSOR\n");
+  printf("  OPEN\n");
+  printf("  FETCH\n");
+  printf("  CLOSE\n");
+  printf("TO PERFORM SELECT STATEMENT\n");
+  printf("USING RECURSIVE COMMON TABLE EXPRESSION.\n");
+
+  /* display DEPARTMENT table content */
+  rc = DepartmentTbContentDisplay();
+
+  printf("\n  Perform:\n");
+  printf("    WITH rcte_department(deptno, deptname, admrdept)\n");
+  printf("      AS(SELECT root.deptno, root.deptname, root.admrdept\n");
+  printf("           FROM department root\n");
+  printf("           WHERE root.deptname = 'SUPPORT SERVICES'\n");
+  printf("           UNION ALL");
+  printf(" SELECT child.deptno, child.deptname, child.admrdept\n");
+  printf("                       ");
+  printf("FROM department child, rcte_department parent\n");
+  printf("                       WHERE child.admrdept = parent.deptno)\n");
+  printf("      SELECT * FROM rcte_department\n");
+  printf("\n  Results:\n");
+  printf("    DEPTNO DEPTNAME                     ADMRDEPT\n");
+  printf("    ------ ---------------------------- --------\n");
+
+  /* cursor -- declare */
+  EXEC SQL DECLARE c18 CURSOR FOR
+    WITH rcte_department(deptno, deptname, admrdept)
+      AS(SELECT root.deptno, root.deptname, root.admrdept
+           FROM department root
+           WHERE root.deptname = 'SUPPORT SERVICES'
+           UNION ALL SELECT child.deptno, child.deptname, child.admrdept
+                       FROM department child, rcte_department parent
+                       WHERE child.admrdept = parent.deptno)
+      SELECT * FROM rcte_department;
+
+  /* open cursor */
+  EXEC SQL OPEN c18;
+  EMB_SQL_CHECK("cursor -- open");
+
+  /* fetch cursor */
+  EXEC SQL FETCH c18 INTO :rcteDeptno, :rcteDeptname, :rcteAdmrdept;
+  EMB_SQL_CHECK("cursor -- fetch");
+
+  while (sqlca.sqlcode != 100)
+  {
+    printf("    %-6s %-28s %-8s\n", rcteDeptno, rcteDeptname, rcteAdmrdept);
+
+    EXEC SQL FETCH c18 INTO :rcteDeptno, :rcteDeptname, :rcteAdmrdept;
+    EMB_SQL_CHECK("cursor -- fetch");
+  }
+
+  /* close cursor */
+  EXEC SQL CLOSE c18;
+  EMB_SQL_CHECK("cursor -- close");
+
+  return 0;
+} /* TbSelectStatementUsingRecursiveCommonTableExpression */
+
+int OrgTbContentDisplay(void)
+{
+  struct sqlca sqlca;
+
+  printf("\n  SELECT * FROM org\n");
+  printf("    ");
+  printf("DEPTNUMB DEPTNAME       MANAGER DIVISION   LOCATION\n");
+  printf("    ");
+  printf("-------- -------------- ------- ---------- --------------\n");
+
+  EXEC SQL DECLARE c19 CURSOR FOR SELECT * FROM org;
+
+  EXEC SQL OPEN c19;
+  EMB_SQL_CHECK("cursor -- open");
+
+  EXEC SQL FETCH c19 INTO :deptnumb, :deptname, :manager, :division,
+                          :location;
+  EMB_SQL_CHECK("cursor -- fetch");
+
+  while (sqlca.sqlcode != 100)
+  {
+    printf("    %8d %-14s %7d %-10s %-14s\n",
+           deptnumb, deptname, manager, division, location);
+
+    EXEC SQL FETCH c19 INTO :deptnumb, :deptname, :manager, :division,
+                            :location;
+    EMB_SQL_CHECK("cursor -- fetch");
+  }
+
+  EXEC SQL CLOSE c19;
+  EMB_SQL_CHECK("cursor -- close");
+
+  return 0;
+} /* OrgTableContentDisplay */
+
+int DepartmentTbContentDisplay(void)
+{
+  struct sqlca sqlca;
+
+  printf("\n  SELECT * FROM department\n");
+  printf("    ");
+  printf("DEPTNO DEPTNAME                     MGRNO  ADMRDEPT LOCATION\n");
+  printf("    ");
+  printf("------ ---------------------------- ------ -------- --------\n");
+
+  EXEC SQL DECLARE c20 CURSOR FOR SELECT * FROM department;
+
+  EXEC SQL OPEN c20;
+  EMB_SQL_CHECK("cursor -- open");
+
+  EXEC SQL FETCH c20 INTO :deptno, :departmentDeptname,
+                          :mgrno:mgrnoInd, :admrdept,
+                          :departmentLocation:departmentLocationInd;
+  EMB_SQL_CHECK("cursor -- fetch");
+
+  while (sqlca.sqlcode != 100)
+  {
+    printf("    %-6s %-28s", deptno, departmentDeptname);
+    if (mgrnoInd >= 0)
+    {
+      printf(" %-6s", mgrno);
+    }
+    else
+    {
+      printf(" -     ");
+    }
+    printf(" %-8s", admrdept);
+    if (departmentLocationInd >= 0)
+    {
+      printf(" %-16s", departmentLocation);
+    }
+    else
+    {
+      printf(" -     ");
+    }
+    printf("\n");
+
+    EXEC SQL FETCH c20
+      INTO :deptno, :departmentDeptname, :mgrno:mgrnoInd, :admrdept,
+           :departmentLocation:departmentLocationInd;
+    EMB_SQL_CHECK("cursor -- fetch");
+  }
+
+  EXEC SQL CLOSE c20;
+  EMB_SQL_CHECK("cursor -- close");
+
+  return 0;
+} /* DepartmentTbContentDisplay */
+
+int EmployeeTbPartialContentDisplay(void)
+{
+  int rc = 0;
+  struct sqlca sqlca;
+
+  printf("\n  Perform:\n");
+  printf("    SELECT job, edlevel, comm\n");
+  printf("      FROM employee\n");
+  printf("      WHERE job IN('DESIGNER', 'FIELDREP')\n");
+  printf("\n  Results:\n");
+  printf("    JOB      EDLEVEL COMM\n");
+  printf("    -------- ------- ----------\n");
+
+  /* declare cursor */
+  EXEC SQL DECLARE c21 CURSOR FOR
+    SELECT job, edlevel, comm
+      FROM employee
+      WHERE job IN('DESIGNER', 'FIELDREP');
+
+  /* open cursor */
+  EXEC SQL OPEN c21;
+  EMB_SQL_CHECK("cursor -- open");
+
+  /* fetch cursor */
+  EXEC SQL FETCH c21 INTO :job, :edlevel, :comm;
+  EMB_SQL_CHECK("cursor -- fetch");
+
+  while (sqlca.sqlcode != 100)
+  {
+    printf("    %-8s %7d %10.2f\n", job, edlevel, comm);
+
+    EXEC SQL FETCH c21 INTO :job, :edlevel, :comm;
+    EMB_SQL_CHECK("cursor -- fetch");
+  }
+
+  /* close cursor */
+  EXEC SQL CLOSE c21;
+  EMB_SQL_CHECK("cursor -- close");
+
+  return 0;
+} /* EmployeeTbPartialContentDisplay */
+
+int TbSelectUsingQuerySampling(void)
+{
+  int rc = 0;
+  struct sqlca sqlca;
+
+  printf("\n-----------------------------------------------------------");
+  printf("\nUSE THE SQL STATEMENTS:\n");
+  printf("  DECLARE CURSOR\n");
+  printf("  OPEN\n");
+  printf("  FETCH\n");
+  printf("  CLOSE\n");
+  printf("TO PERFORM A SELECT USING QUERY SAMPLING.\n");
+ 
+  printf("\nCOMPUTING AVG(SALARY) WITHOUT SAMPLING \n");
+  printf("\n  Perform:\n");
+  printf("    SELECT AVG(salary) FROM employee \n");
+  printf("\n  Results:\n");
+  printf("    AVG SALARY\n");
+  printf("    ----------\n");
+     
+  /* declare cursor */
+  EXEC SQL DECLARE c22 CURSOR FOR SELECT AVG(salary) FROM employee;
+
+  /* open cursor */
+  EXEC SQL OPEN c22;
+  EMB_SQL_CHECK("cursor -- open");
+
+  /* fetch cursor */
+  EXEC SQL FETCH c22 INTO :avgSalary;
+  EMB_SQL_CHECK("cursor -- fetch");
+
+  if (sqlca.sqlcode != 100)
+    printf("    %.2f \n", avgSalary);
+
+  /* close cursor */
+  EXEC SQL CLOSE c22;
+  EMB_SQL_CHECK("cursor -- close");
+  
+  printf("\nCOMPUTING AVG(SALARY) WITH QUERY SAMPLING");
+  printf("\n  - ROW LEVEL SAMPLING ");
+  printf("\n  - BLOCK LEVEL SAMPLING \n");
+  printf("\n  ROW LEVEL SAMPLING : USE THE KEYWORD 'BERNOULLI'\n");
+  printf("\nFOR A SAMPLING PERCENTAGE OF P, EACH ROW OF THE TABLE IS\n");
+  printf("SELECTED FOR THE INCLUSION IN THE RESULT WITH A PROBABILITY\n");
+  printf("OF P/100, INDEPENDENTLY OF THE OTHER ROWS IN T\n"); 
+  
+  printf("\n  Perform:\n");
+  printf("    SELECT AVG(salary) FROM employee TABLESAMPLE BERNOULLI(25)");
+  printf(" REPEATABLE(5)\n");
+  printf("\n  Results:\n");
+  printf("    AVG SALARY\n");
+  printf("    ----------\n");
+     
+  /* declare cursor */
+  EXEC SQL DECLARE c23 CURSOR FOR SELECT AVG(salary) FROM employee 
+    TABLESAMPLE BERNOULLI(25) REPEATABLE(5);
+
+  /* open cursor */
+  EXEC SQL OPEN c23;
+  EMB_SQL_CHECK("cursor -- open");
+
+  /* fetch cursor */
+  EXEC SQL FETCH c23 INTO :avgSalary;
+  EMB_SQL_CHECK("cursor -- fetch");
+
+  if (sqlca.sqlcode != 100)
+    printf("    %.2f \n", avgSalary);
+
+  /* close cursor */
+  EXEC SQL CLOSE c23;
+  EMB_SQL_CHECK("cursor -- close");
+  
+  printf("\n\n  BLOCK LEVEL SAMPLING : USE THE KEYWORD 'SYSTEM'\n");
+  printf("\nFOR A SAMPLING PERCENTAGE OF P, EACH ROW OF THE TABLE IS\n");
+  printf("SELECTED FOR INCLUSION IN THE RESULT WITH A PROBABILITY\n");
+  printf("OF P/100, NOT NECESSARILY INDEPENDENTLY OF THE OTHER ROWS\n"); 
+  printf("IN T, BASED UPON AN IMPLEMENTATION-DEPENDENT ALGORITHM\n");
+  
+  printf("\n  Perform:\n");
+  printf("    SELECT AVG(salary) FROM employee TABLESAMPLE SYSTEM(50)");
+  printf(" REPEATABLE(1234)\n");
+  printf("\n  Results:\n");
+  printf("    AVG SALARY\n");
+  printf("    ----------\n");
+     
+  /* declare cursor */
+  EXEC SQL DECLARE c24 CURSOR FOR SELECT AVG(salary)FROM employee 
+    TABLESAMPLE SYSTEM(50) REPEATABLE(1234);
+
+  /* open cursor */
+  EXEC SQL OPEN c24;
+  EMB_SQL_CHECK("cursor -- open");
+
+  /* fetch cursor */
+  EXEC SQL FETCH c24 INTO :avgSalary;
+  EMB_SQL_CHECK("cursor -- fetch");
+  
+  if (sqlca.sqlcode != 100)
+    printf("    %.2f \n", avgSalary);
+
+  /* close cursor */
+  EXEC SQL CLOSE c24;
+  EMB_SQL_CHECK("cursor -- close");
+  
+  printf("\nREPEATABLE CLAUSE ENSURES THAT REPEATED EXECUTIONS OF THAT\n");
+  printf("TABLE REFERENCE WILL RETURN IDENTICAL RESULTS FOR THE SAME \n");
+  printf("VALUE OF THE REPEAT ARGUMENT (IN PARENTHESIS). \n");
+  
+  return 0;
+} /* TbSelectUsingQuerySampling */

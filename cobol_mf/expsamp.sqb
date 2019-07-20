@@ -1,0 +1,324 @@
+      ***********************************************************************
+      ** (c) Copyright IBM Corp. 2007 All rights reserved.
+      ** 
+      ** The following sample of source code ("Sample") is owned by International 
+      ** Business Machines Corporation or one of its subsidiaries ("IBM") and is 
+      ** copyrighted and licensed, not sold. You may use, copy, modify, and 
+      ** distribute the Sample in any form without payment to IBM, for the purpose of 
+      ** assisting you in the development of your applications.
+      ** 
+      ** The Sample code is provided to you on an "AS IS" basis, without warranty of 
+      ** any kind. IBM HEREBY EXPRESSLY DISCLAIMS ALL WARRANTIES, EITHER EXPRESS OR 
+      ** IMPLIED, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED WARRANTIES OF 
+      ** MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE. Some jurisdictions do 
+      ** not allow for the exclusion or limitation of implied warranties, so the above 
+      ** limitations or exclusions may not apply to you. IBM shall not be liable for 
+      ** any damages you suffer as a result of using, copying, modifying or 
+      ** distributing the Sample, even if IBM has been advised of the possibility of 
+      ** such damages.
+      ***********************************************************************
+      **
+      ** SOURCE FILE NAME: expsamp.sqb 
+      **
+      ** SAMPLE: Export and import tables with table data to a DRDA database
+      **
+      **         This program will first export a table to an IXF file format
+      **         and then import the IXF file to a DB2 DRDA database table.
+      **         This program needs the embedded SQL calls in order to 
+      **         connect to an existing database, then to create a temporary
+      **         table to work with.
+      **
+      **         For DRDA database imports, the data file format MUST be of
+      **         the IXF form.  The IMPORT command must be issued with an 
+      **         "INSERT" statement.
+      **
+      ** DB2 APIs USED:
+      **         db2gExport -- EXPORT
+      **         db2gImport -- IMPORT
+      **
+      ** SQL STATEMENTS USED:
+      **         BEGIN DECLARE SECTION 
+      **         END DECLARE SECTION
+      **         EXECUTE IMMEDIATE
+      **         CREATE TABLE
+      **         CONNECT
+      **         COMMIT
+      **
+      ** OUTPUT FILE: expsamp.out (available in the online documentation)
+      ***********************************************************************
+      **
+      ** For more information on the sample programs, see the README file. 
+      **
+      ** For information on developing COBOL applications, see the 
+      ** Application Development Guide.
+      **
+      ** For information on DB2 APIs, see the Administrative API Reference.
+      **
+      ** For information on using SQL statements, see the SQL Reference. 
+      **
+      ** For the latest information on programming, compiling, and running
+      ** DB2 applications, visit the DB2 application development website: 
+      **     http://www.software.ibm.com/data/db2/udb/ad
+      ***********************************************************************
+
+       Identification Division.
+       Program-ID. "expsamp".
+
+       Data Division.
+       Working-Storage Section.
+
+           copy "sqlenv.cbl".
+           copy "sqlca.cbl".
+           copy "sqlutil.cbl".
+           copy "db2ApiDf.cbl".
+
+           EXEC SQL BEGIN DECLARE SECTION END-EXEC.
+
+       77 statement         pic x(254).
+
+       01 userid            pic x(8).
+       01 passwd.
+         49 passwd-length   pic s9(4) comp-5 value 0.
+         49 passwd-name     pic x(18).
+       77 drdadb            pic x(8).
+       01 drdaid            pic x(8).
+       01 drdapwd.
+         49 drdapwd-length  pic s9(4) comp-5 value 0.
+         49 drdapwd-name    pic x(18).
+       01 mysqlchar.
+         49 mysqlchar-LENGTH  pic s9(4) comp-5.
+         49 mysqlchar-DATA    pic x(100).
+       01 mysqllob            usage is SQL type is clob(100).
+       77 mycommitcount       pic s9(4) comp-5 value 0.
+       77 mysqlmethd          pic s9(4) comp-5.
+
+           EXEC SQL END DECLARE SECTION END-EXEC.
+
+       77 errloc              pic x(80).
+       77 rc                  pic s9(9) comp-5.
+       77 stmt                pic x(19) value "select * from staff".
+       77 impstmt             pic x(20) value "create into impstaff".
+       77 stmt2               pic x(17) value "select * from org".
+       77 impstmt2            pic x(18) value "create into imporg".
+       77 datafile            pic x(10) value "EXPTBL.IXF".
+       77 datafile-len        pic 9(4) comp-5 value 10.
+       77 datafile2           pic x(10) value "EXPTB2.IXF".
+       77 datafile2-len       pic 9(4) comp-5 value 10.
+       77 msgfile-x           pic x(10) value "EXPMSG.TXT".
+       77 msgfile-x-len       pic 9(4) comp-5 value 10.
+       77 msgfile-m           pic x(10) value "IMPMSG.TXT".
+       77 msgfile-m-len       pic 9(4) comp-5 value 10.
+       77 fileformat          pic x(3) value "IXF".
+       77 fileformat-len      pic 9(4) comp-5 value 3.
+
+       Procedure Division.
+       expsamp Section.
+           display "Sample COBOL program: EXPSAMP".
+
+           display "Enter your user id : " with no advancing.
+           accept userid.
+      
+           display "Enter your password : " with no advancing.
+           accept passwd-name.
+      
+           inspect passwd-name tallying passwd-length for characters
+              before initial " ".
+      
+           display "Enter the DRDA database name : " with no advancing.
+           accept drdadb.
+      
+           display "Enter the DRDA username : " with no advancing.
+           accept drdaid.
+      
+           display "Enter the DRDA password : " with no advancing.
+           accept drdapwd-name.
+
+           inspect drdapwd-name tallying drdapwd-length for characters
+              before initial " ".
+           display " ".
+
+      * need to preset the size of structure field and counts
+           move stmt              to mysqllob-DATA.
+           move 19                to mysqllob-LENGTH.
+           move SQL-METH-D to mysqlmethd.
+
+      * Prepare the DB2G-EXPORT-STRUCT
+           set DB2-PI-DATA-FILE-NAME of DB2G-EXPORT-STRUCT
+               to address of datafile.
+           move datafile-len to DB2-I-DATA-FILE-NAME-LEN
+               of DB2G-EXPORT-STRUCT.
+           set DB2-PI-LOB-PATH-LIST of DB2G-EXPORT-STRUCT
+               to NULL.
+           set DB2-PI-LOB-FILE-LIST of DB2G-EXPORT-STRUCT
+               to NULL.
+           set DB2-PI-DATA-DESCRIPTOR of DB2G-EXPORT-STRUCT
+               to address of mysqlmethd.
+           set DB2-PI-ACTION-STRING of DB2G-EXPORT-STRUCT
+               to address of mysqllob.
+           set DB2-PI-FILE-TYPE of DB2G-EXPORT-STRUCT
+               to address of fileformat.
+           set DB2-PI-FILE-TYPE-MOD of DB2G-EXPORT-STRUCT
+               to address of SQL-FILETMOD.
+           set DB2-PI-MSG-FILE-NAME of DB2G-EXPORT-STRUCT
+               to address of msgfile-x.
+           move SQLU-INITIAL
+               to DB2-I-CALLER-ACTION of DB2G-EXPORT-STRUCT.
+           set DB2-PO-EXPORT-INFO-OUT of DB2G-EXPORT-STRUCT
+               to address of DB2EXPORT-OUT.
+           move fileformat-len
+               to DB2-I-FILE-TYPE-LEN of DB2G-EXPORT-STRUCT.
+           move msgfile-x-len
+               to DB2-I-MSG-FILE-NAME-LEN of DB2G-EXPORT-STRUCT.
+
+      * connecting to SAMPLE database.
+           EXEC SQL CONNECT TO sample USER :userid USING :passwd
+                END-EXEC. 
+           move "CONNECT TO SAMPLE" to errloc.
+           call "checkerr" using SQLCA errloc.
+
+           display "exporting STAFF table into file : ", datafile.
+      **********************
+      ** EXPORT API called *
+      **********************
+           call "db2gExport" using
+                                 by value     DB2VERSION820
+                                 by reference DB2G-EXPORT-STRUCT
+                                 by reference sqlca
+                              returning rc.
+           move "exporting table" to errloc.
+           call "checkerr" using SQLCA errloc.
+
+           display "rows exported : ", DB2-O-ROWS-EXPORTED.
+
+           move stmt2             to mysqllob-DATA.
+           move 17                to mysqllob-LENGTH.
+      
+           set DB2-PI-DATA-FILE-NAME of DB2G-EXPORT-STRUCT
+               to address of datafile2.
+           move datafile2-len         to DB2-I-DATA-FILE-NAME-LEN
+               of DB2G-EXPORT-STRUCT.
+      
+           display "exporting ORG table into file : ", datafile2.
+      *********************
+      * EXPORT API called *
+      *********************
+           call "db2gExport" using
+                                 by value     DB2VERSION820
+                                 by reference DB2G-EXPORT-STRUCT
+                                 by reference sqlca
+                              returning rc.
+           move "exporting table" to errloc.
+           call "checkerr" using SQLCA errloc.
+      
+           display "rows exported : ", DB2-O-ROWS-EXPORTED.
+      
+           display "connect to DRDA".
+           EXEC SQL CONNECT TO :drdadb USER :drdaid USING :drdapwd
+                END-EXEC.
+           move "CONNECT TO DRDA DB" to errloc.
+           call "checkerr" using SQLCA errloc.
+      
+      * drop tables before creating them, just in case they already exist
+           move "drop table impstaff" to statement.
+           EXEC SQL EXECUTE IMMEDIATE :statement END-EXEC.
+           move "drop table imporg" to statement.
+           EXEC SQL EXECUTE IMMEDIATE :statement END-EXEC.
+           move "DROP index SAMPLE.TESTIND" to statement.
+           EXEC SQL EXECUTE IMMEDIATE :statement END-EXEC;
+           move "COMMIT the DROP TABLE" to errloc.
+           EXEC SQL COMMIT END-EXEC.
+           move "DROP TABLE" to errloc.
+           call "checkerr" using SQLCA errloc.
+      
+      * need to preset the size of structure field and counts
+           set DB2-PI-COMMITCOUNT of DB2G-IMPORT-IN 
+                   to address of mycommitcount.
+           move 0  to DB2-I-RESTARTCOUNT of DB2G-IMPORT-IN.
+           move impstmt           to mysqlchar-DATA.
+           move 20                to mysqlchar-LENGTH.
+           move SQL-METH-D to mysqlmethd.
+
+      * Prepare the DB2G-IMPORT-STRUCT
+           set DB2-PI-DATA-FILE-NAME of DB2G-IMPORT-STRUCT
+               to address of datafile.
+           move datafile-len to DB2-I-DATA-FILE-NAME-LEN
+               of DB2G-IMPORT-STRUCT.
+           set DB2-PI-LOB-PATH-LIST of DB2G-IMPORT-STRUCT
+               to NULL.
+           set DB2-PI-DATA-DESCRIPTOR of DB2G-IMPORT-STRUCT
+               to address of mysqlmethd.
+           set DB2-PI-ACTION-STRING of DB2G-IMPORT-STRUCT
+               to address of mysqlchar.
+           set DB2-PI-FILE-TYPE of DB2G-IMPORT-STRUCT
+               to address of fileformat.
+           set DB2-PI-FILE-TYPE-MOD of DB2G-IMPORT-STRUCT
+               to address of SQL-FILETMOD.
+           set DB2-PI-MSG-FILE-NAME of DB2G-IMPORT-STRUCT
+               to address of msgfile-m.
+           move SQLU-INITIAL
+               to DB2-I-CALLER-ACTION of DB2G-IMPORT-STRUCT.
+           set DB2-PO-IMPORT-INFO-OUT of DB2G-IMPORT-STRUCT
+               to address of DB2G-IMPORT-OUT.
+           move fileformat-len
+               to DB2-I-FILE-TYPE-LEN of DB2G-IMPORT-STRUCT.
+           move msgfile-m-len
+               to DB2-I-MSG-FILE-NAME-LEN of DB2G-IMPORT-STRUCT.
+
+      * need to preset db2gImportIn structure fields
+           move 0 to DB2-I-ROWCOUNT of DB2G-IMPORT-IN.           
+           move 0 to DB2-I-RESTARTCOUNT of DB2G-IMPORT-IN.           
+           move 0 to DB2-I-SKIPCOUNT of DB2G-IMPORT-IN.           
+           set DB2-PI-COMMITCOUNT of DB2G-IMPORT-IN to NULL.           
+           move 0 to DB2-I-WARNINGCOUNT of DB2G-IMPORT-IN.           
+           move 0 to DB2-I-NO-TIMEOUT of DB2G-IMPORT-IN.           
+           move 0 to DB2-I-ACCESS-LEVEL of DB2G-IMPORT-IN.
+           set DB2-PI-IMPORT-INFO-IN of DB2G-IMPORT-STRUCT
+               to address of DB2G-IMPORT-IN.
+
+           display "importing the file ", datafile, " into 'impstaff'".
+
+      *********************
+      * IMPORT API called *
+      *********************
+           call "db2gImport" using
+                                 by value     DB2VERSION820
+                                 by reference DB2G-IMPORT-STRUCT
+                                 by reference sqlca
+                              returning rc.
+           move "importing table" to errloc.
+           call "checkerr" using SQLCA errloc.
+      
+           display "rows imported : ", 
+                    DB2-O-ROWS-INSERTED of DB2G-IMPORT-OUT.
+           display "rows committed : ",
+                    DB2-O-ROWS-COMMITTED of DB2G-IMPORT-OUT.
+      
+           move impstmt2          to mysqlchar-DATA.
+           move 18                to mysqlchar-LENGTH.
+
+           set DB2-PI-DATA-FILE-NAME of DB2G-IMPORT-STRUCT
+               to address of datafile2.
+           move datafile2-len to DB2-I-DATA-FILE-NAME-LEN
+               of DB2G-IMPORT-STRUCT.
+           display "importing the file ", datafile2, " into 'imporg'".
+      *********************
+      * IMPORT API called *
+      *********************
+           call "db2gImport" using
+                                 by value     DB2VERSION820
+                                 by reference DB2G-IMPORT-STRUCT
+                                 by reference sqlca
+                              returning rc.
+           move "importing table" to errloc.
+           call "checkerr" using SQLCA errloc.
+      
+           display "rows imported : ", 
+                    DB2-O-ROWS-INSERTED of DB2G-IMPORT-OUT.
+           display "rows committed : ", 
+                    DB2-O-ROWS-COMMITTED of DB2G-IMPORT-OUT.
+      
+           EXEC SQL CONNECT RESET END-EXEC.
+           move "CONNECT RESET" to errloc.
+           call "checkerr" using SQLCA errloc.
+
+       End-expsamp. stop run.

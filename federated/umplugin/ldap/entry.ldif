@@ -1,0 +1,41 @@
+# ================================================================
+# NEW ENTRIES: assume o=IBM,c=US suffix created 
+# ================================================================
+
+dn: o=IBM,c=US
+objectclass: organization
+o: IBM
+
+dn: ou=II,o=IBM,c=US
+objectclass: organizationalUnit
+ou: II
+
+dn: uid=<iiAuthid>,ou=II,o=IBM,c=US
+objectclass: inetOrgPerson
+cn: Tian Zhang
+sn: Zhang
+uid: <iiAuthid> 
+mail: <iiAuthid>@us.ibm.com
+
+dn: uid=newton,ou=II,o=IBM,c=US
+objectclass: inetOrgPerson
+cn: Famous Newton
+sn: Newton
+uid: newton
+mail: newton@us.ibm.com
+
+dn: IIRemoteServerName=<iiRemoteServerName>,uid=<iiAuthid>,ou=II,o=IBM,c=US
+objectclass: IIUserMapping
+IIRemoteServerName: <iiRemoteServerName>
+IIInstanceName: <iiInstance>
+IIDatabaseName: <iiDatabase>
+uid: newton 
+IIRemotePassword: <74BTjiRTSVcUHISN/Uhsjw==>
+
+dn: IIRemoteServerName=<iiRemoteServerName>,uid=newton,ou=II,o=IBM,c=US
+objectclass: IIUserMapping
+IIRemoteServerName: <iiRemoteServerName>
+IIInstanceName: <iiInstance>
+IIDatabaseName: <iiDatabase>
+uid: <iiAuthid>
+IIRemotePassword: <VZ4VE+K/ETAUHISN/Uhsjw==>

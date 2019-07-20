@@ -1,0 +1,453 @@
+/* Added this for z/OS */
+#ifdef OS_ZOS
+#pragma linkage(server1,fetchable)
+#include <assert.h>
+#include "limits.h"
+#include "ctype.h"
+#include "dsnsql.h"
+#endif
+
+#include <stdlib.h>
+#include <stdio.h>
+#include <memory.h>
+#include <string.h>
+
+/* #include <slqenv.h> */
+#include "sql.h"
+#include "sqlda.h"
+
+
+#define true 1
+#define false 0
+////////////////////////////////////////////////////////////////
+//                  COMPILING + INSTALLING  (unix/win)        //
+//  - copy this file to .../sqllib/sample/cpp                 //
+//  - make sure the suffix of this file is sqC(unix)/sqx(win) //
+//    (rename this file if it's suffic is SQC)                //
+//  - copy the file asnqspC.exp(unix)/asnqspC.def(win) to     //
+//    the same directory                                      //
+//  - use the script 'bldrtn'                                 //
+//    example: 'bldrtn asnqspC <databaseName>'                //
+////////////////////////////////////////////////////////////////
+//
+//Scenario
+//
+// The source table is a kind of inventory list that holds
+// the name of different products together with it's price
+// and the currency.
+// The stored procs task is it to get the exchange rate by
+// querying a special table using it and transform all the prices
+// for the arriving rows to dollar prices.
+//
+// ------------            Source table:        ---------------
+//     CREATE TABLE  SRC_LIST ( item      varchar(30) NOT NULL,
+//                              price     real        NOT NULL,
+//                              currency  char(3)     NOT NULL,
+//                              PRIMARY KEY(item))
+//                              DATA CAPTURE CHANGES
+//
+//
+// ------------           Target table:         ---------------
+// The targ_list table will hold the rows from the source table
+// The price column will be transformed to the American currency.
+// The stored proc will use the currency value to get the current
+// exchange rate from the table currency
+// and use that value to calculate the actual price in dollar.
+//
+// CREATE TABLE  targ_list ( item      varchar(30) NOT NULL,
+//                           price     real        NOT NULL,
+//                           PRIMARY KEY(item) )
+//
+//
+// --- Currency table used to query by the stored proc: ------
+// CREATE TABLE  country_rate ( country      char(3) NOT NULL,
+//                              rate         real    NOT NULL,
+//                              PRIMARY KEY(country))
+//
+//
+//------------------ sample workload ------------------------
+//
+// Sample data for table 'currency':
+// INSERT INTO country_rate VALUES('EUR',0.812)
+// INSERT INTO country_rate VALUES('GBP',0.572)
+// INSERT INTO country_rate VALUES('JPY',107.492)
+// INSERT INTO country_rate VALUES('CHF',1.26)
+//
+//
+// Sample data for the src table:
+// INSERT INTO SRC_LIST VALUES('chair',100,'EUR')
+// INSERT INTO SRC_LIST VALUES('table',50,'CHF')
+// INSERT INTO SRC_LIST VALUES('laptop',100000,'JPY')
+// INSERT INTO SRC_LIST VALUES('LCD display',500,'GBP')
+// INSERT INTO SRC_LIST VALUES('cellphone',65,'EUR')
+// INSERT INTO SRC_LIST VALUES('antyhing',65,'JPY')
+// INSERT INTO SRC_LIST VALUES('house',65000,'GBP')
+//
+// DELETE FROM SRC_LIST WHERE price = 65
+// UPDATE SRC_LIST SET ITEM='phone' where ITEM='chair'
+// UPDATE SRC_LIST SET PRICE=10000,CURRENCY='JPY' where ITEM='phone'
+//
+//
+//
+//
+///////////////////////////////////////////////////////////////////////////////
+///////////////////////////////////////////////////////////////////////////////
+//                                                                           //
+//                                                                           //
+// INPUT:                                                                    //
+// - 4 mandatory parms: + OPERATION (INOUT)                                  //
+//                         that parm can have the values:                    //
+//                         16 = INSERT,                                      //
+//                         32 = UPDATE,                                      //
+//                         128= KEY UPDATE,                                  //
+//                         64 = DELETE                                       //
+//                      + SUPPRESSION (IN)                                   //
+//                         the suppression index is an array that holds      //
+//                         for each non mandatory parameter (starting with   //
+//                         the 5th stored proc parm) a character saying '0'  //
+//                         if there is a value send for the correspdonding   //
+//                         parm or having a '1' saying that the value for    //
+//                         that parm was suppressed.                         //
+//                      + LSN (IN)                                           //
+//                      + COMMITTIME (IN)                                    //
+//                                                                           //
+// - 4 non madatory parms:                                                   //
+//                     + B_item   ( before key parameter)                    //
+//                     + item     ( key parameter)                           //
+//                                ( must be mapped in                        //
+//                                  ibmqrep_trg_cols table)                  //
+//                     + price    ( non key parameter)                       //
+//                                ( must be mapped in                        //
+//                                  ibmqrep_trg_cols table)                  //
+//                     + currency ( non key parameter)                       //
+//                                ( must be mapped in                        //
+//                                  ibmqrep_trg_cols table)                  //
+//                                                                           //
+//                                                                           //
+// OUTPUT:                                                                   //
+// - 1 output parm: + OPERATION (INOUT)                                      //
+//                    The operation parm is used the pass back the SQL       //
+//                    return code                                            //
+//                                                                           //
+///////////////////////////////////////////////////////////////////////////////
+///////////////////////////////////////////////////////////////////////////////
+
+
+extern "C" SQL_API_RC SQL_API_FN server1(sqlint32 *operation,
+                                         char     *suppression,
+                                         char      lsn[10],
+                                         char      committime[27],
+                                         char     *B_item,
+                                         char     *item,       //key
+                                         double    *price,
+                                         char      cur[3],
+                                         sqlint16  nullinds[8] );
+
+SQL_API_RC SQL_API_FN server1(sqlint32  *operation,
+                              char      *suppression,
+                              char       lsn[10],
+                              char       committime[27],
+                              char      *B_item,
+                              char      *item,                 //key
+                              double     *price,
+                              char       cur[3],
+                              sqlint16   nullinds[8] )
+{
+
+  EXEC SQL INCLUDE SQLCA;
+
+  EXEC SQL BEGIN DECLARE SECTION;
+  struct
+  {
+    short len;
+    char  buf[100];
+  } ITEM_VAR,B_ITEM_VAR;
+  char     CURRENCY_VAR[4];
+  float    PRICE_VAR;
+  float    RATE_VAR;
+  EXEC SQL END DECLARE SECTION;
+
+
+   //set DEBUG to true if you want to write debug info to a file
+   //DON'T forget to set the file path right
+   int        DEBUG  = false;
+   const char  path[] = "name of the file here (absolut path)";
+
+   int        i      = 0;
+   char      *supInd = suppression;
+   FILE      *out    = NULL;
+
+
+   sqluint16 len = strlen(item);
+   ITEM_VAR.len = len;
+   memcpy(&ITEM_VAR.buf[0],item,len);
+
+   len = strlen(B_item);
+   B_ITEM_VAR.len = len;
+   memcpy(&B_ITEM_VAR.buf[0],B_item,len);
+
+   memset(CURRENCY_VAR,'\0',sizeof(CURRENCY_VAR));
+   memcpy(CURRENCY_VAR, cur,3);
+   PRICE_VAR      = *price;
+
+
+   if(DEBUG)
+   {
+     //
+     // the SQL statements have to be build depending on
+     // the suppression index in compination with the
+     // nullindicator index. For debugging reasons we
+     // just print them here to a file
+     //
+
+     out = fopen(path , "a" );
+     fprintf(out, " --------- START (Operation=%d)"
+                  " --------- \n",*operation);
+
+     //
+     // print the suppression Index array
+     //
+
+     fprintf(out, "supInd =  ");
+
+     for(i=0;i<4;i++)
+     {
+       fprintf(out, "%c,",supInd[i]);
+     }
+     fprintf(out, " \n ");
+
+
+     //
+     // now print the null indicator array
+     //
+     fprintf(out, "nullinds =  ");
+
+     for(i=0;i<8;i++)
+     {
+       fprintf(out, "%d,",nullinds[i]);
+     }
+     fprintf(out, "\n ");
+
+     fprintf(out, " LSN = ");
+     if(nullinds[2] == -1)
+     {
+       //
+       //when QApply applies spilled rows NO LSN is available
+       //
+       fprintf(out, " no LSN available,"
+                     "row was probably spilled:");
+     }
+     else
+     {
+       for(i=0;i<10;i++)
+       {
+         fprintf(out, "%02X",lsn[i]);
+       }
+     }
+     fprintf(out, "\n");
+   }
+
+   //
+   // select the exchange rate from the table currency
+   // (only if the operation is not a DELETE operation)
+   if(*operation != 64 )
+   {
+     EXEC SQL SELECT REAL(RATE) INTO :RATE_VAR FROM COUNTRY_RATE
+              WHERE COUNTRY=:CURRENCY_VAR;
+
+     if(SQLCODE)
+     {
+       if(DEBUG)
+       {
+         fprintf(out,"EXEC SQL SELECT REAL(RATE) INTO :RATE_VAR "
+                     "FROM COUNTRY_RATE "
+                     "WHERE COUNTRY=:CURRENCY_VAR;\n ");
+       }
+       goto exit;
+     }
+   }
+
+
+////////////////////////////////////////////////////////////
+//                                                        //
+//                    INSERT operation                    //
+//                                                        //
+//          - all values are sent for an insert           //
+//          - suppressed value index doesn't need to      //
+//            be checked                                  //
+//                                                        //
+////////////////////////////////////////////////////////////
+ if(*operation == 16 )
+ {
+   // we can only do a proper insert if all the values are present
+   // Null values wouldn't make sence in that scenario
+   // (no need to check the suppression index, all values are
+   //  sent for an insert statement)
+   if(nullinds[5] != -1 && nullinds[6] != -1 && nullinds[7] != -1)
+   {
+     EXEC SQL INSERT INTO TARG_LIST
+              VALUES(:ITEM_VAR,REAL(:PRICE_VAR/:RATE_VAR));
+   }
+   else
+   {
+     if(DEBUG)
+     {
+       fprintf(out, "(INSERT) one of the parmeters"
+                   " is a NULL value, that "
+                  "should never be the case");
+     }
+     goto exit;
+   }
+
+ }
+
+////////////////////////////////////////////////////////////
+//                                                        //
+//            KEY UPDATE operation                        //
+//                                                        //
+//          - suppressed value index needs to be checked  //
+//            for payload parms  to find out which        //
+//            payload parms had bee updated               //
+//                                                        //
+////////////////////////////////////////////////////////////
+ else if(*operation == 128 )
+ {
+   //
+   // we don't need to  check the keys for suppression they're
+   // always sent, so just check the non key parameters
+   //
+   if( supInd[2] == '1' && supInd[3] == '1')
+   {
+     //
+     //  only the item name is updated
+     //  the other parms are suppressed
+     //  (always check for null vaulues, in this case item is
+     //   declared as a key and cannot have a null value)
+     if( nullinds[4] != -1 && nullinds[5] != -1 )
+     {
+       EXEC SQL UPDATE TARG_LIST SET ITEM=:ITEM_VAR
+                WHERE TARG_LIST.ITEM=:B_ITEM_VAR ;
+     }
+     else
+     {
+       if(DEBUG)
+       {
+         fprintf(out, "(KEY UPDATE) one of the parmeters"
+                     " is a NULL value, that "
+                      "should never be the case");
+       }
+       goto exit;
+     }
+
+   }
+   // there are vales sent for the non key parms,
+   // so concider them in the query
+   else if( supInd[2] == '0' && supInd[3] == '0')
+   {
+     if( nullinds[4] ==  0 && nullinds[5] == 0 &&
+         nullinds[6] ==  0 && nullinds[7] == 0)
+     {
+       EXEC SQL UPDATE TARG_LIST
+            SET ITEM=:ITEM_VAR,PRICE=REAL(:PRICE_VAR/:RATE_VAR)
+            WHERE TARG_LIST.ITEM=:B_ITEM_VAR;
+     }
+     else
+     {
+       if(DEBUG)
+       {
+         fprintf(out, "(KEY UPDATE) one of the parmeters "
+                      "is a NULL value, that "
+                      "should never be the case");
+       }
+       goto exit;
+     }
+
+   }
+
+ }
+////////////////////////////////////////////////////////////
+//                                                        //
+//            UPDATE operation                            //
+//            (no key update !!! )                        //
+//          - suppressed value index needs to be checked  //
+//            for payload parms  to find out which        //
+//            payload parms had bee updated               //
+//                                                        //
+////////////////////////////////////////////////////////////
+ else if(*operation == 32 )
+ {
+   //
+   // we don't need to  check the keys for suppression they're
+   // always sent
+   //
+   if( supInd[2] == '1' && supInd[3] == '1')
+   {
+     //
+     // nothing to be done here, we're not a key update
+     //
+     //
+
+   }
+   // there are vales sent for the non key parms,
+   // so concider them in the query
+   else if( supInd[2] == '0' && supInd[3] == '0')
+   {
+     if( nullinds[5] == 0 && nullinds[6] == 0 && nullinds[7] == 0)
+     {
+       EXEC SQL UPDATE TARG_LIST
+                SET PRICE=REAL(:PRICE_VAR/:RATE_VAR)
+                WHERE TARG_LIST.ITEM=:ITEM_VAR;
+     }
+     else
+     {
+       if(DEBUG)
+       {
+         fprintf(out, "(UPDATE) one of the parmeters "
+                      "is a NULL value, that "
+                      "should never be the case\n");
+       }
+       goto exit;
+     }
+
+   }
+
+ }
+////////////////////////////////////////////////////////////
+//                                                        //
+//            DELETE operation                            //
+//                                                        //
+//          - only the before key values are taken into   //
+//            account                                     //
+//                                                        //
+////////////////////////////////////////////////////////////
+ else if(*operation == 64 )
+ {
+   //the value for the delete is always send as a before
+   //parameter
+   EXEC SQL DELETE FROM TARG_LIST WHERE TARG_LIST.ITEM=:B_ITEM_VAR;
+ }
+
+
+ exit:
+
+ if(DEBUG)
+ {
+    fprintf(out, "SQLCODE(EXEC) = %d\n",SQLCODE);
+    fprintf(out,"Sqlerrm is: %s\n",sqlca.sqlerrmc);
+
+    fclose( out );
+ }
+
+
+// always return the SQLCODE by setting the operation
+// parameter to tell QApply what happened
+
+ *operation = SQLCODE;
+
+
+  return (0);
+
+}
+
+
+

@@ -1,0 +1,463 @@
+/****************************************************************************
+** (c) Copyright IBM Corp. 2007 All rights reserved.
+** 
+** The following sample of source code ("Sample") is owned by International 
+** Business Machines Corporation or one of its subsidiaries ("IBM") and is 
+** copyrighted and licensed, not sold. You may use, copy, modify, and 
+** distribute the Sample in any form without payment to IBM, for the purpose of 
+** assisting you in the development of your applications.
+** 
+** The Sample code is provided to you on an "AS IS" basis, without warranty of 
+** any kind. IBM HEREBY EXPRESSLY DISCLAIMS ALL WARRANTIES, EITHER EXPRESS OR 
+** IMPLIED, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED WARRANTIES OF 
+** MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE. Some jurisdictions do 
+** not allow for the exclusion or limitation of implied warranties, so the above 
+** limitations or exclusions may not apply to you. IBM shall not be liable for 
+** any damages you suffer as a result of using, copying, modifying or 
+** distributing the Sample, even if IBM has been advised of the possibility of 
+** such damages.
+*****************************************************************************
+**
+** SOURCE FILE NAME: udfemsrv.sqC
+**
+** SAMPLE: Call a variety of types of embedded SQL user-defined functions.
+**          
+**         This file contains the user defined functions called in 
+**         udfemcli.sqC.
+**
+** SQL STATEMENTS USED:
+**         BEGIN DECLARE SECTION
+**         END DECLARE SECTION
+**         PREPARE
+**         DECLARE CURSOR
+**         OPEN
+**         FETCH
+**         CLOSE
+**         SELECT
+**
+** OUTPUT FILE: udfemcli.out (available in the online documentation)
+*****************************************************************************
+**
+** For more information on the sample programs, see the README file.
+**
+** For information on developing C++ applications, see the Application
+** Development Guide.
+**
+** For information on using SQL statements, see the SQL Reference.
+**
+** For the latest information on programming, compiling, and running DB2
+** applications, visit the DB2 application development website at
+**     http://www.software.ibm.com/data/db2/udb/ad
+****************************************************************************/
+
+#include <stdio.h>
+#include <string.h>
+#include <stdlib.h>
+#include <sqludf.h>
+#include <sqlca.h>
+#include <sqlenv.h>
+
+#if(defined(DB2NT))
+#define PATH_SEP "\\"
+#else /* UNIX */
+#define PATH_SEP "/"
+#endif
+
+/* This UDF calculates the currency exchange by retrieving data from the 
+   currency exchange table. The table EXCHANGERATE is created in the client
+   program called 'udfemcli.sqc'. */
+#ifdef __cplusplus
+extern "C"
+#endif
+void SQL_API_FN Convert(SQLUDF_CHAR    *inSourceCurrency,  
+                        SQLUDF_DOUBLE  *inAmount, 
+                        SQLUDF_CHAR    *inResultCurrency, 
+                        SQLUDF_DOUBLE  *outResultAmount, 
+                        SQLUDF_NULLIND *sourceCurrencyNullInd,
+                        SQLUDF_NULLIND *amountNullInd,
+                        SQLUDF_NULLIND *resultCurrencyNullInd,
+                        SQLUDF_NULLIND *resultAmountNullInd,
+                        SQLUDF_TRAIL_ARGS)
+{
+  /* Arguments definition: 
+       - inSourceCurrency: Input Source Currency symbol
+       - inAmount:         Input Original Amount
+       - inResultCurrency: Input Result currency symbol
+       - outResultAmount:  Output Amount in result currency  */
+  
+  /* Declare host variables. Note that the inputs of this UDF are 
+     not host variables, thus can't be used in SQL statements directly. */
+  EXEC SQL BEGIN DECLARE SECTION;
+    char sourceCurrency[3];
+    char resultCurrency[3];
+    double exchangeRate;
+    short exchangeRateInd;
+    char stmt[500];
+  EXEC SQL END DECLARE SECTION;
+
+  struct sqlca sqlca;
+
+  /* Return Null value if any of the input is NULL. */
+  if (*sourceCurrencyNullInd == -1 || 
+      *amountNullInd == -1 ||
+      *resultCurrencyNullInd == -1)
+  {
+    *resultAmountNullInd = -1;
+    return;
+  }
+ 
+  strcpy (sourceCurrency, inSourceCurrency);
+  strcpy (resultCurrency, inResultCurrency);
+
+  /* Get the exchange rate for the input and output currency from the 
+     currencyExchange table dynamically. */
+  strcpy(stmt, "SELECT exchangeRate "
+               "FROM exchangeRate "
+               "WHERE SourceCurrency = ? AND "
+                     "ResultCurrency = ?");
+
+  EXEC SQL PREPARE s10 FROM :stmt;
+  if (sqlca.sqlcode != 0)
+  {
+    strcpy(SQLUDF_STATE,"38610");
+    sprintf(SQLUDF_MSGTX, "Prepare failed. SQLCODE = %d", sqlca.sqlcode);
+    goto exit;
+  }
+  
+  EXEC SQL DECLARE c10 CURSOR FOR s10;
+  
+  EXEC SQL OPEN c10 USING :sourceCurrency, :resultCurrency;
+  if (sqlca.sqlcode != 0)
+  {
+    strcpy(SQLUDF_STATE,"38620");
+    sprintf(SQLUDF_MSGTX, "Open cursor failed. SQLCODE = %d", sqlca.sqlcode);
+    goto exit;
+  }
+
+  EXEC SQL FETCH c10 INTO :exchangeRate :exchangeRateInd;
+  if (sqlca.sqlcode != 0)
+  {
+    strcpy(SQLUDF_STATE,"38630");
+    sprintf(SQLUDF_MSGTX, "Fetch cursor failed. SQLCODE = %d", sqlca.sqlcode);
+    goto close_cursor;
+  }
+  
+  if (exchangeRateInd == 0)
+  {
+    *outResultAmount = *inAmount * exchangeRate;
+  }
+  *resultAmountNullInd = exchangeRateInd;
+
+ close_cursor:
+  EXEC SQL CLOSE c10;
+  if (sqlca.sqlcode != 0)
+  {
+    /* Preserve the previous error */
+    if (!strcmp(SQLUDF_STATE, "00000"))
+    {
+      strcpy(SQLUDF_STATE,"38630");
+      sprintf(SQLUDF_MSGTX, "Close cursor failed. SQLCODE = %d", 
+              sqlca.sqlcode);
+    }
+  }
+ exit:
+  return;
+
+} /* Convert */
+
+/* This UDF calculates the sum of all the employees' salary in a department
+   in Canada currency and then convert the sume to US currency */
+#ifdef __cplusplus
+extern "C"
+#endif
+void SQL_API_FN SumSalary(SQLUDF_CHAR    *inDeptNo,  
+                          SQLUDF_DOUBLE  *outAmount, 
+                          SQLUDF_NULLIND *deptNoNullInd,
+                          SQLUDF_NULLIND *amountNullInd,
+                          SQLUDF_TRAIL_ARGS)
+{ 
+  /* Argument Definition:
+       - inDeptNo: Input Department number
+       - outAmount: Output Amount in US currency */
+
+  /* Declare host variables. Note that the inputs of this UDF are 
+     not host variables, thus can't be used in SQL statements directly */
+  EXEC SQL BEGIN DECLARE SECTION;
+    char deptNo[4];
+    double amount;
+    short amountInd;
+    char stmt2[500];
+  EXEC SQL END DECLARE SECTION;
+
+  struct sqlca sqlca;
+
+  /* Return NULL value if any of the input is NULL. */
+  if (*deptNoNullInd == -1)
+  {
+    *amountNullInd = -1;
+    return;
+  }
+ 
+  strcpy (deptNo, inDeptNo);
+
+  /* Call the UDF 'Convert' to convert the sum of salary from Canada 
+     currency to US currency dynamically. */
+  strcpy(stmt2, "SELECT Convert(CHAR('CA'), sum(salary), CHAR('US')) "
+               "FROM employee "
+               "WHERE workdept = ?");
+
+  EXEC SQL PREPARE s20 FROM :stmt2;
+  if (sqlca.sqlcode != 0)
+  {
+    strcpy(SQLUDF_STATE,"38710");
+    sprintf(SQLUDF_MSGTX, "Prepare failed. SQLCODE = %d", sqlca.sqlcode);
+    goto exit;
+  }
+  
+  EXEC SQL DECLARE c20 CURSOR FOR s20;
+  
+  EXEC SQL OPEN c20 USING :deptNo;
+  if (sqlca.sqlcode != 0)
+  {
+    strcpy(SQLUDF_STATE,"38720");
+    sprintf(SQLUDF_MSGTX, "Open cursor failed. SQLCODE = %d", sqlca.sqlcode);
+    goto exit;
+  }
+
+  EXEC SQL FETCH c20 INTO :amount :amountInd;
+  if (sqlca.sqlcode == -443)
+  {
+    strcpy(SQLUDF_STATE, sqlca.sqlstate);
+    strcpy(SQLUDF_MSGTX, "Call to Convert UDF failed");
+    goto close_cursor;
+  }
+
+  if (sqlca.sqlcode == 100)
+  {
+    *outAmount = 0;
+    *amountNullInd = 0;
+    goto close_cursor;
+  }
+
+  if  (sqlca.sqlcode != 0)
+  {
+    strcpy(SQLUDF_STATE,"38730");
+    sprintf(SQLUDF_MSGTX, "Fetch cursor failed. SQLCODE = %d", sqlca.sqlcode);
+    goto close_cursor;
+  }
+  
+  if (amountInd == 0)
+  {
+    *outAmount = amount;
+  }
+
+  *amountNullInd = amountInd;
+ 
+ close_cursor:
+  EXEC SQL CLOSE c20;
+  if (sqlca.sqlcode != 0)
+  {
+    /* Preserve the previous error */
+    if (!strcmp(SQLUDF_STATE, "00000"))
+    {
+      strcpy(SQLUDF_STATE,"38740");
+      sprintf(SQLUDF_MSGTX, 
+              "Close cursor failed. SQLCODE = %d", 
+              sqlca.sqlcode);
+    }
+  }
+ exit:
+  return;
+
+} /* SumSalary */
+
+/* This UDF is similar to the TableUDF in udfsrv.c. The main different is 
+   that this UDF contains embedded SQL. Also, this UDF selects from a table 
+   instead of using a data structure. */
+#ifdef __cplusplus
+extern "C"
+#endif
+void SQL_API_FN TableUDFWithSQL(/* Return row fields */
+                                SQLUDF_DOUBLE *inSalaryFactor,
+                                SQLUDF_CHAR *outName,
+                                SQLUDF_CHAR *outJob,
+                                SQLUDF_DOUBLE *outSalary,
+                                /* Return row field null indicators */
+                                SQLUDF_SMALLINT *salaryFactorNullInd,
+                                SQLUDF_SMALLINT *nameNullInd,
+                                SQLUDF_SMALLINT *jobNullInd,
+                                SQLUDF_SMALLINT *salaryNullInd,
+                                SQLUDF_TRAIL_ARGS_ALL)
+{
+  EXEC SQL BEGIN DECLARE SECTION;
+    char name[10];
+    short nameInd;
+    char job[6];
+    short jobInd;
+    double salary;
+    short salaryInd;
+  EXEC SQL END DECLARE SECTION;
+
+  struct sqlca sqlca;
+
+  EXEC SQL DECLARE c40 CURSOR FOR
+    SELECT NAME, JOB, SALARY
+    FROM STAFF;
+
+  /* SQLUDF_CALLT, SQLUDF_SCRAT, SQLUDF_STATE and SQLUDF_MSGTX are */
+  /* parts of SQLUDF_TRAIL_ARGS_ALL */
+  switch (SQLUDF_CALLT)
+  {
+    case SQLUDF_TF_OPEN:
+
+      /* Open the cursor. This cursor will remain open between calls. */
+      EXEC SQL OPEN c40;
+      if (sqlca.sqlcode != 0)
+      {
+        strcpy(SQLUDF_STATE, "38610");
+        sprintf(SQLUDF_MSGTX, 
+                "Open cursor falied with SQLCODE = %d.", 
+                SQLCODE);
+        goto err_exit;
+      }
+      break;
+
+    case SQLUDF_TF_FETCH:
+      /* Normal call UDF: Fetch next row */
+      EXEC SQL FETCH c40 INTO :name :nameInd, :job :jobInd, :salary :salaryInd;
+
+      if (SQLCODE == 100)
+      {
+        /* No more record found. */
+        strcpy(SQLUDF_STATE, "02000");
+        break;
+      }
+      else if (sqlca.sqlcode != 0)
+      {
+        strcpy(sqludf_sqlstate, "38620");
+        sprintf(SQLUDF_MSGTX, "Fetch cursor falied with SQLCODE = %d.", SQLCODE);
+        goto err_exit;
+      }
+
+      /* Check all null indicator */
+      if (nameInd == 0)
+      {
+        strcpy(outName, name);
+      }
+      *nameNullInd = nameInd;
+
+      if (jobInd == 0)
+      {
+        strcpy(outJob, job);
+      }
+      *jobNullInd = jobInd;
+
+      if (salaryInd == 0)
+      {
+        *outSalary = (*inSalaryFactor) * salary;
+      }
+      *salaryNullInd = salaryInd;
+
+      strcpy(SQLUDF_STATE, "00000");
+      
+      break;
+
+    case SQLUDF_TF_CLOSE:
+      /* Every cursor opened inside the UDF has to be closed before the UDF 
+         terminate. Otherwise, an error will occur. */
+      EXEC SQL CLOSE c40;
+      if (sqlca.sqlcode != 0)
+      {
+        strcpy(sqludf_sqlstate, "38630");
+        sprintf(SQLUDF_MSGTX, "Close cursor falied with SQLCODE = %d.", SQLCODE);
+        goto err_exit;
+      }
+      break;
+
+    case SQLUDF_TF_FIRST:
+
+    case SQLUDF_TF_FINAL:
+      break;
+
+  }
+  return;
+
+ err_exit:
+
+  sprintf(sqludf_msgtext, "A SQL error occured with sqlcode %d, tok: %s", SQLCODE, sqlca.sqlerrmc);
+  return;
+} /* TableUDFWithSQL */
+
+/* This UDF demostrates how to use LOB locators in UDF. */
+#ifdef __cplusplus
+extern "C"
+#endif
+void SQL_API_FN ClobLocatorScalarUDF(SQLUDF_LOCATOR *in_locator,  
+                                     SQLUDF_INTEGER *outNumWords,
+                                     SQLUDF_SMALLINT *clobNullInd,
+                                     SQLUDF_SMALLINT *numWordsNullInd,
+                                     SQLUDF_TRAIL_ARGS)
+{
+  EXEC SQL BEGIN DECLARE SECTION;
+    SQL TYPE IS CLOB_LOCATOR locator;
+    sqlint32 locatorLength;
+    char data[101];
+    sqlint32 i,lengthToDo;
+  EXEC SQL END DECLARE SECTION;
+
+  struct sqlca sqlca;
+
+  SQLUDF_INTEGER j, startCounting=0;
+
+  *outNumWords = 0;
+
+  locator = *in_locator;
+  
+  /* Find out the length of the input locator. */
+  EXEC SQL VALUES LENGTH(:locator) INTO :locatorLength;
+  if (sqlca.sqlcode != 0)
+  {
+    strcpy(SQLUDF_STATE, "38610");
+    sprintf(SQLUDF_MSGTX, 
+            "Can't get length of the lob. SQLCODE = %d", 
+            sqlca.sqlcode);
+    goto exit;
+  }
+
+  /* Materalize the lob 100 bytes a time. */
+  for (i=1, lengthToDo = locatorLength - i + 1 > 100 ? 100 : locatorLength - i + 1; 
+       lengthToDo > 0;
+       lengthToDo = locatorLength - i + 1> 100 ? 100 : locatorLength - i + 1, i=i+lengthToDo)
+  {
+    /* Materialize the next 100 bytes or whatever is left */
+    EXEC SQL VALUES SUBSTR(:locator, :i, :lengthToDo) INTO :data;
+    if (sqlca.sqlcode != 0)
+    {
+      strcpy(SQLUDF_STATE, "38620");
+      sprintf(SQLUDF_MSGTX, 
+              "Can't materialize the lob. SQLCODE = %d, i = %d, lengthToDo = %d", 
+              sqlca.sqlcode, i, lengthToDo);
+      goto exit;
+    }
+    
+    j = 0;
+
+    while(j < lengthToDo)
+    {
+      /* Skip the space */
+      for(; data[j] == ' ' && j < lengthToDo; j++);
+
+      if (j != lengthToDo)
+      {
+        *outNumWords = *outNumWords + 1;
+        /* Skip the word */
+        for(; data[j] != ' ' && j < lengthToDo; j++);
+      }
+    }
+  }
+ 
+  *numWordsNullInd = 0;
+
+ exit:
+  return;
+} /* end of ClobLocatorScalarUDF */

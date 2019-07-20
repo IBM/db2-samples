@@ -1,0 +1,209 @@
+/****************************************************************************
+** (c) Copyright IBM Corp. 2007 All rights reserved.
+** 
+** The following sample of source code ("Sample") is owned by International 
+** Business Machines Corporation or one of its subsidiaries ("IBM") and is 
+** copyrighted and licensed, not sold. You may use, copy, modify, and 
+** distribute the Sample in any form without payment to IBM, for the purpose of 
+** assisting you in the development of your applications.
+** 
+** The Sample code is provided to you on an "AS IS" basis, without warranty of 
+** any kind. IBM HEREBY EXPRESSLY DISCLAIMS ALL WARRANTIES, EITHER EXPRESS OR 
+** IMPLIED, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED WARRANTIES OF 
+** MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE. Some jurisdictions do 
+** not allow for the exclusion or limitation of implied warranties, so the above 
+** limitations or exclusions may not apply to you. IBM shall not be liable for 
+** any damages you suffer as a result of using, copying, modifying or 
+** distributing the Sample, even if IBM has been advised of the possibility of 
+** such damages.
+*****************************************************************************
+**
+** SOURCE FILE NAME: tbcompress.sqC 
+**    
+** SAMPLE: How to create tables with null and default value compression 
+**         option. 
+**
+** SQL STATEMENTS USED:
+**         CREATE TABLE 
+**         ALTER TABLE
+**         DROP TABLE
+**
+** OUTPUT FILE: tbcompress.out (available in the online documentation)
+*****************************************************************************
+**
+** For more information on the sample programs, see the README file.
+**
+** For information on developing C++ applications, see the Application
+** Development Guide.
+**
+** For information on using SQL statements, see the SQL Reference.
+**
+** For the latest information on programming, compiling, and running DB2
+** applications, visit the DB2 application development website at
+**     http://www.software.ibm.com/data/db2/udb/ad
+****************************************************************************/
+
+#include <string.h>
+#include <sqlenv.h>
+#include <sqlutil.h>
+#include "utilemb.h"
+#if ((__cplusplus >= 199711L) && !defined DB2HP && !defined DB2AIX) || \
+    (DB2LINUX && (__LP64__ || (__GNUC__ >= 3)) )
+   #include <iomanip>
+   #include <iostream>
+   using namespace std; 
+#else
+   #include <iomanip.h>
+   #include <iostream.h>
+#endif
+
+EXEC SQL INCLUDE SQLCA;
+
+class TbComp
+{
+  public:
+    int TbCreate();
+    int TbCompress();
+    int TbDrop();
+};
+
+// create the table
+int TbComp::TbCreate()
+{
+  int rc = 0;
+
+  cout << "\n-----------------------------------------------------------";
+  cout << "\nCreating table COMP_TAB\n\n";
+  
+  // create the table 
+  cout << "    CREATE TABLE COMP_TAB(Col1 INT NOT NULL WITH DEFAULT,\n";
+  cout << "                          Col2 CHAR(7),\n";
+  cout << "                          Col3 VARCHAR(7) NOT NULL,\n";
+  cout << "                          Col4 DOUBLE) \n";
+ 
+  EXEC SQL CREATE TABLE COMP_TAB(col1 INT NOT NULL WITH DEFAULT,
+                                 col2 CHAR(7),
+                                 col3 VARCHAR(7) NOT NULL,
+                                 col4 DOUBLE);
+                                       
+  EMB_SQL_CHECK("Table -- Create");
+
+  EXEC SQL COMMIT;
+  EMB_SQL_CHECK("Transaction -- Commit");
+
+  return rc;
+} // TbComp::TbCreate    
+
+// activate NULL and default value compression
+int TbComp::TbCompress(void)
+{
+  int rc = 0;
+    
+  cout << "\n-----------------------------------------------------------\n";
+  cout << " To activate VALUE COMPRESSION at table level and COMPRESS \n";
+  cout << " SYSTEM DEFAULT at column level \n\n";
+
+  cout << "    ALTER TABLE COMP_TAB ACTIVATE VALUE COMPRESSION \n\n";
+  cout << " Rows will be formatted using the new row format on subsequent\n";
+  cout << " insert,load and update operation, and NULL values will not be\n";
+  cout << " taking up space if applicable.\n\n";
+  
+  // If the table COMP_TAB does not have many NULL values, enabling
+  // compression will result in using more disk space than using 
+  // the old row format 
+
+  EXEC SQL ALTER TABLE COMP_TAB ACTIVATE VALUE COMPRESSION;
+
+  cout << "\n To save more disk space on system default value for column\n";
+  cout << " Col1, enter\n";
+  cout << "\n    ALTER TABLE COMP_TAB ALTER Col1 COMPRESS SYSTEM DEFAULT\n";
+  cout << "\n On subsequent insert, load, and update operations,numerical\n";
+  cout << " 0 value (occupying 4 bytes of storage) for column Col1 will\n";
+  cout << " not be saved on disk.\n";
+
+  EXEC SQL ALTER TABLE COMP_TAB ALTER Col1 COMPRESS SYSTEM DEFAULT;
+
+  cout << "\n\n To switch the table to use the old format, enter\n\n";
+  cout << "    ALTER TABLE COMP_TAB DEACTIVATE VALUE COMPRESSION\n\n";   
+  cout << " Rows inserted, loaded or updated after the ALTER statement\n";
+  cout << " will have old row format.\n";
+
+  EXEC SQL ALTER TABLE COMP_TAB DEACTIVATE VALUE COMPRESSION;
+
+  return rc;
+} // TbComp::TbCompress 
+
+// drop the table
+int TbComp::TbDrop(void)
+{
+  int rc = 0;
+
+  cout << "\n-----------------------------------------------------------";
+  cout << "\nDropping table COMP_TAB\n\n";
+  
+  // drop the table 
+  cout << "    DROP TABLE COMP_TAB\n";
+
+  EXEC SQL DROP TABLE COMP_TAB;
+  EMB_SQL_CHECK("Table -- Drop");
+
+  EXEC SQL COMMIT;
+  EMB_SQL_CHECK("Transaction -- Commit");
+
+  return rc;
+} // TbComp::Tbdrop 
+
+int main(int argc, char *argv[])
+{
+  int rc = 0;
+  CmdLineArgs check;
+  TbComp compress;
+  DbEmb db;
+
+  // check the command line arguments
+  rc = check.CmdLineArgsCheck1(argc, argv, db);
+  if (rc != 0)
+  {
+    return rc;
+  }
+  
+  cout << "\nTHIS SAMPLE SHOWS HOW TO USE NULL AND DEFAULT VALUE\n";
+  cout << "COMPRESSION OPTION AT TABLE LEVEL AND COLUMN LEVEL.\n";
+  
+  // connect to database
+    rc = db.Connect();
+  if (rc != 0)
+  {
+    return rc;
+  }
+  
+  // create a new table
+  rc = compress.TbCreate();
+  if (rc != 0)
+  {
+    return rc;
+  }
+  
+  // activate null and default value compression
+  rc = compress.TbCompress();
+  if (rc != 0)
+  {
+    return rc;
+  }
+  
+  // drop the table created
+  rc = compress.TbDrop();
+  if (rc != 0)
+  {
+    return rc;
+  }
+  
+  // disconnect from the databas
+  rc = db.Disconnect();
+  if (rc != 0)
+  {
+    return rc;
+  }
+
+  return 0;
+} // main

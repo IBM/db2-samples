@@ -1,0 +1,704 @@
+******************************************************************************
+* (c) Copyright IBM Corp. 2007 All rights reserved.
+* 
+* The following sample of source code ("Sample") is owned by International 
+* Business Machines Corporation or one of its subsidiaries ("IBM") and is 
+* copyrighted and licensed, not sold. You may use, copy, modify, and 
+* distribute the Sample in any form without payment to IBM, for the purpose of 
+* assisting you in the development of your applications.
+* 
+* The Sample code is provided to you on an "AS IS" basis, without warranty of 
+* any kind. IBM HEREBY EXPRESSLY DISCLAIMS ALL WARRANTIES, EITHER EXPRESS OR 
+* IMPLIED, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED WARRANTIES OF 
+* MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE. Some jurisdictions do 
+* not allow for the exclusion or limitation of implied warranties, so the above 
+* limitations or exclusions may not apply to you. IBM shall not be liable for 
+* any damages you suffer as a result of using, copying, modifying or 
+* distributing the Sample, even if IBM has been advised of the possibility of 
+* such damages.
+*
+******************************************************************************
+*
+*               README for SQLJ Samples on Unix
+*
+* The <install_path>/sqllib/samples/java/sqlj directory contains this README 
+* file. Where <install_path> is the location of DB2 9.7 on your hard drive.
+* The default location for <install_path> is
+*               $HOME
+*
+* This README describes how to build and run sqlj sample code for DB2 9.7.
+* The DB2 9.7 sqlj samples are located in the following directory:
+*    <install_path>/sqllib/samples/java/sqlj 
+*
+* Copy the files from this directory to your working directory prior to
+* building the sample programs. The sample programs directory is
+* typically read-only on most platforms and some samples produce output
+* files that require write permissions on the directory.
+*
+* WARNING: Some of these samples may change your database or database
+* manager configuration.  Execute the samples against a test database
+* only, such as the DB2 SAMPLE database.
+*
+******************************************************************************
+*
+*           Prepare your DB2 sample development environment
+*
+*  1) Copy the files in <install_path>/sqllib/samples/java/sqlj/* to your
+*     working directory and ensure that directory has write permission.
+*
+*  2) Modify the CLASSPATH to include:
+*         <install_path>/sqllib/java/db2java.zip
+*         <install_path>/sqllib/java/db2jcc.jar
+*         <install_path>/sqllib/java/db2jcc_license_cu.jar
+*         <install_path>/sqllib/java/<jdkDirName>/lib
+*         <install_path>/sqllib/lib
+*         <install_path>/sqllib/function
+*         <install_path>/sqllib/java/sqlj.zip
+*     where <jdkDirName> is the name of the
+*     jdk directory under <install_path>/sqllib/java.
+*
+*     Modify the PATH to include <install_path>/sqllib/java/<jdkDirName>/bin,
+*     <install_path>/sqllib/lib.
+*
+*     Please make sure that JDK_PATH( db2
+*     database manager  configuration parameter) is
+*     pointing to the <install_path>/sqllib/java/<jdkDirName>.
+*
+*     To see the dbm cfg parameter value, run the following from db2
+*     command window and look for the value of JDK_PATH. 
+*       db2 get dbm cfg
+*
+*  3) To build and run SQLj samples, you need to:
+*
+*     1. Enable tcpip:
+*          db2set DB2COMM=tcpip
+*          db2stop
+*          db2start
+*
+*     2. By default, your database configuration parameter SVCENAME is
+*        set to an available port_number. If it is not, update the database
+*        configuration with an available port number using the following
+*        command:
+*          db2 update dbm cfg using SVCENAME <port_number>
+*        where <port_number> is an available port_number.
+*
+*        After you have updated the database configuration manually, you have
+*        to restart DB2 using the following commands:
+*          db2 terminate
+*          db2stop
+*          db2start
+*
+*  4) Start the Database Manager with the following command:
+*       db2start
+*
+*  5) Create the sample database with the following command:
+*       db2sampl     
+*
+*  6) Connect to the database with the following command:
+*       db2 connect to sample
+*
+*  7) To build Stored Procedures and User Defined Functions, ensure
+*     that you have write permission on the
+*    <install_path>/sqllib/function directory.
+*
+*  8) cd to the directory containing the files copied in step 1.
+*
+******************************************************************************
+*
+*                              Building DB2 Samples
+*
+*   There are two ways to build DB2 samples: using a make utility or
+*   using the build files that are included with the DB2 sample
+*   programs.
+*
+*        o To build samples using the make utility see
+*          'BUILDING SAMPLES USING make UTILITY'.
+*        o To build samples using the build files or when you do not
+*          have a compatible make utility see 'BUILDING
+*          SAMPLES USING BUILD FILES'
+*
+******************************************************************************
+*
+*                 *** BUILDING SAMPLES USING make UTILITY ***
+*
+*      If you have a compatible make utility on your system, you
+*      can use the makefile provided. Modify the PATH
+*      variable to include the directory containing the make
+*      utility.
+*
+*      Depending on your environment, the makefile has to be
+*      modified. To run SQLj samples with the makefile provided, you 
+*      need to hardcode the password in the makefile. Here is a
+*      list of variables you can set in the SQLj makefile:
+*            o set DB to the database you want to work with.
+*            o set UID to a valid user ID if needed (By default, UID is
+*              set to the current user id).
+*            o set PWD to the password of the user ID.
+*            o set SERVER_NAME to the server's name.
+*            o set PORT_NUMBER to an available port number (By default,
+*              PORT_NUMBER is set to 50000).
+*      For more details refer to the 'VARIABLES' section
+*      in the makefile.
+*
+*      Execute the appropriate 'make' command in your working
+*      directory:
+*
+*          o make <program name> - builds the sample identified by
+*            <program name>
+*            Do not include the file extension for the
+*            program name.  E.g. make DbAuth
+*            For any dependencies refer to the individual sample.
+*
+*          o make srv   - builds only samples that can be run on the
+*            server,including routines (stored procedures and User
+*            Defined Functions).
+*
+*          o make rtn   - builds only routines.
+*
+*          o make call_rtn - builds only client programs that call
+*            routines.
+*
+*          o make client_run - builds only programs that run
+*            completely on the client (not ones that call routines).
+*
+*          o make all_client  - builds all client samples (all
+*            programs in the  'call_rtn' and 'client_run' categories).
+*
+*          o make all - builds all supplied sample programs including
+*            routines, stored procedures and UDFs.
+*
+*    o After compiling the sample, run it using normal java invocation:
+*            java  <program_name>
+*
+*     Note:
+*       The makefile provided will only work if a compatible make
+*       executable program is resident on your system in a directory
+*       included in your PATH variable. Such a make utility may be
+*       provided by another language compiler.
+*
+******************************************************************************
+*
+*                  *** BUILDING SAMPLES USING BUILD FILES ***
+*
+*          As an alternative to the makefile, the build files provided
+*          can be used to build the sqlj samples.
+*
+*          If you do not have a compatible make utility you can use
+*          the SQLj build files to build SQLj programs.
+*
+*      Building and Executing Standalone Samples
+*      -----------------------------------------
+*
+*        a) To build an SQLj program without a compatible make
+*           utility:
+*
+*                 bldsqlj <program name>
+*
+*               Note:
+*               When you build SQLj programs with the build files, do not
+*               include the file extension for the program name.
+*
+*               Like the SQLj makefile, the SQLj build files need to be
+*               updated with a valid user ID, password and an available
+*               port number.
+*
+*                bldsqlj - Builds an SQLj program. Here is the usage of
+*                          this build file:
+*
+*                bldsqlj <prog_name> (requires hardcoding user ID and
+*                                     password in the bldsqlj file)
+*                bldsqlj <prog_name> <userid> <password>
+*                bldsqlj <prog_name> <userid> <password> <server_name>
+*                bldsqlj <prog_name> <userid> <password> <server_name>
+*                                    <port_number>
+*                bldsqlj <prog_name> <userid> <password> <server_name>
+*                                    <port_number> <db_name>
+*
+*                Where,
+*                o <prog_name>   - the name of the sample program without the
+*                                  .sqlj extension.
+*                o <userid>      - user ID needed connect to the database.
+*                o <password>    - password needed to connect to the
+*                            database.
+*                o <server_name> - server's name that you work with.
+*                o <port_number> - an available port_number on the server.
+*                o <db_name>     - the name of the database where the SQL
+*                                  package will be created.
+*                                  The default is "sample".
+*
+*          NOTE: The following sqlj sample programs containing DDL statements
+*                need to be pre-compiled using sqlj <program name>.sqlj
+*                instead of the build file:
+*
+*                  TbConstr.sqlj
+*                  TbTemp.sqlj
+*                  TbUMQT.sqlj
+*
+*       o After compiling the sample, run it using normal java invocation:
+*                  java  <program_name>
+*
+*      Building and Executing Stored Procedures
+*      ----------------------------------------
+*
+*           o Build the server file using:
+*                bldsqlj <prog_name> (requires hardcoding user ID and
+*                                      password in the bldsqlj file.)
+*                bldsqlj <prog_name> <userid> <password>
+*                bldsqlj <prog_name> <userid> <password> <server_name>
+*                bldsqlj <prog_name> <userid> <password> <server_name>
+*                <port_number>
+*                bldsqlj <prog_name> <userid> <password> <server_name>
+*                <port_number> <db_name>
+*
+*             Where,
+*             o <prog_name>   - the name of the sample program without
+*                               the .sqlj extension.
+*             o <userid>      - user ID needed connect to the database.
+*             o <password>    - password needed to connect to the
+*                               database.
+*             o <server_name> - server's name that you work with.
+*             o <port_number> - an available port_number on the server.
+*             o <db_name>     - the name of the database where the SQL
+*                               package will be created. The default is
+*                               "sample".
+*
+*           o Build stored procedure using the build file:
+*                   spcat
+*
+*           o Build the corresponding client file sample using
+*                   bldsqlj as shown above.
+*
+*           o Run the sample using normal java invocation:
+*                   java  <Client_prog_name>
+*
+*      Building and Executing User Defined Functions:
+*      ----------------------------------------------
+*
+*           o Build server file using:
+*                    bldsqlj <prog_name> (requires hardcoding user ID and
+*                                           password in the bldsqlj file.)
+*                    bldsqlj <prog_name> <userid> <password>
+*                    bldsqlj <prog_name> <userid> <password> <server_name>
+*                    bldsqlj <prog_name> <userid> <password> <server_name>
+*                            <port_number>
+*                    bldsqlj <prog_name> <userid> <password> <server_name>
+*                            <port_number> <db_name>
+*                  Where,
+*                  o <prog_name>   - the name of the sample program without
+*                                    the .sqlj extension.
+*                  o <userid>      - user ID needed connect to the database.
+*                  o <password>    - password needed to connect to the
+*                                    database.
+*                  o <server_name> - server's name that you work with.
+*                  o <port_number> - an available port_number on the server.
+*                  o <db_name>     - the name of the database where the SQL
+*                                    package will be created. The default is
+*                                    "sample".
+*
+*           o Build the User Defined Functions using build files:
+*                   udfcat or udfjcat.
+*
+*            o Build the corresponding client file sample using
+*                   bldsqlj as shown above.
+* 
+*            o Run the sample using normal java invocation:
+*                   java  <Client_prog_name>
+*
+*     Building and Running the Data Source Samples
+*     --------------------------------------------
+*
+*      1. Obtain and set up non DB2 packages
+*
+*         The following packages must be installed in order to build and run
+*         the Data Source Samples.
+*
+*         Package              Location of Package
+*         ====================================================================
+*         JNDI 1.2.1 class     http://java.sun.com/products/jndi/
+*                                                   #downloadLibraries
+*
+*         File System Service  http://java.sun.com/products/jndi/
+*                                                   #downloadProvider 1.2
+*
+*         JDBC 2.0 Optional    http://java.sun.com/products/jdbc/download.html
+*	                                            #spec Package
+*
+*      To build this set of SQLJ samples, update your CLASSPATH to
+*      include the following files:
+*          jndi.jar
+*          fscontext.jar
+*          providerutil.jar
+*          jdbc20_stdext.jar
+*
+*      For instance, if you have these jar files located at $HOME/JAR, your
+*      CLASSPATH should looks like:
+*          CLASSPATH=...:$HOME/JAR/jndi.jar:$HOME/JAR/fscontext.jar:
+*                    $HOME/JAR/providerutil.jar:$HOME/JAR/jdbc2_0-stdext.jar
+*
+*      You also have to update your CLASSPATH to include the path to the
+*      directory where jndi.properties is located. For instance, if
+*      jndi.properties is located under $HOME/JAR, your CLASSPATH should
+*      looks like:
+*          CLASSPATH=...:$HOME/JAR/jndi.jar:$HOME/JAR/fscontext.jar:
+*                   $HOME/JAR/providerutil.jar:$HOME/JAR/jdbc2_0-stdext.jar:$HOME/JAR/
+*
+*        NOTE:
+*           The SPI (Service Provider Interface) for storing and lookup of
+*           DataSources in the JNDI is used as the File System. You can
+*           modify jndi.properties if you want to use any other SPI for the
+*           JNDI, for instance, LDAP, DNS, etc.
+*
+*           Please note that the appropriate jar files have to be presented
+*           in the CLASSPATH. No changes are required to run the SQLJ sample
+*           programs.
+*
+*      2. Modify Property Files
+*
+*         Modify the property files DS1.prop, DS2.prop, DS3.prop to reflect
+*         your environment.
+*         Here is a list of variables you have to modify in these property
+*         files:
+*
+*           o serverName - set to the server name.
+*           o portNumber - set to an available port number (by default set
+*                          to 50000)
+*           o databaseName - set to the database (by default set to
+*                           'sample')
+*           o userName - set to a valid user ID.
+*           o password - set to the user ID's password.
+*
+*      3. Create the DataSources used in this set of SQLJ programs
+*
+*        a) Compile the program createRegisterDS.java with the following
+*           command:
+*
+*               javac createRegisterDS.java
+*
+*        b) Run the createRegisterDS.java program with the following
+*           command:
+*
+*               java createRegisterDS <property_file>
+*
+*        There are three sample property files. They are as follows:
+*
+*           1. DS1.prop: jdbc/defaultDataSource
+*              - used in DataSource1.sqlj
+*
+*           2. DS2.prop: jdbc/DB2SimpleDataSource_ds1
+*              - used in Batch1Demo.sqlj, Batch2Demo.sqlj, Batch3Demo.sqlj,
+*                DataSource2.sqlj, ScrollIterDemo.sqlj
+*
+*           3. DS3.prop: jdbc/DB2SimpleDataSource_ds2
+*              - used in DataSource2.sqlj
+*
+*        The DataSources are then created and registered in the JNDI.
+*
+*      4. Create a few sample tables in the SAMPLE database
+*
+*        a) Compile the CreateDemoSchema.sqlj sample program:
+*
+*               sqlj CreateDemoSchema.sqlj
+*
+*        b) Run the CreateDemoSchema.sqlj sample program:
+*
+*               java CreateDemoSchema
+*
+*           This will create a schema and four tables in the SAMPLE
+*           database.
+*           The four tables are as follows:
+*
+*              Batch_Test1 // used in Batch1Demo, Batch2Demo
+*              Batch_Test2 // used in Batch2Demo
+*              Scroll_Test
+*              BlobClob_Tab
+*
+*      5. Compile and Customize
+*
+*           Compile and Customize the demo sample programs using the provided
+*           build file
+*           bldsqljds:
+*
+*                bldsqljds <program_file>
+*
+*           For instance, if you want to compile and customize
+*           DbConnDataSource.sqlj, do the following:
+*
+*                bldsqljds DbConnDataSource
+*
+*      Run demo sample programs by the following command:
+*
+*           java <program_filename>
+*
+*      For instance, if you want to run Batch1Demo.sqlj, do the following
+*      command:
+*
+*           java Batch1Demo
+*
+******************************************************************************
+*
+*              Common file Descriptions
+* 
+* The following are the common files for SQLj samples. For more
+* information on these files, refer to the program source files.
+*
+******************************************************************************
+*
+* Batch files
+*
+* bldsqlj        - build file for application programs
+*
+******************************************************************************
+*
+* Common Utility Function files
+*
+* makefile       - Makefile for sample programs
+* Util.sqlj      - utilities used by most programs.
+*
+******************************************************************************
+*
+*               SQLj Samples Design
+*
+* The Java SQLj sample programs form an object-based design reflecting
+* the component nature of DB2. Related samples demonstrate a specific
+* level of database programming. Each level is identified by the first
+* two characters of the sample name. Here are the database levels
+* represented by the samples:
+*
+* Identifier     DB2 Level
+*
+*     Ap        Applet Level.
+*     Db        Database Level.
+*     Tb        Table Level.
+*     Dt        Data Type Level.
+*     Ud        UDF Level.
+*     Sp        Stored Procedure Level.
+*
+******************************************************************************
+*
+*               SQLj Sample File Descriptions
+*
+* The following are the SQLj sample files included with DB2. For more
+* information on the sample programs, refer to the program source
+* files.
+*
+******************************************************************************
+*
+* Applet Level
+*
+* Applt.html    - HTML file for Applt.sqlj
+* Applt.sqlj    - How to create applets
+*
+******************************************************************************
+*
+* Database Level
+*
+* DbAuth.sqlj   - How to grant/display/revoke authorities at database
+*                 level.
+* DbConn.sqlj   - How to connect and disconnect from a database.
+* DbMCon.sqlj   - How to connect and disconnect from multiple
+*                 databases.
+* DbUse.sqlj    - How to use database objects.
+*
+******************************************************************************
+*
+* Table Level
+*
+* LargeRid.sqlj             - How to enable Large RIDs support on both new
+*                             tables/
+*                             tablespaces and existing tables/tablespaces.
+*
+*                             PREREQUISITE: Run the script LargeRid_setup.db2
+*                             before running this sample. Run the LargeRid_cleanup.db2
+*                             script to cleanup the database objects after running the
+*                             sample.
+*
+* LargeRidScrpt             - CLP script that calls two scripts LargeRid_cleanup.db2
+*                             and LargeRid_setup.db2 respectively
+*
+* LargeRid_setup.db2        - CLP script that issues CREATE TABLE statements for 
+*                             the sample LargeRid.sqlj
+*
+* LargeRid_cleanup.db2      - CLP script that issues DROP TABLE statements for 
+*                             the sample LargeRid.sqlj
+* 
+* TbAST.sqlj                - How to use staging table for updating deferred
+*                             AST.
+*
+*                             PREREQUISITE: Run the script TbAST_setup.db2
+*                             before running this sample. Run the TbAST_cleanup.db2
+*                             script to cleanup the database objects after running
+*                             the sample.
+*
+* TbASTScrpt                - CLP script that calls two scripts TbAST_cleanup.db2
+*                             and TbAST_setup.db2 respectively
+*                             
+* TbAST_setup.db2           - CLP script that issues CREATE TABLE statements for 
+*                             the sample TbAST.sqlj
+*
+* TbAST_cleanup.db2         - CLP script that issues DROP TABLE statements for 
+*                             the sample TbAST.sqlj
+*
+* TbCompress.sqlj           - How to create tables with null and default
+*                             value compression option.
+* TbConstr.sqlj             - How to work with table constraints.
+* TbCreate.sqlj             - How to create, alter, and drop tables.
+* TbIdent.sqlj              - How to use Identity Columns.
+* TbInfo.sqlj               - How to get and set information at a table
+*                             level.
+* TbMod.sqlj                - How to modify information in a table.
+* TbOnlineInx.sqlj          - How to create and reorg indexes on a table.
+* TbPriv.sqlj               - How to grant/display/revoke privileges at a
+*                             table level.
+* TbRead.sqlj               - How to read information in a table.
+* TbRowcompress.sqlj        - How to perform row compression on a table.
+*
+*                             PREREQUISITE: Run the script TbRowcompress_setup.db2
+*                             before running this sample. Run the
+*                             TbRowcompress_cleanup.db2 script to cleanup the
+*                             database objects after running the sample.
+*
+* TbRowcompressScrpt        - CLP script that calls two scripts 
+*                             TbRowcompress_cleanup.db2 and TbRowcompress_setup.db2 
+*                             respectively
+*
+* TbRowcompress_setup.db2   - CLP script that issues CREATE TABLE statements for 
+*                             the sample TbRowcompress.sqlj
+*
+* TbRowcompress_cleanup.db2 - CLP script that issues DROP TABLE statements for 
+*                             the sample TbRowcompress.sqlj
+*
+* TbRunstats.sqlj           - How to perform runstats on a table.
+* TbSel.sqlj                - How to select from each of: insert, update,
+*                             delete.
+* TbTemp.sqlj               - How to use Declared Temporary Table.
+* TbTrig.sqlj               - How to use a trigger on a table.
+* TbUMQT.sqlj               - How to use user materialzed query tables
+*                             (summary tables).
+* SetIntegrity.sqlj         - How to perform online SET INTEGRITY on a table.
+*
+*                             PREREQUISITE: Run the script SetIntegrity_setup.db2
+*                             before running this sample. Run the
+*                             SetIntegrity_cleanup.db2 script to cleanup the
+*                             database objects after running the sample.
+*
+* SetIntegrityScrpt         - CLP script that calls two scripts SetIntegrity_cleanup.db2
+*                             and SetIntegrity_setup.db2 respectively 
+*
+* SetIntegrity_setup.db2    - CLP script that issues CREATE TABLE statements for 
+*                             the sample SetIntegrity.sqlj
+*
+* SetIntegrity_cleanup.db2  - CLP script that issues DROP TABLE statements for 
+*                             the sample SetIntegrity.sqlj
+*
+******************************************************************************
+*
+* Data Type Level
+*
+* DtUdt.sqlj     - How to create/use/drop user defined distinct types.
+*
+******************************************************************************
+*
+* UDF Level
+*
+* UDFcli.sqlj    - Call the UDFs in UDFsrv.java.
+* UDFCreate.db2  - CLP script to catalog the Java UDFs contained in
+*                  UDFsrv.java.
+* UDFDrop.db2    - CLP script to uncatalog the Java UDFs contained in
+*                  UDFsrv.java.
+* UDFjcli.sqlj   - Call the UDFs in UDFjsrv.java.
+* UDFjCreate.db2 - CLP script to catalog the Java UDFs contained in
+*                  UDFjsrv.java.
+* UDFjDrop.db2   - CLP script to uncatalog the Java UDFs contained in
+*                  UDFjsrv.java.
+* UDFjsrv.java   - Provide UDFs to be called by UDFjcli.sqlj.
+* UDFsrv.java    - Provide UDFs to be called by UDFcli.sqlj.
+*
+******************************************************************************
+*
+* Stored Procedure Level
+*
+* SpCreate.db2  - CLP script to issue CREATE PROCEDURE statements
+* SpDrop.db2    - CLP script to drop stored procedures from the catalog
+* SpClient.sqlj - Client application that calls the stored procedures.
+* SpServer.sqlj - Stored procedure functions built and run on the
+*                 server
+* SpIterat.sqlj - Iterator class file for SpServer.sqlj.
+*
+******************************************************************************
+*
+* Java Beans Samples
+*
+* CreateEmployee.sqlj	- How to create an employee record.
+* GeneratePayroll.sqlj	- How to generate payroll reports by
+*                         department.
+*
+******************************************************************************
+*
+* Data Source Sample Files
+*
+* Batch1Demo.sqlj:       - setBatchLimit(2) creates two Execution Contexts
+*                          ex1/ex2.Inserts two rows using  ex1 and perform
+*                          executeBatch()Does a JDBC select to verify 2 rows
+*                          in table.Runs two update statements for the two
+*                          rows with ex2(DOES NOT do an executeBatch())
+*                          Performs an SQLJ select to verify that the two
+*                          rows were updated - The SQLJ select will trigger
+*                          an implicit Batch Execute
+*
+* Batch2Demo.sqlj:       - setBatching(true)  BatchLimit(4) Uses two tables
+*                          Batch_Test1/Batch_Test2. Loops for three times
+*                          (insert statement on Batch_Test2).
+*                          Batch_Test2 should have no rows
+*                          Verifies through JDBC select (as implicit Execute
+*                          OR  executeBatch() has not been called)
+*                          setBatchLimit(1)
+*                          Inserts one row into Batch_Test1. This should
+*                          create new Batch and previous batch should be
+*                          implicitly executed.Batch_Test2 should have three
+*                          rows. Batch_Test1 should have
+*                          one row (after SQLJ select has been executed)
+*
+* Batch3Demo.sqlj        - setBatching(true)  setBatchLimit(UNLIMITED_BATCH)
+*                          inserts fifty rows into Batch_Test1
+*                          executeBatch().Verifies the number of rows
+*                          through SELECT count(*) from Batch_Test1
+*
+* DbConnDataSource.sqlj  - This is a sample program using the
+*                          defaultContext.Because there is no context
+*                          specified in the SELECT statement, the
+*                          underlying context should be obtained from the
+*                          DataSource jdbc/defaultDataSource, which is
+*                          registered using createRegisterDS.java and DS1.prop
+*
+* DbConMDataSources.sqlj - This sample program  is using the contexts
+*                          TesCtx1 & TestCtx2.The underlying connection
+*                          from ctx1 is obtained  from the  DataSource
+*                          jdbc/DB2SimpleDataSource_ds1.Another
+*                          connection from ctx2 is obtained from
+*                          jdbc/DB2SimpleDataSource_ds2
+*
+* ScrollIterDemo.sqlj    - This program illustrates usage of Named and
+*                          Positional Scrollable Iterators in SQLJ. Also, it
+*                          shows how a Scrollable Iterator can be
+*                          used for positioned update by implementing
+*                          ForUpdate Clause. However,
+*                          updates will work only when the program is
+*                          customized.
+*
+* BlobClobDemo.sqlj      - This sample program shows the way to access
+*                          Blob/Clob fields in DB2 tables. For accessing
+*                          LOBs in S/390 Db2 additional auxiliary tables
+*                          and indexes need to be created on server side.
+*
+* createRegisterDS.java  - Creates and registers dataSources as specified
+*                          by the property files.The DataSources will be
+*                          created in the temp directory. The file uses
+*                          File System SPI to create a .bindings file in
+*                          the temp directory C:/temp (as defined in
+*                          jndi.properties).
+*
+* CreateDemoSchema.sqlj  - This program creates the schema for the
+*                          DataSource Demo programs.
+*
+******************************************************************************
+

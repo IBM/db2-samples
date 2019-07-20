@@ -1,0 +1,1307 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<xs:schema xmlns:xs="http://www.w3.org/2001/XMLSchema">
+	
+	<xs:annotation>
+		<xs:documentation xml:lang="en">
+			XML Schema of messages sent by Q Capture to a subscriber.
+			(C) Copyright IBM CORPORATION 2003
+		</xs:documentation>
+	</xs:annotation>
+
+
+	<!-- Message type definition -->
+
+	<xs:element name="msg" type="msgType"/>
+
+	<xs:complexType name="msgType">
+		<xs:choice>
+			<xs:element name="trans" type="transType"/>
+			<xs:element name="rowOp" type="rowOpType"/>
+			<xs:element name="subDeactivated" type="subDeactivatedType"/>
+			<xs:element name="loadDoneRcvd" type="loadDoneRcvdType"/>
+			<xs:element name="heartbeat" type="heartbeatType"/>
+			<xs:element name="errorRpt" type="errorRptType"/>
+			<xs:element name="subSchema" type="subSchemaType"/>
+			<xs:element name="lob" type="lobType"/>
+			<xs:element name="addColumn" type="addColumnType"/>
+		</xs:choice>
+		<xs:attribute name="version" type="xs:string" use="required"/>	
+		<xs:attribute name="dbName" type="xs:string" use="required"/>	
+	</xs:complexType>
+
+
+	<!-- Transaction type definition -->
+
+	<xs:complexType name="transType">
+		<xs:choice maxOccurs="unbounded">
+			<xs:element name="insertRow" type="singleValRowType"/>
+			<xs:element name="deleteRow" type="singleValRowType"/>
+			<xs:element name="updateRow" type="updateRowType"/>
+		</xs:choice>
+		<xs:attribute name="isLast" type="xs:boolean" use="required"/>	
+		<xs:attribute name="segmentNum" type="xs:positiveInteger" use="required"/>	
+		<xs:attribute name="cmitLSN" type="xs:string" use="required"/>
+		<xs:attribute name="cmitTime" type="xs:dateTime" use="required"/>	
+		<xs:attribute name="authID" type="xs:string"/>	
+		<xs:attribute name="correlationID" type="xs:string"/>	
+		<xs:attribute name="planName" type="xs:string"/>	
+	</xs:complexType>
+
+
+	<!-- LOB type definition -->
+
+	<xs:complexType name="lobType">
+		<xs:choice>		
+			<xs:element name="blob" nillable="true">
+				<xs:complexType>
+					<xs:simpleContent>
+						<xs:extension base="blob"/> 
+					</xs:simpleContent>
+				</xs:complexType>
+			</xs:element>
+			<xs:element name="clob" nillable="true">
+				<xs:complexType>
+					<xs:simpleContent>
+						<xs:extension base="clob"/> 
+					</xs:simpleContent>
+				</xs:complexType>
+			</xs:element>
+			<xs:element name="dbclob" nillable="true">
+				<xs:complexType>
+					<xs:simpleContent>
+						<xs:extension base="dbclob"/> 
+					</xs:simpleContent>
+				</xs:complexType>
+			</xs:element>
+		</xs:choice>
+		<xs:attributeGroup ref="commonAttrGroup"/>	
+		<xs:attribute name="isLast" type="xs:boolean" use="required"/>	
+		<xs:attribute name="colName" type="xs:string" use="required"/>	
+		<xs:attribute name="rowNum" type="xs:positiveInteger" use="required"/>	
+		<xs:attribute name="totalDataLen" type="xs:nonNegativeInteger" use="required"/>	
+		<xs:attribute name="dataLen" type="xs:nonNegativeInteger" use="required"/>	
+	</xs:complexType>
+
+
+	<!-- Row operation type definition -->
+
+	<xs:complexType name="rowOpType">
+		<xs:choice>
+			<xs:element name="insertRow" type="singleValRowType"/>
+			<xs:element name="deleteRow" type="singleValRowType"/>
+			<xs:element name="updateRow" type="updateRowType"/>
+		</xs:choice>
+		<xs:attribute name="isLast" type="xs:boolean"/>	
+		<xs:attribute name="cmitLSN" type="xs:string" use="required"/>
+		<xs:attribute name="cmitTime" type="xs:dateTime" use="required"/>	
+		<xs:attribute name="authID" type="xs:string"/>	
+		<xs:attribute name="correlationID" type="xs:string"/>	
+		<xs:attribute name="planName" type="xs:string"/>	
+	</xs:complexType>
+
+
+	<!-- Row types and their common attribute group definition -->
+
+	<xs:complexType name="singleValRowType">
+		<xs:sequence  maxOccurs="unbounded">
+			<xs:element name="col" type="singleValColType"/>
+		</xs:sequence>
+		<xs:attributeGroup ref="commonAttrGroup"/>	
+		<xs:attributeGroup ref="opAttrGroup"/>	
+	</xs:complexType>
+
+	<xs:complexType name="updateRowType">
+		<xs:sequence  maxOccurs="unbounded">
+			<xs:element name="col" type="updateValColType"/>
+		</xs:sequence>
+		<xs:attributeGroup ref="commonAttrGroup"/>	
+		<xs:attributeGroup ref="opAttrGroup"/>	
+	</xs:complexType>
+
+
+
+	<!-- Column types and their common attribute group definition -->
+
+	<xs:complexType name="singleValColType">
+		<xs:choice>
+			<xs:element name="smallint" nillable="true">
+				<xs:complexType>
+					<xs:simpleContent>
+						<xs:extension base="smallint"/> 
+					</xs:simpleContent>
+				</xs:complexType>
+			</xs:element>
+			<xs:element name="integer" nillable="true">
+				<xs:complexType>
+					<xs:simpleContent>
+						<xs:extension base="integer"/> 
+					</xs:simpleContent>
+				</xs:complexType>
+			</xs:element>
+			<xs:element name="bigint" nillable="true">
+				<xs:complexType>
+					<xs:simpleContent>
+						<xs:extension base="bigint"/> 
+					</xs:simpleContent>
+				</xs:complexType>
+			</xs:element>
+			<xs:element name="float" nillable="true">
+				<xs:complexType>
+					<xs:simpleContent>
+						<xs:extension base="float"/> 
+					</xs:simpleContent>
+				</xs:complexType>
+			</xs:element>
+			<xs:element name="real" nillable="true">
+				<xs:complexType>
+					<xs:simpleContent>
+						<xs:extension base="real"/> 
+					</xs:simpleContent>
+				</xs:complexType>
+			</xs:element>
+			<xs:element name="double" nillable="true">
+				<xs:complexType>
+					<xs:simpleContent>
+						<xs:extension base="double"/> 
+					</xs:simpleContent>
+				</xs:complexType>
+			</xs:element>
+			<xs:element name="decimal" nillable="true">
+				<xs:complexType>
+					<xs:simpleContent>
+						<xs:extension base="decimal"/> 
+					</xs:simpleContent>
+				</xs:complexType>
+			</xs:element>
+			<xs:element name="decfloat" nillable="true">
+				<xs:complexType>
+					<xs:simpleContent>
+						<xs:extension base="decfloat"/> 
+					</xs:simpleContent>
+				</xs:complexType>
+			</xs:element>
+			<xs:element name="date" nillable="true">
+				<xs:complexType>
+					<xs:simpleContent>
+						<xs:extension base="date"/> 
+					</xs:simpleContent>
+				</xs:complexType>
+			</xs:element>
+			<xs:element name="time" nillable="true">
+				<xs:complexType>
+					<xs:simpleContent>
+						<xs:extension base="time"/> 
+					</xs:simpleContent>
+				</xs:complexType>
+			</xs:element>
+			<xs:element name="timestamp" nillable="true">
+				<xs:complexType>
+					<xs:simpleContent>
+						<xs:extension base="timestamp"/> 
+					</xs:simpleContent>
+				</xs:complexType>
+			</xs:element>
+			<xs:element name="char" nillable="true">
+				<xs:complexType>
+					<xs:simpleContent>
+						<xs:extension base="char"/> 
+					</xs:simpleContent>
+				</xs:complexType>
+			</xs:element>
+			<xs:element name="varchar" nillable="true">
+				<xs:complexType>
+					<xs:simpleContent>
+						<xs:extension base="varchar"/> 
+					</xs:simpleContent>
+				</xs:complexType>
+			</xs:element>
+			<xs:element name="longvarchar" nillable="true">
+				<xs:complexType>
+					<xs:simpleContent>
+						<xs:extension base="longvarchar"/> 
+					</xs:simpleContent>
+				</xs:complexType>
+			</xs:element>
+			<xs:element name="bitchar" nillable="true">
+				<xs:complexType>
+					<xs:simpleContent>
+						<xs:extension base="bitchar"/> 
+					</xs:simpleContent>
+				</xs:complexType>
+			</xs:element>
+			<xs:element name="bitvarchar" nillable="true">
+				<xs:complexType>
+					<xs:simpleContent>
+						<xs:extension base="bitvarchar"/> 
+					</xs:simpleContent>
+				</xs:complexType>
+			</xs:element>
+			<xs:element name="bitlongvarchar" nillable="true">
+				<xs:complexType>
+					<xs:simpleContent>
+						<xs:extension base="bitlongvarchar"/> 
+					</xs:simpleContent>
+				</xs:complexType>
+			</xs:element>
+			<xs:element name="graphic" nillable="true">
+				<xs:complexType>
+					<xs:simpleContent>
+						<xs:extension base="graphic"/> 
+					</xs:simpleContent>
+				</xs:complexType>
+			</xs:element>
+			<xs:element name="vargraphic" nillable="true">
+				<xs:complexType>
+					<xs:simpleContent>
+						<xs:extension base="vargraphic"/> 
+					</xs:simpleContent>
+				</xs:complexType>
+			</xs:element>
+			<xs:element name="longvargraphic" nillable="true">
+				<xs:complexType>
+					<xs:simpleContent>
+						<xs:extension base="longvargraphic"/> 
+					</xs:simpleContent>
+				</xs:complexType>
+			</xs:element>
+			<xs:element name="rowid" nillable="true">
+				<xs:complexType>
+					<xs:simpleContent>
+						<xs:extension base="rowid"/> 
+					</xs:simpleContent>
+				</xs:complexType>
+			</xs:element>
+			<xs:element name="blob" nillable="true">
+				<xs:complexType>
+					<xs:simpleContent>
+						<xs:extension base="blob"/> 
+					</xs:simpleContent>
+				</xs:complexType>
+			</xs:element>
+			<xs:element name="clob" nillable="true">
+				<xs:complexType>
+					<xs:simpleContent>
+						<xs:extension base="clob"/> 
+					</xs:simpleContent>
+				</xs:complexType>
+			</xs:element>
+			<xs:element name="dbclob" nillable="true">
+				<xs:complexType>
+					<xs:simpleContent>
+						<xs:extension base="dbclob"/> 
+					</xs:simpleContent>
+				</xs:complexType>
+			</xs:element>
+			<xs:element name="xml" nillable="true">
+				<xs:complexType>
+					<xs:simpleContent>
+						<xs:extension base="xml"/> 
+					</xs:simpleContent>
+				</xs:complexType>
+			</xs:element>
+		</xs:choice>
+		<xs:attributeGroup ref="colAttrGroup"/>	
+	</xs:complexType>
+
+	<xs:complexType name="updateValColType">
+		<xs:choice>
+			<xs:element name="smallint">
+				<xs:complexType>
+					<xs:sequence>
+						<xs:sequence minOccurs="0">
+							<xs:element name="beforeVal" nillable="true"> 
+								<xs:complexType>
+									<xs:simpleContent>
+										<xs:extension base="smallint">
+											<xs:attribute name="invalidData" type="xs:boolean" default="false"/>
+											<xs:attribute name="rawData" type="xs:boolean" default="false"/>
+										</xs:extension>
+									</xs:simpleContent>
+								</xs:complexType>
+							</xs:element>
+						</xs:sequence>
+						<xs:element name="afterVal" nillable="true">
+							<xs:complexType>
+								<xs:simpleContent>
+									<xs:extension base="smallint">
+										<xs:attribute name="invalidData" type="xs:boolean" default="false"/>
+										<xs:attribute name="rawData" type="xs:boolean" default="false"/>
+									</xs:extension>
+								</xs:simpleContent>
+							</xs:complexType>
+						</xs:element>
+					</xs:sequence>
+				</xs:complexType>
+			</xs:element>
+			<xs:element name="integer">
+				<xs:complexType>
+					<xs:sequence>
+						<xs:sequence minOccurs="0">
+							<xs:element name="beforeVal" nillable="true"> 
+								<xs:complexType>
+									<xs:simpleContent>
+										<xs:extension base="integer">
+											<xs:attribute name="invalidData" type="xs:boolean" default="false"/>
+											<xs:attribute name="rawData" type="xs:boolean" default="false"/>
+										</xs:extension>
+									</xs:simpleContent>
+								</xs:complexType>
+							</xs:element>
+						</xs:sequence>
+						<xs:element name="afterVal" nillable="true">
+							<xs:complexType>
+								<xs:simpleContent>
+									<xs:extension base="integer">
+										<xs:attribute name="invalidData" type="xs:boolean" default="false"/>
+										<xs:attribute name="rawData" type="xs:boolean" default="false"/>
+									</xs:extension>
+								</xs:simpleContent>
+							</xs:complexType>
+						</xs:element>
+					</xs:sequence>
+				</xs:complexType>
+			</xs:element>
+			<xs:element name="bigint">
+				<xs:complexType>
+					<xs:sequence>
+						<xs:sequence minOccurs="0">
+							<xs:element name="beforeVal" nillable="true"> 
+								<xs:complexType>
+									<xs:simpleContent>
+										<xs:extension base="bigint">
+											<xs:attribute name="invalidData" type="xs:boolean" default="false"/>
+											<xs:attribute name="rawData" type="xs:boolean" default="false"/>
+										</xs:extension>
+									</xs:simpleContent>
+								</xs:complexType>
+							</xs:element>
+						</xs:sequence>
+						<xs:element name="afterVal" nillable="true">
+							<xs:complexType>
+								<xs:simpleContent>
+									<xs:extension base="bigint">
+										<xs:attribute name="invalidData" type="xs:boolean" default="false"/>
+										<xs:attribute name="rawData" type="xs:boolean" default="false"/>
+									</xs:extension>
+								</xs:simpleContent>
+							</xs:complexType>
+						</xs:element>
+					</xs:sequence>
+				</xs:complexType>
+			</xs:element>
+			<xs:element name="float">
+				<xs:complexType>
+					<xs:sequence>
+						<xs:sequence minOccurs="0">
+							<xs:element name="beforeVal" nillable="true"> 
+								<xs:complexType>
+									<xs:simpleContent>
+										<xs:extension base="float">
+											<xs:attribute name="invalidData" type="xs:boolean" default="false"/>
+											<xs:attribute name="rawData" type="xs:boolean" default="false"/>
+										</xs:extension>
+									</xs:simpleContent>
+								</xs:complexType>
+							</xs:element>
+						</xs:sequence>
+						<xs:element name="afterVal" nillable="true">
+							<xs:complexType>
+								<xs:simpleContent>
+									<xs:extension base="float">
+										<xs:attribute name="invalidData" type="xs:boolean" default="false"/>
+										<xs:attribute name="rawData" type="xs:boolean" default="false"/>
+									</xs:extension>
+								</xs:simpleContent>
+							</xs:complexType>
+						</xs:element>
+					</xs:sequence>
+				</xs:complexType>
+			</xs:element>
+			<xs:element name="real">
+				<xs:complexType>
+					<xs:sequence>
+						<xs:sequence minOccurs="0">
+							<xs:element name="beforeVal" nillable="true"> 
+								<xs:complexType>
+									<xs:simpleContent>
+										<xs:extension base="real">
+											<xs:attribute name="invalidData" type="xs:boolean" default="false"/>
+											<xs:attribute name="rawData" type="xs:boolean" default="false"/>
+										</xs:extension>
+									</xs:simpleContent>
+								</xs:complexType>
+							</xs:element>
+						</xs:sequence>
+						<xs:element name="afterVal" nillable="true">
+							<xs:complexType>
+								<xs:simpleContent>
+									<xs:extension base="real">
+										<xs:attribute name="invalidData" type="xs:boolean" default="false"/>
+										<xs:attribute name="rawData" type="xs:boolean" default="false"/>
+									</xs:extension>
+								</xs:simpleContent>
+							</xs:complexType>
+						</xs:element>
+					</xs:sequence>
+				</xs:complexType>
+			</xs:element>
+			<xs:element name="double">
+				<xs:complexType>
+					<xs:sequence>
+						<xs:sequence minOccurs="0">
+							<xs:element name="beforeVal" nillable="true"> 
+								<xs:complexType>
+									<xs:simpleContent>
+										<xs:extension base="double">
+											<xs:attribute name="invalidData" type="xs:boolean" default="false"/>
+											<xs:attribute name="rawData" type="xs:boolean" default="false"/>
+										</xs:extension>
+									</xs:simpleContent>
+								</xs:complexType>
+							</xs:element>
+						</xs:sequence>
+						<xs:element name="afterVal" nillable="true">
+							<xs:complexType>
+								<xs:simpleContent>
+									<xs:extension base="double">
+										<xs:attribute name="invalidData" type="xs:boolean" default="false"/>
+										<xs:attribute name="rawData" type="xs:boolean" default="false"/>
+									</xs:extension>
+								</xs:simpleContent>
+							</xs:complexType>
+						</xs:element>
+					</xs:sequence>
+				</xs:complexType>
+			</xs:element>
+			<xs:element name="decimal">
+				<xs:complexType>
+					<xs:sequence>
+						<xs:sequence minOccurs="0">
+							<xs:element name="beforeVal" nillable="true"> 
+								<xs:complexType>
+									<xs:simpleContent>
+										<xs:extension base="decimal">
+											<xs:attribute name="invalidData" type="xs:boolean" default="false"/>
+											<xs:attribute name="rawData" type="xs:boolean" default="false"/>
+										</xs:extension>
+									</xs:simpleContent>
+								</xs:complexType>
+							</xs:element>
+						</xs:sequence>
+						<xs:element name="afterVal" nillable="true">
+							<xs:complexType>
+								<xs:simpleContent>
+									<xs:extension base="decimal">
+										<xs:attribute name="invalidData" type="xs:boolean" default="false"/>
+										<xs:attribute name="rawData" type="xs:boolean" default="false"/>
+									</xs:extension>
+								</xs:simpleContent>
+							</xs:complexType>
+						</xs:element>
+					</xs:sequence>
+				</xs:complexType>
+			</xs:element>
+			<xs:element name="decfloat">
+				<xs:complexType>
+					<xs:sequence>
+						<xs:sequence minOccurs="0">
+							<xs:element name="beforeVal" nillable="true"> 
+								<xs:complexType>
+									<xs:simpleContent>
+										<xs:extension base="decfloat">
+											<xs:attribute name="invalidData" type="xs:boolean" default="false"/>
+											<xs:attribute name="rawData" type="xs:boolean" default="false"/>
+										</xs:extension>
+									</xs:simpleContent>
+								</xs:complexType>
+							</xs:element>
+						</xs:sequence>
+						<xs:element name="afterVal" nillable="true">
+							<xs:complexType>
+								<xs:simpleContent>
+									<xs:extension base="decfloat">
+										<xs:attribute name="invalidData" type="xs:boolean" default="false"/>
+										<xs:attribute name="rawData" type="xs:boolean" default="false"/>
+									</xs:extension>
+								</xs:simpleContent>
+							</xs:complexType>
+						</xs:element>
+					</xs:sequence>
+				</xs:complexType>
+			</xs:element>
+			<xs:element name="date">
+				<xs:complexType>
+					<xs:sequence>
+						<xs:sequence minOccurs="0">
+							<xs:element name="beforeVal" nillable="true"> 
+								<xs:complexType>
+									<xs:simpleContent>
+										<xs:extension base="date">
+											<xs:attribute name="invalidData" type="xs:boolean" default="false"/>
+											<xs:attribute name="rawData" type="xs:boolean" default="false"/>
+										</xs:extension>
+									</xs:simpleContent>
+								</xs:complexType>
+							</xs:element>
+						</xs:sequence>
+						<xs:element name="afterVal" nillable="true">
+							<xs:complexType>
+								<xs:simpleContent>
+									<xs:extension base="date">
+										<xs:attribute name="invalidData" type="xs:boolean" default="false"/>
+										<xs:attribute name="rawData" type="xs:boolean" default="false"/>
+									</xs:extension>
+								</xs:simpleContent>
+							</xs:complexType>
+						</xs:element>
+					</xs:sequence>
+				</xs:complexType>
+			</xs:element>
+			<xs:element name="time">
+				<xs:complexType>
+					<xs:sequence>
+						<xs:sequence minOccurs="0">
+							<xs:element name="beforeVal" nillable="true"> 
+								<xs:complexType>
+									<xs:simpleContent>
+										<xs:extension base="time">
+											<xs:attribute name="invalidData" type="xs:boolean" default="false"/>
+											<xs:attribute name="rawData" type="xs:boolean" default="false"/>
+										</xs:extension>
+									</xs:simpleContent>
+								</xs:complexType>
+							</xs:element>
+						</xs:sequence>
+						<xs:element name="afterVal" nillable="true">
+							<xs:complexType>
+								<xs:simpleContent>
+									<xs:extension base="time">
+										<xs:attribute name="invalidData" type="xs:boolean" default="false"/>
+										<xs:attribute name="rawData" type="xs:boolean" default="false"/>
+									</xs:extension>
+								</xs:simpleContent>
+							</xs:complexType>
+						</xs:element>
+					</xs:sequence>
+				</xs:complexType>
+			</xs:element>
+			<xs:element name="timestamp">
+				<xs:complexType>
+					<xs:sequence>
+						<xs:sequence minOccurs="0">
+							<xs:element name="beforeVal" nillable="true"> 
+								<xs:complexType>
+									<xs:simpleContent>
+										<xs:extension base="timestamp">
+											<xs:attribute name="invalidData" type="xs:boolean" default="false"/>
+											<xs:attribute name="rawData" type="xs:boolean" default="false"/>
+										</xs:extension>
+									</xs:simpleContent>
+								</xs:complexType>
+							</xs:element>
+						</xs:sequence>
+						<xs:element name="afterVal" nillable="true">
+							<xs:complexType>
+								<xs:simpleContent>
+									<xs:extension base="timestamp">
+										<xs:attribute name="invalidData" type="xs:boolean" default="false"/>
+										<xs:attribute name="rawData" type="xs:boolean" default="false"/>
+									</xs:extension>
+								</xs:simpleContent>
+							</xs:complexType>
+						</xs:element>
+					</xs:sequence>
+				</xs:complexType>
+			</xs:element>
+			<xs:element name="char">
+				<xs:complexType>
+					<xs:sequence>
+						<xs:sequence minOccurs="0">
+							<xs:element name="beforeVal" nillable="true"> 
+								<xs:complexType>
+									<xs:simpleContent>
+										<xs:extension base="char">
+											<xs:attribute name="invalidData" type="xs:boolean" default="false"/>
+											<xs:attribute name="rawData" type="xs:boolean" default="false"/>
+										</xs:extension>
+									</xs:simpleContent>
+								</xs:complexType>
+							</xs:element>
+						</xs:sequence>
+						<xs:element name="afterVal" nillable="true">
+							<xs:complexType>
+								<xs:simpleContent>
+									<xs:extension base="char">
+										<xs:attribute name="invalidData" type="xs:boolean" default="false"/>
+										<xs:attribute name="rawData" type="xs:boolean" default="false"/>
+									</xs:extension>
+								</xs:simpleContent>
+							</xs:complexType>
+						</xs:element>
+					</xs:sequence>
+				</xs:complexType>
+			</xs:element>
+			<xs:element name="varchar">
+				<xs:complexType>
+					<xs:sequence>
+						<xs:sequence minOccurs="0">
+							<xs:element name="beforeVal" nillable="true"> 
+								<xs:complexType>
+									<xs:simpleContent>
+										<xs:extension base="varchar">
+											<xs:attribute name="invalidData" type="xs:boolean" default="false"/>
+											<xs:attribute name="rawData" type="xs:boolean" default="false"/>
+										</xs:extension>
+									</xs:simpleContent>
+								</xs:complexType>
+							</xs:element>
+						</xs:sequence>
+						<xs:element name="afterVal" nillable="true">
+							<xs:complexType>
+								<xs:simpleContent>
+									<xs:extension base="varchar">
+										<xs:attribute name="invalidData" type="xs:boolean" default="false"/>
+										<xs:attribute name="rawData" type="xs:boolean" default="false"/>
+									</xs:extension>
+								</xs:simpleContent>
+							</xs:complexType>
+						</xs:element>
+					</xs:sequence>
+				</xs:complexType>
+			</xs:element>
+			<xs:element name="longvarchar">
+				<xs:complexType>
+					<xs:sequence>
+						<xs:sequence minOccurs="0">
+							<xs:element name="beforeVal" nillable="true"> 
+								<xs:complexType>
+									<xs:simpleContent>
+										<xs:extension base="longvarchar">
+											<xs:attribute name="invalidData" type="xs:boolean" default="false"/>
+											<xs:attribute name="rawData" type="xs:boolean" default="false"/>
+										</xs:extension>
+									</xs:simpleContent>
+								</xs:complexType>
+							</xs:element>
+						</xs:sequence>
+						<xs:element name="afterVal" nillable="true">
+							<xs:complexType>
+								<xs:simpleContent>
+									<xs:extension base="longvarchar">
+										<xs:attribute name="invalidData" type="xs:boolean" default="false"/>
+										<xs:attribute name="rawData" type="xs:boolean" default="false"/>
+									</xs:extension>
+								</xs:simpleContent>
+							</xs:complexType>
+						</xs:element>
+					</xs:sequence>
+				</xs:complexType>
+			</xs:element>
+			<xs:element name="bitchar">
+				<xs:complexType>
+					<xs:sequence>
+						<xs:sequence minOccurs="0">
+							<xs:element name="beforeVal" nillable="true"> 
+								<xs:complexType>
+									<xs:simpleContent>
+										<xs:extension base="bitchar">
+											<xs:attribute name="invalidData" type="xs:boolean" default="false"/>
+											<xs:attribute name="rawData" type="xs:boolean" default="false"/>
+										</xs:extension>
+									</xs:simpleContent>
+								</xs:complexType>
+							</xs:element>
+						</xs:sequence>
+						<xs:element name="afterVal" nillable="true">
+							<xs:complexType>
+								<xs:simpleContent>
+									<xs:extension base="bitchar">
+										<xs:attribute name="invalidData" type="xs:boolean" default="false"/>
+										<xs:attribute name="rawData" type="xs:boolean" default="false"/>
+									</xs:extension>
+								</xs:simpleContent>
+							</xs:complexType>
+						</xs:element>
+					</xs:sequence>
+				</xs:complexType>
+			</xs:element>
+			<xs:element name="bitvarchar">
+				<xs:complexType>
+					<xs:sequence>
+						<xs:sequence minOccurs="0">
+							<xs:element name="beforeVal" nillable="true"> 
+								<xs:complexType>
+									<xs:simpleContent>
+										<xs:extension base="bitvarchar">
+											<xs:attribute name="invalidData" type="xs:boolean" default="false"/>
+											<xs:attribute name="rawData" type="xs:boolean" default="false"/>
+										</xs:extension>
+									</xs:simpleContent>
+								</xs:complexType>
+							</xs:element>
+						</xs:sequence>
+						<xs:element name="afterVal" nillable="true">
+							<xs:complexType>
+								<xs:simpleContent>
+									<xs:extension base="bitvarchar">
+										<xs:attribute name="invalidData" type="xs:boolean" default="false"/>
+										<xs:attribute name="rawData" type="xs:boolean" default="false"/>
+									</xs:extension>
+								</xs:simpleContent>
+							</xs:complexType>
+						</xs:element>
+					</xs:sequence>
+				</xs:complexType>
+			</xs:element>
+			<xs:element name="bitlongvarchar">
+				<xs:complexType>
+					<xs:sequence>
+						<xs:sequence minOccurs="0">
+							<xs:element name="beforeVal" nillable="true"> 
+								<xs:complexType>
+									<xs:simpleContent>
+										<xs:extension base="bitlongvarchar">
+											<xs:attribute name="invalidData" type="xs:boolean" default="false"/>
+											<xs:attribute name="rawData" type="xs:boolean" default="false"/>
+										</xs:extension>
+									</xs:simpleContent>
+								</xs:complexType>
+							</xs:element>
+						</xs:sequence>
+						<xs:element name="afterVal" nillable="true">
+							<xs:complexType>
+								<xs:simpleContent>
+									<xs:extension base="bitlongvarchar">
+										<xs:attribute name="invalidData" type="xs:boolean" default="false"/>
+										<xs:attribute name="rawData" type="xs:boolean" default="false"/>
+									</xs:extension>
+								</xs:simpleContent>
+							</xs:complexType>
+						</xs:element>
+					</xs:sequence>
+				</xs:complexType>
+			</xs:element>
+			<xs:element name="graphic">
+				<xs:complexType>
+					<xs:sequence>
+						<xs:sequence minOccurs="0">
+							<xs:element name="beforeVal" nillable="true"> 
+								<xs:complexType>
+									<xs:simpleContent>
+										<xs:extension base="graphic">
+											<xs:attribute name="invalidData" type="xs:boolean" default="false"/>
+											<xs:attribute name="rawData" type="xs:boolean" default="false"/>
+										</xs:extension>
+									</xs:simpleContent>
+								</xs:complexType>
+							</xs:element>
+						</xs:sequence>
+						<xs:element name="afterVal" nillable="true">
+							<xs:complexType>
+								<xs:simpleContent>
+									<xs:extension base="graphic">
+										<xs:attribute name="invalidData" type="xs:boolean" default="false"/>
+										<xs:attribute name="rawData" type="xs:boolean" default="false"/>
+									</xs:extension>
+								</xs:simpleContent>
+							</xs:complexType>
+						</xs:element>
+					</xs:sequence>
+				</xs:complexType>
+			</xs:element>
+			<xs:element name="vargraphic">
+				<xs:complexType>
+					<xs:sequence>
+						<xs:sequence minOccurs="0">
+							<xs:element name="beforeVal" nillable="true"> 
+								<xs:complexType>
+									<xs:simpleContent>
+										<xs:extension base="vargraphic">
+											<xs:attribute name="invalidData" type="xs:boolean" default="false"/>
+											<xs:attribute name="rawData" type="xs:boolean" default="false"/>
+										</xs:extension>
+									</xs:simpleContent>
+								</xs:complexType>
+							</xs:element>
+						</xs:sequence>
+						<xs:element name="afterVal" nillable="true">
+							<xs:complexType>
+								<xs:simpleContent>
+									<xs:extension base="vargraphic">
+										<xs:attribute name="invalidData" type="xs:boolean" default="false"/>
+										<xs:attribute name="rawData" type="xs:boolean" default="false"/>
+									</xs:extension>
+								</xs:simpleContent>
+							</xs:complexType>
+						</xs:element>
+					</xs:sequence>
+				</xs:complexType>
+			</xs:element>
+			<xs:element name="longvargraphic">
+				<xs:complexType>
+					<xs:sequence>
+						<xs:sequence minOccurs="0">
+							<xs:element name="beforeVal" nillable="true"> 
+								<xs:complexType>
+									<xs:simpleContent>
+										<xs:extension base="longvargraphic">
+											<xs:attribute name="invalidData" type="xs:boolean" default="false"/>
+											<xs:attribute name="rawData" type="xs:boolean" default="false"/>
+										</xs:extension>
+									</xs:simpleContent>
+								</xs:complexType>
+							</xs:element>
+						</xs:sequence>
+						<xs:element name="afterVal" nillable="true">
+							<xs:complexType>
+								<xs:simpleContent>
+									<xs:extension base="longvargraphic">
+										<xs:attribute name="invalidData" type="xs:boolean" default="false"/>
+										<xs:attribute name="rawData" type="xs:boolean" default="false"/>
+									</xs:extension>
+								</xs:simpleContent>
+							</xs:complexType>
+						</xs:element>
+					</xs:sequence>
+				</xs:complexType>
+			</xs:element>
+			<xs:element name="rowid">
+				<xs:complexType>
+					<xs:sequence>
+						<xs:sequence minOccurs="0">
+							<xs:element name="beforeVal" nillable="true"> 
+								<xs:complexType>
+									<xs:simpleContent>
+										<xs:extension base="rowid">
+											<xs:attribute name="invalidData" type="xs:boolean" default="false"/>
+											<xs:attribute name="rawData" type="xs:boolean" default="false"/>
+										</xs:extension>
+									</xs:simpleContent>
+								</xs:complexType>
+							</xs:element>
+						</xs:sequence>
+						<xs:element name="afterVal" nillable="true">
+							<xs:complexType>
+								<xs:simpleContent>
+									<xs:extension base="rowid">
+										<xs:attribute name="invalidData" type="xs:boolean" default="false"/>
+										<xs:attribute name="rawData" type="xs:boolean" default="false"/>
+									</xs:extension>
+								</xs:simpleContent>
+							</xs:complexType>
+						</xs:element>
+					</xs:sequence>
+				</xs:complexType>
+			</xs:element>
+			<xs:element name="blob">
+				<xs:complexType>
+					<xs:sequence>
+						<xs:sequence minOccurs="0">
+							<xs:element name="beforeVal" nillable="true"> 
+								<xs:complexType>
+									<xs:simpleContent>
+										<xs:extension base="blob">
+											<xs:attribute name="invalidData" type="xs:boolean" default="false"/>
+											<xs:attribute name="rawData" type="xs:boolean" default="false"/>
+										</xs:extension>
+									</xs:simpleContent>
+								</xs:complexType>
+							</xs:element>
+						</xs:sequence>
+						<xs:element name="afterVal" nillable="true">
+							<xs:complexType>
+								<xs:simpleContent>
+									<xs:extension base="blob">
+										<xs:attribute name="invalidData" type="xs:boolean" default="false"/>
+										<xs:attribute name="rawData" type="xs:boolean" default="false"/>
+									</xs:extension>
+								</xs:simpleContent>
+							</xs:complexType>
+						</xs:element>
+					</xs:sequence>
+				</xs:complexType>
+			</xs:element>
+			<xs:element name="clob">
+				<xs:complexType>
+					<xs:sequence>
+						<xs:sequence minOccurs="0">
+							<xs:element name="beforeVal" nillable="true"> 
+								<xs:complexType>
+									<xs:simpleContent>
+										<xs:extension base="clob">
+											<xs:attribute name="invalidData" type="xs:boolean" default="false"/>
+											<xs:attribute name="rawData" type="xs:boolean" default="false"/>
+										</xs:extension>
+									</xs:simpleContent>
+								</xs:complexType>
+							</xs:element>
+						</xs:sequence>
+						<xs:element name="afterVal" nillable="true">
+							<xs:complexType>
+								<xs:simpleContent>
+									<xs:extension base="clob">
+										<xs:attribute name="invalidData" type="xs:boolean" default="false"/>
+										<xs:attribute name="rawData" type="xs:boolean" default="false"/>
+									</xs:extension>
+								</xs:simpleContent>
+							</xs:complexType>
+						</xs:element>
+					</xs:sequence>
+				</xs:complexType>
+			</xs:element>
+			<xs:element name="dbclob">
+				<xs:complexType>
+					<xs:sequence>
+						<xs:sequence minOccurs="0">
+							<xs:element name="beforeVal" nillable="true"> 
+								<xs:complexType>
+									<xs:simpleContent>
+										<xs:extension base="dbclob">
+											<xs:attribute name="invalidData" type="xs:boolean" default="false"/>
+											<xs:attribute name="rawData" type="xs:boolean" default="false"/>
+										</xs:extension>
+									</xs:simpleContent>
+								</xs:complexType>
+							</xs:element>
+						</xs:sequence>
+						<xs:element name="afterVal" nillable="true">
+							<xs:complexType>
+								<xs:simpleContent>
+									<xs:extension base="dbclob">
+										<xs:attribute name="invalidData" type="xs:boolean" default="false"/>
+										<xs:attribute name="rawData" type="xs:boolean" default="false"/>
+									</xs:extension>
+								</xs:simpleContent>
+							</xs:complexType>
+						</xs:element>
+					</xs:sequence>
+				</xs:complexType>
+			</xs:element>
+			<xs:element name="xml">
+				<xs:complexType>
+					<xs:sequence>
+						<xs:sequence minOccurs="0">
+							<xs:element name="beforeVal" nillable="true"> 
+								<xs:complexType>
+									<xs:simpleContent>
+										<xs:extension base="xml">
+											<xs:attribute name="invalidData" type="xs:boolean" default="false"/>
+											<xs:attribute name="rawData" type="xs:boolean" default="false"/>
+										</xs:extension>
+									</xs:simpleContent>
+								</xs:complexType>
+							</xs:element>
+						</xs:sequence>
+						<xs:element name="afterVal" nillable="true">
+							<xs:complexType>
+								<xs:simpleContent>
+									<xs:extension base="xml">
+										<xs:attribute name="invalidData" type="xs:boolean" default="false"/>
+										<xs:attribute name="rawData" type="xs:boolean" default="false"/>
+									</xs:extension>
+								</xs:simpleContent>
+							</xs:complexType>
+						</xs:element>
+					</xs:sequence>
+				</xs:complexType>
+			</xs:element>
+		</xs:choice>
+	 <xs:attributeGroup ref="colAttrGroup"/>	
+	</xs:complexType>
+
+
+	<!-- Attribute group definition -->
+
+	<xs:attributeGroup name="commonAttrGroup">
+		<xs:attribute name="subName" type="xs:string" use="required"/>	
+		<xs:attribute name="srcOwner" type="xs:string" use="required"/>	
+		<xs:attribute name="srcName" type="xs:string" use="required"/>	
+		<xs:attribute name="intentSEQ" type="xs:string"/>	
+	</xs:attributeGroup>
+
+	<xs:attributeGroup name="colAttrGroup">
+		<xs:attribute name="name" type="xs:string" use="required"/>	
+		<xs:attribute name="isKey" type="xs:boolean" default="false"/>	
+		<xs:attribute name="invalidData" type="xs:boolean" default="false"/>	
+		<xs:attribute name="rawData" type="xs:boolean" default="false"/>	
+	</xs:attributeGroup>
+
+	<xs:attributeGroup name="opAttrGroup">
+		<xs:attribute name="rowNum" type="xs:positiveInteger"/>	
+		<xs:attribute name="hasLOBCols" type="xs:boolean" default="false"/>	
+	</xs:attributeGroup>
+
+
+	<!-- Subscription deactivated type definition -->
+
+	<xs:complexType name="subDeactivatedType">
+		<xs:attributeGroup ref="commonAttrGroup"/>	
+		<xs:attribute name="stateInfo" type="xs:string" use="required"/>
+	</xs:complexType>
+
+
+	<!-- Load done received type definition -->
+
+	<xs:complexType name="loadDoneRcvdType">
+		<xs:attributeGroup ref="commonAttrGroup"/>	
+		<xs:attribute name="stateInfo" type="xs:string" use="required"/>
+	</xs:complexType>
+
+
+	<!-- Heartbeat type definition -->
+
+	<xs:complexType name="heartbeatType">
+		<xs:attribute name="sendQName" type="xs:string" use="required"/>
+		<xs:attribute name="lastCmitTime" type="xs:dateTime"/>
+	</xs:complexType>
+
+
+	<!-- Error Report type definition -->
+
+	<xs:complexType name="errorRptType">
+		<xs:attributeGroup ref="commonAttrGroup"/>	
+		<xs:attribute name="errorMsg" type="xs:string" use="required"/>
+	</xs:complexType>
+
+
+	<!-- Schema type definition -->
+ 
+	<xs:complexType name="subSchemaType">
+		<xs:sequence maxOccurs="unbounded">
+			<xs:element name="col" type="colSchemaType"/>
+		</xs:sequence>
+		<xs:attributeGroup ref="commonAttrGroup"/>	
+                <xs:attribute name="sendQName" type="xs:string" use="required"/>
+		<xs:attribute name="allChangedRows" type="xs:boolean" default="false"/>
+		<xs:attribute name="beforeValues" type="xs:boolean" default="false"/>
+		<xs:attribute name="changedColsOnly" type="xs:boolean" default="true"/>
+		<xs:attribute name="hasLoadPhase" type="loadPhaseEnumType" default="none"/>
+		<xs:attribute name="dbServerType" type="dbServerTypeEnumType" use="required"/>	
+		<xs:attribute name="dbRelease" type="xs:string" use="required"/>	
+		<xs:attribute name="dbInstance" type="xs:string" use="required"/>	
+		<xs:attribute name="capRelease" type="xs:string" use="required"/>	
+		<xs:attribute name="timestamp" type="xs:string" />	
+	</xs:complexType>
+
+
+	<!-- Add column definition -->
+ 
+	<xs:complexType name="addColumnType">
+		<xs:sequence maxOccurs="1">
+			<xs:element name="col" type="colSchemaType"/>
+		</xs:sequence>
+		<xs:attributeGroup ref="commonAttrGroup"/>	
+	</xs:complexType>
+
+
+	<!-- Load phase enumeration type definition -->
+
+	<xs:simpleType name="loadPhaseEnumType">
+		<xs:restriction base="xs:string">
+			<xs:enumeration value="none"/>
+			<xs:enumeration value="external"/>
+		</xs:restriction>
+	</xs:simpleType>
+
+
+	<!-- DB2 server type enumeration type definition -->
+	<!--
+	     DB2 server type enum values based on DB server type values described in 
+		  asnrib.h 
+   	-->
+
+	<xs:simpleType name="dbServerTypeEnumType">
+		<xs:restriction base="xs:string">
+			<xs:enumeration value="QDB2"/>
+			<xs:enumeration value="QDB2/6000"/>
+			<xs:enumeration value="QDB2/HPUX"/>
+			<xs:enumeration value="QDB2/NT"/>
+			<xs:enumeration value="QDB2/SUN"/>
+			<xs:enumeration value="QDB2/SUN64"/>
+			<xs:enumeration value="QDB2/SUNX86"/>
+			<xs:enumeration value="QDB2/SUNX8664"/>
+			<xs:enumeration value="QDB2/LINUX"/>
+			<xs:enumeration value="QDB2/Windows"/>
+			<xs:enumeration value="QDB2/AIX64"/>
+			<xs:enumeration value="QORACLE"/>
+		</xs:restriction>
+	</xs:simpleType>
+
+
+	<!-- Column schema type definition -->
+
+	<xs:complexType name="colSchemaType">
+		<xs:attribute name="name" type="xs:string" use="required"/>	
+		<xs:attribute name="type" type="dataTypeEnumType" use="required"/>	
+		<xs:attribute name="isKey" type="xs:boolean" default="false"/>		
+		<xs:attribute name="len" type="xs:unsignedInt"/>	
+		<xs:attribute name="precision" type="xs:unsignedShort"/>	
+		<xs:attribute name="scale" type="xs:unsignedShort"/>	
+		<xs:attribute name="codepage" type="xs:unsignedInt" default="0"/>	
+		<xs:attribute name="default" type="xs:string"/>	
+		<xs:attribute name="beforeColName" type="xs:string"/>	
+	</xs:complexType>
+
+	<!-- Data type enumeration type definition -->
+	<!-- Data type names are used as tag name also. Both are the same. -->
+
+	<xs:simpleType name="dataTypeEnumType">
+		<xs:restriction base="xs:string">
+			<xs:enumeration value="smallint"/>
+			<xs:enumeration value="integer"/>
+			<xs:enumeration value="bigint"/>
+			<xs:enumeration value="float"/>
+			<xs:enumeration value="real"/>
+			<xs:enumeration value="double"/>
+			<xs:enumeration value="decimal"/>
+			<xs:enumeration value="decfloat"/>
+			<xs:enumeration value="char"/>
+			<xs:enumeration value="varchar"/>
+			<xs:enumeration value="longvarchar"/>
+			<xs:enumeration value="bitchar"/>
+			<xs:enumeration value="bitvarchar"/>
+			<xs:enumeration value="bitlongvarchar"/>
+			<xs:enumeration value="graphic"/>
+			<xs:enumeration value="vargraphic"/>
+			<xs:enumeration value="longvargraphic"/>
+			<xs:enumeration value="time"/>
+			<xs:enumeration value="timestamp"/>
+			<xs:enumeration value="date"/>
+			<xs:enumeration value="rowid"/>
+			<xs:enumeration value="blob"/>
+			<xs:enumeration value="clob"/>
+			<xs:enumeration value="dbclob"/>
+			<xs:enumeration value="xml"/>
+		</xs:restriction>
+	</xs:simpleType>
+
+
+	<!-- Data type definitions -->
+
+	<xs:simpleType name="smallint">
+		<xs:restriction base="xs:short">
+		</xs:restriction>
+	</xs:simpleType>
+
+	<xs:simpleType name="integer">
+		<xs:restriction base="xs:integer">
+		</xs:restriction>
+	</xs:simpleType>
+
+	<xs:simpleType name="bigint">
+		<xs:restriction base="xs:long">
+		</xs:restriction>
+	</xs:simpleType>
+
+	<xs:simpleType name="float">
+		<xs:restriction base="xs:float">
+		</xs:restriction>
+	</xs:simpleType>
+
+	<xs:simpleType name="real">
+		<xs:restriction base="xs:float">
+		</xs:restriction>
+	</xs:simpleType>
+
+	<xs:simpleType name="double">
+		<xs:restriction base="xs:double">
+		</xs:restriction>
+	</xs:simpleType>
+
+	<xs:simpleType name="decimal">
+		<xs:restriction base="xs:decimal">
+		</xs:restriction>
+	</xs:simpleType>
+
+	<xs:simpleType name="decfloat">
+		<xs:restriction base="xs:decimal">
+		</xs:restriction>
+	</xs:simpleType>
+
+	<xs:simpleType name="date">
+		<xs:restriction base="xs:date">
+		</xs:restriction>
+	</xs:simpleType>
+
+	<xs:simpleType name="time">
+		<xs:restriction base="xs:time">
+		</xs:restriction>
+	</xs:simpleType>
+
+	<xs:simpleType name="timestamp">
+		<xs:restriction base="xs:dateTime">
+		</xs:restriction>
+	</xs:simpleType>
+
+	<xs:simpleType name="char">
+		<xs:restriction base="xs:string">
+		</xs:restriction>
+	</xs:simpleType>
+
+	<xs:simpleType name="varchar">
+		<xs:restriction base="xs:string">
+		</xs:restriction>
+	</xs:simpleType>
+
+	<xs:simpleType name="longvarchar">
+		<xs:restriction base="xs:string">
+		</xs:restriction>
+	</xs:simpleType>
+
+	<xs:simpleType name="bitchar">
+		<xs:restriction base="xs:string">
+		</xs:restriction>
+	</xs:simpleType>
+
+	<xs:simpleType name="bitvarchar">
+		<xs:restriction base="xs:string">
+		</xs:restriction>
+	</xs:simpleType>
+
+	<xs:simpleType name="bitlongvarchar">
+		<xs:restriction base="xs:string">
+		</xs:restriction>
+	</xs:simpleType>
+
+	<xs:simpleType name="graphic">
+		<xs:restriction base="xs:string">
+		</xs:restriction>
+	</xs:simpleType>
+
+	<xs:simpleType name="vargraphic">
+		<xs:restriction base="xs:string">
+		</xs:restriction>
+	</xs:simpleType>
+
+	<xs:simpleType name="longvargraphic">
+		<xs:restriction base="xs:string">
+		</xs:restriction>
+	</xs:simpleType>
+
+	<xs:simpleType name="rowid">
+		<xs:restriction base="xs:hexBinary">
+		</xs:restriction>
+	</xs:simpleType>
+
+	<xs:simpleType name="blob">
+		<xs:restriction base="xs:hexBinary">
+		</xs:restriction>
+	</xs:simpleType>
+
+	<xs:simpleType name="clob">
+		<xs:restriction base="xs:string">
+		</xs:restriction>
+	</xs:simpleType>
+
+	<xs:simpleType name="dbclob">
+		<xs:restriction base="xs:string">
+		</xs:restriction>
+	</xs:simpleType>
+	
+	<xs:simpleType name="xml">
+		<xs:restriction base="xs:string">
+		</xs:restriction>
+	</xs:simpleType>
+
+
+</xs:schema>

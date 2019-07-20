@@ -1,0 +1,25 @@
+*****************************************************************************
+*
+* README for SQL Statement
+*
+* These sample scripts demonstrate SQL Statements specific to DDL and DML.
+*
+*
+*****************************************************************************
+*              Documentation
+*
+* For information on using SQL statements, see the SQL Reference.
+*
+* For the latest information on programming, building, and running DB2
+* applications, visit the DB2 application development website:
+*      http://www.software.ibm.com/data/db2/udb/ad
+*****************************************************************************
+*
+*****************************************************************************
+* README - this file!
+*****************************************************************************
+*
+* This README will contain the SQL Statements specific to DML and DDL. 
+* These samples will be made available in the future releases.
+*
+*****************************************************************************

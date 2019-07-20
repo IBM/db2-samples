@@ -1,0 +1,54 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<xs:schema xmlns:xs="http://www.w3.org/2001/XMLSchema">
+	
+	<xs:annotation>
+		<xs:documentation xml:lang="en">
+			Schema of messages from an external subscriber to Capture
+			(C) Copyright IBM CORPORATION 2001
+		</xs:documentation>
+	</xs:annotation>
+
+
+	<!-- Message type definition -->
+
+	<xs:element name="msg" type="msgType"/>
+
+	<xs:complexType name="msgType">
+		<xs:choice>
+			<xs:element name="invalidateSendQ" type="invalidateSendQType"/>
+			<xs:element name="loadDone" type="loadDoneType"/>
+			<xs:element name="activateSub" type="activateSubType"/>
+			<xs:element name="deactivateSub" type="deactivateSubType"/>
+		</xs:choice>
+		<xs:attribute name="version" type="xs:string" use="required"/>	
+	</xs:complexType>
+
+
+	<!-- Invalidate send queue type definition -->
+
+	<xs:complexType name="invalidateSendQType">
+		<xs:attribute name="sendQName" type="xs:string" use="required"/>
+	</xs:complexType>
+
+
+	<!-- Load Done type definition -->
+
+	<xs:complexType name="loadDoneType">
+		<xs:attribute name="subName" type="xs:string" use="required"/>
+	</xs:complexType>
+
+
+	<!-- Activate Subscription type definition -->
+
+	<xs:complexType name="activateSubType">
+		<xs:attribute name="subName" type="xs:string" use="required"/>
+	</xs:complexType>
+
+
+	<!-- Deactivate Subscription type definition -->
+
+	<xs:complexType name="deactivateSubType">
+		<xs:attribute name="subName" type="xs:string" use="required"/>
+	</xs:complexType>
+
+</xs:schema>

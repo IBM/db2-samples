@@ -1,0 +1,522 @@
+/****************************************************************************
+** (c) Copyright IBM Corp. 2007 All rights reserved.
+** 
+** The following sample of source code ("Sample") is owned by International 
+** Business Machines Corporation or one of its subsidiaries ("IBM") and is 
+** copyrighted and licensed, not sold. You may use, copy, modify, and 
+** distribute the Sample in any form without payment to IBM, for the purpose of 
+** assisting you in the development of your applications.
+** 
+** The Sample code is provided to you on an "AS IS" basis, without warranty of 
+** any kind. IBM HEREBY EXPRESSLY DISCLAIMS ALL WARRANTIES, EITHER EXPRESS OR 
+** IMPLIED, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED WARRANTIES OF 
+** MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE. Some jurisdictions do 
+** not allow for the exclusion or limitation of implied warranties, so the above 
+** limitations or exclusions may not apply to you. IBM shall not be liable for 
+** any damages you suffer as a result of using, copying, modifying or 
+** distributing the Sample, even if IBM has been advised of the possibility of 
+** such damages.
+*****************************************************************************
+**
+** SOURCE FILE NAME: getlogs.sqc
+**
+** SAMPLE: How to get the customer view of diagnostic log file entries
+**
+** This sample shows:
+**
+**         1. How to retrieve messages from the notification log starting 
+**	      at a specified point in time.
+**         2. How to retrieve messages from the notification log written 
+**	      over the last week or over the last 24 hours.
+**
+** SQL STATEMENTS USED:
+**          CONNECT
+**          DECLARE CURSOR
+**	    SELECT
+**
+** OUTPUT FILE: getlogs.out (available in the online documentation)
+*****************************************************************************
+**
+** For more information on the sample programs, see the README file.
+**
+** For information on developing C applications, see the Application
+** Development Guide.
+**
+** For information on using SQL statements, see the SQL Reference.
+**
+** For information on DB2 APIs, see the Administrative API Reference.
+**
+** For the latest information on programming, building, and running DB2
+** applications, visit the DB2 application development website:
+**     http://www.software.ibm.com/data/db2/udb/ad
+****************************************************************************/
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+#include <sql.h>
+#include <sqlenv.h>
+#include <sqlutil.h>
+#include "utilemb.h" 
+
+EXEC SQL INCLUDE SQLCA;
+
+EXEC SQL BEGIN DECLARE SECTION;
+  char timeStamp[31];     /* variable to store time stamp */ 
+  short timeStampNI;      /* timeStamp null indicator */
+  char instanceName[129]; /* variable to store instance name */
+  short instanceNameNI;   /* instanceName null indicator */
+  short dbPartitionNum;   /* variable to store DB partition number */
+  short dbPartitionNumNI; /* dbPartitionNum null indicator */
+  char dbName[9];         /* variable to store database name */
+  short	dbNameNI;         /* dbName null indicator */
+  char processName[256];  /* variable to store process name */
+  short processNameNI;    /* processName null indicator */
+  char applId[65];        /* variable to store application ID */
+  short applIdNI;         /* applId null indicator */
+  char msgType[3];        /* variable to store message type */
+  short msgTypeNI;        /* msgType null indicator */
+  char msgSeverity[1];    /* variable to store message severity */
+  short msgSeverityNI;    /* msgSeverity null indicator */
+  char msg[16385];        /* variable to store the message */
+  short msgNI;            /* msg null indicator */
+  char argvDate[12];      /* Variable to store date argument */
+  char argvTime[10];      /* Variable to store time argument */
+  char dbAlias[9];        /* Variable to store database argument */
+  char user[128];         /* Variable to store userID argument */
+  char pswd[15];          /* Variable to store Password argument */
+EXEC SQL END DECLARE SECTION;
+
+int main(int argc, char *argv[])
+{
+  int rc = 0;
+
+  /* check the command line arguments */
+  switch (argc)
+  {
+    case 3:
+      strcpy(argvDate, argv[1]);
+      strcpy(argvTime, argv[2]);
+      strcpy(dbAlias, "sample");
+      strcpy(user, "");
+      strcpy(pswd, "");
+      break;
+
+    case 4:
+      strcpy(argvDate, argv[1]);
+      strcpy(argvTime, argv[2]);
+      strcpy(dbAlias, argv[3]);
+      strcpy(user, "");
+      strcpy(pswd, "");
+      break;
+
+    case 6:
+      strcpy(argvDate, argv[1]);
+      strcpy(argvTime, argv[2]);
+      strcpy(dbAlias, argv[3]);
+      strcpy(user, argv[4]);
+      strcpy(pswd, argv[5]);
+      break;
+
+    default:
+      printf("Usage: getlogs <TimeStamp> [dbname] [userid password]\n");
+      printf("  Timestamp Format: YYYY-MM-DD  HOUR:MINUTE:SECOND\n");
+      printf("  Example1: getlogs 2005-12-22 06.44.44\n");
+      printf("  Example2: getlogs 2005-12-22 06.44.44 <dbname>\n");
+      printf("  Example3: getlogs 2005-12-22 06.44.44 <dbname> ");
+      printf("<userID> <passwd>\n");
+      exit(0);
+  }
+
+  printf("\nTHIS SAMPLE SHOWS HOW TO RETRIEVE NOTIFICATION LOGS MESSAGES\n"); 
+
+  /* connecting to sample database */
+  EXEC SQL CONNECT TO :dbAlias user :user using :pswd;
+
+  printf("\n------------------------------------------------------------\n");
+  printf("NOTIFICATION MESSAGES STARTING AT A SPECIFIED POINT IN TIME \n");
+  printf("FROM ALL PARTITIONS\n");
+  printf("------------------------------------------------------------\n");
+
+  /* declaring the cursor c1 to select the information from the log */
+  /* timestamp is provided to the program as part of command line argument */
+  EXEC SQL DECLARE c1 CURSOR FOR 
+             SELECT timestamp, instancename, dbpartitionnum, dbname,
+         	    processname, appl_id, msgtype, msgseverity, msg 
+               FROM TABLE(PD_GET_LOG_MSGS(TIMESTAMP(:argvDate,:argvTime))) AS t
+               ORDER BY TIMESTAMP;
+
+  /* open the cursor c1 */
+  EXEC SQL OPEN c1;
+  EMB_SQL_CHECK("cursor -- open");
+
+  /* fetch the records */
+  while (sqlca.sqlcode == SQL_RC_OK)
+  {
+    /* retrieve a record */
+    EXEC SQL FETCH c1 INTO :timeStamp :timeStampNI,
+                           :instanceName :instanceNameNI,
+                           :dbPartitionNum :dbPartitionNumNI,
+                           :dbName :dbNameNI,
+                           :processName :processNameNI,
+                           :applId :applIdNI,
+                           :msgType :msgTypeNI,
+                           :msgSeverity :msgSeverityNI,
+                           :msg :msgNI;
+    EMB_SQL_CHECK("cursor -- fetch");
+
+
+    /* print the information retrieved */
+    if (sqlca.sqlcode == SQL_RC_OK)
+    {
+      if (timeStampNI >= 0)
+      {  
+        printf("Timestamp\t: %s\n", timeStamp);
+      }
+      else
+      {
+        printf("Timestamp\t: Unknown\n");
+      }
+
+      if (instanceNameNI >= 0)
+      {
+        printf("Instance Name\t: %s\n", instanceName);
+      }
+      else
+      { 
+        printf("Instance Name\t: Unknown\n");
+      }
+
+      if (dbPartitionNumNI >= 0)
+      {
+        printf("DB Partition Num: %d\n", dbPartitionNum);
+      }
+      else
+      {
+        printf("DB Partition Num: Unknown\n");
+      }
+
+      if (dbNameNI >= 0)
+      {  
+        printf("Database Name\t: %s\n", dbName);
+      }
+      else
+      { 
+        printf("Database Name\t: Unknown\n");
+      }
+
+      if (processNameNI >= 0) 
+      {
+        printf("Process Name\t: %s\n", processName);
+      }
+      else
+      {
+        printf("Process Name\t: Unknown\n");
+      }
+
+      if (applIdNI >= 0)
+      {
+        printf("Application ID\t: %s\n", applId);
+      }
+      else
+      {
+        printf("Application ID\t: Unknown\n");
+      }
+ 
+      if (msgTypeNI >= 0) 
+      {
+        printf("Message Type\t: %s\n", msgType);
+      }
+      else
+      {
+        printf("Message Type\t: Unknown\n");
+      }
+
+      if (msgSeverityNI >= 0)
+      {
+        printf("Message Severity: %s\n", msgSeverity);
+      }
+      else
+      {
+        printf("Message Severity: Unknown\n");
+      }
+
+      if (msgNI >= 0)
+      {
+        printf("Message\t\t: %s\n", msg);
+      }
+      else
+      {
+        printf("Message\t\t: Unknown\n");
+      }
+    }
+  } /* end of first while loop */
+
+  /* closing the cursor */
+  EXEC SQL CLOSE c1;
+  EMB_SQL_CHECK("cursor -- close");
+
+  printf("------------------------------------------------------------\n");
+  printf("NOTIFICATION MESSAGES WRITTEN IN THE LAST WEEK FROM ");
+  printf("ALL PARTITIONS\n");
+  printf("------------------------------------------------------------\n");
+
+  EXEC SQL DECLARE c2 CURSOR FOR
+             SELECT timestamp, 
+                    instancename, 
+                    dbpartitionnum, 
+                    dbname,
+                    processname, 
+                    appl_id, 
+                    msgtype, 
+                    msgseverity, 
+                    msg
+               FROM TABLE(PD_GET_LOG_MSGS(current_timestamp - 7 days)) AS t
+               ORDER BY TIMESTAMP;
+
+  /* open the cursor c2 */
+  EXEC SQL OPEN c2;
+  EMB_SQL_CHECK("cursor -- open");
+
+  /* fetch the records */
+  while (sqlca.sqlcode == SQL_RC_OK)
+  {
+    /* retrieve a record */
+    EXEC SQL FETCH c2 INTO :timeStamp :timeStampNI,
+                           :instanceName :instanceNameNI,
+                           :dbPartitionNum :dbPartitionNumNI,
+                           :dbName :dbNameNI,
+                           :processName :processNameNI,
+                           :applId :applIdNI,
+                           :msgType :msgTypeNI,
+                           :msgSeverity :msgSeverityNI,
+                           :msg :msgNI;
+    EMB_SQL_CHECK("cursor -- fetch");
+
+    /* print the information retrieved */
+    if (sqlca.sqlcode == SQL_RC_OK)
+    {
+      if (timeStampNI >= 0)
+      {
+        printf("Timestamp\t: %s\n", timeStamp);
+      }
+      else
+      {
+        printf("Timestamp\t: Unknown\n");
+      }
+
+      if (instanceNameNI >= 0)
+      {
+        printf("Instance Name\t: %s\n", instanceName);
+      }
+      else
+      {
+        printf("Instance Name\t: Unknown\n");
+      }
+
+      if (dbPartitionNumNI >= 0)
+      {
+        printf("DB Partition Num: %d\n", dbPartitionNum);
+      }
+      else
+      {
+        printf("DB Partition Num: Unknown\n");
+      }
+
+      if (dbNameNI >= 0) 
+      {
+        printf("Database Name:\t %s\n", dbName); 
+      }
+      else
+      {
+        printf("Database Name\t: Unknown\n");
+      }
+
+      if (processNameNI >= 0)
+      {
+        printf("Process Name\t: %s\n", processName);
+      }
+      else
+      {
+        printf("Process Name\t: Unknown\n");
+      }
+
+      if (applIdNI >= 0)
+      {
+        printf("Application ID\t: %s\n", applId);
+      }
+      else
+      {
+        printf("Application ID\t: Unknown\n");
+      }
+
+      if (msgTypeNI >= 0)
+      {
+        printf("Message Type\t: %s\n", msgType);
+      }
+      else
+      {
+        printf("Message Type\t: Unknown\n");
+      }
+
+      if (msgSeverityNI >= 0)
+      {
+        printf("Message Severity: %s\n", msgSeverity);
+      }
+      else
+      {
+        printf("Message Severity: Unknown\n");
+      }
+
+      if (msgNI >= 0)
+      {
+        printf("Message\t\t:%s\n", msg);
+      }
+      else
+      {
+        printf("Message\t\t: Unknown\n");
+      }
+    }
+  } /* end of second while loop */
+
+  /* close the cursor c2 */
+  EXEC SQL CLOSE c2;
+  EMB_SQL_CHECK("cursor -- close");
+
+  printf("------------------------------------------------------------\n");
+  printf("NOTIFICATION MESSAGES WRITTEN OVER LAST 24 HOURS FROM \n");
+  printf("ALL PARTITIONS\n");
+  printf("------------------------------------------------------------\n");
+
+  /* declare the cursor c3 to get the information from logs */
+  EXEC SQL DECLARE c3 CURSOR FOR 
+             SELECT timestamp, 
+                    instancename, 
+                    dbpartitionnum,  
+                    dbname,
+                    processname, 
+                    appl_id,  
+                    msgtype, 
+                    msgseverity,  
+                    msg	
+               FROM SYSIBMADM.PDLOGMSGS_LAST24HOURS WHERE msgseverity = 'C'
+               ORDER BY TIMESTAMP DESC;
+
+  /* open the cursor c3 */
+  EXEC SQL OPEN c3;
+  EMB_SQL_CHECK("cursor -- open");
+
+  /* fetch the records */
+  while (sqlca.sqlcode == SQL_RC_OK)
+  {
+    /* retrieve a record */
+    EXEC SQL FETCH c3 INTO :timeStamp :timeStampNI,
+                           :instanceName :instanceNameNI,
+                           :dbPartitionNum :dbPartitionNumNI,
+                           :dbName :dbNameNI,
+                           :processName :processNameNI,
+                           :applId :applIdNI,
+                           :msgType :msgTypeNI,
+                           :msgSeverity :msgSeverityNI,
+                           :msg :msgNI;
+    EMB_SQL_CHECK("cursor -- fetch");
+
+    /* print the information retrieved */
+    if (sqlca.sqlcode == SQL_RC_OK)
+    {
+      if (timeStampNI >= 0) 
+      {
+        printf("Timestamp\t: %s\n", timeStamp);
+      }
+      else
+      {
+        printf("Timestamp\t: Unknown\n");
+      }
+
+      if (instanceNameNI >= 0)
+      {
+        printf("Instance Name\t: %s\n", instanceName);
+      }
+      else
+      {
+        printf("Instance Name\t: Unknown\n");
+      }
+
+      if (dbPartitionNumNI >= 0) 
+      {
+        printf("DB Partition Num: %d\n", dbPartitionNum);
+      }
+      else
+      {
+        printf("DB Partition Num: Unknown\n");
+      }
+
+      if (dbNameNI >= 0) 
+      {
+        printf("Database Name\t: %s\n", dbName);
+      }
+      else
+      {
+        printf("Database Name\t: Unknown\n");
+      }
+
+      if (processNameNI >= 0)
+      {
+        printf("Process Name\t: %s\n", processName);
+      }
+      else
+      {
+        printf("Process Name\t: Unknown\n");
+      }
+
+      if (applIdNI >= 0) 
+      {
+        printf("Application ID\t: %s\n", applId);
+      }
+      else
+      {
+        printf("Application ID\t: Unknown\n");
+      }
+
+      if (msgTypeNI >= 0)
+      {
+        printf("Message Type\t: %s\n", msgType);
+      }
+      else
+      {
+        printf("Message Type\t: Unknown\n");
+      }
+
+      if (msgSeverityNI >= 0)
+      {
+        printf("Message Severity: %s\n", msgSeverity);
+      }
+      else
+      {
+        printf("Message Severity: Unknown\n");
+      }
+
+      if (msgNI >= 0)
+      {
+        printf("Message\t: %s\n", msg); 
+      }
+      else
+      {
+        printf("Message\t: Unknown\n");
+      }
+    }
+  } /* end of third while loop */
+
+  /* close the cursor c3 */
+  EXEC SQL CLOSE c3;
+  EMB_SQL_CHECK("cursor -- close");
+
+  /* disconnect from the database */
+  rc = DbDisconn(dbAlias);
+  if (rc != 0)
+  {
+    return rc;
+  }
+  
+  return 0;
+
+} /* end of main */

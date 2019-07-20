@@ -1,0 +1,350 @@
+/***************************************************************************
+**   (c) Copyright IBM Corp. 2007 All rights reserved.
+**
+**   The following sample of source code ("Sample") is owned by International
+**   Business Machines Corporation or one of its subsidiaries ("IBM") and is
+**   copyrighted and licensed, not sold. You may use, copy, modify, and
+**   distribute the Sample in any form without payment to IBM, for the purpose of
+**   assisting you in the development of your applications.
+**
+**   The Sample code is provided to you on an "AS IS" basis, without warranty of
+**   any kind. IBM HEREBY EXPRESSLY DISCLAIMS ALL WARRANTIES, EITHER EXPRESS OR
+**   IMPLIED, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED WARRANTIES OF
+**   MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE. Some jurisdictions do
+**   not allow for the exclusion or limitation of implied warranties, so the above
+**   limitations or exclusions may not apply to you. IBM shall not be liable for
+**   any damages you suffer as a result of using, copying, modifying or
+**   distributing the Sample, even if IBM has been advised of the possibility of
+**   such damages.
+** *************************************************************************
+**
+** SAMPLE FILE NAME: recxmldecomp.sqc
+**
+** PURPOSE: How to register a recursive XML schema to the XSR and
+**          enable the same for decomposition.
+**
+** USER SCENARIO: The existing PurchaseOrder schema in the Sample database is
+**   enhanced to have new Employee tables to process the purchase orders.
+**   We have Recursive Schema for Employee data management, an employee
+**   can be a manager and himself reporting to another employee. The XML document
+**   contains the employee information along with department details which needs
+**   to be stored in relational tables for easy retrieval of data.
+**
+**  PREREQUISITE:
+**        The instance document and the annotated schema should exist in the same
+**        directory as the sample. Copy recemp.xml, recemp.xsd from directory
+**        <install_path>/sqllib/samples/xml/data in UNIX and
+**        <install_path>\sqllib\samples\xml\data in Windows to the working directory.
+**
+**  EXECUTION:    i)  bldapp recxmldecomp ( Build the sample)
+**                ii) recxmldecomp        ( Run the sample)
+**
+**  INPUTS:       NONE
+**
+**  OUTPUTS:      Decomposition of XML document according to the annotations
+**                in recursive schema.
+**
+**  OUTPUT FILE:  recxmldecomp.out (available in the online documentation)
+**
+**  SQL STATEMENTS USED:
+**        REGISTER XMLSCHEMA
+**        COMPLETE XMLSCHEMA
+**        DECOMPOSE XML DOCUMENT
+**        CREATE
+**        SELECT
+**        DROP
+**
+*****************************************************************************
+**
+** For more information on the sample programs, see the README file.
+**
+** For information on developing C applications, see the Application
+** Development Guide.
+**
+** For information on using SQL statements, see the SQL Reference.
+**
+** For the latest information on programming, building, and running DB2
+** applications, visit the DB2 application development website:
+**     http://www.software.ibm.com/data/db2/udb/ad
+****************************************************************************
+**
+**  SAMPLE DESCRIPTION
+**
+** *************************************************************************
+** 1. Register the annotated recursive XML schema.
+** 2. Decompose the XML document using the registered XML schema.
+** 3. Select data from the relational tables to see the decomposed data.
+** *************************************************************************/
+
+/* **************************************************************************
+**    SETUP
+** **************************************************************************/
+
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+#include <sqlenv.h>
+#include <sqlutil.h>
+#include "utilemb.h"
+
+EXEC SQL INCLUDE SQLCA;
+EXEC SQL BEGIN DECLARE SECTION;
+  char RelSchema[1024];
+  char SchemaName[1024];
+  char SchemaLocation[1024];
+  char PrimaryDocument[1024];
+  char xmlfilename[1024];
+  char documentid[1024];
+  short shred = 1;
+  short validation = 1;
+  short isRelSchemaNULL = 0;
+  short isXMLSchemaNULL = 0;
+  short isDocumentIDNULL = 0;
+  short isXMLFileNULL = 0;
+  short isValidationNULL = 0;
+  short isReserveBLOB1NULL = -1;
+  short isReserveBLOB2NULL = -1;
+  short isReserveIntNULL = -1;
+  SQL TYPE IS BLOB_FILE xsdfile;
+  SQL TYPE IS BLOB_FILE addfile;
+  SQL TYPE IS BLOB_FILE xmlfile;
+  short in_ind = 0;
+  short null_ind = -1;
+  SQL TYPE is BLOB(1M) *xsdobjp = NULL;
+  SQL TYPE is BLOB(1M) *addobjp = NULL;
+  SQL TYPE is BLOB(2M) *xmlobjp = NULL;
+  char empid[20];
+  char deptid[20];
+  SQL TYPE IS XML AS CLOB(50K) members;
+  char status[1];
+  char decomposition[1];
+  char decomposition_version[5];
+EXEC SQL END DECLARE SECTION;
+
+int selectfromtable(void);
+
+int main(int argc, char *argv[])
+{
+  int rc = 0;
+  char dbAlias[SQL_ALIAS_SZ + 1];
+  char user[USERID_SZ + 1];
+  char pswd[PSWD_SZ + 1];
+  FILE *testfile;
+  char strStmt[100];
+
+  /* check the command line arguments */
+  rc = CmdLineArgsCheck1(argc, argv, dbAlias, user, pswd);
+  if (rc != 0)
+  {
+    return rc;
+  }
+
+  /* connect to database */
+  rc = DbConn(dbAlias, user, pswd);
+  if (rc != 0)
+  {
+    return rc;
+  }
+
+  printf("\n-----------------------------------------------------------");
+  printf("\nUSE THE SQL STATEMENT\n");
+  printf("  CREATE TABLE\n");
+  printf("TO CREATE TABLE xdb.poemployee\n");
+
+  strcpy(strStmt,"CREATE TABLE xdb.poemployee (empid VARCHAR(20), deptid VARCHAR(20), members XML)");
+
+  EXEC SQL EXECUTE IMMEDIATE :strStmt;
+  EMB_SQL_CHECK("Table -- Create");
+
+  /* **************************************************************************
+  **    1. Register the recursive XML schema.
+  ** **************************************************************************/
+  strcpy((char *)RelSchema, "xdb");
+  strcpy((char *)SchemaName,"employee");
+  strcpy((char *)SchemaLocation, "http://porder.com/employee.xsd");
+  strcpy((char *)documentid, "employee001");
+  strcpy((char *)PrimaryDocument,"recemp.xsd");
+  strcpy((char *)xmlfilename, "recemp.xml");
+
+  printf("\nTHIS SAMPLE SHOWS: How to register a recursive XML schema to the XSR ");
+  printf("\nand enable the same for decomposition.\n\n");
+
+  /* Register the schema documents.*/
+  strcpy(xsdfile.name, PrimaryDocument);
+  xsdfile.name_length = strlen(xsdfile.name);
+  xsdfile.file_options = SQL_FILE_READ;
+  if (xsdfile.name_length > 0)
+    {
+      testfile = fopen( xsdfile.name, "r" );
+      if ( testfile != NULL )
+        {
+          fclose( testfile );
+          if ((xsdobjp = (struct xsdobjp_t *)
+                                     malloc (sizeof (*xsdobjp))) != NULL )
+            {
+               memset(xsdobjp, 0, sizeof(*xsdobjp));
+               EXEC SQL VALUES (:xsdfile) INTO :*xsdobjp;
+            }
+        }
+      else
+        {
+           printf("fopen() error.\n");
+           printf("Error accessing file: %s \n", xsdfile.name);
+           exit(0);
+        }
+    }
+  /* Call the stored procedure. */
+  printf("CALLING  SYSPROC.XSR_REGISTER TO REGISTER THE SCHEMA\n");
+
+  EXEC SQL CALL SYSPROC.XSR_REGISTER (:RelSchema:in_ind,
+                                      :SchemaName:in_ind,
+                                      :SchemaLocation:in_ind,
+                                      :*xsdobjp:in_ind,
+                                      :*xsdobjp:null_ind );
+  EMB_SQL_CHECK("CALLING SYSPROC.XSR_REGISTER");
+
+  /* Complete schema registration with Decomposition enabled.*/
+  /* COMPLETE XMLSCHEMA xdb.bookdetail ENABLE DECOMPOSITION;*/
+
+  EXEC SQL CALL SYSPROC.XSR_COMPLETE (:RelSchema:in_ind,
+                                      :SchemaName:in_ind,
+                                      :*xsdobjp:null_ind,
+                                      :shred);
+
+  EMB_SQL_CHECK("CALLING SYSPROC.XSR_COMPLETE");
+
+  /* Perform Commit to save changes */
+  EXEC SQL COMMIT;
+  EMB_SQL_CHECK("COMMIT");
+
+  /*Check catalog tables for information regarding registered schema. */
+  EXEC SQL DECLARE c2 cursor FOR SELECT status, decomposition, decomposition_version                                                        FROM SYSIBM.SYSXSROBJECTS WHERE XSROBJECTNAME = 'EMPLOYEE';
+   /* open cursor */
+  EXEC SQL OPEN c2;
+  EMB_SQL_CHECK("cursor -- open");
+
+  /* fetch cursor */
+  EXEC SQL FETCH c2 INTO :status, :decomposition, :decomposition_version;
+  EMB_SQL_CHECK("cursor -- fetch");
+  while (sqlca.sqlcode != 100)
+  {
+    printf("STATUS 			   : %.*s\n",1,status);
+    printf("DECOMPOSITION ENABLED  : %.*s\n",1,decomposition);
+    printf("DECOMPOSITION VERSION  : %.*s\n",5, decomposition_version);
+   
+    EXEC SQL FETCH c2 INTO :status, :decomposition, :decomposition_version;
+    EMB_SQL_CHECK("cursor -- fetch");
+
+  }
+
+  /* close cursor */
+  EXEC SQL CLOSE c2;
+  EMB_SQL_CHECK("cursor -- close");
+
+  /* *************************************************************************
+  ** 2. Decompose the XML document using the registered XML schema.
+  ** *************************************************************************/
+
+  /* Decompose the XML document */
+  if (strcmp(xmlfilename, "NULL") == 0)
+    {
+      isXMLFileNULL = -1;
+    }
+  else
+    {
+      strcpy(xmlfile.name, xmlfilename);
+      xmlfile.name_length = strlen(xmlfile.name);
+      xmlfile.file_options = SQL_FILE_READ;
+      if (xmlfile.name_length > 0)
+        {
+          testfile = fopen( xmlfile.name, "r" );
+          if ( testfile != NULL )
+            {
+              fclose( testfile );
+              if ((xmlobjp = (struct xmlobjp_t *)
+                                       malloc (sizeof (*xmlobjp))) != NULL )
+                {
+                   memset(xmlobjp, 0, sizeof(*xmlobjp));
+                   EXEC SQL VALUES (:xmlfile) INTO :*xmlobjp;
+                }
+            }/* file opened*/
+          else
+            {
+              printf("fopen() error.\n");
+              printf("Error accessing file: %s \n", xmlfile.name);
+              exit(0);
+            }
+        } /* xmlfile.name_length>0 */
+      }
+
+    EXEC SQL CALL SYSPROC.XDBDECOMPXML (:RelSchema,
+                                        :SchemaName,
+                                        :*xmlobjp,
+                                        :documentid,
+                                        :validation:isValidationNULL,
+                                        :*xmlobjp:isReserveBLOB1NULL,
+                                        :*xmlobjp:isReserveBLOB2NULL,
+                                        :validation:isReserveIntNULL);
+
+    EMB_SQL_CHECK("CALL SYSPROC.XDBDECOMPXML");
+
+    /* *************************************************************************
+    ** 3. Select data from the relational tables to see the decomposed data.
+    ** *************************************************************************/
+
+    /* Select from tables to check if decomposition was successfull */
+    rc = selectfromtable();
+
+    EXEC SQL DROP TABLE xdb.poemployee;
+    EMB_SQL_CHECK("XDB.POEMPLOYEE-- DROP");
+
+    EXEC SQL DROP XSROBJECT xdb.employee;
+    EMB_SQL_CHECK("XDB.EMPLOYEE-- DROP");
+
+    /* Reset connection to DB */
+    EXEC SQL CONNECT RESET;
+    EMB_SQL_CHECK("Connect Reset");
+
+    return 0;
+}
+
+int selectfromtable(void)
+{
+  int rc = 0;
+  struct sqlca sqlca;
+  char strStmt[100];
+
+  printf("\n  Executing:\n");
+  printf("    SELECT empid, deptid, members FROM XDB.POEMPLOYEE ORDER BY empid\n");
+  printf("\n  Results:\n");
+  printf("-------------------------------------------------------------------------------\n");
+
+  /* declare cursor */
+  strcpy(strStmt, "SELECT empid, deptid, members FROM xdb.poemployee ORDER BY empid");
+  EXEC SQL PREPARE stmt FROM :strStmt;
+  EXEC SQL DECLARE c0 CURSOR FOR stmt;
+
+  /* open cursor */
+  EXEC SQL OPEN c0;
+  EMB_SQL_CHECK("cursor -- open");
+
+  /* fetch cursor */
+  EXEC SQL FETCH c0 INTO :empid, :deptid, :members;
+  EMB_SQL_CHECK("cursor -- fetch");
+
+  while (sqlca.sqlcode != 100)
+  {
+    printf("EMPID   : %s\n", empid);
+    printf("DEPTID  : %s\n", deptid);
+    printf("MEMBERS : %s\n\n", members.data);
+
+    EXEC SQL FETCH c0 INTO :empid, :deptid, :members;
+    EMB_SQL_CHECK("cursor -- fetch");
+  }
+
+  /* close cursor */
+  EXEC SQL CLOSE c0;
+  EMB_SQL_CHECK("cursor -- close");
+
+  return 0;
+} /* selectfromtable */

@@ -1,0 +1,76 @@
+****************************************************************************
+*                             Licensed Materials 
+*                              Property of IBM
+*
+* Governed under the terms of the International
+* License Agreement for Non-Warranted Sample Code.
+*
+* © COPYRIGHT International Business Machines Corp. 2007
+* All Rights Reserved.
+*
+* US Government Users Restricted Rights - Use, duplication or
+* disclosure restricted by GSA ADP Schedule Contract with IBM Corp.
+*
+*****************************************************************************
+* 
+*                         CLASS DEFINITION
+*
+* UtilConnection_DB2.php
+*
+*** Class  
+*
+*     db2_Connection extends IO_Helper
+*
+*
+***** Public variables
+*
+*      o $[Connection Type]conn 
+*        - The default connection to the database
+*
+*      o $HTML_GENERAL_HELP
+*        - Overridden from IO_Helper
+*        - Contains PHP code to generate the generic HTML help output
+*
+*      o $CLI_GENERAL_HELP
+*        - Overridden from IO_Helper
+*        - Contains PHP code to generate the generic CLI help output
+* 
+**** FUNCTIONS
+*
+*      o __construct
+*        - Initialize IO_Helper bass class
+*        - Set the schema variable to the appropriate value.
+*
+*      o Public make_Connection($persistentConnection = false)
+*        - Forms a connection to the database and sets $dbconn
+*          By default this connection is non persistent if you would like a
+*          Persistent Connection’ you must pass in true
+*          - Exits on failure to connect
+*          - Prints out 'Connection Open' on success
+*          - Attempts to turn off auto commit if it is on.
+*
+*      o Public close_Connection($dbconn = null)
+*        - Tries to close the given connection on the connection passed in 
+*          or else on the default connection if null is passed
+*          - Just outputs a success for failure string
+*
+*      o Public rollback($dbconn = null)
+*        - Tries to perform a rollback on the connection passed in or else  
+*          on the default connection if null is passed
+*          - Return true on success and false on failure
+*          - Output the result to the screen
+*
+*      o Public commit($dbconn = null)
+*        - Tries to perform a Commit Tries on the connection passed in or  
+*          else on the default connection if null is passed
+*          - Return true on success and false on failure
+*          - Output the result to the screen
+*
+*      o Public exec($query)
+*        - Execute a single query against the main database connection. 
+*          - Returns true on success and false on a fail.
+*
+*      o Public get_Error()
+*        - Returns a error messages that is set in the connection
+* 
+*****************************************************************************

@@ -1,0 +1,549 @@
+//**************************************************************************
+//   (c) Copyright IBM Corp. 2007 All rights reserved.
+//   
+//   The following sample of source code ("Sample") is owned by International 
+//   Business Machines Corporation or one of its subsidiaries ("IBM") and is 
+//   copyrighted and licensed, not sold. You may use, copy, modify, and 
+//   distribute the Sample in any form without payment to IBM, for the purpose of 
+//   assisting you in the development of your applications.
+//   
+//   The Sample code is provided to you on an "AS IS" basis, without warranty of 
+//   any kind. IBM HEREBY EXPRESSLY DISCLAIMS ALL WARRANTIES, EITHER EXPRESS OR 
+//   IMPLIED, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED WARRANTIES OF 
+//   MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE. Some jurisdictions do 
+//   not allow for the exclusion or limitation of implied warranties, so the above 
+//   limitations or exclusions may not apply to you. IBM shall not be liable for 
+//   any damages you suffer as a result of using, copying, modifying or 
+//   distributing the Sample, even if IBM has been advised of the possibility of 
+//   such damages.
+//***************************************************************************
+//
+// SAMPLE FILE NAME: XmlIntegrate.sqlj
+//
+// PURPOSE: To show how to use XMLROW and XMLGROUP functions to publish
+//          relational information as XML. 
+//          To show XMLQuery default passing mechanism. 
+//	    To show default column specification for XMLTABLE.
+//
+// USAGE SCENARIO: The super marker manager maintains a database to store 
+//                 all customer's addresses in a relational table called 
+//                 "addr" so that whenever a customer places an order for
+//                 any item, he can use this "addr" table to deliver the
+//                 item. As the number of customers grew year after 
+//                 year,there was a need to change the table structure 
+//                 to have one single XML column for address and maintain 
+//                 the data in a new table called "custinfo_new".
+//
+// PREQUISITES : 1. Create the pre-requisite tables by running the command:
+//                    XmlIntegrateScrpt
+//                  Alternatively,you can run the command:
+//                    db2 -tvf XmlIntegrate_setup.db2
+//
+// EXECUTION : 1. Compile the sample using:
+//                   bldsqlj XmlIntegrate <userid> <password> <server_name> <port_number> <db_name>
+//             2. Run the sample as:
+//                   java XmlIntegrate
+//             3. Perform a clean up once the sample has been executed using:
+//                   db2 -tvf XmlIntegrate_cleanup.db2
+//
+// INPUTS: NONE
+// 
+// OUTPUTS: Shows comparison of XML documents created using different
+//          SQLXML functions and using XMLROW, XMLGROUP functions
+//
+// OUTPUT FILE: XmlIntegrate.out (available in the online documentation)
+//
+// SQL STATEMENTS USED:
+// 		 INSERT 
+//		 SELECT
+//
+// SQL/XML FUNCTIONS USED:
+//  		 XMLROW
+//		 XMLGROUP
+// 		 XMLDOCUMENT
+//		 XMLELEMENT
+//		 XMLCONCAT
+//		 XMLATTRIBUTES
+//		 
+//************************************************************************
+// For more information about the command line processor (CLP) scripts,     
+// see the README file.                                                     
+// For information on using SQL statements, see the SQL Reference.          
+//                                                                          
+// For the latest information on programming, building, and running DB2     
+// applications, visit the DB2 application development website:             
+// http://www.software.ibm.com/data/db2/udb/ad                            
+//  
+//************************************************************************
+//
+// SAMPLE DESCRIPTION
+//
+//************************************************************************
+//
+// 1. Shows comparison of publishing XML documents using different
+//    SQL/XML functions and XMLROW function.
+//
+//  1.1 Element centric mapping comparison.
+//
+//  1.2 Attribute centric mapping comparison.
+//
+// 2. Shows the comparison of publishing XML documents using 
+//    different SQL/XML publishing functions and XMLGROUP function.
+//
+// 3. Shows XMLQuery default parameter passing mechanism.
+//
+// 4. Shows default column specification for XMLTABLE.
+//
+//*************************************************************************
+//
+//  IMPORT ALL PACKAGES AND CLASSES
+//
+//*************************************************************************
+
+import java.util.*;
+import java.io.*;
+import java.lang.*;
+import java.sql.*;
+import sqlj.runtime.*;
+import sqlj.runtime.ref.*;
+
+//*************************************************************************
+// 
+//      DECLARE CURSORS
+//
+//*************************************************************************
+
+#sql iterator XmlIntegrate_cursor (int , String);
+#sql iterator XmlIntegrate_cursor1 (String);
+#sql iterator XmlIntegrate_cursor2 (int, String);
+
+class XmlIntegrate
+{
+  public static void main(String argv[])
+  {
+    String url = "jdbc:db2:sample";
+    DefaultContext ctx = null;
+    Connection con = null;
+    try
+    {
+
+      //*****************************************************************
+      //
+      //    SETUP
+      //
+      //*****************************************************************
+
+      // Register the jcc driver
+      Class.forName("com.ibm.db2.jcc.DB2Driver").newInstance();
+
+      // Connect to sample database
+      con = DriverManager.getConnection(url);
+
+      // Set connection to default connection context 
+      ctx = new DefaultContext(con); 
+      DefaultContext.setDefaultContext(ctx);
+  
+      System.out.println("--------------------------------------------------");
+      System.out.println("This sample shows  "+
+               "1. How to use XMLROW and XMLGROUP functions to publish"+
+               " relational information as XML.");
+      System.out.println("2. Shows XMLQuery default passing mechanism");
+      System.out.println("3. Shows default column specification for XMLTABLE");
+      System.out.println("--------------------------------------------------");
+      System.out.println("\n");
+
+
+                        
+      XmlRowUsage();
+      XmlGroupUsage();
+      XQueryPassingMechanism();
+      XMLTABLEColSpec();
+
+      // close connection
+      con.close();
+    }
+    catch(SQLException sqle)
+    {
+      System.out.println("Error Msg: "+ sqle.getMessage());
+      System.out.println("SQLState: "+sqle.getSQLState());
+      System.out.println("SQLError: "+sqle.getErrorCode());
+      System.out.println("Rollback the transaction and quit the program");
+      System.out.println();
+      try { DefaultContext.getDefaultContext().getConnection().rollback(); }
+      catch (Exception e)
+      {
+      }
+      System.exit(1);
+    }
+    catch(Exception e)
+    {}
+  } //main
+ 
+  //*********************************************************************
+  //  1. Shows comparison of publishing XML documents using different
+  //     SQL/XML functions and XMLROW function.
+  //
+  //********************************************************************* 
+  static void XmlRowUsage()
+  {
+    try
+    {
+      // create table 'addr'
+      System.out.println("\nThe table addr is created in the setup script \n" +
+                         "XmlIntegrate_setup.db2 using the command \n" +
+                         "'CREATE TABLE addr (custid int, \n" +
+                         "                     name varchar(20), \n" +
+                         "                     street varchar(20), \n" +
+                         "                     city varchar(20), \n" +
+                         "                     province varchar(20), \n" +
+                         "                     postalcode BIGINT)' \n");
+
+      // create table 'custinfo_new'
+      System.out.println("\nThe table custinfo_new is created in the setup script \n" +
+                         "XmlIntegrate_setup.db2 using the command \n" +
+                         "'CREATE TABLE custinfo_new(custid int, address XML)' \n");
+                         
+      //****************************************************************
+      //  1.1 Element centric mapping comparison
+      //****************************************************************   
+
+      // Insert values into "addr" table
+      #sql {INSERT INTO addr 
+            VALUES (1000, 'suma', 'james street', 
+                    'madras', 'Tamil Nadu', 560004)};
+
+     // Insert values into "custinfo_new" table and Create an XML 
+     // document address with name, street, city, postal code columns
+     // in the "addr" table and display it along with custid details
+
+      #sql {INSERT INTO custinfo_new (Custid, Address)
+            SELECT Custid, XMLDOCUMENT(
+             XMLElement(NAME "row",XMLCONCAT(
+             XMLElement(NAME "name", name OPTION NULL ON NULL),
+             XMLElement(NAME "street", street OPTION NULL ON NULL), 
+             XMLElement(NAME "city", city OPTION NULL ON NULL),
+             XMLElement(NAME "province", province OPTION NULL ON NULL),
+             XMLElement(NAME "postalcode", postalcode OPTION NULL ON NULL))
+             OPTION NULL ON NULL )) 
+            FROM addr}; 
+   
+      // Create an XML document using XMLROW function with name, street
+      // city, postalcode columns of "addr" table and insert into Address 
+      // column of "custinfo_new" table
+
+      #sql {INSERT INTO custinfo_new (Custid, Address)
+            (SELECT Custid, XMLROW(C.name, C.street, C.city,
+                                   C.province,C.postalcode) 
+             FROM addr C)};
+
+
+      System.out.println(" Check whether XML document created using "+
+                         "SQL/XML publishing functions and the one " +
+                         "created with XMLROW are same.");
+
+      XmlIntegrate_cursor cur1;
+      #sql cur1 = {SELECT custid, address 
+                   FROM custinfo_new};
+  
+ 
+      int customerId = 0;
+      String Addr = "";
+
+      System.out.println("CUSTOMERID     ADDRESS");
+      System.out.println("----------     ---------"); 
+  
+      #sql {FETCH :cur1 INTO :customerId, :Addr};
+      while(true)
+      {
+        if (cur1.endFetch())
+        {
+          break;
+        }
+        System.out.println(Data.format(customerId, 20) + "      "+
+                           Data.format(Addr, 1024));
+        #sql {FETCH :cur1 INTO :customerId, :Addr};
+      }
+
+      //************************************************************
+      //  1.2 Attribute Centric mapping comparison
+      //************************************************************
+
+      // Attribute centric mapping using case expressions in DB2 9
+      System.out.println("------------------------------------------");
+      System.out.println("   Attribute Centric mapping              "); 
+      System.out.println("------------------------------------------");
+      
+      #sql cur1 = { SELECT Custid, CASE WHEN C.name is NULL and 
+                                             C.street is NULL and 
+                                             C.City is NULL and 
+                                             C.province is NULL and 
+                                             C.postalcode is NULL 
+                                   THEN cast(NULL as XML) 
+                                   ELSE XMLDOCUMENT(XMLElement(name "row", 
+                                        XMLAttributes(C.name, C.street,
+                                                      C.city, C.province,
+                                                      C.postalcode))) 
+                                   END 
+                    FROM addr C};
+
+      #sql {FETCH :cur1 INTO :customerId, :Addr};
+      while(true)
+      {
+        if (cur1.endFetch())
+        {
+          break;
+        }
+        System.out.println(Data.format(customerId, 20) + "      "+
+                           Data.format(Addr, 1024));
+        #sql {FETCH :cur1 INTO :customerId, :Addr};
+      }
+
+
+      System.out.println("-----------------------------------------------");
+      System.out.println("Attribute centric mapping using XMLROW function");
+      System.out.println("-----------------------------------------------");
+      #sql cur1 = {SELECT Custid, XMLROW(C.name, C.street, C.city, 
+                         C.province,C.postalcode OPTION AS ATTRIBUTES) 
+                   FROM addr C};
+
+      #sql {FETCH :cur1 INTO :customerId, :Addr};
+      while(true)
+      {
+        if (cur1.endFetch())
+        {
+          break;
+        }
+        System.out.println(Data.format(customerId, 20) + "      "+
+                           Data.format(Addr, 1024));
+        #sql {FETCH :cur1 INTO :customerId, :Addr};
+      }
+      cur1.close();
+    }
+    catch(SQLException sqle)
+    {
+      System.out.println("Error Msg: "+ sqle.getMessage());
+      System.out.println("SQLState: "+sqle.getSQLState());
+      System.out.println("SQLError: "+sqle.getErrorCode());
+      System.out.println("Rollback the transaction and quit the program");
+      System.out.println();
+      try { DefaultContext.getDefaultContext().getConnection().rollback(); }
+      catch (Exception e)
+      {
+      }
+      System.exit(1);
+    }
+    catch(Exception e)
+    {}
+  } //XmlRowUsage
+  
+  //*************************************************************************
+  //  2. Shows the comparison of publishing XML documents
+  //     using different SQL/XML publishing functions and XMLGROUP function
+  //
+  //*************************************************************************
+  static void XmlGroupUsage()
+  {
+    try
+    {
+
+      // Get all purchaseorders made by a particular customer as one single
+      // XML document
+
+      XmlIntegrate_cursor1 cur1;
+
+      System.out.println("-----------------------------------------------");
+      System.out.println(" Create XML document using SQL/XML publishing "+
+                         "functions");
+      System.out.println("-----------------------------------------------");
+
+      #sql cur1 = {SELECT XMLDOCUMENT(XMLElement(NAME "rowset", 
+               XMLAGG(XMLElement(NAME "row", 
+               XMLElement(NAME "orderdate", p.orderdate OPTION NULL ON NULL), 
+               XMLElement(NAME "porder", p.porder OPTION NULL ON NULL) 
+               OPTION NULL ON NULL)) 
+               OPTION NULL ON NULL)) 
+               FROM purchaseorder p, customer c 
+               WHERE p.custid=c.Cid};
+
+      String Addr = "";
+
+      System.out.println("ADDRESS");
+      System.out.println("---------");
+
+      #sql {FETCH :cur1 INTO :Addr};
+      while(true)
+      {
+        if (cur1.endFetch())
+        {
+          break;
+        }
+        System.out.println( Data.format(Addr, 5000));
+        #sql {FETCH :cur1 INTO :Addr};
+      }
+
+      // Doing the same as above using XMLGROUP function
+
+      System.out.println("----------------------------------------------");
+      System.out.println("Create an XML document using XMLGROUP function");
+      System.out.println("----------------------------------------------");
+
+      #sql cur1 = {SELECT  XMLGROUP(p.orderdate, p.porder)
+                   FROM purchaseorder p, customer c 
+                   WHERE p.custid=c.Cid}; 
+      #sql {FETCH :cur1 INTO :Addr};
+      while(true)
+      {
+        if (cur1.endFetch())
+        {
+          break;
+        }
+        System.out.println( Data.format(Addr, 5000));
+        #sql {FETCH :cur1 INTO :Addr};
+      }
+
+      cur1.close();
+    }
+    catch(SQLException sqle)
+    {
+      System.out.println("Error Msg: "+ sqle.getMessage());
+      System.out.println("SQLState: "+sqle.getSQLState());
+      System.out.println("SQLError: "+sqle.getErrorCode());
+      System.out.println("Rollback the transaction and quit the program");
+      System.out.println();
+      try { DefaultContext.getDefaultContext().getConnection().rollback(); }
+      catch (Exception e)
+      {
+      }
+      System.exit(1);
+    }
+    catch(Exception e)
+    {}
+  } //XmlGroupUsage
+
+  //*************************************************************************
+  //
+  //    3. Shows XMLQuery default parameter passing mechanism
+  //
+  //*************************************************************************
+  static void XQueryPassingMechanism()
+  {
+    try
+    {
+      String info="";
+      int empno=0;
+
+
+      System.out.println("-------------------------------------------");
+      System.out.println("XMLQuery default parameter passing mechanism");
+      System.out.println("-------------------------------------------");
+    
+      // create table 'employee'
+      System.out.println("\nThe table employee is created in the setup script \n" +
+                         "XmlIntegrate_setup.db2 using the command \n" +
+                         "'CREATE TABLE EMPLOYEE (empno int,lastname varchar(20), \n" +
+                         "           firstname varchar(20), workdept varchar(20), \n" +
+                         "           phoneno varchar(20), hireDate DATE)' \n");
+                        
+
+      #sql {INSERT INTO employee 
+            VALUES (100, 'latha', 'suma', 'Informix', '5114', '03/01/2006')};
+
+      XmlIntegrate_cursor2 cur1;
+
+      System.out.println("SELECT empno, XMLQuery('<Emp lastname="+
+                         "\"{$LASTNAME}\" firstname=\"{$FIRSTNAME}\">"+
+                         "<department>{$WORKDEPT}</department>"+
+                         "<phone_ext>{$PHONENO}</phone_ext>"+
+                         "<hire_date>{$HIREDATE}</hire_date></Emp>')"+
+                         "FROM employee");
+      System.out.println("\n");
+   
+      #sql cur1 = {SELECT empno, XMLQuery('<Emp lastname="{$LASTNAME}" 
+                     firstname="{$FIRSTNAME}">
+                     <department>{$WORKDEPT}</department>
+                     <phone_ext>{$PHONENO}</phone_ext>
+                     <hire_date>{$HIREDATE}</hire_date></Emp>') 
+                   FROM employee};
+
+      #sql {FETCH :cur1 INTO :empno, :info};
+
+      System.out.println(Data.format(empno, 20)+"      "+
+                         Data.format(info, 200));
+      cur1.close();   
+      
+    }
+    catch(SQLException sqle)
+    {
+      System.out.println("Error Msg: "+ sqle.getMessage());
+      System.out.println("SQLState: "+sqle.getSQLState());
+      System.out.println("SQLError: "+sqle.getErrorCode());
+      System.out.println("Rollback the transaction and quit the program");
+      System.out.println();
+      try { DefaultContext.getDefaultContext().getConnection().rollback(); }
+      catch (Exception e)
+      {
+      }
+      System.exit(1);
+    }
+    catch(Exception e)
+    {}
+  } //XQueryPassingMechanism
+
+
+  //*************************************************************************
+  //
+  //      4. Shows the default column specification of XMLTABLE
+  //
+  //*************************************************************************
+
+  static void XMLTABLEColSpec()
+  {
+    try
+    {
+      String info = "";
+      XmlIntegrate_cursor1 cur1;
+
+      System.out.println("--------------------------------------------------");
+      System.out.println("Shows the default column specification of XMLTABLE");
+      System.out.println("--------------------------------------------------");
+
+      System.out.println("SELECT X.* FROM XMLTABLE ('db2-fn:xmlcolumn " +
+                         "(\"CUSTOMER.INFO\")/customerinfo/phone') as X");  
+      System.out.println("\n");
+
+      #sql cur1 = {SELECT X.* FROM XMLTABLE ('db2-fn:xmlcolumn 
+                  ("CUSTOMER.INFO")/customerinfo/phone') as X};
+
+      #sql {FETCH :cur1 INTO :info};
+      while(true)
+      {
+        if (cur1.endFetch())
+        {
+          break;
+        }
+    
+        System.out.println("INFO");
+        System.out.println("-----");
+      
+        System.out.println(Data.format(info, 1024));
+        #sql {FETCH :cur1 INTO :info};
+      }
+      cur1.close(); 
+    }
+    catch(SQLException sqle)
+    {
+      System.out.println("Error Msg: "+ sqle.getMessage());
+      System.out.println("SQLState: "+sqle.getSQLState());
+      System.out.println("SQLError: "+sqle.getErrorCode());
+      System.out.println("Rollback the transaction and quit the program");
+      System.out.println();
+      try { DefaultContext.getDefaultContext().getConnection().rollback(); }
+      catch (Exception e)
+      {
+      }
+      System.exit(1);
+    }
+    catch(Exception e)
+    {}
+  } //XMLTABLEColSpec
+} //class XmlIntegrate

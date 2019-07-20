@@ -1,0 +1,6 @@
+1, "<XDS FIL='loadfile1.xml' SCH='porder'/>"
+2, "<XDS FIL='loadfile2.xml' SCH='porder'/>"
+3, "<XDS FIL='loadfile2.xml' SCH='customer'/>"
+4, "<XDS FIL='loadfile2.xml' SCH='product'/>"
+5, "<XDS FIL='loadfile2.xml' SCH='supplier'/>"
+6, "<XDS FIL='loadfile2.xml' SCH='porder'/>"

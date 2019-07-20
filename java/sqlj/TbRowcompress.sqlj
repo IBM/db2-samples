@@ -1,0 +1,648 @@
+//***************************************************************************
+// (c) Copyright IBM Corp. 2007 All rights reserved.
+// 
+// The following sample of source code ("Sample") is owned by International 
+// Business Machines Corporation or one of its subsidiaries ("IBM") and is 
+// copyrighted and licensed, not sold. You may use, copy, modify, and 
+// distribute the Sample in any form without payment to IBM, for the purpose of 
+// assisting you in the development of your applications.
+// 
+// The Sample code is provided to you on an "AS IS" basis, without warranty of 
+// any kind. IBM HEREBY EXPRESSLY DISCLAIMS ALL WARRANTIES, EITHER EXPRESS OR 
+// IMPLIED, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED WARRANTIES OF 
+// MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE. Some jurisdictions do 
+// not allow for the exclusion or limitation of implied warranties, so the above 
+// limitations or exclusions may not apply to you. IBM shall not be liable for 
+// any damages you suffer as a result of using, copying, modifying or 
+// distributing the Sample, even if IBM has been advised of the possibility of 
+// such damages.
+//***************************************************************************
+//
+// SOURCE FILE NAME: TbRowcompress.sqlj
+//
+// SAMPLE: How to perform row compression on a table
+//
+//         This sample shows:
+//         1. How to enable the row compression after a table is created.
+//         2. How to enable the row compression during table creation.
+//         3. Usage of the options to REORG to use the exiting dictionary
+//            or creating a new dictionary.
+//         4. How to estimate the effectiveness of the compression.
+//
+//         This sample should be run using the following steps:
+//         1.Compile the program with the following command:
+//           javac TbRowcompress.java
+//
+//         2.The sample should be run using the following command
+//           java TbRowcompress <path for dummy file>
+//           The fenced user id must be able to create or overwrite files in
+//           the directory specified.This directory must be a full path on
+//           the server. The dummy file 'dummy.del' must
+//           exist before the sample is run.
+//
+// SQL STATEMENTS USED:
+//         ALTER TABLE
+//         COMMIT
+//         DELETE
+//         EXPORT
+//         FETCH
+//         IMPORT
+//         INSERT
+//         INSPECT
+//         REORG
+//         RUNSTATS
+//         SELECT
+//         UPDATE
+//
+// JAVA 2 CLASSES USED:
+//         Statement
+//         CallableStatement
+//         ResultSet
+//
+// Classes used from Util.java are:
+//         Db
+//         Data
+//         JdbcException
+//
+// PREQUISITES : 1. Create the pre-requisite tables by running the command:
+//                    TbRowcompressScrpt
+//                  Alternatively,you can run the command:
+//                    db2 -tvf TbRowcompress_setup.db2
+//
+// EXECUTION : 1. Compile the sample using:
+//                   bldsqlj TbRowcompress <userid> <password> <server_name> <port_number> <db_name>
+//             2. Run the sample as:
+//                   java TbRowcompress
+//             3. Perform a clean up once the sample has been executed using:
+//                   db2 -tvf TbRowcompress_cleanup.db2
+//
+// OUTPUT FILE: TbRowcompress.java (available in the online documentation)
+//***************************************************************************
+//
+// For more information on the sample programs, see the README file.
+//
+// For information on developing JDBC applications, see the Application
+// Development Guide.
+//
+// For information on using SQL statements, see the SQL Reference.
+//
+// For the latest information on programming, compiling, and running DB2
+// applications, visit the DB2 application development website at
+//     http://www.software.ibm.com/data/db2/udb/ad
+//***************************************************************************
+
+import java.lang.*;
+import java.sql.*;
+import sqlj.runtime.*;
+import sqlj.runtime.ref.*;
+
+#sql iterator TbRowcompress_Cursor0(String);
+#sql iterator TbRowcompress_Cursor1(int, int);
+#sql iterator TbRowcompress_Cursor2(int, int, int, int, int);
+
+class TbRowcompress
+{
+  public static void main(String argv[])
+  {
+      try
+      {
+        Connection con;
+        DefaultContext ctx;
+
+        // initialize DB2Driver and establish database connection.
+        Class.forName("com.ibm.db2.jcc.DB2Driver").newInstance();
+        con = DriverManager.getConnection("jdbc:db2:SAMPLE");
+
+        ctx = new DefaultContext( con );
+        DefaultContext.setDefaultContext(ctx);
+
+        String path = argv[0];
+
+        System.out.println(
+          "THIS SAMPLE SHOWS HOW TO PERFROM ROW COMPRESSION ON A TABLE.\n" +
+          "\n-------------------------------------------------------------\n");
+
+         // to Load table data into a file.
+        getLoadData(con, path);
+
+        // to enable row compression on table.
+        enableRowCompressionForTables(con, path);
+
+        // to disable row compression on tables.
+        disableRowCompressionForTables(con, path);
+
+        // to inspect the compression.
+        inspectCompression(con, path);
+
+        // disconnect from the 'sample' database
+        con.close();
+
+      }
+      catch (Exception e)
+      {
+        SqljException sqljExc = new SqljException(e);
+        sqljExc.handle();
+      }
+
+  } // main
+
+  // this function shows how to prepare data for load
+  static void getLoadData(Connection con, String path) throws SQLException
+  {
+    try
+    {
+      System.out.println(
+        "\nThe temp table is created in the setup script \n" +
+        "TbRowcompress_setup.db2 using the command \n" +
+        "'CREATE TABLE temp(empno INT, sal INT)' \n");
+
+      // insert data into the table and export the data in order to obtain
+      // dummy.del file in the required format for load.
+
+      System.out.println(
+        "\nUSE THE SQL STATEMENTS:\n" +
+        "  INSERT \n" +
+        "TO INSERT DATA INTO THE TABLE \n" +
+        "\n    Perform:\n" +
+        "    INSERT INTO temp VALUES(100, 20000)\n" +
+        "    INSERT INTO temp VALUES(200, 30000)\n" +
+        "    INSERT INTO temp VALUES(100, 30500)\n" +
+        "    INSERT INTO temp VALUES(300, 20000)\n" +
+        "    INSERT INTO temp VALUES(400, 30000)");
+
+      // insert data into the table
+      #sql {INSERT INTO temp VALUES(100, 20000)};
+      #sql {INSERT INTO temp VALUES(200, 30000)};
+      #sql {INSERT INTO temp VALUES(100, 30500)};
+      #sql {INSERT INTO temp VALUES(300, 20000)};
+      #sql {INSERT INTO temp VALUES(400, 30000)};
+      #sql {COMMIT};
+
+      System.out.println(
+        "\nUSE THE SQL STATEMENTS:\n" +
+        "  EXPORT \n" +
+        "TO EXPORT TABLE DATA INTO A FILE \n" +
+        "\n    Perform:\n" +
+        "    EXPORT TO dummy.del OF DEL SELECT * FROM temp");
+
+      // export data into a dummy file
+      // call the stored procedure ADMIN_CMD for EXPORT
+      System.out.println();
+      System.out.println("Call stored procedure named SYSPROC.ADMIN_CMD");
+
+      String str ="CALL SYSPROC.ADMIN_CMD" +
+                  "('EXPORT TO " +
+                  path +
+                  "dummy.del OF DEL SELECT * FROM temp')";
+
+      Statement stmt = con.createStatement();
+      stmt.execute(str);
+      stmt.close();
+    }
+    catch (Exception e)
+    {
+      SqljException sqljExc = new SqljException(e);
+      sqljExc.handle();
+    }
+  } // getLoadData
+
+  // this function shows how to enable row compression for tables
+  static void enableRowCompressionForTables
+                (Connection con, String path) throws SQLException
+  {
+    try
+    {
+      System.out.println(
+        "\nTable empl1 is created in the setup script \n" +
+        "TbRowcompress_setup.db2 with compression not enabled\n" +
+        "at the time of table creation using the command\n" +
+        "'CREATE TABLE empl1(emp_no INT, salary INT)' \n");
+
+      System.out.println(
+        "\nUSE THE SQL STATEMENTS:\n" +
+        "  IMPORT \n" +
+        "TO IMPORT THE DATA INTO THE TABLE \n" +
+        "\n    Perform:\n" +
+        "    IMPORT FROM dummy.del OF DEL INSERT INTO empl1");
+
+      // import data from file
+      // call the stored procedure ADMIN_CMD for IMPORT
+      System.out.println();
+      System.out.println("Call stored procedure named SYSPROC.ADMIN_CMD");
+
+      String str ="CALL SYSPROC.ADMIN_CMD" +
+                  "('IMPORT FROM " +
+                  path +
+                  "dummy.del OF DEL INSERT INTO empl1')";
+
+      Statement stmt = con.createStatement();
+      stmt.execute(str);
+      stmt.close();
+
+      System.out.println(
+        "\nUSE THE SQL STATEMENTS:\n" +
+        "  ALTER TABLE \n" +
+        "TO ENABLE ROW COMPRESSION \n" +
+        "\n    Perform:\n" +
+        "    ALTER TABLE empl1 COMPRESS YES");
+
+      // enable row compression
+      #sql {ALTER TABLE empl1 COMPRESS YES};
+      #sql {COMMIT};
+
+      System.out.println(
+        "\nUSE THE SQL STATEMENTS:\n" +
+        "  REORG \n" +
+        "TO COMPRESS ROWS \n" +
+        "\n    Perform:\n" +
+        "    REORG TABLE empl1");
+
+      // perform non-inplace reorg to compress rows and to retain
+      // existing dictionary
+      // call the stored procedure ADMIN_CMD for REORG
+      System.out.println();
+      System.out.println("Call stored procedure named SYSPROC.ADMIN_CMD");
+      #sql {CALL SYSPROC.ADMIN_CMD('REORG TABLE empl1')};
+      #sql {COMMIT};
+    }
+    catch (Exception e)
+    {
+      SqljException sqljExc = new SqljException(e);
+      sqljExc.handle();
+    }
+  } // enableRowCompressionForTables
+
+  // this function shows how to disable rowcompression on table
+  static void disableRowCompressionForTables
+                (Connection con, String path) throws SQLException
+  {
+    try
+    {
+      System.out.println(
+        "\nTable empl2 is created in the setup script TbRowcompress_setup.db2\n" +
+        "with compression enabled initially using the command \n" +
+        "'CREATE TABLE empl2(emp_no INT, salary INT) COMPRESS YES' \n");
+
+      System.out.println(
+        "\nUSE THE SQL STATEMENTS:\n" +
+        "  IMPORT \n" +
+        "TO IMPORT THE DATA INTO THE TABLE \n" +
+        "\n    Perform:\n" +
+        "    IMPORT FROM dummy.del OF DEL INSERT INTO empl2");
+
+      // import data into the table
+      // call the stored procedure ADMIN_CMD for IMPORT
+      System.out.println();
+      System.out.println("Call stored procedure named SYSPROC.ADMIN_CMD");
+      String str ="CALL SYSPROC.ADMIN_CMD" +
+                  "('IMPORT FROM " +
+                  path +
+                  "dummy.del OF DEL INSERT INTO empl2')";
+
+      Statement stmt = con.createStatement();
+      stmt.execute(str);
+      stmt.close();
+
+      System.out.println(
+        "\nUSE THE SQL STATEMENTS:\n" +
+        "  REORG \n" +
+        "TO COMPRESS ROWS \n" +
+        "\n    Perform:\n" +
+        "    REORG TABLE empl2");
+
+      // perform reorg to compress rows
+      // call the stored procedure ADMIN_CMD for REORG
+      System.out.println();
+      System.out.println("Call stored procedure named SYSPROC.ADMIN_CMD");
+      #sql {CALL SYSPROC.ADMIN_CMD('REORG TABLE empl2')};
+      #sql {COMMIT};
+
+
+      System.out.println(
+        "\nUSE THE SQL STATEMENTS:\n" +
+        "  INSERT \n" +
+        "  UPDATE \n" +
+        "  DELETE \n" +
+        "TO INSERT, UPDATE OR DELETE DATA IN TABLE \n" +
+        "\n    Perform:\n" +
+        "    INSERT INTO empl2 VALUES(400, 30000)\n" +
+        "    UPDATE empl2 SET salary = salary + 1000\n" +
+        "    DELETE FROM empl2 WHERE emp_no = 200");
+
+      // perform modifications on table
+      #sql {INSERT INTO empl2 VALUES(400, 30000)};
+      #sql {UPDATE empl2 SET salary = salary + 1000};
+      #sql {DELETE FROM empl2 WHERE emp_no = 200};
+      #sql {COMMIT};
+
+      System.out.println(
+        "\nUSE THE SQL STATEMENTS:\n" +
+        "  ALTER TABLE \n" +
+        "TO DISABLE ROW COMPRESSION FOR THE TABLE \n" +
+        "\n    Perform:\n" +
+        "    ALTER TABLE empl2 COMPRESS NO");
+
+      // disable row compression for the table
+      #sql {ALTER TABLE empl2 COMPRESS NO};
+      #sql {COMMIT};
+
+      System.out.println(
+        "\nUSE THE SQL STATEMENTS:\n" +
+        "  REORG TABLE \n" +
+        "TO REORG THE TABLE AND REMOVE EXISTING DICTIONARY \n" +
+        "\n    Perform:\n" +
+        "    REORG TABLE empl2 RESETDICTIONARY");
+
+      // Perform reorg to remove existing dictionary.
+      // New dictionary will be created and all the rows processed
+      // by the reorg are decompressed.
+      // call the stored procedure ADMIN_CMD for REORG
+      System.out.println();
+      System.out.println("Call stored procedure named SYSPROC.ADMIN_CMD");
+      #sql {CALL SYSPROC.ADMIN_CMD('REORG TABLE empl2 RESETDICTIONARY')};
+      #sql {COMMIT};
+    }
+    catch (Exception e)
+    {
+      SqljException sqljExc = new SqljException(e);
+      sqljExc.handle();
+    }
+  } // disableRowCompressionForTables
+
+  // this function demonstrates the extent of row compression for table
+  static void inspectCompression(Connection con, String path) throws SQLException
+  {
+    try
+    {
+      System.out.println(
+        "\nTable empl3 is created in the setup script \n" +
+        "TbRowcompress_setup.db2 using the command \n" +
+        "'CREATE TABLE empl3(emp_no INT, salary INT)' \n");
+
+      System.out.println(
+        "\nUSE THE SQL STATEMENTS:\n" +
+        "  IMPORT \n" +
+        "TO IMPORT DATA INTO TABLE \n" +
+        "\n    Perform:\n" +
+        "    IMPORT FROM dummy.del OF DEL INSERT INTO empl3");
+
+      // import data into the table
+      // call the stored procedure ADMIN_CMD for IMPORT
+      System.out.println();
+      System.out.println("Call stored procedure named SYSPROC.ADMIN_CMD");
+      String str ="CALL SYSPROC.ADMIN_CMD" +
+                  "('IMPORT FROM " +
+                  path +
+                  "dummy.del OF DEL INSERT INTO empl3')";
+
+      Statement stmt = con.createStatement();
+      stmt.execute(str);
+      stmt.close();
+
+      System.out.println(
+        "\nUSE THE SQL STATEMENTS:\n" +
+        "  ALTER TABLE \n" +
+        "TO ENABLE COMPRESSION \n" +
+        "\n    Perform:\n" +
+        "    ALTER TABLE empl3 COMPRESS YES");
+
+      // enable row compression for the table
+      #sql {ALTER TABLE empl3 COMPRESS YES};
+      #sql {COMMIT};
+
+      System.out.println(
+        "\nUSE THE SQL STATEMENTS:\n" +
+        "  INSERT \n" +
+        "TO INSERT DATA INTO THE TABLE \n" +
+        "\n    Perform:\n" +
+        "    INSERT INTO empl3 VALUES(400, 30000)");
+
+      // insert some data into the table
+      #sql {INSERT INTO empl3 VALUES(400, 30000)};
+      #sql {COMMIT};
+
+      System.out.println(
+        "\nUSE THE SQL STATEMENTS:\n" +
+        "  INSPECT \n" +
+        "TO ESTIMATE THE EFFECTIVENESS OF COMPRESSION \n" +
+        "\n    Perform:\n" +
+        "    INSPECT ROWCOMPESTIMATE TABLE NAME empl3 RESULTS KEEP result");
+
+      // Perform inspect to estimate the effectiveness of compression.
+      // Inspect has to be run before the REORG utility.
+      // Inspect allows you to look over tablespaces and tables for their
+      // architectural integrity.
+      // 'result' file contains percentage of bytes saved from compression,
+      // Percentage of rows ineligible for compression due to small row size,
+      // Compression dictionary size, Expansion dictionary size etc.
+      // To view the contents of 'result' file perform
+      //    db2inspf result result.out; This formats the 'result' file to
+      // readable form.
+
+      String execCmd = "db2 INSPECT ROWCOMPESTIMATE TABLE NAME empl3" +
+                       " RESULTS KEEP result";
+
+      // execute the command
+      Process p1 = Runtime.getRuntime().exec(execCmd);
+
+      System.out.println(
+        "\nUSE THE SQL STATEMENTS:\n" +
+        "  REORG \n" +
+        "TO REORG THE TABLE \n" +
+        "\n    Perform:\n" +
+        "    REORG TABLE empl3");
+
+      // perform reorg on the table
+      // call the stored procedure ADMIN_CMD for REORG
+      System.out.println();
+      System.out.println("Call stored procedure named SYSPROC.ADMIN_CMD");
+      #sql {CALL SYSPROC.ADMIN_CMD('REORG TABLE empl3')};
+      #sql {COMMIT};
+
+      System.out.println(
+        "\nUSE THE SQL STATEMENTS:\n" +
+        "  INSERT \n" +
+        "TO INSERT DATA INTO THE TABLE \n" +
+        "\n    Perform:\n" +
+        "    INSERT INTO empl3 VALUES(500, 40000)");
+
+      // all the rows will be compressed including the one inserted
+      // after reorg
+      #sql {INSERT INTO empl3 VALUES(500, 40000)};
+      #sql {COMMIT};
+
+      System.out.println(
+        "\nUSE THE SQL STATEMENTS:\n" +
+        "  ALTER TABLE \n" +
+        "TO DISABLE THE COMPRESSION \n" +
+        "\n    Perform:\n" +
+        "    ALTER TABLE empl3 COMPRESS NO");
+
+      // disable row compression for the table.
+      // rows inserted after this will be non-compressed.
+      #sql {ALTER TABLE empl3 COMPRESS NO};
+      #sql {COMMIT};
+      System.out.println(
+        "\nUSE THE SQL STATEMENTS:\n" +
+        "  INSERT \n" +
+        "TO INSERT DATA INTO THE TABLE \n" +
+        "\n    Perform:\n" +
+        "    INSERT INTO empl3 VALUES(600, 40500)");
+
+      // add one row of data to the table
+      #sql {INSERT INTO empl3 VALUES(600, 40500)};
+      #sql {COMMIT};
+
+      System.out.println(
+        "\nUSE THE SQL STATEMENTS:\n" +
+        "  ALTER TABLE \n" +
+        "TO ENABLE THE COMPRESSION \n" +
+        "\n    Perform:\n" +
+        "    ALTER TABLE empl3 COMPRESS YES");
+
+      // enable the row compression for the table
+      #sql {ALTER TABLE empl3 COMPRESS YES};
+      #sql {COMMIT};
+
+      System.out.println(
+        "\nUSE THE SQL STATEMENTS:\n" +
+        "  INSERT \n" +
+        "TO INSERT DATA INTO THE TABLE \n" +
+        "\n    Perform:\n" +
+        "    INSERT INTO empl3 VALUES(700, 40600)");
+
+      // add one row of data to the table
+      #sql {INSERT INTO empl3 VALUES(700, 40600)};
+      #sql {COMMIT};
+
+      System.out.println(
+        "\nUSE THE SQL STATEMENTS:\n" +
+        "  RUNSTATS \n" +
+        "TO MEASURE THE EFFECTIVENESS OF COMPRESSION \n" +
+        "\n    Perform:\n" +
+        "    RUNSTATS ON TABLE EMPL");
+
+      // Perform runstats to measure the effectiveness of compression using
+      // compression related catalog fields. New columns will be updated to
+      // catalog table after runstats if performed on a compressed table.
+
+      // get fully qualified name of the table
+      String tableName = "EMPL3";
+      String schemaName = getSchemaName(tableName);
+      String fullTableName = schemaName + "." + tableName;
+
+      // call the stored procedure ADMIN_CMD for RUNSTATS
+      System.out.println();
+      System.out.println("Call stored procedure named SYSPROC.ADMIN_CMD");
+      str = "CALL SYSPROC.ADMIN_CMD('" +
+            "RUNSTATS ON TABLE " +
+            fullTableName +
+            "')";
+
+      Statement stmt1 = con.createStatement();
+      stmt1.execute(str);
+
+      stmt1.close();
+
+      System.out.println();
+      System.out.println("  SELECT * FROM empl3");
+      System.out.println(
+        "    EMP_NO  SALARY\n" +
+        "    ------  ------");
+
+      int emp_no = 0;
+      int sal = 0;
+
+      TbRowcompress_Cursor1 cur1;
+
+      // declare a cursor
+      #sql cur1 = {SELECT * FROM empl3};
+
+      // fetch the cursor
+      #sql {FETCH :cur1 INTO :emp_no, :sal};
+
+      while (!cur1.endFetch())
+      {
+       System.out.println(
+         "      " + Data.format(emp_no, 3) +
+         "   " + Data.format(sal, 5));
+
+        #sql {FETCH :cur1 INTO :emp_no, :sal};
+      }
+
+      // close the cursor
+      cur1.close();
+
+      System.out.println();
+      System.out.println(
+        "SELECT avgrowsize, avgcompressedrowsize, pctpagessaved,\n" +
+        "       avgrowcompressionratio, pctrowscompressed\n" +
+        "  FROM SYSCAT.TABLES WHERE tabname = 'EMPL3'");
+      System.out.println(
+        "\n    AvRowSize AvCmprsdRowSize PerPgSaved AvgRowCmprRatio" +
+        " PerRowsCmprsd\n" +
+        "    --------- --------------- ---------- ---------------" +
+        " -------------");
+
+      int avgrowsize = 0;
+      int avgcompressedrowsize = 0;
+      int pctpagessaved = 0;
+      int avgrowcompressionratio = 0;
+      int pctrowscompressed = 0;
+
+      TbRowcompress_Cursor2 cur2;
+
+      // declare a cursor
+      #sql cur2 = {SELECT avgrowsize, avgcompressedrowsize,
+                          pctpagessaved, avgrowcompressionratio,
+                          pctrowscompressed
+                     FROM SYSCAT.TABLES
+                     WHERE tabname = 'EMPL3'};
+
+      // fetch the cursor
+      #sql {FETCH :cur2 INTO :avgrowsize, :avgcompressedrowsize,
+                             :pctpagessaved, :avgrowcompressionratio,
+                             :pctrowscompressed};
+
+      while (!cur2.endFetch())
+      {
+        System.out.println(
+          "    " + Data.format(avgrowsize, 4) +
+          "    " + Data.format(avgcompressedrowsize, 11) +
+          "    " + Data.format(pctpagessaved, 9) +
+          "    " + Data.format(avgrowcompressionratio, 9) +
+          "    " + Data.format(pctrowscompressed, 13));
+
+        #sql {FETCH :cur2 INTO :avgrowsize, :avgcompressedrowsize,
+                               :pctpagessaved, :avgrowcompressionratio,
+                               :pctrowscompressed};
+      }
+
+      // close the cursor
+      cur2.close();
+    }
+    catch (Exception e)
+    {
+      SqljException sqljExc = new SqljException(e);
+      sqljExc.handle();
+    }
+  } // inspectCompression
+
+  // function to get the schema name for a particular table
+  static String getSchemaName(String tableName) throws Exception
+  {
+    // declare a cursor to run through the result of the query
+    TbRowcompress_Cursor0 cur0;
+
+    #sql cur0 = {SELECT tabschema FROM syscat.tables WHERE tabname = :tableName};
+
+    String schemaName = null;
+    #sql {FETCH :cur0 INTO :schemaName};
+
+    // remove the trailing white space characters from schemaName before
+    // returning it to the calling function
+    return schemaName.trim();
+
+  } // getSchemaName
+}
+

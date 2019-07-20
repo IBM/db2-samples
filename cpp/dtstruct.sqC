@@ -1,0 +1,1223 @@
+/****************************************************************************
+** (c) Copyright IBM Corp. 2007 All rights reserved.
+** 
+** The following sample of source code ("Sample") is owned by International 
+** Business Machines Corporation or one of its subsidiaries ("IBM") and is 
+** copyrighted and licensed, not sold. You may use, copy, modify, and 
+** distribute the Sample in any form without payment to IBM, for the purpose of 
+** assisting you in the development of your applications.
+** 
+** The Sample code is provided to you on an "AS IS" basis, without warranty of 
+** any kind. IBM HEREBY EXPRESSLY DISCLAIMS ALL WARRANTIES, EITHER EXPRESS OR 
+** IMPLIED, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED WARRANTIES OF 
+** MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE. Some jurisdictions do 
+** not allow for the exclusion or limitation of implied warranties, so the above 
+** limitations or exclusions may not apply to you. IBM shall not be liable for 
+** any damages you suffer as a result of using, copying, modifying or 
+** distributing the Sample, even if IBM has been advised of the possibility of 
+** such damages.
+*****************************************************************************
+**
+** SOURCE FILE NAME: dtstruct.sqC
+**
+** SAMPLE: Create, use, drop a hierarchy of structured types and typed tables
+**
+**         This sample program demonstrates how to create structured types
+**         and typed tables using SQL. The program creates a hierarchy
+**         of structured types and then a hierarchy of typed tables
+**         that is defined by the hierarchy of structured types.  It also
+**         shows how to insert data into the typed tables. The sample 
+**         demonstrates how to use some typed table clauses, such as ONLY
+**         and OUTER, and to update the data in a typed table. It compares
+**         different ways to retrieve data using structured type features.
+
+**         This sample program also demonstrates how to drop a hierachy of
+**         structured types and a hierarchy of typed tables using SQL. The
+**         program drops the hierarchy of typed tables first, then it drops
+**         the hierarchy of structured types.
+**
+**
+** SQL STATEMENTS USED:
+**         CREATE TYPE
+**         CREATE TABLE
+**         ALTER TYPE
+**         ALTER TABLE
+**         INSERT
+**         SELECT
+**         UPDATE
+**         DROP TYPE
+**         DROP TABLE
+**         EXECUTE IMMEDIATE
+**
+** STRUCTURES USED:
+**          sqlca
+**
+** OUTPUT FILE: dtstruct.out (available in the on-line documentation)
+*****************************************************************************
+**
+** For more information on the sample programs, see the README file.
+**
+** For information on developing C++ applications, see the Application
+** Development Guide.
+**
+** For information on using SQL statements, see the SQL Reference.
+**
+** For the latest information on programming, compiling, and running DB2
+** applications, visit the DB2 application development website at
+**     http://www.software.ibm.com/data/db2/udb/ad
+****************************************************************************/
+
+#include <string.h>
+#include <stdio.h>
+#include <sqlenv.h>
+#include <sqlca.h>
+#include "utilemb.h"
+#if ((__cplusplus >= 199711L) && !defined DB2HP && !defined DB2AIX) || \
+    (DB2LINUX && (__LP64__ || (__GNUC__ >= 3)) )
+   #include <iomanip>
+   #include <iostream>
+   using namespace std; 
+#else
+   #include <iomanip.h>
+   #include <iostream.h>
+#endif
+
+
+EXEC SQL INCLUDE SQLCA;
+
+
+class structtype
+{
+  public:
+    int CreateStructTypes();
+    int CreateTypedTables();
+    int AlterStructType(char *stmt);
+    int PopulateTbls();
+    int InsertPerson(int id, char *name, char *year);
+    int InsertEmp(int id, char *name, char *birthYear,
+                int salary, int deptID);
+    int InsertEmp(int id, char *name);
+    int InsertStudent(int id, char *name, char *birthYear,
+                char *major, double archivm);
+    int InsertProf(int id, char *name, char *birthYear,
+                int salary, char *speciality, int dept);
+    int InsertDept(int id, char *name, int budget, int mgrId);
+
+    int ComparePersonEmpContents();
+    int ShowOnlyOuterEmp();
+    int ShowEmpsDept();
+    int ShowMgrEmps(char *mgr);
+    int UptPersonBirth(int birthYear, int id);
+
+    int DropStructTables();
+    int DropStructTypes();
+
+  private:
+    int ExecuteStmt(char *stmt);
+    int DropTypeOrTable(char *objName, int objType);
+};
+
+static const int DROP_TYPE  = 1;
+static const int DROP_TABLE = 2;
+
+
+int main (int argc, char *argv[])
+{
+  cout << "\nSample C++ program : dtstruct.sqC\n\n" << endl;
+  cout << "THIS SAMPLE SHOWS HOW TO CREATE AND USE STRUCTURED TYPES AND TYPED "
+       << "TABLES" << endl;
+
+  int rc = 0;
+  structtype aStType;
+  struct sqlca sqlca;
+  CmdLineArgs check;
+  DbEmb db;
+
+  // check the command line arguments
+  rc = check.CmdLineArgsCheck1(argc, argv, db);
+  if (rc != 0)
+  {
+    return rc;
+  }
+
+  // connect to the database
+  rc = db.Connect();
+  if (rc != 0)
+  {
+    return rc;
+  }
+
+  // Setup the structured types and tables.  As well as populate the database
+  rc = aStType.CreateStructTypes();
+  if (rc != 0) return rc;
+
+  // Create structured tables
+  rc = aStType.CreateTypedTables();
+  if (rc != 0) return rc;
+
+  //Populate the database
+  rc = aStType.PopulateTbls();
+  if (rc != 0) return rc;
+
+  // Use the structured types and tables.
+  cout << "\n----------------------------------------" << endl;
+  cout << "USE THE SQL STATEMENT:\n"
+       << " SELECT\n"
+       << "TO RETRIEVE TABLE DATA\n" << endl;
+
+  //Compare root table with subtable
+  rc = aStType.ComparePersonEmpContents();
+  if (rc != 0) return rc;
+
+  cout << "\n----------------------------------------" << endl;
+  cout << "USE THE SQL STATEMENT:\n"
+       << " UPDATE\n"
+       << "TO MODIFY TABLE DATA\n" << endl;
+  rc = aStType.UptPersonBirth(1964, 30);
+  if (rc != 0) return rc;
+
+  //Demonstrate ONLY and OUTER
+  rc = aStType.ShowOnlyOuterEmp();
+  if (rc != 0) return rc;
+
+  //Select name and dept name for all employees
+  rc = aStType.ShowEmpsDept();
+  if (rc != 0) return rc;
+
+  //Select employees whose manager's manager is Lou
+  rc = aStType.ShowMgrEmps("Lou");
+  if (rc != 0) return rc;
+
+  // Drop the structured types and tables.
+  rc = aStType.DropStructTables();
+  if (rc != 0) return rc;
+
+  //Drop the structured types
+  rc = aStType.DropStructTypes();
+  if (rc != 0) return rc;
+
+  //Disconnect from database
+  db.Disconnect();
+
+  return 0;
+
+} // end of main
+
+
+int structtype::CreateStructTypes()
+{
+  int rc = 0;
+  char aStmt[140];
+
+  cout << "\n-----------------------------------------------" << endl;
+  cout << "USE THE SQL STATEMENT:" << endl;
+  cout << "  CREATE TYPE" << endl;
+  cout << "TO CREATE STRUCTURED TYPES\n" << endl;
+  cout << "  CREATE TYPE PERSON_T " << endl;
+  cout << "   AS (name VARCHAR(40), birthyear, integer) \n"
+       << "   MODE DB2SQL\n"
+       << "   REF USING INTEGER\n" << endl;
+
+  EXEC SQL create type person_t as (name varchar(40), birthyear integer)
+             mode db2sql REF USING INTEGER;
+  EMB_SQL_CHECK("create type person_t");
+  cout << "Created structured type, person_t.\n" << endl;
+
+  cout << "  CREATE TYPE EMP_T\n"
+       << "    UNDER PERSON_T\n"
+       << "    AS ( salary integer ) \n"
+       << "    MODE DB2SQL\n" << endl;
+
+
+  EXEC SQL create type emp_t under person_t
+              as ( salary integer ) mode db2sql;
+  EMB_SQL_CHECK("create type emp_t");
+  cout << "Created structured type, emp_t.\n" << endl;
+
+  cout << "  CREATE TYPE PROF_T\n"
+       << "    UNDER EMP_T\n"
+       << "    AS ( speciality varchar(20) )\n"
+       << "    MODE DB2SQL\n" << endl;
+
+  EXEC SQL create type prof_t under emp_t
+             as ( speciality varchar(20) )
+             mode db2sql;
+  EMB_SQL_CHECK("Create type prof_t");
+  cout << "Created structured type, prof_t.\n" << endl;
+
+  cout << "  CREATE TYPE STUDENT_T\n"
+       << "    UNDER PERSON_T \n"
+       << "    AS (major varchar(20), archivm decimal(5,2))\n"
+       << "    MODE DB2SQL\n" << endl;
+
+  EXEC SQL create type student_t under person_t as
+      ( major varchar(20), archivm decimal(5,2) ) mode db2sql;
+  EMB_SQL_CHECK("create type student_t");
+  cout << "Created structured type, student_t.\n" << endl;
+
+  cout << "  CREATE TYPE DEPT_T\n"
+       << "    AS ( name varchar(20), budget integer, mgr ref(emp_t) )\n"
+       << "    MODE DB2SQL\n"
+       << "    REF USING INTEGER\n" << endl;
+
+  EXEC SQL Create type dept_t
+            as ( name varchar(20), budget integer, mgr ref(emp_t) )
+            mode db2sql REF USING INTEGER;
+  EMB_SQL_CHECK("create type dept_t");
+  cout << "Created structured type, dept_t.\n" << endl;
+
+  cout << "  COMMIT\n" << endl;
+  EXEC SQL commit;
+  EMB_SQL_CHECK("commit");
+
+  cout << "\n-----------------------------------------------" << endl;
+  cout << "USE THE SQL STATEMENT:" << endl;
+  cout << "  ALTER TYPE" << endl;
+  cout << "TO MODIFY AN EXISTING TYPE\n" << endl;
+  cout << "  ALTER TYPE EMP_T\n"
+       << "    ADD ATTRIBUTE DEPT\n"
+       << "    REF (dept_t)\n" << endl;
+
+  strcpy(aStmt, "Alter type emp_t add attribute dept ref(dept_t)");
+  if (rc = AlterStructType(aStmt)) return rc;
+
+  EXEC SQL Commit;
+  EMB_SQL_CHECK("commit");
+
+  return rc;
+
+} // end of CreateStructTypes
+
+
+
+// Alter a Structured type
+int structtype::AlterStructType(char *stmt)
+{
+  EXEC SQL BEGIN DECLARE SECTION;
+    char altEmpType[120];
+  EXEC SQL END DECLARE SECTION;
+
+  strcpy(altEmpType, stmt);
+  EXEC SQL PREPARE altstat FROM :altEmpType;
+  EMB_SQL_CHECK("PREPARE ALTER statment");
+
+  EXEC SQL EXECUTE altstat;
+  EMB_SQL_CHECK("EXECUTE altstate");
+
+  return 0;
+
+} // end of AlterStructType
+
+
+int structtype::CreateTypedTables( )
+{
+  int rc = 0;
+  char stmt[120];
+
+  // Creates the typed tables
+  while (1) {
+    cout << "--------------------------------------------------" << endl;
+    cout << " CREATE TABLE PERSON\n"
+         << "   OF PERSON_T (ref is oid user generated)\n" << endl;
+
+    strcpy(stmt, "create table person of person_t");
+    strcat(stmt, " (ref is oid user generated)");
+    if(rc = ExecuteStmt (stmt)) break;
+    cout << "Created table person of person_t.\n" << endl;
+
+    cout << " CREATE TABLE EMP_L OF EMP_T\n"
+         << "   UNDER PERSON\n"
+         << "   INHERIT SELECT PRIVILEGES\n" << endl;
+    strcpy(stmt, "create table emp_l of emp_t under person ");
+    strcat(stmt, "inherit select privileges");
+    if(rc = ExecuteStmt(stmt)) break;
+    cout << "Created table emp_l of emp_t.\n" << endl;
+
+    cout << " CREATE TABLE PROF OF PROF_T\n"
+         << "   UNDER EMP_L\n"
+         << "   INHERIT SELECT PRIVILEGES\n" << endl;
+    strcpy(stmt, "create table prof of prof_t under emp_l inherit");
+    strcat(stmt, " select privileges");
+    if(rc = ExecuteStmt(stmt)) break;
+    cout << "Created table prof of prof_t.\n" << endl;
+
+    cout << " CREATE TABLE STUDENT OF STUDENT_T\n"
+         << "   UNDER PERSON INHERIT SELECT PRIVILEGES\n" << endl;
+    strcpy(stmt, "create table student of student_t ");
+    strcat(stmt, "under person inherit select privileges");
+    if(rc = ExecuteStmt(stmt)) break;
+    cout << "Created table student of student_t.\n" << endl;
+
+    cout << " CREATE TABLE DEPT_N OF DEPT_T\n"
+         << "   (REF IS OID USER GENERATED, MGR WITH OPTIONS SCOPE EMP_L)\n"
+         << endl;
+    strcpy(stmt, "create table dept_n of dept_t ");
+    strcat(stmt, "(ref is oid user generated, mgr with options scope emp_l)");
+    if(rc = ExecuteStmt(stmt)) break;
+    cout << "Created table dept_n of dept_t.\n" << endl;
+
+    cout << " ALTER TABLE EMP_L\n"
+         << "   ALTER COLUMN DEPT ADD SCOPE DEPT_N\n" << endl;
+    strcpy(stmt, "alter table emp_l alter column dept add scope dept_n");
+    if (rc = ExecuteStmt(stmt)) break;
+    cout << "Alter table emp_l of emp_t.\n" << endl;
+    break;
+  }
+
+  return rc;
+
+} // end of CreateTypedTbls
+
+
+// Populates the typed tables
+int structtype::PopulateTbls()
+{
+  int rc = 0;
+
+  while ( 1 )
+  {
+
+    cout << "-------------------------------------------" << endl;
+    cout << "Populates the tables ...\n\n" << endl;
+
+    cout << "USE THE SQL STATEMENT:" << endl;
+    cout << " INSERT " << endl;
+    cout << "TO INSERT TABLE DATA\n" << endl;
+
+    if (rc = InsertPerson(10, "John", "1970")) break;
+    if (rc = InsertPerson(20, "Paul", "1962")) break;
+
+    if (rc = InsertEmp(30, "Pat", "1968", 60000, 10)) break;
+    if (rc = InsertEmp(40, "Hitomi", "1980", 67000, 20)) break;
+    if (rc = InsertEmp(90, "Lou")) break;
+    if (rc = InsertEmp(50, "Sam", "1968", 63000, 40)) break;
+    if (rc = InsertEmp(60, "Uta", "1977", 95000, 30)) break;
+
+    if (rc = InsertStudent(100, "Franzis", "1975", "pol", 2.5)) break;
+    if (rc = InsertStudent(110, "Herb", "1980", "math", 1.7)) break;
+
+    if (rc = InsertProf(70, "Rich", "1941", 90000, "oec", 30)) break;
+    if (rc = InsertProf(80, "Herb", "1972", 120000, "math", 30)) break;
+
+    if (rc = InsertDept(10, "math", 300000, 80)) break;
+    if (rc = InsertDept(20, "oec", 500000, 70)) break;
+    if (rc = InsertDept(30, "headq", 5000000, 90)) break;
+    if (rc = InsertDept(40, "itso", 1000000, 60)) break;
+      break;
+
+  }
+
+  return rc;
+
+} // end of PopulateTbls
+
+
+//Insert a record into table 'Person'
+int structtype::InsertPerson(int id, char *name, char *year)
+{
+  EXEC SQL BEGIN DECLARE SECTION;
+    char stmtBuf[120];
+  EXEC SQL END DECLARE SECTION;
+
+
+  sprintf(stmtBuf,
+    "Insert into person (oid, name, birthyear) "
+    "values (Person_t(%i), \'%s\', %s)",
+    id, name, year);
+
+  cout << "INSERT INTO Person (oid, name, birthyear)" << endl;
+  cout << " VALUES (Person_t(" << id << "), '" << name << "', "
+       << year << ")\n" << endl;
+
+  EXEC SQL PREPARE insertStmt from :stmtBuf;
+  EMB_SQL_CHECK("Prepare insertStmt");
+
+  EXEC SQL EXECUTE insertStmt;
+  EMB_SQL_CHECK("Execute insert person statement");
+
+  return 0;
+
+} // end of InsertPerson
+
+//Insert a record into table Emp
+int structtype::InsertEmp(
+                    int id,
+                    char *name,
+                    char *birthYear,
+                    int salary,
+                    int deptID
+                    )
+{
+  EXEC SQL BEGIN DECLARE SECTION;
+    char instEmpstmtHv[120];
+  EXEC SQL END DECLARE SECTION;
+
+
+  sprintf(instEmpstmtHv,
+    "insert into emp_l (oid, name, birthyear, salary, dept) "
+    " values(emp_t(%i), \'%s\', %s, %i, dept_t(%i))",
+      id, name, birthYear, salary, deptID);
+
+  cout << "INSERT INTO Emp (oid, name, birthyear, salary, dept)" << endl;
+  cout << " VALUES (Emp_t(" << id << "), '" << name << "', '" << birthYear
+       << "', " << salary << ", Dept_t(" << deptID << "))\n"
+       << endl;
+
+  EXEC SQL PREPARE insertStmt from :instEmpstmtHv;
+  EMB_SQL_CHECK("Prepare insertStmt");
+
+  EXEC SQL EXECUTE insertStmt;
+  EMB_SQL_CHECK("Execute insert emp_l statement");
+
+  return 0;
+
+} // end of InsertEmp
+
+
+//Insert a row into table Emp
+int structtype::InsertEmp(int id, char *name)
+{
+  EXEC SQL BEGIN DECLARE SECTION;
+    char instEmpStmtHv[120];
+  EXEC SQL END DECLARE SECTION;
+
+
+  sprintf(instEmpStmtHv,
+    "insert into emp_l (oid, name) values(emp_t(%i), \'%s\')", id, name);
+
+
+  cout << "INSERT INTO Emp (oid, name)" << endl;
+  cout << " VALUES (Emp_t(" << id << "), '" << name << "')\n"
+       << endl;
+
+  EXEC SQL PREPARE insertStmt from :instEmpStmtHv;
+  EMB_SQL_CHECK("Prepare insertStmt");
+
+  EXEC SQL EXECUTE insertStmt;
+  EMB_SQL_CHECK("Execute insert emp_l statement");
+
+  return 0;
+
+} // end of InsertEmp
+
+//Insert a row into table Student
+int structtype::InsertStudent(
+                int     id,
+                char    *name,
+                char    *birthYear,
+                char    *major,
+                double  archivm
+                )
+{
+  EXEC SQL BEGIN DECLARE SECTION;
+    char instStudentHv[120];
+  EXEC SQL END DECLARE SECTION;
+
+
+  sprintf(instStudentHv,
+    "insert into student (oid, name, birthyear, major, archivm) "
+    "values (student_t(%i), \'%s\', %s, \'%s\', %f)",
+      id, name, birthYear, major, archivm);
+
+  cout << "INSERT INTO Student (oid, name, birthyear, major, archivm)\n";
+  cout << " VALUES (Student_t(" << id << "), '" << name << "', '"
+       << birthYear << "', '" << major << "', " << archivm << ")\n"
+       << endl;
+
+  EXEC SQL PREPARE instStudent from :instStudentHv;
+  EMB_SQL_CHECK("Prepare instStudent");
+
+  EXEC SQL EXECUTE instStudent;
+  EMB_SQL_CHECK("Execute insert student statement");
+
+  return 0;
+
+} // end of InsertStudent
+
+
+//Insert a record into Prof table
+int structtype::InsertProf(
+      int id,
+      char *name,
+      char *birthYear,
+      int salary,
+      char *speciality, int dept)
+{
+
+  EXEC SQL BEGIN DECLARE SECTION;
+    char insertProf[200];
+  EXEC SQL END DECLARE SECTION;
+
+  sprintf(insertProf,
+    "Insert into prof (oid, name, birthyear, salary, speciality, dept) "
+    "values (Prof_t(%i), \'%s\', %s, %i, \'%s\', Dept_t(%i))",
+      id, name, birthYear, salary, speciality, dept);
+
+
+  cout << "INSERT INTO Prof (oid, name, birthyear, salary, speciality,"
+       << " dept)\n" << " VALUES (Prof_t(" << id << "), '" << name
+       << "', '" << birthYear << "', " << salary << ", '"
+       << speciality << "', Dept_t(" << dept << "))\n" << endl;
+
+  EXEC SQL PREPARE instProf from :insertProf;
+  EMB_SQL_CHECK("Prepare instStudent");
+
+  EXEC SQL EXECUTE instProf;
+  EMB_SQL_CHECK("Execute insert prof statement");
+
+  return 0;
+} // end of InsertProf
+
+//Insert a row into table Dept_n
+int structtype::InsertDept(int id, char *name, int budget, int mgrId)
+{
+
+  EXEC SQL BEGIN DECLARE SECTION;
+    char insertDept[150];
+  EXEC SQL END DECLARE SECTION;
+
+
+  sprintf(insertDept,
+    "insert into dept_n (oid, name, budget, mgr) "
+    "values (dept_t(%i), \'%s\', %i, emp_t(%i))",
+    id, name, budget, mgrId);
+
+  cout << "INSERT INTO Dept_n (oid, name, budget, mgr)\n"
+       << " VALUES (Dept_t(" << id << "), '" << name
+       << "', " << budget << ", Emp_t(" << mgrId << "))\n" << endl;
+
+  EXEC SQL PREPARE instDept from :insertDept;
+  EMB_SQL_CHECK("Prepare instStudent");
+
+  EXEC SQL EXECUTE instDept;
+  EMB_SQL_CHECK("Execute insert Dept statement");
+
+  return 0;
+
+} // end of InsertDept
+
+
+//Executes a dynamic embedded sql statement
+int structtype::ExecuteStmt(char *aStatement)
+{
+  EXEC SQL BEGIN DECLARE SECTION;
+    char stmtStr[120];
+  EXEC SQL END DECLARE SECTION;
+
+  strcpy(stmtStr, aStatement);
+
+  EXEC SQL PREPARE aStmt from :stmtStr;
+  EMB_SQL_CHECK("Prepare aStmt");
+
+  EXEC SQL EXECUTE aStmt;
+  EMB_SQL_CHECK("Execute aStmt");
+
+  return 0;
+
+} // end of ExecuteCrtStmt
+
+
+
+// Compares root table and subtable
+int structtype::ComparePersonEmpContents()
+{
+
+  int rc = 0;
+  EXEC SQL BEGIN DECLARE SECTION;
+    char stmt[120];
+    short oidHv;
+    char  empNamHv[30];
+    short birthYearHv;
+    sqlint32 salaryHv;
+    short deptHv;
+    short hvindPE;
+    short hvindPEYear;
+    char tblperson[30];
+  EXEC SQL END DECLARE SECTION;
+
+  int sqlcode = 0;
+
+
+  cout << "\n----------------------------------------------------" << endl;
+  cout << "Compare Root and Sub tables' contents\n" << endl;
+  cout << "NOTE:" << endl;
+  cout << "The following is the content of the 'Person' table." << endl;
+  cout << "Person is the root-table which contains not only contents\n"
+       << " of its own table but also the contents of its sub-tables.\n"
+       << endl;
+
+  cout << "SELECT oid, name, birthyear FROM Person\n" << endl;
+  cout << "  ID            NAME          BIRTHYEAR" << endl;
+  cout << "-----------------------------------------" << endl;
+
+//  EXEC SQL DECLARE personCur CURSOR FOR
+//        select oid, name, birthyear from :tblperson;
+
+  strcpy(stmt, "select oid, name, birthyear from person");
+
+  EXEC SQL PREPARE q1 FROM :stmt;
+  EXEC SQL DECLARE personCur CURSOR FOR q1;
+
+  EMB_SQL_CHECK("DECLARE CURSOR");
+
+  EXEC SQL OPEN personCur;
+
+  EMB_SQL_CHECK("OPEN CURSOR");
+
+  hvindPEYear = 0;
+  while(sqlcode != 100)
+  {
+    EXEC SQL FETCH personCur INTO
+        :oidHv, :empNamHv, :birthYearHv :hvindPEYear;
+
+    if (SQLCODE == 100)
+      sqlcode = SQLCODE;
+    else
+    {
+      cout << "  " << setw(3) << oidHv << "           " << setw(8)
+           << empNamHv;
+      cout.setf(ios::left, ios::adjustfield);
+
+      if (hvindPEYear != -1)
+        cout << "       " << birthYearHv << endl;
+      else
+        cout << "       " << "-" << endl;
+
+      cout.setf(ios::left, ios::adjustfield);
+    }
+  }
+
+
+  cout << "\n" << endl;
+
+  EXEC SQL CLOSE personCur;
+  EMB_SQL_CHECK("CLOSE CURSOR") ;
+
+
+  cout << "NOTE:" << endl;
+  cout << "The following is the content of the 'Emp_l' table, \n"
+       << "which is a sub-table.\n" << endl;
+  cout << "SELECT oid, name, birthyear, salary, dept FROM Emp_l\n" << endl;
+  cout << "  ID      NAME      BIRTHYEAR    SALARY     DEPT" << endl;
+  cout << "--------------------------------------------------"
+       << endl;
+
+//  EXEC SQL DECLARE empCur CURSOR FOR
+//    select oid, name, birthyear, salary, dept from emp_l;
+
+  strcpy(stmt,  "select oid, name, birthyear, salary, dept from emp_l");
+
+  EXEC SQL PREPARE q2 FROM :stmt;
+  EXEC SQL DECLARE empCur CURSOR FOR q2;
+
+  EMB_SQL_CHECK("DECLARE CURSOR");
+
+  EXEC SQL OPEN empCur;
+
+  EMB_SQL_CHECK("OPEN CURSOR");
+
+  sqlcode = 0;
+  hvindPE = 0;
+  hvindPEYear = 0;
+  while(sqlcode != 100)
+  {
+    EXEC SQL FETCH empCur INTO :oidHv, :empNamHv, :birthYearHv :hvindPEYear,
+                :salaryHv :hvindPE, :deptHv :hvindPE;
+    if (SQLCODE == 100)
+      sqlcode = SQLCODE;
+    else
+    {
+      cout << "  " << oidHv << "      " << setw(8) << empNamHv;
+
+      if (hvindPE != -1)
+        cout << "  " << birthYearHv;
+      else
+        cout << "  " << "-";
+
+      if (hvindPE != -1)
+        cout << "         " << setw(8) << salaryHv << "    " << deptHv << endl;
+      else
+        cout << "           " << setw(8) << " -"      << "     " << "-" << endl;
+
+      cout.setf(ios::left, ios::adjustfield);
+    }
+  }
+
+  cout << "\n" << endl;
+
+  EXEC SQL CLOSE empCur;
+  EMB_SQL_CHECK("CLOSE CURSOR") ;
+
+  return 0;
+
+} // end of ComparePersonEmpContents
+
+
+// Update the records of table person where oid=id
+int structtype::UptPersonBirth(int birthYear, int id)
+{
+  EXEC SQL BEGIN DECLARE SECTION;
+    char uptPersonStmt[120];
+  EXEC SQL END DECLARE SECTION;
+
+  sprintf(uptPersonStmt, "UPDATE Person SET birthyear=%i "
+      "WHERE oid=Emp_t(%i)", birthYear, id);
+
+  cout << "UPDATE Person" << endl;
+  cout << " SET birthyear=" << birthYear << endl;
+  cout << " WHERE oid=Emp_t(" << id << ")\n" << endl;
+
+  EXEC SQL EXECUTE IMMEDIATE :uptPersonStmt;
+  EMB_SQL_CHECK("Update Table Person");
+
+  return 0;
+
+} // end of UptPersonBirth
+
+// Demonstrate ONLY and OUTER
+int structtype::ShowOnlyOuterEmp()
+{
+  EXEC SQL BEGIN DECLARE SECTION;
+    char stmt2[120];
+    short oidOutHv;
+    char  empNamOutHv[30];
+    short birthYearOutHv;
+    sqlint32 salaryOutHv;
+    short deptOutHv;
+    short hvindOOE;
+  EXEC SQL END DECLARE SECTION;
+
+  int sqlcode = 0;
+
+
+  cout << "\n-------------------------------------------" << endl;
+  cout << "SHOW ONLY and OUTER\n" << endl;
+  cout << "SELECT * FROM ONLY(Emp_l)\n" << endl;
+  cout << "  ID       NAME    BIRTHYEAR   SALARY    DEPT" << endl;
+  cout << "-----------------------------------------------" << endl;
+
+
+//  EXEC SQL DECLARE onlyCur CURSOR FOR
+//    select * from ONLY(emp_l);
+
+  strcpy(stmt2, "select * from ONLY(emp_l)");
+  EXEC SQL PREPARE q3 FROM :stmt2;
+  EXEC SQL DECLARE onlyCur CURSOR FOR q3;
+
+  EMB_SQL_CHECK("DECLARE CURSOR");
+
+  EXEC SQL OPEN onlyCur;
+  EMB_SQL_CHECK("OPEN CURSOR");
+
+  hvindOOE = 0;
+  while(sqlcode != 100)
+  {
+    EXEC SQL FETCH onlyCur INTO :oidOutHv, :empNamOutHv,
+      :birthYearOutHv :hvindOOE, :salaryOutHv :hvindOOE,
+      :deptOutHv :hvindOOE;
+
+    if (SQLCODE == 100)
+      sqlcode = SQLCODE;
+    else
+    {
+      cout << "  " << oidOutHv << "       " << setw(8) << empNamOutHv;
+      if (hvindOOE != -1)
+        cout << birthYearOutHv << "        " << setw(8) << salaryOutHv
+             << "   " << deptOutHv << endl;
+      else
+        cout << "-   " << "        " << setw(8) << "-" << "   " << "-"
+             << endl;
+
+      cout.setf(ios::left, ios::adjustfield);
+    }
+
+  }
+
+
+  EXEC SQL CLOSE onlyCur;
+  EMB_SQL_CHECK("CLOSE CURSOR") ;
+
+
+  cout << "\n\nSELECT * FROM OUTER(Emp_l)\n" << endl;
+  cout << "  ID     NAME     BIRTHYEAR   SALARY     DEPT" << endl;
+  cout << "-----------------------------------------------" << endl;
+
+//  EXEC SQL DECLARE outerCur CURSOR FOR
+//    select * from OUTER(emp_l);
+  strcpy(stmt2, "select * from OUTER(emp_l)");
+  EXEC SQL PREPARE q4 FROM :stmt2;
+  EXEC SQL DECLARE outerCur CURSOR FOR q4;
+
+  EMB_SQL_CHECK("DECLARE CURSOR");
+
+  EXEC SQL OPEN outerCur;
+  EMB_SQL_CHECK("OPEN CURSOR");
+
+  sqlcode = 0;
+  hvindOOE = 0;
+  while (sqlcode != 100)
+  {
+    EXEC SQL FETCH outerCur INTO :oidOutHv, :empNamOutHv, :birthYearOutHv :hvindOOE,
+        :salaryOutHv :hvindOOE, :deptOutHv :hvindOOE;
+    if (SQLCODE == 100)
+      sqlcode = SQLCODE;
+    else
+    {
+      cout << "  " << oidOutHv << "     " << setw(6)
+           << empNamOutHv << "   ";
+      if (hvindOOE != -1)
+        cout << birthYearOutHv << "       " << setw(8) << salaryOutHv
+             << "    " << deptOutHv << endl;
+      else
+        cout << "-    " << "      " << setw(8) << "-" << "    "
+             << "-" << endl;
+
+      cout.setf(ios::left, ios::adjustfield);
+    }
+
+  }
+
+  cout << "\n" << endl;
+
+  EXEC SQL CLOSE outerCur;
+  EMB_SQL_CHECK("CLOSE CURSOR") ;
+
+  return 0;
+
+} // end of ShowOnlyOuterEmp
+
+
+// Show name and dept name for all employees
+int structtype::ShowEmpsDept()
+{
+  EXEC SQL BEGIN DECLARE SECTION;
+    char  empNameDeptHv[30];
+    char  slStmtDeptHv[220];
+    char  empsDeptHv[30];
+    short hvindED;
+  EXEC SQL END DECLARE SECTION;
+
+  int sqlcode = 0;
+
+
+  strcpy(slStmtDeptHv, "select E.name, E.dept->name from emp_l E");
+
+  cout << "\n---------------------------------------------" << endl;
+  cout << "USE THE SQL STATEMENT:" << endl;
+  cout << " SELECT" << endl;
+  cout << "DEPT NAME FOR ALL EMPLOYEES\n" << endl;
+  cout << "SELECT E.name, E.dept->name FROM Emp E\n" << endl;
+  cout << "  Name           Dept" << endl;
+  cout << "-----------------------" << endl;
+
+  // Prepare the query statement
+  EXEC SQL PREPARE selempDeptStmt From :slStmtDeptHv;
+  EMB_SQL_CHECK("Prepare select statement");
+
+  // Declare a cursor for the query
+  EXEC SQL DECLARE empDeptCur CURSOR FOR selempDeptStmt;
+  EMB_SQL_CHECK("DECLARE CURSOR");
+
+  EXEC SQL OPEN empDeptCur;
+  EMB_SQL_CHECK("OPEN CURSOR");
+
+  hvindED = 0;
+  while(sqlcode != 100)
+  {
+    EXEC SQL FETCH empDeptCur INTO :empNameDeptHv, :empsDeptHv :hvindED;
+
+    if (SQLCODE == 100)
+      sqlcode = SQLCODE;
+    else
+    {
+      cout << "  "  << setw(8) << empNameDeptHv << "       ";
+
+      if (hvindED != -1)
+        cout << empsDeptHv << endl;
+      else
+        cout << "-" << endl;
+
+      cout.setf(ios::left, ios::adjustfield);
+    }
+  }
+
+  cout << "\n" << endl;
+
+  EXEC SQL CLOSE empDeptCur;
+  EMB_SQL_CHECK("CLOSE CURSOR") ;
+
+  strcpy(slStmtDeptHv,
+    "select E.name, "
+    "(select D.name from dept_n D where D.oid=E.dept) from emp_l E");
+
+  cout << "SELECT E.name, SELECT D.name FROM dept_n D WHERE D.oid=E.dept)\n"
+       << " FROM Emp E\n" << endl;
+  cout << "  Name           Dept" << endl;
+  cout << "-----------------------" << endl;
+
+  // Prepare the query statement
+  EXEC SQL PREPARE selEmpDeptStmt2 From :slStmtDeptHv;
+  EMB_SQL_CHECK("Prepare select statement");
+
+  // Declare a cursor for the query
+  EXEC SQL DECLARE empDeptCur2 CURSOR FOR selEmpDeptStmt2;
+  EMB_SQL_CHECK("DECLARE CURSOR");
+
+  EXEC SQL OPEN empDeptCur2;
+  EMB_SQL_CHECK("OPEN CURSOR");
+
+  sqlcode = 0;
+  hvindED = 0;
+  while(sqlcode != 100)
+  {
+    EXEC SQL FETCH empDeptCur2 INTO :empNameDeptHv, :empsDeptHv :hvindED;
+
+    if (SQLCODE == 100)
+      sqlcode = SQLCODE;
+    else
+    {
+      cout << "  "  << setw(8) << empNameDeptHv << "       ";
+
+      if (hvindED != -1)
+        cout << empsDeptHv << endl;
+      else
+        cout << "-" << endl;
+      cout.setf(ios::left, ios::adjustfield);
+    }
+  }
+
+  cout << "\n" << endl;
+
+  EXEC SQL CLOSE empDeptCur2;
+  EMB_SQL_CHECK("CLOSE CURSOR") ;
+
+  return 0;
+
+} // endl of ShowEmpsDept
+
+
+// Select Employees whose manager's manager is the input
+int structtype::ShowMgrEmps(char *mgr)
+{
+  EXEC SQL BEGIN DECLARE SECTION;
+    char  mgrHv[30];
+    char  empNameHv[30];
+    char  slStmtHv[220];
+    short oidMgrHv;
+  EXEC SQL END DECLARE SECTION;
+
+  int sqlcode = 0;
+
+  strcpy(mgrHv, mgr);
+  strcpy(slStmtHv, "Select e.name from emp_l e  ");
+  strcat(slStmtHv, "where e.dept->mgr->dept->mgr->name = ?");
+  strcat(slStmtHv, "ORDER BY e.name");
+
+  cout << "\n--------------------------------------------------------"
+       << endl;
+  cout << "Select employees whose manager's manager is " << mgr
+       << "\n" << endl;
+  cout << "USE THE SQL STATEMENT:" << endl;
+  cout << "SELECT e.name from emp_l e  \n"
+       << " WHERE e.dept->mgr->dept->mgr->name = '" << mgr
+       << "' ORDER BY e.name"
+       << "\n" << endl;
+  cout << "  Name           Manager" << endl;
+  cout << "--------------------------" << endl;
+
+
+  // Prepare the query statement
+  EXEC SQL PREPARE selStmt From :slStmtHv;
+  EMB_SQL_CHECK("Prepare select statement");
+
+  // Declare a cursor for the query
+  EXEC SQL DECLARE mgrC1 CURSOR FOR selStmt;
+  EMB_SQL_CHECK("DECLARE CURSOR");
+
+  EXEC SQL OPEN mgrC1 USING :mgrHv;
+  EMB_SQL_CHECK("OPEN CURSOR");
+
+
+  while(sqlcode != 100)
+  {
+    EXEC SQL FETCH mgrC1 INTO :empNameHv;
+
+    if (SQLCODE == 100)
+      sqlcode = SQLCODE;
+    else
+    {
+      cout << "  "  << setw(8) << empNameHv << "       "
+           << setw(8) << mgrHv << endl;
+
+      cout.setf(ios::left, ios::adjustfield);
+    }
+  }
+
+  cout << "\n" << endl;
+
+  EXEC SQL CLOSE mgrC1;
+  EMB_SQL_CHECK("CLOSE CURSOR") ;
+
+
+  cout << "USE THE SQL STATEMENT:" << endl;
+  cout << "SELECT e3.name FROM emp_l e1, dept_n d1, emp_l e2, dept_n d2, emp_l e3\n"
+       << " WHERE e1.name = '" << mgr << "' and e1.oid  = d1.mgr \n"
+       << "       and d1.oid  = e2.dept and e2.oid  = d2.mgr \n"
+       << "       and d2.oid  = e3.dept\n"<< endl;
+  cout << "  Name            Manager" << endl;
+  cout << "---------------------------" << endl;
+
+  strcpy(slStmtHv,
+    "select e3.name from emp_l e1, dept_n d1, emp_l e2, dept_n d2, emp_l e3 ");
+  strcat(slStmtHv,
+    "where e1.name = ? and e1.oid  = d1.mgr and d1.oid  = e2.dept ");
+  strcat(slStmtHv, " and e2.oid  = d2.mgr and d2.oid  = e3.dept");
+
+
+  EXEC SQL PREPARE selStmt2 From :slStmtHv;
+  EMB_SQL_CHECK("Prepare select statement");
+
+  EXEC SQL DECLARE mgrC2 CURSOR FOR selStmt2;
+  EMB_SQL_CHECK("DECLARE CURSOR");
+
+  EXEC SQL OPEN mgrC2 using :mgrHv;
+
+  sqlcode = 0;
+  while(sqlcode != 100)
+  {
+    EXEC SQL FETCH mgrC2 INTO :empNameHv;
+
+    if (SQLCODE == 100)
+      sqlcode = SQLCODE;
+    else
+    {
+      cout << "  " << setw(8) << empNameHv << "        "
+           << setw(8) << mgrHv << endl;
+      cout.setf(ios::left, ios::adjustfield);
+    }
+
+  }
+
+
+  EXEC SQL CLOSE mgrC2;
+  EMB_SQL_CHECK("CLOSE CURSOR");
+
+  return 0;
+
+} // end of ShowMgrEmps
+
+
+int structtype::DropStructTables()
+{
+  int rc = 0;
+
+  cout << "\n\nDROP the hierarchy of structured tables ...\n" << endl;
+  cout << "\n------------------------" << endl;
+  cout << "USE THE SQL STATEMENT:" << endl;
+  cout << " DROP TABLE\n"
+       << "TO DROP A TYPED TABLE\n" << endl;
+
+  cout << " DROP TABLE prof\n" << endl;
+  if (rc = DropTypeOrTable("prof", DROP_TABLE)) return rc;
+
+  cout << " DROP TABLE student\n" << endl;
+  if (rc = DropTypeOrTable("student", DROP_TABLE)) return rc;
+
+  cout << " DROP TABLE dept_n\n" << endl;
+  if (rc = DropTypeOrTable("dept_n", DROP_TABLE)) return rc;
+
+  cout << " DROP TABLE emp_l\n" << endl;
+  if (rc = DropTypeOrTable("emp_l", DROP_TABLE)) return rc;
+
+  cout << " DROP TABLE person\n" << endl;
+  if (rc = DropTypeOrTable("person", DROP_TABLE)) return rc;
+
+  return rc;
+
+} // end of DropStructTbls
+
+
+int structtype::DropStructTypes( )
+{
+  int rc = 0;
+  char stmt3[120];
+
+  cout << "\nDROP the hierarchy of structured types ..." << endl;
+  cout << "\n---------------------------------------" << endl;
+  cout << "USE THE SQL STATEMENT:" << endl;
+  cout << " DROP TYPE\n"
+       << "TO DROP A STRUCTURED TYPE\n" << endl;
+
+  cout << " DROP TYPE prof_t\n" << endl;
+  if (rc = DropTypeOrTable("prof_t", DROP_TYPE)) return rc;
+
+  cout << " DROP TYPE student_t\n" << endl;
+  if (rc = DropTypeOrTable("student_t", DROP_TYPE)) return rc;
+
+
+  cout << "\n---------------------------------------------" << endl;
+  cout << "USE THE SQL STATEMENT:" << endl;
+  cout << " ALTER TYPE" << endl;
+  cout << "TO MODIFY AN EXISTING STRUCTURED TYPE\n" << endl;
+
+  // Alter type emp_t to drop attribute dept
+  cout << " ALTER TYPE emp_t\n"
+       << "  DROP ATTRIBUTE dept\n" << endl;
+
+  cout << "NOTE:\n"
+       << " The attribute dept associated with the structured\n"
+       << " type emp_t must be dropped before the structure type\n"
+       << " dept can be dropped.\n" << endl;
+
+//  EXEC SQL alter type emp_t drop attribute dept;
+  strcpy(stmt3, " alter type emp_t drop attribute dept");
+  rc = ExecuteStmt(stmt3);
+  if (rc != 0)
+  {
+    return rc;
+  }
+
+  EMB_SQL_CHECK("Alter type emp_t");
+
+  cout << " DROP TYPE dept_t\n" << endl;
+  if (rc = DropTypeOrTable("dept_t", DROP_TYPE)) return rc;
+
+  cout << " DROP TYPE emp_t\n" << endl;
+  if (rc = DropTypeOrTable("emp_t", DROP_TYPE)) return rc;
+
+  cout << " DROP TYPE person_t\n" << endl;
+  if (rc = DropTypeOrTable("person_t", DROP_TYPE)) return rc;
+
+  return rc;
+
+} // DropStructTypes
+
+
+int structtype::DropTypeOrTable(char *objName, int objType)
+{
+  EXEC SQL BEGIN DECLARE SECTION;
+    char dropState[120];
+  EXEC SQL END DECLARE SECTION;
+
+  int rc = 0;
+  char errMsg[120];
+
+  if (objType == DROP_TABLE)
+  {
+    sprintf(dropState, "drop table %s", objName);
+    sprintf(errMsg, "Execute DROP TABLE %s statement\n", objName);
+  }
+  else
+  {
+    sprintf(dropState, "drop type %s", objName);
+    sprintf(errMsg, "Execute DROP TYPE %s statement\n", objName);
+  }
+
+
+  EXEC SQL EXECUTE IMMEDIATE :dropState;
+  EMB_SQL_CHECK(errMsg);
+
+  return rc;
+
+} // end of DropTypeOrTable
+

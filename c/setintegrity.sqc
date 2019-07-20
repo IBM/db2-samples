@@ -1,0 +1,1086 @@
+/****************************************************************************
+** (c) Copyright IBM Corp. 2007 All rights reserved.
+** 
+** The following sample of source code ("Sample") is owned by International 
+** Business Machines Corporation or one of its subsidiaries ("IBM") and is 
+** copyrighted and licensed, not sold. You may use, copy, modify, and 
+** distribute the Sample in any form without payment to IBM, for the purpose of 
+** assisting you in the development of your applications.
+** 
+** The Sample code is provided to you on an "AS IS" basis, without warranty of 
+** any kind. IBM HEREBY EXPRESSLY DISCLAIMS ALL WARRANTIES, EITHER EXPRESS OR 
+** IMPLIED, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED WARRANTIES OF 
+** MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE. Some jurisdictions do 
+** not allow for the exclusion or limitation of implied warranties, so the above 
+** limitations or exclusions may not apply to you. IBM shall not be liable for 
+** any damages you suffer as a result of using, copying, modifying or 
+** distributing the Sample, even if IBM has been advised of the possibility of 
+** such damages.
+*****************************************************************************
+**
+** SOURCE FILE NAME: setintegrity.sqc
+**
+** SAMPLE: How to perform online SET INTEGRITY on a table.
+**
+**         This sample shows:
+**         1. Availability of table during SET INTEGRITY after LOAD utility.
+**         2. Availability of table during SET INTEGRITY after adding a new
+**            partition is added to the table via the ALTER ATTACH.
+**         3. Shows how SET INTEGRITY statement will generate the proper
+**            values for both generated columns and identity values whenever
+**            a partition which violates the constraint is attached a data
+**            partitioned table.
+**
+** SQL STATEMENTS USED:
+**         ALTER TABLE
+**         CREATE TABLE
+**         DROP TABLE
+**         EXPORT
+**         IMPORT
+**         INSERT
+**         LOAD
+**         SELECT
+**         SET INTEGRITY
+**
+** DB2 APIs USED:
+**         db2Load   ----  Load data into a file
+**
+** SQL STRUCTURES USED:
+**         sqlca
+**         db2ExportStruct
+**
+** OUTPUT FILE: setintegrity.out (available in the online documentation)
+*****************************************************************************
+**
+** For more information on the sample programs, see the README file.
+**
+** For information on developing C applications, see the Application
+** Development Guide.
+**
+** For information on using SQL statements, see the SQL Reference.
+**
+** For the latest information on programming, building, and running DB2
+** applications, visit the DB2 application development website:
+**     http://www.software.ibm.com/data/db2/udb/ad
+****************************************************************************/
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+#include <sqlenv.h>
+#include <sqlutil.h>
+#include <sqlcodes.h>
+#include "utilemb.h"
+#include <db2ApiDf.h>
+
+/* Function prototypes */
+int DMSTbspaceCreate(char serverWorkingPath[]);  
+int PartitionedTbCreate(void);  
+int AlterTable(void);        
+int ShowTableContents(void);
+int LoadData(void);
+int Createptb_with_generateIdentity(void);
+int Createtb_temp(void);   
+int SchemaNameGet(void);        
+int TbDrop(void);               
+int TablespacesDrop(void);     
+
+EXEC SQL INCLUDE SQLCA;         /* Includes SQL communication area */
+
+EXEC SQL BEGIN DECLARE SECTION; /* Host variable declare section */
+  char stmt[200];
+  char strStmt[257];
+  sqlint32 max;
+  sqlint32 min;
+  char tableName[129];
+  char schemaName[129];
+EXEC SQL END DECLARE SECTION;
+
+int main(int argc, char *argv[])
+{
+  int rc = 0;
+  char nodeName[SQL_INSTNAME_SZ + 1];
+  char serverWorkingPath[SQL_PATH_SZ + 1];
+  char dbAlias[SQL_ALIAS_SZ + 1];
+  char user[USERID_SZ + 1];
+  char pswd[PSWD_SZ + 1];
+
+  /* Check the command line arguments */
+  rc = CmdLineArgsCheck3(argc, argv, dbAlias, nodeName, user, pswd);
+  if (rc != 0)
+  {
+    return rc;
+  }
+
+  printf("\nTHIS SAMPLE SHOWS HOW TO PERFORM SET INTEGRITY ON A TABLE.\n");
+
+  /* Attach to a local or remote instance */
+  rc = InstanceAttach(nodeName, user, pswd);
+  if (rc != 0)
+  {
+    return rc;
+  }
+
+  /* Get server working path */
+  rc = ServerWorkingPathGet(dbAlias, serverWorkingPath);
+  if (rc != 0)
+  {
+    return rc;
+  }
+
+  /* Detach from the local or remote instance */
+  rc = InstanceDetach(nodeName);
+  if (rc != 0)
+  {
+    return rc;
+  }
+
+  /* Connect to the database */
+  DbConn(dbAlias, user, pswd);
+  if (rc != 0)
+  {
+    return rc;
+  }
+
+  /* Create regular DMS tablespaces */
+  rc = DMSTbspaceCreate(serverWorkingPath);  
+
+  printf("\n************************************************************\n");
+  printf("\nTHE FOLLOWING SCENARIO SHOWS THE AVAILABILITY OF \n");
+  printf("  TABLE DURING SET INTEGRITY AFTER LOAD UTILITY\n");
+  printf("\n************************************************************\n");
+
+  /* Create partitioned table */
+  rc = PartitionedTbCreate(); 
+  
+  printf("\n************************************************************\n"); 
+  printf("\nTHE FOLLOWING SCENARIO SHOWS THE AVAILABILITY OF  \n");
+  printf("  TABLE DURING SET INTEGRITY ALONG WITH GENERATE\n");
+  printf("  IDENTITY CLAUSE AFTER LOAD\n");
+  printf("\n************************************************************\n");
+
+  /* Create temporary table */
+  rc = Createtb_temp();
+
+  printf("\n************************************************************\n");
+  printf("\nTHE FOLLOWING SCENARIO SHOWS THE AVAILABILITY OF \n");
+  printf("  TABLE DURING SET INTEGRITY AFTER ATTACH via ALTER\n");
+  printf("\n************************************************************\n");
+
+  /* Alter a table */
+  rc = AlterTable();
+
+  /* Drop tablespaces */ 
+  rc = TablespacesDrop();
+  
+  /* Disconnect from the database */
+  DbDisconn(dbAlias);
+  if (rc != 0)
+  {
+    return rc;
+  }
+
+  return 0;
+} /* main */
+
+/* Creates regular DMS tablespaces. */
+int DMSTbspaceCreate(char serverWorkingPath[])
+{
+  int rc = 0;
+  struct sqlca sqlca;
+  char containerFileName[SQL_PATH_SZ + 1];
+  char containerFileName1[SQL_PATH_SZ + 1];
+  char containerFileName2[SQL_PATH_SZ + 1];
+  char containerFileName3[SQL_PATH_SZ + 1];
+
+  printf("\n-----------------------------------------------------------");
+  printf("\nUSE THE SQL STATEMENT:\n");
+  printf("  CREATE REGULAR TABLESPACE\n");
+  printf("TO CREATE REGULAR DMS TABLE SPACES.\n");
+
+  /* Create regular DMS table space dms_tspace */
+  strcpy(containerFileName, serverWorkingPath);
+  strcat(containerFileName, PATH_SEP);
+  strcat(containerFileName, "dms_container.dat");
+
+  sprintf(strStmt, "CREATE REGULAR TABLESPACE dms_tspace "
+                   "  MANAGED BY DATABASE "
+                   "  USING(FILE '%s' 10000)" , containerFileName);
+ 
+  printf("\nExecute the statement:\n");
+  printf("  CREATE REGULAR TABLESPACE dms_tspace\n");
+  printf("    MANAGED BY DATABASE\n");
+  printf("      USING(FILE 'dms_container.dat' 10000)\n");
+
+  EXEC SQL EXECUTE IMMEDIATE :strStmt;
+  EMB_SQL_CHECK("DMS tablespace -- create");
+
+  /* Commit transaction */
+  EXEC SQL COMMIT;
+  EMB_SQL_CHECK("transaction -- commit");
+
+  /* Create regular DMS table space dms_tspace1 */
+  strcpy(containerFileName1, serverWorkingPath);
+  strcat(containerFileName1, PATH_SEP);
+  strcat(containerFileName1, "dms_container1.dat");
+  
+  sprintf(strStmt, "CREATE REGULAR TABLESPACE dms_tspace1 "
+                   "  MANAGED BY DATABASE "
+                   "  USING(FILE '%s' 10000)" , containerFileName1);
+
+  printf("\nExecute the statement:\n");
+  printf("  CREATE REGULAR TABLESPACE dms_tspace1\n");
+  printf("    MANAGED BY DATABASE\n");
+  printf("      USING(FILE 'dms_container1.dat' 10000)\n");
+
+  EXEC SQL EXECUTE IMMEDIATE :strStmt;
+  EMB_SQL_CHECK("DMS tablespace -- create");
+
+  /* Commit transaction */
+  EXEC SQL COMMIT;
+  EMB_SQL_CHECK("transaction -- commit");
+
+  /* Create regular DMS table space dms_tspace2 */
+  strcpy(containerFileName2, serverWorkingPath);
+  strcat(containerFileName2, PATH_SEP);
+  strcat(containerFileName2, "dms_container2.dat");
+  
+  sprintf(strStmt, "CREATE REGULAR TABLESPACE dms_tspace2 "
+                   "  MANAGED BY DATABASE "
+                   "  USING(FILE '%s' 10000)" , containerFileName2);
+
+  printf("\nExecute the statement:\n");
+  printf("  CREATE REGULAR TABLESPACE dms_tspace2\n");
+  printf("    MANAGED BY DATABASE\n");
+  printf("      USING(FILE 'dms_container2.dat' 10000)\n");
+
+  EXEC SQL EXECUTE IMMEDIATE :strStmt;
+  EMB_SQL_CHECK("DMS tablespace -- create");
+
+  /* Commit transaction */
+  EXEC SQL COMMIT;
+  EMB_SQL_CHECK("transaction -- commit");
+
+  /* Create regular DMS table space dms_tspace3 */
+  strcpy(containerFileName3, serverWorkingPath);
+  strcat(containerFileName3, PATH_SEP);
+  strcat(containerFileName3, "dms_container3.dat");
+
+  sprintf(strStmt, "CREATE REGULAR TABLESPACE dms_tspace3 "
+                   "  MANAGED BY DATABASE "
+                   "  USING(FILE '%s' 10000)" , containerFileName3);
+
+  printf("\nExecute the statement:\n");
+  printf("  CREATE REGULAR TABLESPACE dms_tspace3\n");
+  printf("    MANAGED BY DATABASE\n");
+  printf("      USING(FILE 'dms_container3.dat' 10000)\n");
+
+  EXEC SQL EXECUTE IMMEDIATE :strStmt;
+  EMB_SQL_CHECK("DMS tablespace -- create");
+
+  /* Commit transaction */
+  EXEC SQL COMMIT;
+  EMB_SQL_CHECK("transaction -- commit");
+
+  return 0;
+} /* DMSTbspaceCreate */
+
+/* Creates a partitioned table in regular DMS tablespaces with 'part1'
+   in 'dms_tspace1', 'part2' in 'dms_tspace2' and 'part3' in 
+   'dms_tspace3' and inserts data into it. The  function also shows 
+   how SET INTEGRITY can be performed on a partitioned table */
+int PartitionedTbCreate(void)
+{
+  int rc = 0;
+  struct sqlca sqlca;
+  char stmt1[250];
+  char stmt2[250];
+  
+  printf("\nUSE THE SQL STATEMENT:\n");
+  printf("  CREATE TABLE\n");
+  printf("TO CREATE A PARTITIONED TABLE:\n");
+
+  printf("\nExecute the statement:\n");
+  printf("  CREATE TABLE fact_table(max INTEGER NOT NULL,\n");
+  printf("                          CONSTRAINT CC CHECK (max>0))\n");
+  printf("    PARTITION BY RANGE (max)\n");
+  printf("    (PART  part1 STARTING FROM (-1) ENDING (3) IN dms_tspace1,\n");
+  printf("    PART part2 STARTING FROM (4) ENDING (6) IN dms_tspace2,\n");
+  printf("    PART part3 STARTING FROM (7) ENDING (9) IN dms_tspace3);\n");
+
+  EXEC SQL CREATE TABLE fact_table(max INTEGER NOT NULL,
+                                  CONSTRAINT CC CHECK (max>0))
+             PARTITION BY RANGE (max)
+               (PART  part1 STARTING FROM (-1) ENDING (3) IN dms_tspace1,
+               PART part2 STARTING FROM (4) ENDING (6) IN dms_tspace2,
+               PART part3 STARTING FROM (7) ENDING (9) IN dms_tspace3);
+
+  EMB_SQL_CHECK("Table -- Create");
+  
+  /* Commit transaction */
+  EXEC SQL COMMIT;
+  EMB_SQL_CHECK("Transaction -- Commit");
+
+  /* Insert data into a partitioned table */
+  printf("\nUSE THE SQL STATEMENT\n");
+  printf("  INSERT\n");
+  printf("TO INSERT DATA INTO A TABLE USING VALUES.\n");
+
+  printf("\nExecute the statement:");
+  printf("\n  INSERT INTO fact_table VALUES(1), (2), (3)\n");
+
+  strcpy(strStmt, "INSERT INTO fact_table VALUES(1), (2), (3)");
+  EXEC SQL EXECUTE IMMEDIATE :strStmt;
+  EMB_SQL_CHECK("INSERT INTO -- fact_table");
+
+  /* Create a temporary table to load data into base table */
+  printf("\nExecute the statements:");
+  printf("\n  CREATE TABLE temp_table (max INT)\n ");
+ 
+  EXEC SQL CREATE TABLE temp_table (max INTEGER);
+  EMB_SQL_CHECK("Table -- Create");
+  EXEC SQL COMMIT;
+  EMB_SQL_CHECK("Transaction -- Commit");
+  
+  /* Insert data into a temporary table */
+  printf("\n  INSERT INTO temp_table VALUES(4), (5), (6), (7), (0), (-1)\n");
+
+  strcpy(strStmt, "INSERT INTO temp_table VALUES(4),(5),(6),(7),(0),(-1)");
+  EXEC SQL EXECUTE IMMEDIATE :strStmt;
+  EMB_SQL_CHECK("INSERT INTO -- temp_table");
+  EXEC SQL COMMIT;
+  EMB_SQL_CHECK("Transaction -- Commit");  
+   
+  /* Load data from a query into a table using the db2Load API */ 
+  rc = LoadData();
+
+  /* Create a temporary table to hold exceptions thrown by SET INTEGRITY
+     statement */
+  printf("\nExecute the statement:");
+  printf("\n  CREATE TABLE fact_exception(max INTEGER NOT NULL)\n");
+  
+  strcpy(strStmt, "CREATE TABLE fact_exception(max INTEGER NOT NULL)");
+  EXEC SQL EXECUTE IMMEDIATE :strStmt;
+  EMB_SQL_CHECK("TABLE fact_exception Created");
+ 
+  EXEC SQL COMMIT;
+  EMB_SQL_CHECK("Transaction -- Commit");
+   
+  printf("\nUSE THE SQL STATEMENT\n");
+  printf("  SET INTEGRITY\n");
+  printf("TO TABLE OUT OF CHECK PENDING STATE:\n");
+ 
+  /* The following SET INTEGRITY statement will check the table 'fact_table' 
+     for constraint violations and at the same time it provides read access 
+     to table 'fact_table'. If there are any constraint violations then the
+     violating data will be deleted from fact_table and inserted into
+     'fact_exception' table (a temporary table) */
+
+  printf("\nExecute the statement:");
+  printf("\n  SET INTEGRITY FOR fact_table ALLOW READ ACCESS ");
+  printf(" \n   IMMEDIATE CHECKED  FOR EXCEPTION IN fact_table"); 
+  printf("\n      USE fact_exception\n");
+
+  EXEC SQL SET INTEGRITY FOR fact_table ALLOW READ ACCESS
+             IMMEDIATE CHECKED FOR EXCEPTION IN fact_table
+             USE fact_exception;
+  EMB_SQL_CHECK("SET INTEGRITY -- fact_table");
+
+  EXEC SQL COMMIT;
+  EMB_SQL_CHECK("Transaction -- Commit");  
+
+  /* Display the contents of 'fact_table' table.*/
+  printf("\n-----------------------------------------------------------");
+  printf("\nUSE THE SQL STATEMENT:\n");
+  printf("  SELECT\n");
+  printf("TO SELECT ROWS FROM A TABLE.\n");
+
+  printf("\nExecute the statement:");
+  printf("\n  SELECT * FROM fact_table\n");
+
+  printf("\nResults:\n");
+  printf("   MAX \n");
+  printf("  ------ \n");
+
+  strcpy(strStmt,"SELECT * FROM fact_table");
+
+  EXEC SQL PREPARE stmt1 FROM :strStmt;
+  EXEC SQL COMMIT;
+
+  /* Declare the cursor */
+  EXEC SQL DECLARE c1 CURSOR FOR stmt1;
+  EXEC SQL COMMIT;
+
+  /* Open cursor */
+  EXEC SQL OPEN c1;
+  EMB_SQL_CHECK("cursor -- open");
+
+  /* Fetch cursor */
+  EXEC SQL FETCH c1 INTO :max;
+  EMB_SQL_CHECK("cursor -- fetch");
+
+  while (sqlca.sqlcode != 100)
+  {
+    printf(" %5d \n", max);
+
+    EXEC SQL FETCH c1 INTO :max;
+    EMB_SQL_CHECK("cursor -- fetch");
+
+  }
+
+  /* Close cursor */
+  EXEC SQL CLOSE c1;
+  EMB_SQL_CHECK("cursor -- close");
+  EXEC SQL COMMIT;
+ 
+  /* Display the contents of 'fact_exception' table.*/
+  printf("\n-----------------------------------------------------------");
+  printf("\nUSE THE SQL STATEMENT:\n");
+  printf("  SELECT\n");
+  printf("TO SELECT ROWS FROM A TABLE.\n");
+
+  printf("\nExecute the statement:");
+  printf("\n  SELECT * FROM fact_exception\n");
+
+  printf("\nResults:\n");
+  printf("   MAX \n");
+  printf("  ------ \n");
+
+  strcpy(strStmt,"SELECT * FROM fact_exception");
+
+  EXEC SQL PREPARE stmt2 FROM :strStmt;
+  EMB_SQL_CHECK(" Statement Prepared ");
+
+  EXEC SQL COMMIT;
+  EMB_SQL_CHECK("commit");
+
+  /* Declare the cursor */
+  EXEC SQL DECLARE c2 CURSOR FOR stmt2;
+  EXEC SQL COMMIT;
+
+  /* Open cursor */
+  EXEC SQL OPEN c2;
+  EMB_SQL_CHECK("cursor -- open");
+
+  /* Fetch cursor */
+  EXEC SQL FETCH c2 INTO :max;
+  EMB_SQL_CHECK("cursor -- fetch");
+
+  while (sqlca.sqlcode != 100)
+  {
+    printf(" %5d\n", max);
+
+    EXEC SQL FETCH c2 INTO :max;
+    EMB_SQL_CHECK("cursor -- fetch");
+  }
+
+  /* Close cursor */
+  EXEC SQL CLOSE c2;
+  EMB_SQL_CHECK("cursor -- close");  
+  EXEC SQL COMMIT;   
+
+  /* Drop the tables created */
+  printf("\nUSE THE SQL STATEMENT:\n");
+  printf("  DROP\n");
+  printf("TO DROP A TABLE.\n");
+
+  printf("\nExecute the statements:");
+  printf("\n  DROP TABLE fact_table");
+  printf("\n  DROP TABLE fact_exception");
+  printf("\n  DROP TABLE temp_table");
+
+  EXEC SQL DROP TABLE fact_table;
+  EMB_SQL_CHECK("Drop Table--  fact_table");  
+
+  EXEC SQL DROP TABLE fact_exception;
+  EMB_SQL_CHECK("Drop Table--  fact_exception");  
+
+  EXEC SQL DROP TABLE temp_table;
+  EMB_SQL_CHECK("Drop Table--  temp_table");  
+  EXEC SQL COMMIT;   
+  printf("\n");  
+  return rc;
+} /* PartitionedTbCreate */  
+
+/* Display the contents of 'fact_table' table.*/
+int ShowTableContents(void)
+{
+  char stmt0[250];  
+  int rc =0;
+
+  printf("\n-----------------------------------------------------------");
+  printf("\nUSE THE SQL STATEMENT:\n");
+  printf("  SELECT\n");
+  printf("TO SELECT ROWS FROM A TABLE.\n");
+
+  printf("\nExecute the statement:");
+  printf("\n  SELECT * FROM fact_table\n");
+
+  printf("\nResults:\n");
+  printf("   MIN      MAX \n");
+  printf("  ------   -------\n");
+
+  strcpy(strStmt,"SELECT * FROM fact_table");
+
+  EXEC SQL PREPARE stmt0 FROM :strStmt;
+  EXEC SQL COMMIT;
+
+  /* Declare the cursor */
+  EXEC SQL DECLARE c0 CURSOR FOR stmt0;
+  EXEC SQL COMMIT;
+
+  /* Open cursor */
+  EXEC SQL OPEN c0;
+  EMB_SQL_CHECK("cursor -- open");
+
+  /* Fetch cursor */
+  EXEC SQL FETCH c0 INTO :min, :max;
+  EMB_SQL_CHECK("cursor -- fetch");
+
+  while (sqlca.sqlcode != 100)
+  {
+    printf(" %4d  %7d \n", min, max);
+
+    EXEC SQL FETCH c0 INTO :min, :max;
+    EMB_SQL_CHECK("cursor -- fetch");
+
+  }
+
+  /* Close cursor */
+  EXEC SQL CLOSE c0;
+  EMB_SQL_CHECK("cursor -- close");
+  
+   return rc;
+} /* ShowTableContents */
+
+/* This function demonstrates how to load data from a query into a table
+   using the db2Load API */
+int LoadData()
+{
+  int rc = 0;
+  struct sqlca sqlca;
+
+  /* The query statement that is used to obtain data from the source table */
+  char *queryStr = "SELECT * FROM temp_table";
+  char actionString[256];
+
+  /* Declare the input and output structures needed to call the
+     db2Load API */
+  struct db2LoadStruct paramStruct;
+  struct db2LoadIn inputInfoStruct;
+  struct db2LoadOut outputInfoStruct;
+  struct sqlu_media_list mediaList;
+  union sqlu_media_list_targets mediaListTargets;
+  struct sqlu_statement_entry statementEntry;
+
+  struct sqlchar *pAction;
+  char localMsgFileName[128];
+
+  /* Initialize the members of the structures to NULL or zero */
+  memset(&paramStruct, 0, sizeof(paramStruct));
+  memset(&mediaList, 0, sizeof(mediaList));
+  memset(&outputInfoStruct, 0, sizeof(outputInfoStruct));
+  memset(&inputInfoStruct, 0, sizeof(inputInfoStruct));
+  memset(&mediaListTargets, 0, sizeof(mediaListTargets));
+  memset(&statementEntry, 0, sizeof(statementEntry));
+
+  /* Setup the input information structure */
+  
+  inputInfoStruct.iRestartphase =  ' ';
+  inputInfoStruct.iStatsOpt = SQLU_STATS_NONE;
+  inputInfoStruct.iIndexingMode = SQLU_INX_AUTOSELECT;
+  inputInfoStruct.iNonrecoverable  =  SQLU_NON_RECOVERABLE_LOAD;
+  inputInfoStruct.iAccessLevel     =  SQLU_ALLOW_NO_ACCESS;
+  inputInfoStruct.iLockWithForce   =  SQLU_NO_FORCE;
+
+  /* From V9.0 onwards, the structure member iCheckPending is            
+     deprecated and replaced with iSetIntegrityPending. Also the             
+     possible value to set this  variable SQLU_CHECK_PENDING_CASCADE_DEFERRED
+     has been replaced with SQLU_SI_PENDING_CASCADE_DEFERRED. */
+  inputInfoStruct.iSetIntegrityPending = SQLU_SI_PENDING_CASCADE_DEFERRED;
+
+  statementEntry.pEntry = queryStr;
+  statementEntry.length = strlen(queryStr);
+
+  mediaListTargets.pStatement = &statementEntry;
+
+  mediaList.media_type = SQLU_SQL_STMT;
+  mediaList.sessions = 1;
+  mediaList.target = mediaListTargets;
+
+  strcpy(actionString, "INSERT INTO fact_table");
+  pAction = (struct sqlchar *)malloc(sizeof(short) +
+                                     sizeof(actionString) + 1);
+  pAction->length = strlen(actionString);
+  strcpy(pAction->data, actionString);
+
+  /* Setup the parameter structure */
+  paramStruct.piSourceList = &mediaList;
+  paramStruct.piActionString = pAction;  
+  paramStruct.piFileType = SQL_CURSOR;
+
+  strcpy(localMsgFileName, "tbloadcrossloader.MSG");
+
+  paramStruct.piLocalMsgFileName = localMsgFileName;
+  paramStruct.piLoadInfoIn = &inputInfoStruct;
+  paramStruct.poLoadInfoOut    = &outputInfoStruct;
+  paramStruct.iCallerAction = SQLU_INITIAL;
+
+  /* load data into the 'emptable' table by calling the db2Load API */
+  printf("\n-----------------------------------------------------------\n");
+  printf("\n  CALL THE DB2 API db2Load()\n");
+  printf("\n-----------------------------------------------------------");
+  db2Load (db2Version1010, &paramStruct, &sqlca);     
+
+  DB2_API_CHECK("table -- load");
+
+  /* free memory allocated */
+  free(pAction);
+
+  return 0;
+} /* LoadData */
+
+/* Create a partitioned table with 'part1' in 'dms_tspace1', 'part2' in
+   'dms_tspace2' and 'part3 in 'dms_tspace3'with GENERATE IDENTITY clause */
+int Createptb_with_GenerateIdentity(void)
+{
+   int rc =0;
+   struct sqlca sqlca;
+
+   printf(" USE THE SQL STATEMENT:\n");
+   printf("   CREATE\n");
+   printf(" TO CREATE A PARTITIONED TABLE WITH GENERATE IDENTITY CLAUSE\n");
+
+   printf("\nExecute the statement:");
+   printf("\n  CREATE TABLE fact_table (min SMALLINT NOT NULL,");
+   printf("\n                 max SMALLINT GENERATED ALWAYS AS IDENTITY,");
+   printf("\n                 CONSTRAINT CC CHECK (min>0)) ");
+   printf("\n    PARTITION BY RANGE (min)");
+   printf("\n    (PART  part1 STARTING FROM (1) ENDING (3) IN dms_tspace1,");
+   printf("\n    PART part2 STARTING FROM (4) ENDING (6) IN dms_tspace2,");
+   printf("\n    PART part3 STARTING FROM (7) ENDING (9) IN dms_tspace3);");
+
+   strcpy(strStmt, "CREATE TABLE fact_table (min SMALLINT NOT NULL,");
+   strcat(strStmt, "max SMALLINT GENERATED ALWAYS AS IDENTITY,");
+   strcat(strStmt, "CONSTRAINT CC CHECK (min>0))");
+   strcat(strStmt, "PARTITION BY RANGE (min)");
+   strcat(strStmt, "(PART part1 STARTING FROM (1) ENDING (3)IN dms_tspace1,");
+   strcat(strStmt, "PART part2 STARTING FROM (4) ENDING (6) IN dms_tspace2,");
+   strcat(strStmt, "PART part3 STARTING FROM (7) ENDING (9) IN dms_tspace3)");
+
+   EXEC SQL EXECUTE IMMEDIATE :strStmt;
+   EMB_SQL_CHECK("Table -- Create");
+
+   EXEC SQL COMMIT;
+   EMB_SQL_CHECK("Transaction -- Commit");
+
+   return rc;
+} /* Createptb_with_GenerateIdentity */
+
+/* Creates a temporary table and inserts data into it. The function shows
+   SET INTEGRITY operation on 'fact_table' with GENERATE IDENTIY and
+   FORCE GENERATED clauses to it.   */
+int Createtb_temp(void)
+{
+  int rc = 0;
+  struct sqlca sqlca;
+
+  rc = Createptb_with_GenerateIdentity();
+
+  printf("\n\nUSE THE SQL STATEMENT:\n");
+  printf("  CREATE\n");
+  printf("TO CREATE TABLE .\n");
+
+  printf("\nExecute the statement:");
+  printf("\n  CREATE TABLE temp_table (min SMALLINT NOT NULL);\n");
+
+  strcpy(strStmt, "CREATE TABLE temp_table(min SMALLINT NOT NULL)");
+  EXEC SQL EXECUTE IMMEDIATE :strStmt;
+  EMB_SQL_CHECK("Table -- Create");
+
+  EXEC SQL COMMIT;
+  EMB_SQL_CHECK("Transaction -- Commit");
+ 
+  printf("\nUSE THE SQL STATEMENT:\n");
+  printf("  INSERT\n");
+  printf("DATA INTO A TABLE WITH VALUES.\n");
+
+  printf("\nExecute the statements:");
+  printf("\n  INSERT INTO temp_table VALUES (1), (2), (3), (4), (5)");
+  printf("\n  INSERT INTO temp_table VALUES (6), (7), (8), (9)\n");
+   
+  strcpy(strStmt, "INSERT INTO temp_table VALUES(1), (2), (3), (4), (5)");
+  EXEC SQL EXECUTE IMMEDIATE :strStmt;
+  EMB_SQL_CHECK("INSERT INTO -- temp_table"); 
+
+  strcpy(strStmt, "INSERT INTO temp_table VALUES (6), (7), (8), (9)");
+  EXEC SQL EXECUTE IMMEDIATE :strStmt;
+  EMB_SQL_CHECK("INSERT INTO -- temp_table");
+
+  EXEC SQL COMMIT;
+  EMB_SQL_CHECK("Transaction -- Commit");
+
+  /* Load data from a query into a table using the db2Load API */
+  rc = LoadData();
+
+  /* The following SET INTEGRITY statement will check the table fact_table 
+     for constraint violations and at the same time the GENERATE IDENTITY 
+     along with NOT INCREMENTAL options will generate new identity values
+     for all rows currently in the table and all loaded rows */
+
+  printf("\nUSE THE SQL STATEMENT\n");
+  printf("  SET INTEGRITY\n");
+  printf("TO TABLE OUT OF CHECK PENDING STATE:\n");
+
+  printf("\nExecute the statement:");
+  printf("\n  SET INTEGRITY FOR fact_table GENERATE IDENTITY \n");
+  printf("    IMMEDIATE CHECKED  NOT INCREMENTAL \n");
+
+  EXEC SQL SET INTEGRITY FOR fact_table GENERATE IDENTITY
+             IMMEDIATE CHECKED  NOT INCREMENTAL; 
+  EMB_SQL_CHECK("SET INTEGRITY -- fact_table");
+
+  EXEC SQL COMMIT;
+  EMB_SQL_CHECK("Transaction -- Commit");  
+
+  /* Display the contents of 'fact_table' table */
+  rc = ShowTableContents();
+ 
+  printf("\nExecute the statement:\n");
+  printf("  DROP TABLE fact_table\n");
+
+  EXEC SQL DROP TABLE fact_table;
+  EMB_SQL_CHECK("Drop Table -- fact_table");
+  EXEC SQL COMMIT;
+  EMB_SQL_CHECK("Transaction -- Commit");  
+
+  printf("\n***********************************************************\n");
+  printf("\nTHE FOLLOWING SCENARIO SHOWS THE AVAILABILITY OF \n");
+  printf("  TABLE DURING SET INTEGRITY ALONG WITH FORCE\n");
+  printf("  GENERATED CLAUSE AFTER LOAD UTILITY\n");
+  printf("\n***********************************************************\n");
+  
+  /* Create partitioned table with GENERATE IDENTITY clause */ 
+  rc = Createptb_with_GenerateIdentity();
+  printf("\n");
+  
+  /* Load data from a query into a table using the db2Load API */ 
+  rc = LoadData();
+
+  /* The following SET INTEGRITY statement will check table fact_table for
+     constraint violations and at the same time the force generated clause
+     will operate on rows that do not evaluate to the proper expression */
+
+  printf("\nExecute the statement:");
+  printf("\n  SET INTEGRITY FOR fact_table\n ");
+  printf("   IMMEDIATE CHECKED  FORCE GENERATED \n");
+
+  strcpy(strStmt, "SET INTEGRITY FOR fact_table ");
+  strcat(strStmt, "IMMEDIATE CHECKED  FORCE GENERATED");
+   
+  EXEC SQL EXECUTE IMMEDIATE :strStmt;
+  EMB_SQL_CHECK("SET INTEGRITY -- fact_table");
+
+  EXEC SQL COMMIT;
+  EMB_SQL_CHECK("Transaction -- Commit");  
+
+  /* Display the contents of 'fact_table' table */
+  rc = ShowTableContents();
+
+  printf("\nExecute the statement:\n");
+  printf("  DROP TABLE fact_table\n");
+
+  EXEC SQL DROP TABLE fact_table;
+  EMB_SQL_CHECK("Drop Table -- fact_table");
+  EXEC SQL COMMIT;
+  EMB_SQL_CHECK("Transaction -- Commit");  
+
+  return rc;
+} /* Createtb_temp */
+
+/* Function to alter a table by attaching a new partition to a existing 
+   table. Shows how SET INTEGRITY is performed on 'fact_table' to bring 
+   table out of check pending state  */   
+int AlterTable(void)
+{
+  int rc = 0;
+  struct sqlca sqlca;
+
+  struct db2LoadStruct paramStruct;
+  struct db2LoadIn inputInfoStruct;
+  struct db2LoadOut outputInfoStruct;
+  struct sqlu_media_list mediaList;
+  union sqlu_media_list_targets mediaListTargets;
+  struct sqlu_statement_entry statementEntry;
+
+  /* The query statement that is used to obtain data from the source table */
+  char *queryStr = "SELECT * FROM attach";
+  char actionString[256];
+  struct sqlchar *pAction;
+  char localMsgFileName1[128];
+  
+  rc = Createptb_with_GenerateIdentity();
+  printf("\n");
+
+  /* Load data from a query into a table using the db2Load API */
+  rc = LoadData();
+
+  EXEC SQL CREATE TABLE attach_part (min SMALLINT NOT NULL,
+                          max SMALLINT GENERATED ALWAYS AS IDENTITY,
+                          CONSTRAINT CC CHECK (min>0)) IN dms_tspace1;
+  EMB_SQL_CHECK("Temporary table --  Created");
+
+  EXEC SQL CREATE TABLE attach(min SMALLINT NOT NULL);
+  EMB_SQL_CHECK("Temporary table --  Created");
+
+  strcpy(strStmt, "INSERT INTO attach VALUES (10), (11), (12)");
+  EXEC SQL EXECUTE IMMEDIATE :strStmt;
+
+  /* Declare the input and output structures needed to call the
+     db2Load API */
+
+  /* Initialize the members of the structures to NULL or zero */
+  memset(&paramStruct, 0, sizeof(paramStruct));
+  memset(&mediaList, 0, sizeof(mediaList));
+  memset(&outputInfoStruct, 0, sizeof(outputInfoStruct));
+  memset(&inputInfoStruct, 0, sizeof(inputInfoStruct));
+  memset(&mediaListTargets, 0, sizeof(mediaListTargets));
+  memset(&statementEntry, 0, sizeof(statementEntry));
+
+  /* Setup the input information structure */
+
+  inputInfoStruct.iRestartphase =  ' ';
+  inputInfoStruct.iStatsOpt = SQLU_STATS_NONE;
+  inputInfoStruct.iIndexingMode = SQLU_INX_AUTOSELECT;
+  inputInfoStruct.iNonrecoverable  =  SQLU_NON_RECOVERABLE_LOAD;
+  inputInfoStruct.iAccessLevel     =  SQLU_ALLOW_NO_ACCESS;
+  inputInfoStruct.iLockWithForce   =  SQLU_NO_FORCE;
+
+  /* From V9.0 onwards, the structure member iCheckPending is          
+     deprecated and replaced with iSetIntegrityPending. Also the     
+     possible value to set this  variable SQLU_CHECK_PENDING_CASCADE_DEFERRED
+     has been replaced with SQLU_SI_PENDING_CASCADE_DEFERRED.              */
+     inputInfoStruct.iSetIntegrityPending = SQLU_SI_PENDING_CASCADE_DEFERRED;
+
+  statementEntry.pEntry = queryStr;
+  statementEntry.length = strlen(queryStr);
+
+  mediaListTargets.pStatement = &statementEntry;
+
+  mediaList.media_type = SQLU_SQL_STMT;
+  mediaList.sessions = 1;
+  mediaList.target = mediaListTargets;
+
+  strcpy(actionString, "INSERT INTO attach_part");
+  pAction = (struct sqlchar *)malloc(sizeof(short) +
+                                     sizeof(actionString) + 1);
+  pAction->length = strlen(actionString);
+  strcpy(pAction->data, actionString);
+
+  /* Setup the parameter structure */
+  paramStruct.piSourceList = &mediaList;
+  paramStruct.piActionString = pAction;
+  paramStruct.piFileType = SQL_CURSOR;
+
+  strcpy(localMsgFileName1, "tbloadcrossloader.MSG");
+
+  paramStruct.piLocalMsgFileName = localMsgFileName1;
+  paramStruct.piLoadInfoIn = &inputInfoStruct;
+  paramStruct.poLoadInfoOut = &outputInfoStruct;
+  paramStruct.iCallerAction = SQLU_INITIAL;
+
+  printf("\n-----------------------------------------------------------\n");
+  printf("\n  CALL THE DB2 API db2Load()\n");
+  printf("\n-----------------------------------------------------------");
+  db2Load (db2Version1010, &paramStruct, &sqlca);
+
+  DB2_API_CHECK("table -- load");
+
+  /* free memory allocated */
+  free(pAction);
+ 
+  printf("\nUSE THE SQL STATEMENT\n");
+  printf("  ALTER TABLE\n");
+  printf("TO ATTACH PARTITION TO A TABLE\n");
+ 
+  printf("\nExecute the statement:\n");
+  printf("  ALTER TABLE fact_table ATTACH PARTITION part4\n");
+  printf("    STARTING FROM (10) ENDING AT (12)\n");
+  printf("      FROM TABLE attach_part\n");
+
+  EXEC SQL ALTER TABLE fact_table ATTACH PARTITION part4
+             STARTING FROM (10) ENDING AT (12) FROM TABLE attach_part;
+
+  EMB_SQL_CHECK(" Attached Partition To Table");
+
+  EXEC SQL COMMIT;
+  EMB_SQL_CHECK(" Transaction -- Commit ");
+
+  /* The following SET INTEGRITY statement will check the table fact_table 
+     for constraint violations and at the same time the GENERATE IDENTITY
+     along with INCREMENTAL options will generate new identity values
+     for attached rows only. */
+ 
+  printf("\nUSE THE SQL STATEMENT\n");
+  printf("  SET INTEGRITY \n");
+  printf("TO BRING TABLE OUT OF CHECK PENDING STATE\n\n");
+ 
+  printf("Execute the statement:\n");
+  printf("  SET INTEGRITY FOR fact_table GENERATE IDENTITY\n");
+  printf("    IMMEDIATE CHECKED INCREMENTAL;\n");
+
+  EXEC SQL SET INTEGRITY FOR fact_table GENERATE IDENTITY 
+             IMMEDIATE CHECKED INCREMENTAL; 
+  
+  EMB_SQL_CHECK(" SET INTEGRITY -- fact_table");
+  
+  EXEC SQL COMMIT;
+  EMB_SQL_CHECK("Transaction -- Commit");
+
+  /* Display the contents of 'fact_table' table */
+  rc = ShowTableContents();
+
+  /* Drop tables */
+  rc = TablesDrop();
+ 
+  return rc;
+} /* AlterTable */
+
+/* Function to get sever working path */ 
+int ServerWorkingPathGet(char dbAlias[], char serverWorkingPath[])
+{
+  int rc = 0;
+  struct sqlca sqlca;
+  db2CfgParam cfgParameters[1];
+  db2Cfg cfgStruct;
+  char serverLogPath[SQL_PATH_SZ + 1];
+  char dbAlias_upper[SQL_ALIAS_SZ + 1] = { 0 };
+  int ctr = 0;
+  int len;
+
+  /* initialize cfgParameters */
+  cfgParameters[0].flags = 0;
+  cfgParameters[0].token = SQLF_DBTN_LOGPATH;
+  cfgParameters[0].ptrvalue =
+    (char *)malloc((SQL_PATH_SZ + 1) * sizeof(char));
+
+  /* initialize cfgStruct */
+  cfgStruct.numItems = 1;
+  cfgStruct.paramArray = cfgParameters;
+  cfgStruct.flags = db2CfgDatabase;
+  cfgStruct.dbname = dbAlias;
+
+  /* get database configuration */
+  db2CfgGet(db2Version1010, (void *)&cfgStruct, &sqlca);
+  DB2_API_CHECK("server log path -- get");
+
+  strcpy(serverLogPath, cfgParameters[0].ptrvalue);
+  free(cfgParameters[0].ptrvalue);
+
+  /* get server working path */
+  /* for example, if the serverLogPath = "C:\DB2\NODE0001\....". */
+  /* keep for serverWorkingPath "C:\DB2" only. */
+
+  for (ctr = 0; ctr < strlen (dbAlias); ctr++)
+  {
+    dbAlias_upper[ctr] = toupper (dbAlias[ctr]);
+  }
+  dbAlias_upper[ctr] = '\0';  /* terminate the constructed string */
+
+  len = (int)(strstr(serverLogPath, "NODE") - serverLogPath - 1);
+  memcpy(serverWorkingPath, serverLogPath, len);
+  serverWorkingPath[len] = '\0';
+
+  return 0;
+} /* ServerWorkingPathGet */
+
+/* Function to get a schema name of the table */ 
+int SchemaNameGet(void)
+{
+  struct sqlca sqlca;
+
+  /* get table schema name */
+  EXEC SQL SELECT tabschema INTO :schemaName
+             FROM syscat.tables
+               WHERE tabname = :tableName;
+  EMB_SQL_CHECK("table schema name -- get");
+
+  /* get rid of spaces from the end of schemaName */
+  strtok(schemaName, " ");
+
+  return 0;
+} /* SchemaNameGet */
+
+/* Drop tables */
+int TablesDrop(void)
+{
+   int rc =0;
+   struct sqlca sqlca;
+  
+   printf("\n-----------------------------------------------------------");
+   printf("\nUSE THE SQL STATEMENT:\n");
+   printf("  DROP\n");
+   printf("TO DROP TABLES.\n");
+
+   /* Drop tables */
+   printf("\nExecute the statements");
+   printf("\n  DROP TABLE fact_table\n");
+
+   EXEC SQL DROP TABLE fact_table;
+   EMB_SQL_CHECK("table -- drop");
+  
+   printf("\n  DROP TABLE temp_table\n");
+
+   EXEC SQL DROP TABLE temp_table;
+   EMB_SQL_CHECK("table -- drop");
+
+   printf("\n  DROP TABLE attach\n");
+
+   EXEC SQL DROP TABLE attach;
+   EMB_SQL_CHECK("table -- drop");
+
+   /* Commit Transaction */ 
+   EXEC SQL COMMIT;
+   EMB_SQL_CHECK("transaction -- commit");
+   
+   return 0;
+} /* TablesDrop */
+
+/* Drops tablespaces */ 
+int TablespacesDrop(void)
+{
+  int rc = 0;
+  struct sqlca sqlca;
+
+  printf("\n-----------------------------------------------------------");
+  printf("\nUSE THE SQL STATEMENT:\n");
+  printf("  DROP TABLESPACES\n");
+  printf("TO DROP TABLESPACES.\n");
+
+  printf("\nExecute the statements");
+  printf("\n  DROP TABLESPACE dms_tspace\n");
+
+  EXEC SQL DROP TABLESPACE dms_tspace;
+  EMB_SQL_CHECK("tablespaces -- drop");
+  
+  printf("\n  DROP TABLESPACE dms_tspace1\n");
+
+  EXEC SQL DROP TABLESPACE dms_tspace1;
+  EMB_SQL_CHECK("tablespaces -- drop");
+
+  printf("\n  DROP TABLESPACE dms_tspace2\n");
+
+  EXEC SQL DROP TABLESPACE dms_tspace2;
+  EMB_SQL_CHECK("tablespaces -- drop");
+
+  printf("\n  DROP TABLESPACE dms_tspace3\n");
+
+  EXEC SQL DROP TABLESPACE dms_tspace3;
+  EMB_SQL_CHECK("tablespaces -- drop");
+ 
+  /* Commit Transaction */ 
+  EXEC SQL COMMIT;
+  EMB_SQL_CHECK("transaction -- commit");
+  printf("\n-----------------------------------------------------------\n");  
+  
+  return 0;
+} /* TablespacesDrop */

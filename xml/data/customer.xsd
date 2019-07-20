@@ -1,0 +1,15 @@
+<xsd:schema xmlns:xsd="http://www.w3.org/2001/XMLSchema" 
+            targetNamespace="http://www.test.com/customer" >
+
+<xsd:complexType name="customerType">
+  <xsd:sequence>
+    <xsd:element name="Name"    type="xsd:string" />
+    <xsd:element name="Address" type="xsd:string" />
+    <xsd:element name="Phone"   type="xsd:string" />
+    <xsd:element  name="email"   type="xsd:string" />
+  </xsd:sequence>
+  <xsd:attribute name="type"    type="xsd:string" />
+</xsd:complexType>
+
+</xsd:schema>
+

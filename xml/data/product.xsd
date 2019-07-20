@@ -1,0 +1,15 @@
+<xsd:schema xmlns:xsd="http://www.w3.org/2001/XMLSchema" 
+            targetNamespace="http://www.test.com/product" >
+
+<xsd:complexType name="prodType">
+  <xsd:sequence>
+    <xsd:element name="Name"    type="xsd:string" />
+    <xsd:element name="SKU"     type="xsd:string" />
+    <xsd:element name="Price"   type="xsd:integer" />
+    <xsd:element name="Comment" type="xsd:string" />
+  </xsd:sequence>
+  <xsd:attribute name="color"   type="xsd:string" />
+  <xsd:attribute name="weight"  type="xsd:integer" />
+</xsd:complexType>
+</xsd:schema>
+

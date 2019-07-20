@@ -1,0 +1,427 @@
+/* *************************************************************************
+**   (c) Copyright IBM Corp. 2007 All rights reserved.
+**   
+**   The following sample of source code ("Sample") is owned by International 
+**   Business Machines Corporation or one of its subsidiaries ("IBM") and is 
+**   copyrighted and licensed, not sold. You may use, copy, modify, and 
+**   distribute the Sample in any form without payment to IBM, for the purpose of 
+**   assisting you in the development of your applications.
+**   
+**   The Sample code is provided to you on an "AS IS" basis, without warranty of 
+**   any kind. IBM HEREBY EXPRESSLY DISCLAIMS ALL WARRANTIES, EITHER EXPRESS OR 
+**   IMPLIED, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED WARRANTIES OF 
+**   MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE. Some jurisdictions do 
+**   not allow for the exclusion or limitation of implied warranties, so the above 
+**   limitations or exclusions may not apply to you. IBM shall not be liable for 
+**   any damages you suffer as a result of using, copying, modifying or 
+**   distributing the Sample, even if IBM has been advised of the possibility of 
+**   such damages.
+** *************************************************************************
+**                                                                          
+**  SAMPLE FILE NAME: xupdate.sqc                                          
+**                                                                          
+**  PURPOSE:  To demonstrate how to insert, delete, update, replace, and rename 
+**            one or more XML documents or document fragments using transform 
+**            expressions. 
+**                                                                          
+**  USAGE SCENARIO: The orders made by customers are stored in the existing 
+**                  PurchaseOrder system. A customer has ordered some items initially, 
+**                  and now the customer wants to add some more items and remove some 
+**                  items from the list. This sample will show how the order is modified 
+**                  using the XQuery transform expression and updating expressions.                 
+**                                                                          
+**  PREREQUISITE: NONE
+**                                                                          
+**  EXECUTION:    bldapp xupdate       (Build the sample)
+**                xupdate              (Run the sample)   
+**                                                                          
+**  INPUTS:       NONE
+**                                                                          
+**  OUTPUTS:      Successful updation of the purchase orders.
+**                                                                          
+**  OUTPUT FILE:  xupdate.out (available in the online documentation)      
+**                                     
+**  SQL STATEMENTS USED:
+**        INSERT
+**        UPDATE  
+**        DROP   
+**
+**  SQL/XML FUNCTIONS USED:                                                  
+**        XMLQUERY                                                       
+**  
+*****************************************************************************
+**
+** For more information on the sample programs, see the README file.
+**
+** For information on developing C applications, see the Application
+** Development Guide.
+**
+** For information on using SQL statements, see the SQL Reference.
+**
+** For information on DB2 APIs, see the Administrative API Reference.
+**
+** For the latest information on programming, building, and running DB2
+** applications, visit the DB2 application development website:
+**     http:**www.software.ibm.com/data/db2/udb/ad
+****************************************************************************
+**
+**  SAMPLE DESCRIPTION                                                      
+**
+** *************************************************************************
+**  1. Insert Expression  -- Insert a new element to the existing XML document/fragment.
+**  2. Delete Expression  -- Delete some elements from the exisitng XML document/fragment.
+**  3. Replace value of Expression -- i)  Replace the value of an element
+**                                    ii) Replace the value of attribute
+**  4. Replace Expression -- Replace an element and attribute
+**  5. Rename Expression  -- i)  Rename an element in the existing XML document/fragment.
+**                           ii) Rename an attribute in the existing XML document/fragment.
+**  6. Insert and Replace Expressions -- Combination of transform expressions.
+** *************************************************************************/
+
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+#include <sqlenv.h>
+#include <sqlcodes.h>
+#include <sqlutil.h>
+#include "utilemb.h"
+
+EXEC SQL BEGIN DECLARE SECTION;
+  char stmt[1684];
+  SQL TYPE IS XML AS BLOB( 10K ) xmlblob;
+EXEC SQL END DECLARE SECTION;
+
+int main(int argc, char *argv[])
+{
+  int rc = 0;
+  char dbAlias[SQL_ALIAS_SZ + 1];
+  char user[USERID_SZ + 1];
+  char pswd[PSWD_SZ + 1];
+  /* check the command line arguments */
+  rc = CmdLineArgsCheck1(argc, argv, dbAlias, user, pswd);
+  if (rc != 0)
+  {
+    return rc;
+  }
+   /* connect to database */
+  rc = DbConn(dbAlias, user, pswd);
+  if (rc != 0)
+  {
+    return rc;
+  }
+
+  rc=insertExpr();
+  rc=deleteExpr();
+  rc=renameExpr();
+  rc=replaceExpr();
+  rc=combinationExprr();
+
+  return 0;
+} /* main */
+
+int insertExpr()
+{
+   int rc = 0;
+  struct sqlca sqlca;
+  printf("\n*******************************************************************************");
+  printf("\n Insert Expression -- Insert a new element to the existing XML document/fragment.");
+  printf("\n*******************************************************************************");
+  sprintf(stmt,"SELECT  xmlquery('transform copy $po := $order modify do insert document { <item> <partid>100-103-01</partid> <name>Snow Shovel, Super Deluxe 26 inch</name> <quantity>2</quantity> <price>49.99</price> </item> } as last into $po return  $po' passing purchaseorder.porder as \"order\") from purchaseorder where poid=5004");
+
+  printf("\n\n Query: \n %s", stmt);
+  EXEC SQL PREPARE s1 FROM :stmt;
+  EMB_SQL_CHECK("prepare -- statement");
+
+  EXEC SQL DECLARE c1 CURSOR FOR s1;
+  EMB_SQL_CHECK("declare -- cusrsor");
+
+  EXEC SQL OPEN c1;
+  EMB_SQL_CHECK("cursor -- open");
+
+  EXEC SQL FETCH c1 INTO :xmlblob;
+  EMB_SQL_CHECK("cursor -- fetch");
+
+  printf("\n\n Data after insert:");
+  /* Print the result */
+  while( sqlca.sqlcode == SQL_RC_OK )
+  {
+    xmlblob.data[xmlblob.length]='\0';
+    printf("\n%s",xmlblob.data);
+    EXEC SQL FETCH c1 INTO :xmlblob;
+    EMB_SQL_CHECK("cursor -- fetch");
+  }
+  EXEC SQL CLOSE c1;
+  EXEC SQL COMMIT;
+  EMB_SQL_CHECK("cursor -- close");
+  return 0;
+
+}
+
+int deleteExpr()
+{
+   int rc = 0;
+  struct sqlca sqlca;
+  printf("\n\n*******************************************************************************");
+  printf("\n Delete Expression  -- Delete some elements from the exisitng XML document/fragment.");
+  printf("\n*******************************************************************************");
+  sprintf( stmt,"UPDATE purchaseorder SET porder = xmlquery('transform copy $po := $order modify do delete $po/PurchaseOrder/item[partid = ''100-201-01''] return  $po' passing porder as \"order\") WHERE poid=5004");
+
+  printf("\n\n Query: \n%s",stmt);
+  EXEC SQL EXECUTE IMMEDIATE :stmt;
+  EMB_SQL_CHECK("Update -- statement");
+
+  sprintf( stmt, "SELECT porder FROM purchaseorder WHERE poid=5004");
+  EXEC SQL PREPARE s2 FROM :stmt;
+  EXEC SQL DECLARE c11 CURSOR FOR s2;
+  EMB_SQL_CHECK("declare -- cusrsor");
+
+  EXEC SQL OPEN c11;
+  EMB_SQL_CHECK("cursor -- open");
+
+  EXEC SQL FETCH c11 INTO :xmlblob;
+  EMB_SQL_CHECK("cursor -- fetch");
+
+  printf("\n\n Data after delete: ");
+  /* Print the result */
+  while( sqlca.sqlcode == SQL_RC_OK )
+  {
+    xmlblob.data[xmlblob.length]='\0';
+    printf("\n%s",xmlblob.data);
+    EXEC SQL FETCH c11 INTO :xmlblob;
+    EMB_SQL_CHECK("cursor -- fetch");
+  }
+  EXEC SQL CLOSE c11;
+  EXEC SQL COMMIT;
+  EMB_SQL_CHECK("cursor -- close");
+  return 0;
+
+}  //deleteExpr
+
+int replaceExpr()
+{
+  int rc = 0;
+  struct sqlca sqlca;
+  printf("\n\n*******************************************************************************");
+  printf("\n Replace value of Expression --  Replace the value of an element");
+  printf("\n*******************************************************************************");
+
+  sprintf( stmt,"UPDATE purchaseorder SET porder = xmlquery('transform copy  $po := $order modify for $i in $po/PurchaseOrder[@OrderDate = \"2006-02-18\"]//price return do replace value of $i  with $i*0.8 return  $po' passing porder as \"order\")");
+
+  printf("\n\n Query: \n%s",stmt);
+  EXEC SQL EXECUTE IMMEDIATE :stmt;
+  EMB_SQL_CHECK("Update -- statement");
+
+  sprintf( stmt, "SELECT porder FROM purchaseorder ORDER BY poid");
+  
+  EXEC SQL PREPARE s3 FROM :stmt;
+  EXEC SQL DECLARE c111 CURSOR FOR s3;
+  EMB_SQL_CHECK("declare -- cusrsor");
+
+  EXEC SQL OPEN c111;
+  EMB_SQL_CHECK("cursor -- open");
+
+  EXEC SQL FETCH c111 INTO :xmlblob;
+  EMB_SQL_CHECK("cursor -- fetch");
+
+  /* Print the result */
+  printf("\n\n Data after replace value of an element:"); 
+  while( sqlca.sqlcode == SQL_RC_OK )
+  {
+    xmlblob.data[xmlblob.length]='\0';
+    printf("\n%s",xmlblob.data);
+    EXEC SQL FETCH c111 INTO :xmlblob;
+    EMB_SQL_CHECK("cursor -- fetch");
+  }
+  EXEC SQL CLOSE c111;
+  EXEC SQL COMMIT;
+  EMB_SQL_CHECK("cursor -- close");
+
+  
+  
+  printf("\n\n*******************************************************************************");
+  printf("\n Replace value of Expression -- Replace the value of attribute");
+  printf("\n*******************************************************************************");
+  sprintf( stmt,"UPDATE purchaseorder SET porder = xmlquery('transform copy $po := $order modify do replace value of $po/PurchaseOrder/@Status with \"Shipped\" return $po' passing porder as \"order\") WHERE poid = 5002");
+
+  printf("\n\n Query: \n%s",stmt);
+  EXEC SQL EXECUTE IMMEDIATE :stmt;
+  EMB_SQL_CHECK("Update -- statement");
+
+  sprintf( stmt, "SELECT porder FROM purchaseorder WHERE poid = 5002");
+  EXEC SQL PREPARE s4 FROM :stmt; 
+  EXEC SQL DECLARE c2 CURSOR FOR s4;
+  EMB_SQL_CHECK("declare -- cusrsor");
+
+  EXEC SQL OPEN c2;
+  EMB_SQL_CHECK("cursor -- open");
+
+  EXEC SQL FETCH c2 INTO :xmlblob;
+  EMB_SQL_CHECK("cursor -- fetch");
+
+  /* Print the result */ 
+  printf("\n\n Data after replace value of an attribute:");
+  while( sqlca.sqlcode == SQL_RC_OK )
+  {
+    xmlblob.data[xmlblob.length]='\0';
+    printf("\n%s",xmlblob.data);
+    EXEC SQL FETCH c2 INTO :xmlblob;
+    EMB_SQL_CHECK("cursor -- fetch");
+  }
+  EXEC SQL CLOSE c2;
+  EXEC SQL COMMIT;
+  EMB_SQL_CHECK("cursor -- close");
+
+
+  printf("\n\n*******************************************************************************");
+  printf("\n Replace Expression -- Replace an element and attribute."); 
+  printf("\n*******************************************************************************");
+  
+  sprintf( stmt,"XQUERY for $k in db2-fn:sqlquery(\"select porder from purchaseorder where poid = 5004\") return transform copy $i := $k modify (do replace $i//PurchaseOrder/@OrderDate with ( attribute BilledDate {\"12-12-2007\"}), do replace $i//item[1]/price with $k//item[1]/price) return $i//PurchaseOrder");
+
+  printf("\n\n Query: \n%s",stmt);
+  EXEC SQL PREPARE s5 FROM :stmt;
+  EMB_SQL_CHECK("prepare -- statement");
+
+  EXEC SQL DECLARE c3 CURSOR FOR s5;
+  EMB_SQL_CHECK("declare -- cusrsor");
+
+  EXEC SQL OPEN c3;
+  EMB_SQL_CHECK("cursor -- open");
+
+  EXEC SQL FETCH c3 INTO :xmlblob;
+  EMB_SQL_CHECK("cursor -- fetch");
+
+  /* Print the result */
+  printf("\n\n Data after replacing an element and attribute:");
+  while( sqlca.sqlcode == SQL_RC_OK )
+  {
+    xmlblob.data[xmlblob.length]='\0';
+    printf("\n%s",xmlblob.data);
+    EXEC SQL FETCH c3 INTO :xmlblob;
+    EMB_SQL_CHECK("cursor -- fetch");
+  }
+  EXEC SQL CLOSE c3;
+  EXEC SQL COMMIT;
+  EMB_SQL_CHECK("cursor -- close");
+
+  return 0;
+
+}  //replaceExpr
+
+
+int renameExpr()
+{
+  int rc = 0;
+  struct sqlca sqlca;
+  printf("\n\n*******************************************************************************");
+  printf("\n Rename Expression  --  Rename an element in the existing XML document/fragment.");
+  printf("\n*******************************************************************************");
+
+  sprintf( stmt,"UPDATE purchaseorder SET porder = xmlquery('transform copy $po := $order modify for $i in $po//item[quantity > 1] return do rename $i as \"items\" return  $po' passing porder as \"order\") WHERE poid=5002");
+
+  printf("\n\n Query: \n%s",stmt);
+  EXEC SQL EXECUTE IMMEDIATE :stmt;
+  EMB_SQL_CHECK("Update -- statement");
+
+  sprintf( stmt, "SELECT porder FROM purchaseorder WHERE poid=5002");
+  EXEC SQL PREPARE s6 FROM :stmt;   
+  EXEC SQL DECLARE c5 CURSOR FOR s6;
+  EMB_SQL_CHECK("declare -- cusrsor");
+
+  EXEC SQL OPEN c5;
+  EMB_SQL_CHECK("cursor -- open");
+
+  EXEC SQL FETCH c5 INTO :xmlblob;
+  EMB_SQL_CHECK("cursor -- fetch");
+
+  /* Print the result */
+  printf("\n\n Data after renaming an element:");
+  while( sqlca.sqlcode == SQL_RC_OK )
+  {
+    xmlblob.data[xmlblob.length]='\0';
+    printf("\n%s",xmlblob.data);
+    EXEC SQL FETCH c5 INTO :xmlblob;
+    EMB_SQL_CHECK("cursor -- fetch");
+  }
+  EXEC SQL CLOSE c5;
+  EXEC SQL COMMIT;
+  EMB_SQL_CHECK("cursor -- close");
+
+  printf("\n\n*******************************************************************************");
+  printf("\n Rename Expression  -- Rename an attribute in the existing XML document/fragment.");
+  printf("\n*******************************************************************************");
+
+  sprintf(stmt, "XQUERY for $k in db2-fn:sqlquery(\"select porder from purchaseorder where poid=5003\") return transform copy $i := $k modify (do rename $i//*:PurchaseOrder/@OrderDate as \"BilledDate\", do insert attribute Totalcost {\"405.99\"} into $i//*:PurchaseOrder, do rename $i//*:PurchaseOrder//*:partid as \"productid\") return $i//*:PurchaseOrder");
+
+  printf("\n\n Query: \n%s",stmt);
+  EXEC SQL PREPARE s7 FROM :stmt;
+  EMB_SQL_CHECK("prepare -- statement");
+
+  EXEC SQL DECLARE c21 CURSOR FOR s7;
+  EMB_SQL_CHECK("declare -- cusrsor");
+
+  EXEC SQL OPEN c21;
+  EMB_SQL_CHECK("cursor -- open");
+
+  EXEC SQL FETCH c21 INTO :xmlblob;
+  EMB_SQL_CHECK("cursor -- fetch");
+
+  /* Print the result */
+  printf("\n\n Data after renaming an attribute and an element:");
+  while( sqlca.sqlcode == SQL_RC_OK )
+  {
+    xmlblob.data[xmlblob.length]='\0';
+    printf("\n%s",xmlblob.data);
+    EXEC SQL FETCH c21 INTO :xmlblob;
+    EMB_SQL_CHECK("cursor -- fetch");
+  }
+  EXEC SQL CLOSE c21;
+  EXEC SQL COMMIT;
+  EMB_SQL_CHECK("cursor -- close");
+
+  return 0;
+
+}  //renameExpr
+
+
+int combinationExprr()
+{
+  int rc = 0;
+  struct sqlca sqlca;
+  printf("\n\n*******************************************************************************");
+  printf("\n Insert and Replace Expressions -- Combination of transform expressions.");
+  printf("\n*******************************************************************************");
+
+  sprintf( stmt,"UPDATE purchaseorder SET porder = xmlquery ('transform copy   $po := $order modify ( for $i in $po/PurchaseOrder[@OrderDate = ''2006-02-18'']//price return do replace value of $i with $i*0.8, do  insert document { <item> <partid>100-103-01</partid> <name>Snow Shovel, Super Deluxe 26 inch</name> <quantity>2</quantity> <price>49.99</price> </item> } as last into $po/PurchaseOrder) return  $po' passing porder as \"order\") WHERE poid = 5004 ");
+
+  printf("\n\n Query: \n%s",stmt);
+  EXEC SQL EXECUTE IMMEDIATE :stmt;
+  EMB_SQL_CHECK("Update -- statement");
+
+  sprintf( stmt, "SELECT porder FROM purchaseorder WHERE poid=5004");
+  EXEC SQL PREPARE s8 FROM :stmt; 
+  EXEC SQL DECLARE c4 CURSOR FOR s8;
+  EMB_SQL_CHECK("declare -- cusrsor");
+
+  EXEC SQL OPEN c4;
+  EMB_SQL_CHECK("cursor -- open");
+
+  EXEC SQL FETCH c4 INTO :xmlblob;
+  EMB_SQL_CHECK("cursor -- fetch");
+
+  /* Print the result */
+  printf("\n\n Data after insert and replace:");
+  while( sqlca.sqlcode == SQL_RC_OK )
+  {
+    xmlblob.data[xmlblob.length]='\0';
+    printf("\n%s",xmlblob.data);
+    EXEC SQL FETCH c4 INTO :xmlblob;
+    EMB_SQL_CHECK("cursor -- fetch");
+  }
+  EXEC SQL CLOSE c4;
+  EXEC SQL COMMIT;
+  EMB_SQL_CHECK("cursor -- close");
+
+  return 0;
+}  //combinationExprr
+

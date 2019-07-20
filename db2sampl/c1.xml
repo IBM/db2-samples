@@ -1,0 +1,10 @@
+<customerinfo Cid='1000'>
+<name>Kathy Smith</name>
+<addr country="Canada">
+<street>5 Rosewood</street>
+<city>Toronto</city>
+<prov-state>Ontario</prov-state>
+<pcode-zip>M6W 1E6</pcode-zip>
+</addr>
+<phone type="work">416-555-1358</phone>
+</customerinfo>

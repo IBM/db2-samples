@@ -1,0 +1,163 @@
+/****************************************************************************
+** (c) Copyright IBM Corp. 2007 All rights reserved.
+** 
+** The following sample of source code ("Sample") is owned by International 
+** Business Machines Corporation or one of its subsidiaries ("IBM") and is 
+** copyrighted and licensed, not sold. You may use, copy, modify, and 
+** distribute the Sample in any form without payment to IBM, for the purpose of 
+** assisting you in the development of your applications.
+** 
+** The Sample code is provided to you on an "AS IS" basis, without warranty of 
+** any kind. IBM HEREBY EXPRESSLY DISCLAIMS ALL WARRANTIES, EITHER EXPRESS OR 
+** IMPLIED, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED WARRANTIES OF 
+** MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE. Some jurisdictions do 
+** not allow for the exclusion or limitation of implied warranties, so the above 
+** limitations or exclusions may not apply to you. IBM shall not be liable for 
+** any damages you suffer as a result of using, copying, modifying or 
+** distributing the Sample, even if IBM has been advised of the possibility of 
+** such damages.
+*****************************************************************************
+**
+** SOURCE FILE NAME: repeat.sqc 
+**
+** SAMPLE: To call the REPEAT_STMT SQL procedure
+**
+**         There are two parts to this program:
+**            1. the repeat executable (placed on the client)
+**            2. the REPEAT_STMT SQL procedure (created on the
+**               server with the repeat.db2 CLP script)
+**
+**         repeat calls the REPEAT_STMT SQL procedure by preparing
+**         and executing a dynamic CALL statement:
+**
+**            sprintf(stmt, "CALL %s (?)", procname);
+**            EXEC SQL prepare st from :stmt;
+**            EXEC SQL execute st INTO :count:countind;
+**
+**         When the CALL with Host Variable is used,
+**         the precompiler allocates and initializes an internal one
+**         variable SQLDA for both input and output.
+**
+**         The REPEAT_STMT procedure counts the number of FETCH
+**         operations performed in a repeat statement until the cursor
+**         can retrieve no more rows.
+**         The condition handler causes the flow of control to exit 
+**         the repeat loop and complete the stored procedure.
+**
+**         The counter value is assigned to the counter OUT parameter
+**         that is returned to the repeat client. The repeat client  
+**         then prints the counter value.
+**
+** SQL STATEMENTS USED:
+**         CONNECT 
+**         CALL
+**
+** OUTPUT FILE: repeat.out (available in the online documentation)
+*****************************************************************************
+**
+** For more information on the sample programs, see the README file.
+**
+** For information on creating SQL procedures and developing C applications,
+** see the Application Development Guide.
+**
+** For information on using SQL statements, see the SQL Reference.
+**
+** For the latest information on programming, building, and running DB2 
+** applications, visit the DB2 application development website: 
+**     http://www.software.ibm.com/data/db2/udb/ad
+****************************************************************************/
+
+#include <stdio.h>
+#include <stdlib.h>
+#include <sql.h> 
+#include <sqlda.h>
+#include <sqlca.h>
+#include <string.h>
+#include "utilemb.h"
+
+
+int main(int argc, char *argv[]) {
+
+   EXEC SQL BEGIN DECLARE SECTION;
+     char database[9];
+     char userid[9];
+     char passwd[19];
+
+     /* Declare a Local Variable for Holding the Procedure's Name */
+     char procname[254] = "REPEAT_STMT";
+
+     /* Declare a statement strings to call the procedure dynamically */
+     char stmt[1200];
+
+     /* Declare Local Variables for Passing Data to SQL Procedure */
+     sqlint32 count     = 0;
+     sqlint16 countind = 0;
+   EXEC SQL END DECLARE SECTION;
+
+   /* Declare the output SQLDA */
+   struct sqlda *inout_sqlda = (struct sqlda *)
+   malloc(SQLDASIZE(1)); 
+
+   /* Declare the SQLCA */
+   struct sqlca sqlca;
+
+   char eBuffer[1024]; /* error message buffer */
+
+   if (argc != 4) {
+      printf ("\nUSAGE: repeat remote_database userid passwd\n\n");
+      return 1;
+   }
+   strcpy (database, argv[1]);
+   strcpy (userid, argv[2]);
+   strcpy (passwd, argv[3]);
+   /* Connect to Remote Database */
+   printf("CONNECT TO Remote Database.\n");
+   EXEC SQL CONNECT TO :database USER :userid USING :passwd; 
+   EMB_SQL_CHECK("CONNECT TO RSAMPLE");
+
+   /********************************************************\
+   * Call the Remote Procedure via CALL with Host Variables *
+   \********************************************************/
+   printf("Use CALL with Host Variables to invoke the Server Procedure "
+      "named %s\n", procname);
+   countind = -1;                  /* count has no input, so set to null */
+   sprintf(stmt, "CALL %s (?)", procname);
+
+   EXEC SQL prepare st from :stmt;
+   EMB_SQL_CHECK("PREPARE CALL STATEMENT");
+
+   EXEC SQL execute st INTO :count:countind; 
+   EMB_SQL_CHECK("EXECUTE CALL STATEMENT");
+
+   /********************************************************\
+   * Display the # of times the repeat statement iterated     *
+   \********************************************************/
+
+   printf("\nREPEAT statement iterated %d times before invoking NOT FOUND condition\n", count);
+
+   /* COMMIT or ROLLBACK the transaction */
+   if (SQLCODE == 0)
+   { /* Rollback the changes to the database */
+     EXEC SQL ROLLBACK;
+     printf("Server Procedure Complete.\n");
+   }
+   else
+   { /* print the error message, roll back the transaction and return */
+     sqlaintp (eBuffer, 1024, 80, &sqlca);
+     printf("\n%s\n", eBuffer);
+  
+     EXEC SQL ROLLBACK;
+     printf("Server Procedure Transaction Rolled Back.\n\n");
+     return 1;
+   }
+
+   /* Free allocated memory */
+   free( inout_sqlda ); 
+
+   /* Disconnect from Remote Database */
+   EXEC SQL CONNECT RESET; 
+   EMB_SQL_CHECK("CONNECT RESET");
+   return 0;
+}
+/* end of program : repeat.sqc */
+

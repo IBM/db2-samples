@@ -1,0 +1,501 @@
+/****************************************************************************
+** (c) Copyright IBM Corp. 2007 All rights reserved.
+** 
+** The following sample of source code ("Sample") is owned by International 
+** Business Machines Corporation or one of its subsidiaries ("IBM") and is 
+** copyrighted and licensed, not sold. You may use, copy, modify, and 
+** distribute the Sample in any form without payment to IBM, for the purpose of 
+** assisting you in the development of your applications.
+** 
+** The Sample code is provided to you on an "AS IS" basis, without warranty of 
+** any kind. IBM HEREBY EXPRESSLY DISCLAIMS ALL WARRANTIES, EITHER EXPRESS OR 
+** IMPLIED, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED WARRANTIES OF 
+** MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE. Some jurisdictions do 
+** not allow for the exclusion or limitation of implied warranties, so the above 
+** limitations or exclusions may not apply to you. IBM shall not be liable for 
+** any damages you suffer as a result of using, copying, modifying or 
+** distributing the Sample, even if IBM has been advised of the possibility of 
+** such damages.
+*****************************************************************************
+**
+** SOURCE FILE NAME: dtformat.sqc
+**
+** SAMPLE: Load and import data format extensions
+**
+**         This sample:
+**         1. Creates two tables, all_date_time and zoned_dec.
+**         2. Generates two raw data files: one for import, one for load.
+**         3. Imports the contents of a DEL type file with date, time,
+**            timestamp, and keepblanks type modifiers into the
+**            all_date_time table.
+**         4. Loads the contents of an ASC type file with zoned decimal
+**            modifier into the zoned_dec table.
+**         5. Displays the contents of the tables.
+**         6. Drops the tables.
+**
+** DB2 APIs USED:
+**         db2Load -- Load
+**         db2Import -- Import
+**
+** SQL STATEMENTS USED:
+**         CLOSE
+**         COMMIT
+**         CONNECT
+**         DECLARE
+**         DROP TABLE
+**         INCLUDE
+**         OPEN
+**         PREPARE
+**
+** STRUCTURES USED:
+**         sqlca
+**         sqlchar
+**         sqldcol
+**         sqlu_media_list
+**         db2LoadStruct
+**         db2LoadIn
+**         db2LoadOut
+**
+** OUTPUT FILE NAME: dtformat.out (available in the online documentation)
+*****************************************************************************
+**
+** For more information on the sample programs, see the README file.
+**
+** For information on developing C applications, see the Application
+** Development Guide.
+**
+** For information on using SQL statements, see the SQL Reference.
+**
+** For information on DB2 APIs, see the Administrative API Reference.
+**
+** For the latest information on programming, building, and running DB2
+** applications, visit the DB2 application development website:
+**     http://www.software.ibm.com/data/db2/udb/ad
+****************************************************************************/
+
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+#include <sqlenv.h>
+#include <sqlutil.h>
+#include <db2AuCfg.h>
+#include <malloc.h>
+#include "utilemb.h"
+
+int ImportUserDefinedDateAndTimeFormat();
+int LoadZonedDecimalFormat();
+int LoadData(char*, char*, char*);
+int ImportData(char*, char*, char*);
+
+EXEC SQL INCLUDE SQLCA;
+
+EXEC SQL BEGIN DECLARE SECTION;
+  double decimalA_field;
+  double decimalB_field;
+  char time_stamp[30];
+  char date_field[20];
+  char time_field[20];
+  char varchar_field[20];
+  char  st[80];
+EXEC SQL END DECLARE SECTION;
+
+int main(int argc, char *argv[])
+{
+  int rc = 0;
+  char dbAlias[SQL_ALIAS_SZ + 1];
+  char user[USERID_SZ + 1];
+  char pswd[PSWD_SZ + 1];
+
+  /* Check the command line arguments */
+  rc = CmdLineArgsCheck1(argc, argv, dbAlias, user, pswd);
+  if(rc != 0)
+  {
+    return rc;
+  }
+
+  printf("\nHOW TO LOAD AND IMPORT DATA FORMAT EXTENSIONS.\n");
+
+  /* Connect to database */
+  rc = DbConn(dbAlias, user, pswd);
+  if(rc != 0)
+  {
+    return rc;
+  }
+
+  ImportUserDefinedDateAndTimeFormat();
+  LoadZonedDecimalFormat();
+
+  /* Disconnect from the database */
+  rc = DbDisconn(dbAlias);
+  if(rc != 0)
+  {
+    return rc;
+  }
+  return 0;
+} /* main */
+
+
+int ImportUserDefinedDateAndTimeFormat()
+{
+  char        dataFile[] = "DATA.DEL";
+  char        *modifier  = "DATEFORMAT=\"mm/dd/yyyy\" \
+                            TIMEFORMAT=\"h:m:s tt\"\
+                            TIMESTAMPFORMAT=\"mm/dd/yyyy/h:m:s.uuuuuu\" \
+                            KEEPBLANKS ";
+  char        *statement = "INSERT INTO all_date_time \
+                      (varcharField, dateField, timeField, timeStampField)";
+  int         i;
+  FILE        *fp;
+  char        *delData[] = {"\"no blanks\",09/03/2001,10:34:22 AM, \
+                            09/03/2001/10:34:22.124321\n",
+                            "\"blanks   \",12/28/1993,01:59:44 PM, \
+                            12/28/1993/01:59:44.757390\n"};
+
+  printf("-----------------------------------------------------------\n");
+  printf("USE THE SQL STATEMENT:\n");
+  printf("  CREATE TABLE\n");
+  printf("  INSERT INTO\n");
+  printf("AND USE THE DB2 APIs:\n");
+  printf("  db2Import -- IMPORT\n");
+  printf("TO IMPORT USER-DEFINED DATE AND TIME FORMAT INTO A TABLE\n\n");
+
+  /* Write data to the file */
+  if((fp = fopen("DATA.DEL", "w")) == NULL) return 1;
+  for(i = 0; i < 2; i++)
+  {
+    fputs(delData[i], fp);
+  }
+  fclose(fp);
+  printf("  Created file 'DATA.DEL' for IMPORT\n\n");
+
+  printf("  CREATE TABLE all_date_time(\n");
+  printf("    varcharField VARCHAR(20),\n");
+  printf("    dateField DATE,\n");
+  printf("    timeField TIME,\n");
+  printf("    timestampField TIMESTAMP)\n\n");
+  /* Create table all_date_time */
+  EXEC SQL CREATE TABLE all_date_time (varcharField VARCHAR(20),
+                                       dateField DATE,
+                                       timeField TIME,
+                                       timestampField TIMESTAMP);
+  EMB_SQL_CHECK("CREATE TABLE");
+
+
+  printf("  Use the DB2 API db2Import to import the file 'DATA.DEL'\n");
+  printf("  into the table all_date_time\n\n");
+  /* Import data file into table */
+  ImportData(statement, modifier, dataFile);
+
+  /*Display the contents of the table */
+  printf("  SELECT * FROM all_date_time\n");
+  strcpy(st, "SELECT * FROM  all_date_time");
+  EXEC SQL PREPARE s1 FROM :st;
+  EMB_SQL_CHECK("PREPARE");
+  EXEC SQL DECLARE c1 CURSOR FOR s1;
+  EXEC SQL OPEN c1;
+  EMB_SQL_CHECK("OPEN");
+
+
+  printf("    varcharField dateField  timeField timeStampField\n");
+  printf("    ------------ ---------- ---------");
+  printf(" --------------------------\n");
+  do
+  {
+    EXEC SQL FETCH c1 INTO :varchar_field,
+                           :date_field,
+                           :time_field,
+                           :time_stamp;
+    if (SQLCODE != 0) break;
+    printf("    %s    %s %s  %s\n", varchar_field,
+                                date_field,
+                                time_field,
+                                time_stamp);
+  } while(1);
+
+  EXEC SQL CLOSE c1;
+  EMB_SQL_CHECK("CLOSE");
+  EXEC SQL COMMIT;
+  EMB_SQL_CHECK("COMMIT");
+
+  /* Drop table */
+  printf("\n  DROP TABLE all_date_time\n\n");
+  EXEC SQL DROP TABLE all_date_time;
+  EMB_SQL_CHECK("DROP TABLE");
+
+  return 0;
+} /* ImportUserDefinedDateAndTimeFormat */
+
+int LoadZonedDecimalFormat()
+{
+  char        dataFile[] = "DATA.ASC";
+  char        *modifier  = "ZONEDDECIMAL reclen=11";
+  char        *statement = "INSERT INTO zoned_dec (decimalA, decimalB)";
+  int         i;
+  FILE        *fp;
+  char        *ascData[] = {"\x30\x31\x32\xF3\x4E\x30\xF1\xF2\xF3\xD4\x4E",
+                            "\xF1\xF2\x33\xA4\x4E\xF5\xF4\xF3\xF2\xA1\x4E"};
+
+  printf("-----------------------------------------------------------\n");
+  printf("USE THE SQL STATEMENTS:\n");
+  printf("  CREATE TABLE\n");
+  printf("  INSERT INTO\n");
+  printf("AND THE DB2 API:\n");
+  printf("  db2Load\n");
+  printf("TO LOAD ZONED DECIMAL FORMAT INTO A TABLE\n\n");
+
+  /* Write data to the files */
+  if((fp = fopen("DATA.ASC", "w+b")) == NULL) return 1;
+  for(i = 0; i < 2; i++)
+  {
+    fputs(ascData[i], fp);
+  }
+  fclose(fp);
+  printf("  Created file 'DATA.ASC' for LOAD\n\n");
+
+  printf("  CREATE TABLE zoned_dec(\n");
+  printf("    decimalA DECIMAL(4,0),\n");
+  printf("    decimalB DECIMAL(5,2))  \n\n");
+  /* Create table zoned_dec */
+  EXEC SQL CREATE TABLE zoned_dec (decimalA DECIMAL(4,0),
+                                   decimalB DECIMAL(5,2));
+  EMB_SQL_CHECK("CREATE TABLE");
+
+  printf("  Use the DB2 API db2Load to load the file 'DATA.ASC' into \n");
+  printf("  the table zoned_dec\n\n");
+  /* Load table with data file */
+  LoadData(statement, modifier, dataFile);
+
+ /*Display the contents of the table */
+  printf("  All blanks in DEL format for char");
+  printf(" and varchar columns are preserved\n\n");
+  printf("  SELECT * FROM zoned_dec\n");
+  strcpy(st, "SELECT * FROM  zoned_dec");
+  EXEC SQL PREPARE s2 FROM :st;
+  EMB_SQL_CHECK("PREPARE");
+  EXEC SQL DECLARE c2 CURSOR FOR s2;
+  EXEC SQL OPEN c2;
+  EMB_SQL_CHECK("OPEN");
+
+  printf("    decimalA decimalB\n");
+  printf("    -------- --------\n");
+  do
+  {
+    EXEC SQL FETCH c2 INTO :decimalA_field,
+                           :decimalB_field;
+    if(SQLCODE != 0) break;
+    printf("        %4.0f   %5.2f\n", decimalA_field,
+                                       decimalB_field);
+  } while(1);
+
+  EXEC SQL CLOSE c2;
+  EMB_SQL_CHECK("CLOSE");
+  EXEC SQL COMMIT;
+  EMB_SQL_CHECK("COMMIT");
+
+  /* Drop the table */
+  printf("\n  DROP TABLE zoned_dec\n");
+  EXEC SQL DROP TABLE zoned_dec;
+  EMB_SQL_CHECK("DROP TABLE");
+  return 0;
+} /* LoadZonedDecimalFormat */
+
+
+/* Import a file into a table using the sql statement, *\
+\* modifier and name of file to be loaded.             */
+int ImportData(char *actionString, char *modifier, char *dataFile)
+{
+  struct sqlchar *pAction = {0};
+  struct sqlchar *fileTMod = {0};
+  struct sqldcol dataDescriptor = {0};
+  char fileFormat[] = "DEL";
+  char localMsgFileName[128];
+  struct db2ImportIn inputInfo = {0};
+  struct db2ImportOut outputInfo = {0};
+  struct db2ImportStruct importParmStruct = {0};
+
+  /* Initialize LOAD API structures and variables. */
+  strcpy(localMsgFileName, "MSG.TXT");
+  dataDescriptor.dcolmeth = SQL_METH_D;
+
+  /* Setup db2ImportIn structure */
+  inputInfo.iRowcount = inputInfo.iRestartcount = 0;
+  inputInfo.iSkipcount = inputInfo.iWarningcount = 0;
+  inputInfo.iNoTimeout = inputInfo.iAccessLevel = 0;
+  inputInfo.piCommitcount = 0;
+
+  /* Allocate the required space for the actionString and modifier *\
+  \* and initialize the actionString and modifier variables        */
+  pAction = (struct sqlchar *)malloc(strlen(actionString) +
+                                     sizeof(struct sqlchar));
+  pAction->length = strlen(actionString);
+  strncpy (pAction->data, actionString, strlen(actionString));
+  fileTMod = (struct sqlchar *)malloc(strlen(modifier) +
+                               sizeof(struct sqlchar));
+  fileTMod->length = strlen(modifier);
+  strncpy (fileTMod->data, modifier, strlen(modifier));
+
+  importParmStruct.piDataFileName    = dataFile;
+  importParmStruct.piLobPathList     = NULL;
+  importParmStruct.piDataDescriptor  = &dataDescriptor;
+  importParmStruct.piActionString    = pAction;
+  importParmStruct.piFileType        = fileFormat;
+  importParmStruct.piFileTypeMod     = fileTMod;
+  importParmStruct.piMsgFileName     = localMsgFileName;
+  importParmStruct.iCallerAction     = 0;
+  importParmStruct.piImportInfoIn    = &inputInfo;
+  importParmStruct.poImportInfoOut   = &outputInfo;
+  importParmStruct.piNullIndicators  = NULL;
+
+  /* From V9.1 the structure db2ImportStruct will  */
+  /* have a new member.This is piXmlPathList.      */
+  importParmStruct.piXmlPathList     = NULL;
+
+  /* call the IMPORT API */
+  db2Import (db2Version970,
+             &importParmStruct,
+             &sqlca);
+
+  DB2_API_CHECK("data -- import");
+
+  free (pAction);
+  free (fileTMod);
+  /* display import info */
+  printf("  Import info.\n");
+  printf("    rows read     : %ld\n", (int)outputInfo.oRowsRead);
+  printf("    rows skipped  : %ld\n", (int)outputInfo.oRowsSkipped);
+  printf("    rows inserted : %ld\n", (int)outputInfo.oRowsInserted);
+  printf("    rows updated  : %ld\n", (int)outputInfo.oRowsUpdated);
+  printf("    rows rejected : %ld\n", (int)outputInfo.oRowsRejected);
+  printf("    rows committed: %ld\n\n", (int)outputInfo.oRowsCommitted);
+
+  return 0;
+} /* ImportData */
+
+
+/****** Load a file into a table using the sql statement, *******\
+\******  modifier and name of the file to be loaded.      *******/
+int LoadData(char *actionString,
+             char *modifier,
+             char *dataFile)
+{
+  int rc = 0;
+  struct sqlca sqlca = {0};
+  struct sqlu_media_list mediaList = {0};
+  struct sqldcol *dataDescriptor = {0};
+  struct sqlchar *pAction = {0};
+  char localMsgFileName[128];
+  struct sqlchar *fileTMod = {0};
+  struct sqldcoln *pdcolnEntry = {0};
+  struct sqlloctab *pdcolnptrEntry = {0};
+  struct sqlloctab *pdcolnptrEntry2 = {0};
+  db2int32 *pNullIndicators = NULL;
+  char *fileFormat = SQL_ASC;
+  int numColumns = 2;
+
+  struct db2LoadStruct paramStruct = {0};
+  struct db2LoadIn inputInfoStruct = {0};
+  struct db2LoadOut outputInfoStruct = {0};
+
+  /* Initialize LOAD API structures and variables. */
+  strcpy(localMsgFileName, "MSG.TXT");
+
+  /* Setup sqlu_media_list struct containing the filename to be loaded */
+  mediaList.media_type = SQLU_SERVER_LOCATION;
+  mediaList.sessions = 1;
+  mediaList.target.location = (sqlu_location_entry *) malloc(sizeof
+                              (sqlu_location_entry) * mediaList.sessions);
+  strcpy (mediaList.target.location->location_entry, dataFile);
+
+  /* Setup sqldcol structure */
+  dataDescriptor = (struct sqldcol *)calloc(1,(2*(sizeof(short))) +
+                    (numColumns * sizeof(struct sqldcoln)));
+  dataDescriptor->dcolnum = numColumns;
+  pdcolnEntry = dataDescriptor->dcolname;
+  pdcolnEntry->dcolnptr =
+    (char *)calloc(1,(dataDescriptor->dcolnum * sizeof(struct sqlloctab)));
+  dataDescriptor->dcolmeth = SQL_METH_L;
+  dataDescriptor->dcolname->dcolnlen = sizeof(struct sqllocpair)*numColumns;
+  pdcolnptrEntry = (struct sqlloctab *)pdcolnEntry[0].dcolnptr;
+  /* Assign column beginning and ending points */
+  pdcolnptrEntry->locpair[0].begin_loc = 1;
+  pdcolnptrEntry->locpair[0].end_loc =   4;
+  pdcolnptrEntry->locpair[1].begin_loc = 6;
+  pdcolnptrEntry->locpair[1].end_loc =   10;
+
+  /* Allocate the required space for the actionString and modifier *\
+  \* and initialize the actionString and modifier variables        */
+  pAction = (struct sqlchar *)malloc(strlen(actionString) +
+                                     sizeof(struct sqlchar));
+  pAction->length = strlen(actionString);
+  strncpy(pAction->data, actionString, strlen(actionString));
+  fileTMod = (struct sqlchar *)malloc(strlen(modifier) +
+                                      sizeof(struct sqlchar));
+  fileTMod->length = strlen(modifier);
+  strncpy (fileTMod->data, modifier, strlen(modifier));
+
+
+  /* Setup the input information structure */
+  inputInfoStruct.piUseTablespace  = NULL;
+  inputInfoStruct.iSavecount       =  0;  /* consistency points as
+                                            infrequently as possible */
+  inputInfoStruct.iRestartcount    =  0;  /* start at row 1 */
+  inputInfoStruct.iRowcount        =  0;  /* load all rows */
+  inputInfoStruct.iWarningcount    =  0;  /* don't stop for warnings */
+  inputInfoStruct.iDataBufferSize  =  0;  /* default data buffer size */
+  inputInfoStruct.iSortBufferSize  =  0;  /* def. warning buffer size */
+  inputInfoStruct.iHoldQuiesce     =  0;  /* don't hold the quiesce */
+  inputInfoStruct.iRestartphase    =  ' ';/* ignored anyway */
+  inputInfoStruct.iStatsOpt        = SQLU_STATS_NONE; /* don't bother with them */
+  inputInfoStruct.iIndexingMode    = SQLU_INX_AUTOSELECT;/* let load choose */
+                                                         /* indexing mode */
+  inputInfoStruct.iCpuParallelism      =  0;
+  inputInfoStruct.iNonrecoverable      =  SQLU_NON_RECOVERABLE_LOAD;
+  inputInfoStruct.iAccessLevel         =  SQLU_ALLOW_NO_ACCESS;
+  inputInfoStruct.iLockWithForce       =  SQLU_NO_FORCE;
+
+  /* From V9.0 onwards, the structure member iCheckPending is                 */
+  /* deprecated and replaced with iSetIntegrityPending. Also the              */
+  /* possible value to set this  variable SQLU_CHECK_PENDING_CASCADE_DEFERRED */
+  /* has been replaced with SQLU_SI_PENDING_CASCADE_DEFERRED.                 */
+
+  inputInfoStruct.iSetIntegrityPending = SQLU_SI_PENDING_CASCADE_DEFERRED;
+
+
+  /* Setup the parameter structure */
+  paramStruct.piSourceList          = &mediaList;
+  paramStruct.piLobPathList         = NULL;
+  paramStruct.piDataDescriptor      = dataDescriptor;
+  paramStruct.piActionString        = pAction;
+  paramStruct.piFileType            = fileFormat;
+  paramStruct.piFileTypeMod         = fileTMod;
+  paramStruct.piLocalMsgFileName    = localMsgFileName;
+  paramStruct.piTempFilesPath       = NULL;
+  paramStruct.piVendorSortWorkPaths = NULL;
+  paramStruct.piCopyTargetList      = NULL;
+  paramStruct.piNullIndicators      = pNullIndicators;
+  paramStruct.piLoadInfoIn          = &inputInfoStruct;
+  paramStruct.poLoadInfoOut         = &outputInfoStruct;
+  paramStruct.piPartLoadInfoIn      = NULL;
+  paramStruct.poPartLoadInfoOut     = NULL;
+  paramStruct.iCallerAction         = SQLU_INITIAL;
+
+  /* load table */
+  db2Load (db2Version970,            /* Database version number   */
+           &paramStruct,             /* In/out parameters         */
+           &sqlca);                  /* SQLCA                     */
+
+  DB2_API_CHECK("data -- load");
+
+  free(pAction);
+  free(fileTMod);
+
+  /* display load info */
+  printf("  Load info.\n");
+  printf("    rows read     : %ld\n", (db2int32) outputInfoStruct.oRowsRead);
+  printf("    rows skipped  : %ld\n", (db2int32) outputInfoStruct.oRowsSkipped);
+  printf("    rows rejected : %ld\n", (db2int32) outputInfoStruct.oRowsRejected);
+  printf("    rows committed: %ld\n\n", (db2int32) outputInfoStruct.oRowsCommitted);
+
+  return 0;
+} /* LoadData */
+

@@ -1,0 +1,364 @@
+/****************************************************************************
+** (c) Copyright IBM Corp. 2007 All rights reserved.
+** 
+** The following sample of source code ("Sample") is owned by International 
+** Business Machines Corporation or one of its subsidiaries ("IBM") and is 
+** copyrighted and licensed, not sold. You may use, copy, modify, and 
+** distribute the Sample in any form without payment to IBM, for the purpose of 
+** assisting you in the development of your applications.
+** 
+** The Sample code is provided to you on an "AS IS" basis, without warranty of 
+** any kind. IBM HEREBY EXPRESSLY DISCLAIMS ALL WARRANTIES, EITHER EXPRESS OR 
+** IMPLIED, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED WARRANTIES OF 
+** MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE. Some jurisdictions do 
+** not allow for the exclusion or limitation of implied warranties, so the above 
+** limitations or exclusions may not apply to you. IBM shall not be liable for 
+** any damages you suffer as a result of using, copying, modifying or 
+** distributing the Sample, even if IBM has been advised of the possibility of 
+** such damages.
+*****************************************************************************
+**
+** SOURCE FILE NAME: tscreate.sqC 
+**    
+** SAMPLE: How to create and drop buffer pools and table spaces 
+**           
+** DB2 API USED:
+**         db2CfgGet - Get Database Configuration 
+**
+** SQL STATEMENTS USED:
+**         CREATE BUFFERPOOL
+**         EXECUTE IMMEDIATE
+**         DROP
+**
+** OUTPUT FILE: tscreate.out (available in the online documentation)
+*****************************************************************************
+**
+** For more information on the sample programs, see the README file.
+**
+** For information on developing C++ applications, see the Application
+** Development Guide.
+**
+** For information on using SQL statements, see the SQL Reference.
+**
+** For information on DB2 APIs, see the Administrative API Reference.
+**
+** For the latest information on programming, compiling, and running DB2
+** applications, visit the DB2 application development website at
+**     http://www.software.ibm.com/data/db2/udb/ad
+****************************************************************************/
+#include <ctype.h>
+#include <string.h>
+#include <sqlenv.h>
+#include <sqlutil.h>
+#include <db2ApiDf.h>
+#include "utilemb.h"
+#if ((__cplusplus >= 199711L) && !defined DB2HP && !defined DB2AIX) || \
+    (DB2LINUX && (__LP64__ || (__GNUC__ >= 3)) )
+   #include <iostream>
+   using namespace std; 
+#else
+   #include <iostream.h>
+#endif
+
+EXEC SQL BEGIN DECLARE SECTION;
+  char strStmt[257];
+EXEC SQL END DECLARE SECTION;
+
+class TsCreate
+{
+  public:
+    int BufferpoolCreate();
+    int SMSTablespaceCreate(char *);
+    int DMSTablespaceCreate(char *);
+    int TablespacesDrop();
+    int BufferpoolDrop();
+
+    // support functions
+    int ServerWorkingPathGet(char *, char *);
+};
+
+int TsCreate::ServerWorkingPathGet(char dbAlias[], char serverWorkingPath[])
+{
+  int rc = 0;
+  struct sqlca sqlca;
+  char serverLogPath[SQL_PATH_SZ + 1];
+  char dbAlias_upper[SQL_ALIAS_SZ + 1] = { 0 };
+  db2CfgParam cfgParameters[1];
+  db2Cfg cfgStruct;
+  int ctr = 0;
+  int len;
+  char node[]="NODE";
+
+  // initialize cfgParameters
+  cfgParameters[0].flags = 0;
+  cfgParameters[0].token = SQLF_DBTN_LOGPATH;
+  cfgParameters[0].ptrvalue = new char[SQL_PATH_SZ + 1];
+
+  // initialize cfgStruct
+  cfgStruct.numItems = 1;
+  cfgStruct.paramArray = cfgParameters;
+  cfgStruct.flags = db2CfgDatabase;
+  cfgStruct.dbname = dbAlias;
+
+  // get database configuration
+  db2CfgGet(db2Version1010, (void *)&cfgStruct, &sqlca);
+  DB2_API_CHECK("server log path -- get");
+
+  strcpy(serverLogPath, cfgParameters[0].ptrvalue);
+  delete [] cfgParameters[0].ptrvalue;
+
+  // chose server working path
+  // Let's say serverLogPath = "C:\DB2\NODE0001\....".
+  // Keep for serverWorkingPath "C:\DB2" only.
+
+  for (ctr = 0; ctr < strlen (node); ctr++)
+  {
+    dbAlias_upper[ctr] = toupper (node[ctr]);
+  }
+  dbAlias_upper[ctr] = '\0';  /* terminate the constructed string */
+
+  len = (int)(strstr(serverLogPath, dbAlias_upper) - serverLogPath - 1);
+  memcpy(serverWorkingPath, serverLogPath, len);
+  serverWorkingPath[len] = '\0';
+
+  return 0;
+} //TsCreate::ServerWorkingPathGet
+
+int TsCreate::BufferpoolCreate()
+{
+  int rc = 0;
+  struct sqlca sqlca;
+
+  cout << "\n-----------------------------------------------------------";
+  cout << "\nUSE THE SQL STATEMENTS:" << endl;
+  cout << "  CREATE BUFFERPOOL" << endl;
+  cout << "  COMMIT" << endl;
+  cout << "TO CREATE A BUFFER POOL." << endl;
+
+  // create buffer pool
+  cout << "\n  CREATE BUFFERPOOL new_bufpool SIZE 500 PAGESIZE 8K" << endl;
+
+  EXEC SQL CREATE BUFFERPOOL new_bufpool SIZE 500 PAGESIZE 8 K;
+  EMB_SQL_CHECK("bufferpool -- create");
+
+  // commit transaction
+  cout << "  COMMIT" << endl;
+
+  EXEC SQL COMMIT;
+  EMB_SQL_CHECK("transaction -- commit");
+
+  return 0;
+} //TsCreate::BufferpoolCreate
+
+int TsCreate::SMSTablespaceCreate(char serverWorkingPath[])
+{
+  int rc = 0;
+  struct sqlca sqlca;
+  char containerPath[SQL_PATH_SZ + 1];
+
+  cout << "\n-----------------------------------------------------------";
+  cout << "\nUSE THE SQL STATEMENTS:" << endl;
+  cout << "  CREATE TABLESPACE" << endl;
+  cout << "  COMMIT" << endl;
+  cout << "TO CREATE AN SMS TABLE SPACE." << endl;
+
+  // create SMS table space
+  strcpy(containerPath, serverWorkingPath);
+  strcat(containerPath, PATH_SEP);
+  strcat(containerPath, "sms_cont1");
+  strcpy(strStmt, "");
+  strcat(strStmt, "create tablespace sms_tspace ");
+  strcat(strStmt, "MANAGED BY SYSTEM ");
+  strcat(strStmt, "USING('");
+  strcat(strStmt, containerPath);
+  strcat(strStmt, "') BUFFERPOOL new_bufpool");
+
+  cout << "\n  CREATE TABLESPACE sms_tspace"
+       << "\n    MANAGED BY SYSTEM"
+       << "\n    USING('" << containerPath << "')"
+       << "\n    BUFFERPOOL new_bufpool" << endl;
+
+  EXEC SQL EXECUTE IMMEDIATE :strStmt;
+  EMB_SQL_CHECK("SMS tablespace -- create");
+
+  // commit transaction
+  cout << "  COMMIT" << endl;
+
+  EXEC SQL COMMIT;
+  EMB_SQL_CHECK("transaction -- commit");
+
+  return 0;
+} //TsCreate::SMSTablespaceCreate
+
+int TsCreate::DMSTablespaceCreate(char serverWorkingPath[])
+{
+  int rc = 0;
+  struct sqlca sqlca;
+  char containerFileName[SQL_PATH_SZ + 1];
+
+  cout << "\n-----------------------------------------------------------";
+  cout << "\nUSE THE SQL STATEMENTS:" << endl;
+  cout << "  CREATE TABLESPACE" << endl;
+  cout << "  COMMIT" << endl;
+  cout << "TO CREATE A DMS TABLE SPACE." << endl;
+
+  // create DMS table space
+  strcpy(containerFileName, serverWorkingPath);
+  strcat(containerFileName, PATH_SEP);
+  strcat(containerFileName, "dms_cont1.dat");
+  strcpy(strStmt, "");
+  strcat(strStmt, "CREATE TABLESPACE dms_tspace ");
+  strcat(strStmt, "MANAGED BY DATABASE ");
+  strcat(strStmt, "USING(FILE '");
+  strcat(strStmt, containerFileName);
+  strcat(strStmt, "' 10000) BUFFERPOOL new_bufpool");
+
+  cout << "\n  CREATE TABLESPACE dms_tspace"
+       << "\n    MANAGED BY DATABASE"
+       << "\n    USING(FILE '" << containerFileName << "' 10000)"
+       << "\n    BUFFERPOOL new_bufpool" << endl;
+
+  EXEC SQL EXECUTE IMMEDIATE :strStmt;
+  EMB_SQL_CHECK("DMS tablespace -- create");
+
+  // commit transaction
+  cout << "  COMMIT" << endl;
+
+  EXEC SQL COMMIT;
+  EMB_SQL_CHECK("transaction -- commit");
+
+  return 0;
+} //TsCreate::DMSTablespaceCreate
+
+int TsCreate::TablespacesDrop()
+{
+  int rc = 0;
+  struct sqlca sqlca;
+
+  cout << "\n-----------------------------------------------------------";
+  cout << "\nUSE THE SQL STATEMENTS:" << endl;
+  cout << "  DROP" << endl;
+  cout << "  COMMIT" << endl;
+  cout << "TO DROP TABLE SPACES." << endl;
+
+  // drop table spaces
+  cout << "\n  DROP TABLESPACES sms_tspace, dms_tspace" << endl;
+
+  EXEC SQL DROP TABLESPACES sms_tspace, dms_tspace;
+  EMB_SQL_CHECK("tablespaces -- drop");
+
+  // commit transaction
+  cout << "  COMMIT" << endl;
+
+  EXEC SQL COMMIT;
+  EMB_SQL_CHECK("transaction -- commit");
+
+  return 0;
+} //TsCreate::TablespacesDrop
+
+int TsCreate::BufferpoolDrop()
+{
+  int rc = 0;
+  struct sqlca sqlca;
+
+  cout << "\n-----------------------------------------------------------";
+  cout << "\nUSE THE SQL STATEMENTS:" << endl;
+  cout << "  DROP" << endl;
+  cout << "  COMMIT" << endl;
+  cout << "TO DROP A BUFFER POOL." << endl;
+
+  // drop buffer pool
+  cout << "\n  DROP BUFFERPOOL new_bufpool" << endl;
+
+  EXEC SQL DROP BUFFERPOOL new_bufpool;
+  EMB_SQL_CHECK("bufferpool -- drop");
+
+  // commit transaction
+  cout << "  COMMIT" << endl;
+
+  EXEC SQL COMMIT;
+  EMB_SQL_CHECK("transaction -- commit");
+
+  return 0;
+} //TsCreate::BufferpoolDrop
+
+int main(int argc, char *argv[])
+{
+  int rc = 0;
+  CmdLineArgs check;
+  TsCreate create;
+  Instance inst;
+  DbEmb db;
+
+  char serverWorkingPath[SQL_PATH_SZ + 1];
+
+  // check the command line arguments
+  rc = check.CmdLineArgsCheck3(argc, argv, db, inst);
+  if (rc != 0)
+  {
+    return rc;
+  }
+
+  cout <<
+    "\nTHIS SAMPLE SHOWS HOW TO CREATE/DROP BUFFER POOLS AND TABLE SPACES."
+    << endl;
+
+  // attach to a local or remote instance
+  rc = inst.Attach();
+  if (rc != 0)
+  {
+    return rc;
+  }
+
+  // get a server working path
+  rc = create.ServerWorkingPathGet(db.getAlias(), serverWorkingPath);
+  if (rc != 0)
+  {
+    return rc;
+  }
+
+  // detach from the local or remote instance
+  rc = inst.Detach();
+  if (rc != 0)
+  {
+    return rc;
+  }
+
+  // connect database
+  rc = db.Connect();
+  if (rc != 0)
+  {
+    return rc;
+  }
+
+  rc = create.BufferpoolCreate();
+  rc = create.SMSTablespaceCreate(serverWorkingPath);
+  rc = create.DMSTablespaceCreate(serverWorkingPath);
+
+  // disconnect database
+  rc = db.Disconnect();
+  if (rc != 0)
+  {
+    return rc;
+  }
+
+  // connect database again
+  rc = db.Connect();
+  if (rc != 0)
+  {
+    return rc;
+  }
+
+  rc = create.TablespacesDrop();
+  rc = create.BufferpoolDrop();
+
+  // disconnect database
+  rc = db.Disconnect();
+  if (rc != 0)
+  {
+    return rc;
+  }
+
+  return 0;
+} //main
+

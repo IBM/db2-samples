@@ -1,0 +1,200 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+****************************************************************************
+** Licensed Materials - Property of IBM
+**
+** Governed under the terms of the International
+** License Agreement for Non-Warranted Sample Code.
+**
+** (C) COPYRIGHT International Business Machines Corp. 2007
+** All Rights Reserved.
+**
+** US Government Users Restricted Rights - Use, duplication or
+** disclosure restricted by GSA ADP Schedule Contract with IBM Corp.
+*****************************************************************************
+**
+**
+** SOURCE FILE NAME: db2ha_sample_DPF_mutual.xml 
+**
+** SAMPLE: Initial Setup Configuration of DB2 HA shared storage failover
+**         automation using db2haicu
+**
+** FUNCTION: This sample showcases a sample XML configuration file for DB2 HA
+**           Setup. 
+**
+** USAGE: db2haicu -f db2ha_sample_DPF_mutual.xml 
+**
+** DESCRIPTION: The environment for this sample is described below:
+** 
+**      1. The Setup consists of 4 physical machines (hasys01/2/3/4).
+**      2. Each box has 2 NICs (named eth0 and eth1).
+**      3. The NICs are grouped into two networks db2_public_network_0 and
+**         a private network called db2_private_network_0.
+**      4. DB2 DPF instance has 2 partitions: 0 and 1.
+**      5. 19.126.124.251 is the Service IP used for DB2.
+**
+** PREREQUISITES:
+**      1. Hardware installed and configured (physical networks, shared-disk
+**         storage system
+**      2. IP addresses reserved or assigned
+**      3. OS is installed, patched and configured (including the shared-disk
+**         storage system)
+**      4. Users, groups and authentication set-up on both machines
+**      5. TSA v2.2 installed and configured on both nodes
+**      6. Gathering the information on hardware specifications like IP, NIC,
+**         and shared storage
+**      7. Root privilege is required while installing the DB2
+**
+*****************************************************************************
+*****************************************************************************
+**
+** For detailed information about database backup and database recovery, see
+** the Data Recovery and High Availability Guide and Reference. This manual
+** will help you to determine which database and table space recovery methods
+** are best suited to your business environment.
+**
+** For more information on the sample programs, see the README file.
+**
+** For information on developing C applications, see the Application
+** Development Guide.
+**
+** For information on using SQL statements, see the SQL Reference.
+**
+** For information on DB2 APIs, see the Administrative API Reference.
+**
+** For the latest information on programming, building, and running DB2
+** applications, visit the DB2 application development website:
+** http://www.software.ibm.com/data/db2/udb/ad
+****************************************************************************/
+-->
+<!-- ================================================================= -->
+<!-- = DB2Cluster element                                            = -->
+<!-- = This element encapsulates the cluster configuration           = -->
+<!-- = specification for the instance                                = -->
+<!-- ================================================================= -->
+<DB2Cluster xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="db2ha.xsd" clusterManagerName="TSA" version="1.0">
+  <!-- ================================================================= -->
+  <!-- = ClusterDomain element                                         = -->
+  <!-- = This element encapsulates the cluster configuration           = -->
+  <!-- = specification                                                 = -->
+  <!-- = Creating cluster domain of name db2HAdomain                   = -->
+  <!-- = Creating an IP quorum device (IP 19.126.4.5)                  = -->
+  <!-- = The IP must be pingable at all times by each of the nodes in  = -->
+  <!-- = the cluster domain                                            = -->
+  <!-- ================================================================= -->
+  <ClusterDomain domainName="db2haDomain">
+      <Quorum quorumDeviceProtocol="network"  quorumDeviceName="19.126.4.5"/>
+      <!-- ================================================================= -->
+      <!-- = Physical network element                                      = -->
+      <!-- = The physical network specifies the network type, protocol     = -->
+      <!-- = IP address, subnet mask, and NIC name                         = -->
+      <!-- = Create network of name db2_public_network_0                   = -->
+      <!-- ================================================================= -->
+      <PhysicalNetwork physicalNetworkName="db2_public_network_0" physicalNetworkProtocol="ip">
+         <Interface interfaceName="eth0" clusterNodeName="hasys01">
+            <IPAddress baseAddress="19.126.124.30" subnetMask="255.255.255.0"
+             networkName="db2_public_network_0" />
+          </Interface>              
+          <Interface interfaceName="eth0" clusterNodeName="hasys02">
+             <IPAddress baseAddress="19.126.124.31" subnetMask="255.255.255.0"
+              networkName="db2_public_network_0" />
+          </Interface>              
+          <Interface interfaceName="eth0" clusterNodeName="hasys03">
+             <IPAddress baseAddress="19.126.124.32" subnetMask="255.255.255.0"
+             networkName="db2_public_network_0"/>
+          </Interface>              
+          <Interface interfaceName="eth0" clusterNodeName="hasys04">
+             <IPAddress baseAddress="19.126.124.33" subnetMask="255.255.255.0"
+             networkName="db2_public_network_0"/>
+          </Interface>              
+       </PhysicalNetwork>
+       
+      <PhysicalNetwork physicalNetworkName="db2_private_network_0" physicalNetworkProtocol="ip">
+         <Interface interfaceName="eth1" clusterNodeName="hasys01">
+           <IPAddress baseAddress="192.168.23.101" subnetMask="255.255.255.0"
+           networkName="db2_private_network_0" />
+         </Interface>              
+         <Interface interfaceName="eth1" clusterNodeName="hasys02">
+           <IPAddress baseAddress="192.168.23.102" subnetMask="255.255.255.0"
+           networkName="db2_private_network_0" />
+         </Interface>              
+         <Interface interfaceName="eth1" clusterNodeName="hasys03">
+           <IPAddress baseAddress="192.168.23.103" subnetMask="255.255.255.0"
+           networkName="db2_private_network_0"/>
+         </Interface>              
+         <Interface interfaceName="eth1" clusterNodeName="hasys04">
+           <IPAddress baseAddress="192.168.23.104" subnetMask="255.255.255.0"
+           networkName="db2_private_network_0"/>
+         </Interface>              
+       </PhysicalNetwork>
+    <!-- ================================================================= -->
+    <!-- = ClusterNodeName element                                       = -->
+    <!-- = The set of nodes in the cluster domain                        = -->
+    <!-- = Here the defined set of nodes in the domain is                = -->
+    <!-- = hasys01, hasys02, hasys03, hasys04                            = -->
+    <!-- ================================================================= -->
+    <ClusterNode clusterNodeName="hasys01"/>
+    <ClusterNode clusterNodeName="hasys02"/>
+    <ClusterNode clusterNodeName="hasys03"/>
+    <ClusterNode clusterNodeName="hasys04"/>
+  </ClusterDomain>
+  <!-- ================================================================= -->
+  <!-- = Failover policy element                                       = -->
+  <!-- = The failover policy specifies the failover order of the       = -->
+  <!-- = cluster nodes                                                 = -->
+  <!-- = In the current sample the failover policy is mutual take over = -->
+  <!-- ================================================================= -->
+  <FailoverPolicy>
+    <Mutual/>   
+  </FailoverPolicy>
+  <!-- ================================================================= -->
+  <!-- = DB2 Partition element                                         = -->
+  <!-- = The DB2 partition type specifies a DB2 Instance Name,         = -->
+  <!-- = partition number, virtual IP address, Subnet mask,            = -->
+  <!-- = mount resource and the                                        = -->
+  <!-- = mutual failover nodes (hasys01, hasys02)                      = -->
+  <!-- ================================================================= -->
+  <DB2PartitionSet>
+    <DB2Partition dbpartitionnum="0" instanceName="db2inst1">
+      <!-- ================================================================= -->
+      <!-- = Service IP associated with the DB2 Partition                  = -->
+      <!-- = 19.126.124.251                                                = -->
+      <!-- ================================================================= -->
+      <VirtualIPAddress baseAddress="19.126.124.251" subnetMask="255.255.255.0" networkName="db2_public_network_0"/>
+      <!-- ================================================================= -->
+      <!-- = Mounts used by the DB2 Partition 0                            = -->
+      <!-- ================================================================= -->
+      <Mount filesystemPath="/hafs/db2inst1/NODE0000"/>
+      <MutualPair systemPairNode1="hasys01" systemPairNode2="hasys02"/>
+    </DB2Partition>
+    <DB2Partition dbpartitionnum="1" instanceName="db2inst1">
+      <!-- ================================================================= -->
+      <!-- = Mounts used by the DB2 Partition 1                            = -->
+      <!-- ================================================================= -->
+      <Mount filesystemPath="/hafs/db2inst1/NODE0001"/>
+      <MutualPair systemPairNode1="hasys02" systemPairNode2="hasys01"/>
+    </DB2Partition>
+    <DB2Partition dbpartitionnum="2" instanceName="db2inst1">
+      <!-- ================================================================= -->
+      <!-- = Mounts used by the DB2 Partition 2                            = -->
+      <!-- ================================================================= -->
+      <Mount filesystemPath="/hafs/db2inst1/NODE0002"/>
+      <MutualPair systemPairNode1="hasys03" systemPairNode2="hasys04"/>
+    </DB2Partition>
+    <DB2Partition dbpartitionnum="3" instanceName="db2inst1">
+      <!-- ================================================================= -->
+      <!-- = Mounts used by the DB2 Partition 3                            = -->
+      <!-- ================================================================= -->
+      <Mount filesystemPath="/hafs/db2inst1/NODE0003"/>
+      <MutualPair systemPairNode1="hasys04" systemPairNode2="hasys03"/>
+    </DB2Partition>
+  </DB2PartitionSet>
+  <!-- ================================================================= -->
+  <!-- = List of Databases to be configured for High Availability      = -->
+  <!-- ================================================================= -->
+  <HADBSet instanceName="db2inst1">
+     <HADB databaseName = "SAMPLE" />
+     <HADB databaseName = "MYDB" />
+  </HADBSet>
+</DB2Cluster>
+

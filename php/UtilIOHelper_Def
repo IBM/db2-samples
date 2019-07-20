@@ -1,0 +1,128 @@
+****************************************************************************
+*                             Licensed Materials 
+*                              Property of IBM
+*
+* Governed under the terms of the International
+* License Agreement for Non-Warranted Sample Code.
+*
+* © COPYRIGHT International Business Machines Corp. 2007
+* All Rights Reserved.
+*
+* US Government Users Restricted Rights - Use, duplication or
+* disclosure restricted by GSA ADP Schedule Contract with IBM Corp.
+*
+*****************************************************************************
+* 
+*                         CLASS DEFINITION
+*
+* UtilIOHelper.php
+*
+*** Class 
+*
+*     IO_Helper
+*
+***** Public variables
+* 
+*        o $SAMPLE_HEADER
+*          - This Container contains PHP code to be interpreted at run time. 
+*          - General information which is to be ALWAYS printed out at the 
+*            head of each sample. This should be overridden in every sample 
+*            that extends this class
+* 
+* 
+*        o $CLI_GENERAL
+*          - This Container contains PHP code to be interpreted at run time.
+*          - General information which is to be ALWAYS passed to the command 
+*            line
+* 
+*        o $CLI_SAMPLE_HELP
+*          - This Container contains PHP code to be interpreted at run time.
+*          - Sample specific help and forums that are passed to the command 
+*            line
+* 
+*        o $CLI_GENERAL_HELP
+*          - This Container contains PHP code to be interpreted at run time.
+*          - The default connection string field that are passed to the 
+*            command line
+* 
+* 
+*        o $HTML_GENERAL
+*          - This Container contains PHP code to be interpreted at run time.
+*          - General html information which is to be ALWAYS passed to the 
+*            web browser 
+* 
+*        o $HTML_SAMPLE_HELP
+*          - This Container contains PHP code to be interpreted at run time.
+*          - Sample specific help and forums that are passed to a web browser
+* 
+*        o $HTML_GENERAL_HELP
+*          - This Container contains PHP code to be interpreted at run time.
+*          - The default connection string field that are passed to the web 
+*            browser
+* 
+* 
+*        o $isWebBased
+*          - If true the program is running in a web browser
+* 
+*        o $isRunningOnWindows
+*          - True if the program is being run on a windows computer
+* 
+*        o $documentRoot
+*          - Represents the directory where this script is being run out of.
+* 
+*        o $connectionString
+*          - The connection string used to connect to the database
+*            - Default value
+*              - "SAMPLE"
+*        o $userName
+*          - The user name to connect to the database with
+*            - Default value
+*              - ""
+*        o $user_Password
+*          - The user password to connect to the database with
+*            - Default value
+*              - ""
+*        o $schema 
+*          - The current schema to run with
+*            - Default value
+*              - ""
+* 
+*        o $showOptions
+*          - Indicates if the help / sample options are being shown
+* 
+*        o $passedArgs
+*          - A list of all arguments past to the program
+* 
+**** FUNCTIONS
+* 
+*        o __construct($initialize = true)
+*          - if $initialize is true
+*          - Runs check_Parameters()
+* 
+*        o Private try_To_Load_Default_Values()
+*          - Tries to load in the values from the PHPSampleConfig.cfg file
+* 
+*        o Public check_Parameters()
+*          - Checks and sets the program parameters from the information that
+*            was passed in by ether the command line or the GET and POST 
+*            variables set by the HTTP/web server
+* 
+*        o Public close_Sample()
+*          - If the sample is web based it will print out the closing html 
+*            brackets.
+* 
+*        o Public display_Xml_Parsed_Struct($input)
+*          - Prints out a Tree structure of a giving XML document passed in 
+*            as a string
+* 
+*        o Private print_Attribute($attrib)
+*          - Prints out the attributes of a given XML node
+* 
+*        o Private print_White_Space($number)
+*          - Prints out a given number of spaces
+* 
+*        o Public format_Output([string]$str)
+*          - Takes the given string and formats and outputs the string so 
+*            that it looks proper if it were to be printed to a web browser.
+* 
+*****************************************************************************

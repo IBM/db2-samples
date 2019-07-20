@@ -1,0 +1,42 @@
+#*******************************************************************#
+#  IBM DB2 Q Replication                                            #
+#                                                                   #
+#     ASNCLP sample files                                           #
+#                                                                   #
+#     Licensed Materials - Property of IBM                          #
+#                                                                   #
+#     (C) Copyright IBM Corp. 2004 All Rights Reserved              #
+#                                                                   #
+#     US Government Users Restricted Rights - Use, duplication      #
+#     or disclosure restricted by GSA ADP Schedule Contract         #
+#     with IBM Corp.                                                #
+#                                                                   #
+#*******************************************************************#
+#*******************************************************************#
+#                                                                   #
+#                                                                   #
+#           NOTICE TO USERS OF THE SOURCE CODE EXAMPLE              #
+#                                                                   #
+# INTERNATIONAL BUSINESS MACHINES CORPORATION PROVIDES THE SOURCE   #
+# CODE EXAMPLE "AS IS" WITHOUT WARRANTY OF ANY KIND, EITHER         #
+# EXPRESSED OR IMPLIED, INCLUDING, BUT NOT LIMITED TO THE IMPLIED   #
+# WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR        #
+# PURPOSE. THE ENTIRE RISK AS TO THE QUALITY AND PERFORMANCE OF THE #
+# SOURCE CODE EXAMPLE IS WITH YOU. SHOULD ANY PART OF THE SOURCE    #
+# CODE EXAMPLE PROVES DEFECTIVE, YOU (AND NOT IBM) ASSUME THE       #
+# ENTIRE COST OF ALL NECESSARY SERVICING, REPAIR OR CORRECTION.     #
+#                                                                   #
+#*******************************************************************#
+
+# load input file for ways of updating logical table attributes
+
+
+set subgroup "Bidir0";
+
+set server multidir to db "testdb";
+set server multidir to db "testdb1";
+
+SET REFERENCE TABLE USING SCHEMA "testdb".BLUE USES TABLE BLUE.AllTypes0;
+ALTER QSUB SUBTYPE B
+        FROM NODE "testdb".BLUE SOURCE ALL CHANGED ROWS Y TARGET ERROR ACTION I
+        FROM NODE "testdb1".RED SOURCE ALL CHANGED ROWS Y TARGET ERROR ACTION S;

@@ -1,0 +1,399 @@
+//***************************************************************************
+// (c) Copyright IBM Corp. 2007 All rights reserved.
+// 
+// The following sample of source code ("Sample") is owned by International 
+// Business Machines Corporation or one of its subsidiaries ("IBM") and is 
+// copyrighted and licensed, not sold. You may use, copy, modify, and 
+// distribute the Sample in any form without payment to IBM, for the purpose of 
+// assisting you in the development of your applications.
+// 
+// The Sample code is provided to you on an "AS IS" basis, without warranty of 
+// any kind. IBM HEREBY EXPRESSLY DISCLAIMS ALL WARRANTIES, EITHER EXPRESS OR 
+// IMPLIED, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED WARRANTIES OF 
+// MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE. Some jurisdictions do 
+// not allow for the exclusion or limitation of implied warranties, so the above 
+// limitations or exclusions may not apply to you. IBM shall not be liable for 
+// any damages you suffer as a result of using, copying, modifying or 
+// distributing the Sample, even if IBM has been advised of the possibility of 
+// such damages.
+//***************************************************************************
+//
+// SOURCE FILE NAME: LargeRid.sqlj
+//
+// SAMPLE: How to enable Large RIDs support on both new tables/tablespaces
+//         and existing tables/tablespaces.
+//
+// SQL Statements USED:
+//         ALTER TABLESPACE
+//         INSERT
+//         REORG
+//         SELECT
+//
+// JAVA 2 CLASSES USED:
+//         Statement
+//
+// Classes used from Util.sqlj are:
+//         Db
+//         Data
+//         SqljException
+//
+// PREQUISITES : 1. Create the pre-requisite tablespaces and tables by running the command:
+//                    LargeRidScrpt
+//                  Alternatively,you can run the command:
+//                    db2 -tvf LargeRid_setup.db2
+//
+// EXECUTION : 1. Compile the sample using:
+//                   bldsqlj LargeRid <userid> <password> <server_name> <port_number> <db_name>
+//             2. Run the sample as:
+//                   java LargeRid <userid>
+//             3. Perform a clean up once the sample has been executed using:
+//                   db2 -tvf LargeRid_cleanup.db2
+//
+// OUTPUT FILE: LargeRid.out (available in the online documentation)
+//***************************************************************************
+//
+// For more information on the sample programs, see the README file.
+//
+// For information on developing JDBC applications, see the Application
+// Development Guide.
+//
+// For information on using SQL statements, see the SQL Reference.
+//
+// For the latest information on programming, compiling, and running DB2
+// applications, visit the DB2 application development website at
+//     http://www.software.ibm.com/data/db2/udb/ad
+//**************************************************************************/
+
+import java.lang.*;
+import java.sql.*;
+import sqlj.runtime.*;
+import sqlj.runtime.ref.*;
+
+#sql iterator LargeRid_Cursor(int);
+
+class LargeRid
+{
+
+  public static void main(String argv[])
+  {
+    try
+    {
+      String userId;
+      Connection con = null;
+      DefaultContext ctx;
+
+      Class.forName("com.ibm.db2.jcc.DB2Driver").newInstance();
+      con = DriverManager.getConnection("jdbc:db2:SAMPLE");
+
+      ctx = new DefaultContext(con);
+      DefaultContext.setDefaultContext(ctx);
+
+      userId = argv[0];
+      System.out.println(
+        "THIS SAMPLE SHOWS HOW TO ENABLE LARGE RID SUPPORT ON TABLES AND\n" +
+        "  TABLESPACES\n");
+
+      System.out.println(
+         "\nDMS tablespaces dms_tspace, dms_tspace1, dms_tspace2 \n" +
+         "and dms_tspace3 have been created using the setup script \n" +
+         "LargeRid_setup.db2 \n");
+
+      System.out.println
+        ("\n************************************************************\n");
+      System.out.println
+        ("THE FOLLOWING SCENARIO SHOWS HOW TO ENABLE LARGE RID SUPPORT");
+      System.out.println("     FOR A NON-PARTITIONED TABLE\n");
+      System.out.println
+        ("************************************************************");
+
+      System.out.println(
+         "\nThe table 'large' is created in the DMS tablespace 'dms_tspace' \n" +
+         "in the setup script LargeRid_setup.db2 using the command \n" +
+         "'CREATE TABLE large (max INT, min INT) IN dms_tspace' \n");
+
+      System.out.println(
+         "\nAn index called 'large_ind' on the table 'large' is created \n" +
+         "in the setup script LargeRid_setup.db2 using the command \n" +
+         "'CREATE INDEX large_ind ON large (max)' \n");
+ 
+      tbAlterSpace(); 
+      reorgIndex(); 
+
+      System.out.println
+        ("\n************************************************************\n"); 
+      System.out.println
+        ("THE FOLLOWING SCENARIO SHOWS HOW TO ENABLE LARGE RID SUPPORT");
+      System.out.println
+        ("     FOR A PARTITIONED TABLE\n");
+      System.out.println
+        ("************************************************************");
+
+      System.out.println(
+         "\nA partitioned table called 'large_ptab' is created in \n" +
+         "DMS tablespace i.e; part1 is placed at dms_tspace1, part2\n" +
+         "is placed at dms_tspace2 and part3 at dms_tspace3, \n" +
+         "using the setup script LargeRid_setup.db2 with the command \n" +
+         "\n'CREATE TABLE large_ptab (max SMALLINT NOT NULL, \n" +
+         "                           CONSTRAINT CC CHECK (max>0)) \n" +
+         "    PARTITION BY RANGE (max) \n" +
+         "      (PART  part1 STARTING FROM (1) ENDING (3) IN dms_tspace1, \n" +
+         "      PART part2 STARTING FROM (4) ENDING (6) IN dms_tspace2, \n" +
+         "      PART part3 STARTING FROM (7) ENDING (9) IN dms_tspace3)' \n");
+
+      insertData();          
+      tbDetachPartition(con, userId);   
+      convertTbSpace();
+      tbReorganize();        
+      tbAttachPartition();  
+
+      con.close();
+
+    }
+    catch (Exception e)
+    {
+      SqljException sqljExc = new SqljException(e);
+      sqljExc.handle();
+    }
+  } // main
+
+  // Changes table space from regular to large.
+  static void tbAlterSpace() throws SQLException
+  {
+    try
+    {
+     System.out.println(
+       "\n-----------------------------------------------------------" +
+       "\nUSE THE SQL STATEMENT:\n" +
+       "  ALTER TABLESPACE \n" +
+       "TO ALTER A TABLESPACE \n" +
+       "\n    Perform:\n" +
+       "    ALTER TABLESPACE dms_tspace CONVERT TO LARGE");
+
+     // convert regular DMS tablespace 'dms_tspace' to large DMS tablespace
+     #sql {ALTER TABLESPACE dms_tspace CONVERT TO LARGE};
+
+     #sql {COMMIT};
+
+    }
+    catch (Exception e)
+    {
+      SqljException sqljExc = new SqljException(e);
+      sqljExc.handle();
+    }
+  } // tbAlterSpace
+
+  // Reorganize indexes defined on a table.
+  static void reorgIndex() throws SQLException
+  {
+    try
+    {
+     System.out.println(
+       "\n-----------------------------------------------------------" +
+       "\nUSE THE SQL STATEMENT:\n" +
+       "  REORG INDEXES \n" +
+       "TO REORG INDEXES FOR A TABLE \n" +
+       "\n    Perform:\n" +
+       "    REORG INDEXES ALL FOR TABLE large");
+
+      // call the stored procedure
+      System.out.println();
+      System.out.println("Call stored procedure named SYSPROC.ADMIN_CMD");
+      #sql {CALL SYSPROC.ADMIN_CMD('REORG INDEXES ALL FOR TABLE large')};
+
+      #sql {COMMIT};
+    }
+    catch (Exception e)
+    {
+      SqljException sqljExc = new SqljException(e);
+      sqljExc.handle();
+    }
+  } // reorgIndex
+
+  // Insert data into the table.
+  static void insertData() throws SQLException
+  {
+    try
+    {
+     System.out.println(
+       "\n-----------------------------------------------------------" +
+       "\nUSE THE SQL STATEMENT:\n" +
+       "  INSERT INTO \n" +
+       "TO INSERT DATA IN A TABLE \n" +
+       "\n    Perform:\n" +
+       "    INSERT INTO large_ptab VALUES (1), (2), (3),\n" + 
+       "                                  (4), (5), (6),\n" +
+       "                                  (7), (8), (9)");
+
+     // insert data into the table
+     #sql {INSERT INTO large_ptab VALUES (1), (2), (3),
+                                         (4), (5), (6),
+                                         (7), (8), (9)};
+
+     #sql {COMMIT};
+
+    }
+    catch (Exception e)
+    {
+      SqljException sqljExc = new SqljException(e);
+      sqljExc.handle();
+    }
+  } // insertData
+
+  // If a partitioned table has data partitions in different regular DMS
+  // tablespaces, then the tablespaces cannot be converted to large
+  // with the current definition.
+  // To do this, first detach all the partitions of the table, later
+  // convert all the tablespaces to large, reorg all the detached
+  // partitions to support large RID. Finally, reattach the partitions.
+  // Now the entire table supports large RIDs.
+
+  // Remove partition from a partitioned table.
+  static void tbDetachPartition(Connection con, String userId) throws SQLException
+  {
+    try
+    {
+     CallableStatement callStmt1 = null;
+
+     System.out.println(
+       "\n-----------------------------------------------------------" +
+       "\nUSE THE SQL STATEMENT:\n" +
+       "  ALTER TABLE \n" +
+       "TO DETACH THE PARTITIONS  \n" +
+       "\n    Perform:\n" +
+       "    ALTER TABLE large_ptab\n" +
+       "      DETACH PARTITION PART3\n" +
+       "      INTO TABLE detach_part3\n\n" +
+       "    ALTER TABLE large_ptab\n" +
+       "      DETACH PARTITION PART3\n" +
+       "      INTO TABLE detach_part2");
+
+     // detach partitions from base table into some temporary tables
+     #sql {ALTER TABLE large_ptab
+             DETACH PARTITION part3 INTO TABLE detach_part3};
+     #sql {COMMIT};
+     String sql1 = "CALL waitForDetach(?, ?, 'LARGE_PTAB')";
+     callStmt1 = con.prepareCall(sql1);
+     callStmt1.registerOutParameter(1, java.sql.Types.VARCHAR, 30);
+     callStmt1.setString(2, userId);
+     callStmt1.execute();
+     #sql{COMMIT};
+
+     #sql {ALTER TABLE large_ptab
+             DETACH PARTITION part2 INTO TABLE detach_part2};
+     #sql {COMMIT};
+     String sql = "CALL waitForDetach(?, ?, 'LARGE_PTAB')";
+     callStmt1 = con.prepareCall(sql);
+     callStmt1.registerOutParameter(1, java.sql.Types.VARCHAR, 30);
+     callStmt1.setString(2, userId);
+     callStmt1.execute();
+     #sql{COMMIT};
+
+    }
+    catch (Exception e)
+    {
+      SqljException sqljExc = new SqljException(e);
+      sqljExc.handle();
+    }
+  } // tbDetachPartition
+
+  // Changes table space from regular to large.
+  static void convertTbSpace() throws SQLException
+  {
+    try
+    {
+     System.out.println(
+       "\n-----------------------------------------------------------" +
+       "\nUSE THE SQL STATEMENT:\n" +
+       "  ALTER TABLE \n" +
+       "TO DETACH THE PARTITIONS  \n" +
+       "\n    Perform:\n" +
+       "    ALTER TABLESPACE dms_tspace1 CONVERT TO LARGE\n" +
+       "    ALTER TABLESPACE dms_tspace2 CONVERT TO LARGE\n" +
+       "    ALTER TABLESPACE dms_tspace3 CONVERT TO LARGE");
+
+     // convert regular DMS tablespaces to large DMS tablespaces
+     #sql {ALTER TABLESPACE dms_tspace3 CONVERT TO LARGE};
+     #sql {ALTER TABLESPACE dms_tspace2 CONVERT TO LARGE};
+     #sql {ALTER TABLESPACE dms_tspace1 CONVERT TO LARGE};
+
+     #sql {COMMIT};
+
+    }
+    catch (Exception e)
+    {
+      SqljException sqljExc = new SqljException(e);
+      sqljExc.handle();
+    }
+  } // convertTbSpace
+
+  // Reorganize table.
+  static void tbReorganize() throws SQLException
+  {
+    try
+    {
+     System.out.println(
+       "\n-----------------------------------------------------------" +
+       "\nUSE THE SQL STATEMENT:\n" +
+       "  REORG TABLE \n" +
+       "TO REORG THE DETACHED PARTITIONS  \n" +
+       "\n    Perform:\n" +
+       "    REORG TABLE large_ptab ALLOW NO ACCESS\n" +
+       "    REORG TABLE detach_part2 ALLOW NO ACCESS\n" +
+       "    REORG TABLE detach_part3 ALLOW NO ACCESS");
+
+      System.out.println();
+      System.out.println("Call stored procedure named SYSPROC.ADMIN_CMD");
+      #sql {CALL SYSPROC.ADMIN_CMD('REORG TABLE large_ptab ALLOW NO ACCESS')};
+      #sql {CALL SYSPROC.ADMIN_CMD('REORG TABLE detach_part2 ALLOW NO ACCESS')};
+      #sql {CALL SYSPROC.ADMIN_CMD('REORG TABLE detach_part3 ALLOW NO ACCESS')};
+
+      #sql {COMMIT};
+
+    }
+    catch (Exception e)
+    {
+      SqljException sqljExc = new SqljException(e);
+      sqljExc.handle();
+    }
+  } // tbReorganize
+
+  // Add partition to a partitioned table.
+  static void tbAttachPartition() throws SQLException
+  {
+    try
+    {
+     System.out.println(
+       "\n-----------------------------------------------------------" +
+       "\nUSE THE SQL STATEMENT:\n" +
+       "  REORG TABLE \n" +
+       "TO REORG THE DETACHED PARTITIONS  \n" +
+       "\n    Perform:\n" +
+       "    ALTER TABLE large_ptab\n" +
+       "      ATTACH PARTITION part2\n" +
+       "      STARTING FROM (4) ENDING (6)\n" +
+       "      FROM TABLE detach_part2\n\n" +
+       "    ALTER TABLE large_ptab\n" +
+       "      ATTACH PARTITION part2\n" +
+       "      STARTING FROM (7) ENDING (9)\n" +
+       "      FROM TABLE detach_part3");
+
+     // reattach the reorganized detached partitions for table to support 
+     // large RIDs.
+     #sql {ALTER TABLE large_ptab
+             ATTACH PARTITION part2 STARTING FROM (4) ENDING (6) FROM TABLE detach_part2};
+
+
+     #sql {ALTER TABLE large_ptab
+             ATTACH PARTITION part3 STARTING FROM (7) ENDING (9) FROM TABLE detach_part3};
+
+     #sql {COMMIT};
+
+    }
+    catch (Exception e)
+    {
+      SqljException sqljExc = new SqljException(e);
+      sqljExc.handle();
+    }
+  } // tbattachPartition
+
+} 

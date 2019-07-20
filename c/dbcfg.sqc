@@ -1,0 +1,490 @@
+/****************************************************************************  
+** (c) Copyright IBM Corp. 2007 All rights reserved.
+** 
+** The following sample of source code ("Sample") is owned by International 
+** Business Machines Corporation or one of its subsidiaries ("IBM") and is 
+** copyrighted and licensed, not sold. You may use, copy, modify, and 
+** distribute the Sample in any form without payment to IBM, for the purpose of 
+** assisting you in the development of your applications.
+** 
+** The Sample code is provided to you on an "AS IS" basis, without warranty of 
+** any kind. IBM HEREBY EXPRESSLY DISCLAIMS ALL WARRANTIES, EITHER EXPRESS OR 
+** IMPLIED, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED WARRANTIES OF 
+** MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE. Some jurisdictions do 
+** not allow for the exclusion or limitation of implied warranties, so the above 
+** limitations or exclusions may not apply to you. IBM shall not be liable for 
+** any damages you suffer as a result of using, copying, modifying or 
+** distributing the Sample, even if IBM has been advised of the possibility of 
+** such damages.
+*****************************************************************************
+**
+** SOURCE FILE NAME: dbcfg.sqc
+**
+** SAMPLE: Configure database and database manager configuration parameters
+**          
+**          This sample demonstrates the use of the db2AutoConfig() API
+**          which configures database and database manager configuration 
+**          parameters. The program configures the sample database in two
+**          scenarios determined by specifying "1" or "2" as the multinode
+**          command line parameter (any other value defaults to option "1").
+**          With option "1", the db2AutoConfig() API automatically configures 
+**          the sample database. The recommendation and diagnostics are 
+**          produced by this API and printed to standard output. By
+**          specifying "2" as the multinode command line parameter, the
+**          db2AutoConfig() API is used to generate optimized configuration
+**          recommendations for a database on two partitions. 
+**
+** DB2 APIs USED:
+**          db2AutoConfig -- AUTOCONFIG
+**          db2AutoConfigFreeMemory -- AUTOCONFIG FREE MEMORY 
+**          sqlesetc -- SET CLIENT              
+**          sqlaintp -- SQLCA MESSAGE
+**
+** SQL STATEMENTS USED:
+**          INCLUDE
+**          CONNECT
+**
+** STRUCTURES USED:
+**          sqle_conn_setting
+**          db2AutoConfigInterface
+**          db2AutoConfigArray
+**          db2AutoConfigOutput
+**          db2AutoConfigValues
+**          sqlca
+**
+** OUTPUT FILE: dbcfg.out (available in the online documentation)
+*****************************************************************************
+**
+** For more information on the sample programs, see the README file.
+**
+** For information on developing C applications, see the Application
+** Development Guide.
+**
+** For information on using SQL statements, see the SQL Reference.
+**
+** For information on DB2 APIs, see the Administrative API Reference.
+**
+** For the latest information on programming, building, and running DB2 
+** applications, visit the DB2 application development website: 
+**     http://www.software.ibm.com/data/db2/udb/ad
+****************************************************************************/
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+#include <sql.h>
+#include <sqlutil.h>
+#include "db2AuCfg.h"
+#include "utilemb.h"
+
+#define NUMSETTINGS  3
+
+#define CHCKERR(s) if (sqlca.sqlcode < 0) { print_err(&sqlca); return -1; }
+
+EXEC SQL INCLUDE SQLCA;
+
+EXEC SQL BEGIN DECLARE SECTION;
+  char dbName[16];
+  char userid[30];
+  char passwd[30];
+EXEC SQL END DECLARE SECTION;
+
+/* This procedure prints error information released by the APIs. */
+void print_err(struct sqlca *ca)
+{
+  char err[512];
+  printf("________________ERROR INFO_________________________\n");
+
+  /* get error message */
+  sqlaintp(err, sizeof(err), 80, ca);
+
+  printf("%s\n", err);
+  printf("SQLCODE : %d\n", ca->sqlcode);
+  printf("SQLERRMC: %s\n", ca->sqlerrmc);
+  printf("SQLERRP : %s\n", ca->sqlerrp);
+  printf("_______________END ERROR INFO______________________\n");
+  return;
+} /* print_err */
+
+/* This procedure prints diagnotic information released by the APIs. */
+int print_info(db2AutoConfigDiags * Diag)
+{
+
+  int i = 0;
+
+  printf("Token, Value\n");
+
+  while (i < (Diag->numElements))
+  {
+    printf("%5d %6d\n", (Diag->pElements[i]).token,
+           (Diag->pElements[i]).value);
+    i++;
+  }
+  return 0;
+} /* print_info */
+
+/* Procedure to produce db cfg recommendations produced by the API. */
+int print_infodb(struct db2CfgParam *itemList, int num)
+{
+  int i = 0;
+
+  printf("Token, Value\n");
+
+  while (i < num)
+  {
+    int tok = itemList[i].token;
+    if ( /* these are db cfg tokens */
+         tok == SQLF_DBTN_BUFF_PAGE ||
+         tok == SQLF_DBTN_CATALOGCACHE_SZ ||
+         tok == SQLF_DBTN_DFT_DEGREE)
+    {
+      printf("%5d %6d\n", itemList[i].token, *(int *)itemList[i].ptrvalue);
+    }
+    i++;
+  }
+  return 0;
+} /* print_infodb */
+
+/* Procedure to produce dbm cfg recommendations produced by the API. */
+int print_infodbm(struct db2CfgParam *itemList, int num)
+{
+  int i = 0;
+
+  printf("Token, Value\n");
+
+  while (i < num)
+  {
+    int tok = itemList[i].token;
+    if (/* these are dbm cfg tokens */
+        tok == SQLF_KTN_NUM_POOLAGENTS || tok == SQLF_KTN_SHEAPTHRES)
+    {
+      printf("%5d %6d\n", itemList[i].token, *(int *)itemList[i].ptrvalue);
+    }
+
+    if (/* these are dbm cfg tokens */
+        tok == SQLF_KTN_ASLHEAPSZ)
+    {
+      printf("%5d %6d\n", itemList[i].token, *(short *)itemList[i].ptrvalue);
+    }
+
+    i++;
+  }
+  return 0;
+} /* print_infodbm */
+
+int main(int argc, char *argv[])
+{
+  struct sqle_conn_setting connSetting[NUMSETTINGS];
+  SQL_API_RC rc;
+  struct sqlca sqlca;
+  db2AutoConfigInterface autoConfigInterface;
+
+  int inputCount = 2;
+
+  /* input to API */
+  db2int32 mem_percent; /* 250 percent of server memory used on dbm */
+  db2int32 workload; /* workload is mixed queries and transactions */
+
+  unsigned short token;
+  int i = autoConfigInterface.oResult.oNewDbmValues.numElements - 1;
+
+  if (argc != 5)
+  {
+    printf("dbcfg <dbname> <userid> <passwd> <1|2>\n");
+    return -1;
+  }
+
+  strcpy(dbName, argv[1]);
+  strcpy(userid, argv[2]);
+  strcpy(passwd, argv[3]);
+
+  printf("\nHOW TO CONFIGURE DATABASE AND DATABASE MANAGER CONFIGURATION ");
+  printf("PARAMETERS\n");
+
+  printf("\n______STARTING AUTOCONF TESTCASE ON INSTANCE "
+         "OWNING NODE (node 0)\n");
+
+  /* 1 SET CLIENT */
+
+  if (atoi(argv[4]) == 2) /* need to connect and attach to node if MPP */
+  {
+    /* attach to node 0 */
+    connSetting[0].type = SQL_ATTACH_NODE;
+    connSetting[0].value = 0;
+
+    /* connect to node 0 */
+    connSetting[1].type = SQL_CONNECT_NODE;
+    connSetting[1].value = 0;
+
+    /* disconnect from node on commit (implicit when connect reset) */
+    connSetting[2].type = SQL_DISCONNECT;
+    connSetting[2].value = SQL_DISCONNECT_AUTO;
+
+    /* set client information */
+    sqlesetc(&connSetting[0], NUMSETTINGS, &sqlca);
+    printf("SQLESETC instance owning node\n");
+    CHCKERR("set client");
+  }
+
+  /* 2 CONNECT TO DATABASE */
+
+  EXEC SQL CONNECT TO:dbName USER:userid USING:passwd;
+  printf("______Connect\n");
+  CHCKERR("connect db");
+
+  /* 3  ENTER PARMS INTO CONFIG API AND INTERFACE */
+
+  /* allocate memory for input parameters */
+
+  autoConfigInterface.iParams.pElements =
+    (db2AutoConfigElement *)malloc(sizeof(db2AutoConfigElement) *
+                                   inputCount);
+
+  /* set up the interface for calling db2AutoConfig */
+
+  autoConfigInterface.iProductID = DB2_SG_PID_DEFAULT;
+  strcpy(autoConfigInterface.iDbAlias, dbName);
+  strcpy(autoConfigInterface.iProductVersion, "1.1");
+
+  /*** IMPORTANT: the recommendations are automatically 
+                applied to db/dbm cfg 
+   ***/
+  autoConfigInterface.iApply = DB2_SG_APPLY;
+
+  mem_percent = 25;
+  workload = 2;
+
+  autoConfigInterface.iParams.numElements = 2;
+  autoConfigInterface.iParams.pElements[0].token = DB2_SG_MEMORY_PERCENTAGE;
+  autoConfigInterface.iParams.pElements[0].value = mem_percent;
+  autoConfigInterface.iParams.pElements[1].token = DB2_SG_WORKLOAD;
+  autoConfigInterface.iParams.pElements[1].value = workload;
+
+  /* 4 AUTOCONFIG CALL */
+
+  rc = db2AutoConfig(db2Version970, &autoConfigInterface, &sqlca);
+  printf("______DB2AUTOCONFIG_________\n");
+  CHCKERR("db2autoconfig");
+
+  /* 5 PRINT RECOMMENDATION AND DIAGNOSTICS */
+
+  if (rc == DB2_SG_RC_OK)
+  {
+    printf("NUMBER OF DIAGNOSTICS: %d\n",
+           autoConfigInterface.oResult.oDiagnostics.numElements);
+
+    if (autoConfigInterface.oResult.oDiagnostics.numElements > 0)
+    {
+      /* print the diagnostic results */
+      printf("==> resource values are not optimizable, "
+             "diagnostics produced:\n");
+
+      print_info(&((autoConfigInterface.oResult).oDiagnostics));
+      printf("___________________\n");
+    }
+
+    if (autoConfigInterface.oResult.oOldDbValues.numElements > 0)
+    {
+      /* handle the configuration results */
+      printf("==> resource values are optimizable "
+             "recommendations produced:\n");
+      printf("==> NUMBER OF PRODUCED OLD DB CFG RECOMMENDATIONS: %d\n",
+             autoConfigInterface.oResult.oOldDbValues.numElements);
+      printf("==> PRODUCED VALUES\n");
+      print_infodb(autoConfigInterface.oResult.oOldDbValues.pConfigs,
+                   autoConfigInterface.oResult.oOldDbValues.numElements);
+      printf("___________________\n");
+    }
+
+    if (autoConfigInterface.oResult.oNewDbValues.numElements > 0)
+    {
+      printf("==> NUMBER OF PRODUCED NEW DB CFG RECOMMENDATIONS: %d\n",
+             autoConfigInterface.oResult.oNewDbValues.numElements);
+      printf("==> PRODUCED VALUES\n");
+      print_infodb(autoConfigInterface.oResult.oNewDbValues.pConfigs,
+                   autoConfigInterface.oResult.oNewDbValues.numElements);
+      printf("___________________\n");
+
+    }
+
+    if (autoConfigInterface.oResult.oOldDbmValues.numElements > 0)
+    {
+      printf("==> NUMBER OF PRODUCED OLD DBM CFG RECOMMENDATIONS: %d\n",
+             autoConfigInterface.oResult.oOldDbmValues.numElements);
+      printf("==> PRODUCED VALUES\n");
+      print_infodbm(autoConfigInterface.oResult.oOldDbmValues.pConfigs,
+                    autoConfigInterface.oResult.oOldDbmValues.numElements);
+      printf("___________________\n");
+    }
+
+    if (autoConfigInterface.oResult.oNewDbmValues.numElements > 0)
+    {
+      printf("==> NUMBER OF PRODUCED NEW DBM CFG RECOMMENDATIONS: %d\n",
+             autoConfigInterface.oResult.oNewDbmValues.numElements);
+      printf("==> PRODUCED VALUES\n");
+      print_infodbm(autoConfigInterface.oResult.oNewDbmValues.pConfigs,
+                    autoConfigInterface.oResult.oNewDbmValues.numElements);
+      printf("___________________\n");
+    }
+
+  /* 6 FREE MEMORY */
+
+    /* must free all the memory allocated by db2AutoConfig() */
+    db2AutoConfigFreeMemory(db2Version970, &autoConfigInterface, &sqlca);
+  }
+  else
+  {
+    /* handle error */
+    printf("ERROR in API CALL\n");
+  }
+
+  /* disconnect from node */
+  EXEC SQL CONNECT RESET;
+  printf("_____+CONNECT RESET\n");
+  CHCKERR("connect reset");
+
+  /* IF 5 ARGUMENTS SPECIFIED,
+     TREAT AS PARTITIONED DATABASE WITH A SECOND PARTITION */
+  if (atoi(argv[4]) == 2)
+  {
+    /* repeat for second partition (Node 1) */
+    printf("________ OPTION 2 CONFIGURING DATABASE PARTITION RESIDING "
+           "ON NON INSTANCE OWNING PARTITION (node 1)\n");
+
+  /* 1 SET CLIENT */
+
+    /* attach to node 1 */
+    connSetting[0].type = SQL_ATTACH_NODE;
+    connSetting[0].value = 1;
+
+    /* connect to node 1 */
+    connSetting[1].type = SQL_CONNECT_NODE;
+    connSetting[1].value = 1;
+
+    /* disconnect from node on commit */
+    connSetting[2].type = SQL_DISCONNECT;
+    connSetting[2].value = SQL_DISCONNECT_AUTO;
+
+    /* set client information */
+    sqlesetc(&connSetting[0], NUMSETTINGS, &sqlca);
+    printf("______+SQLESETC 2nd node (NODE 1)\n");
+    CHCKERR("set client");
+
+  /* 2 CONNECT TO DATABASE */
+
+    EXEC SQL CONNECT TO :dbName USER :userid USING :passwd;
+    printf("____________++connect to db\n");
+    CHCKERR("connect to db");
+
+  /* 3  ENTER PARMS INTO API AND INTERFACE */
+
+    /* input to smartguide */
+    mem_percent = 45; /* percentage of memory for dbm server is 34% */
+    workload = 2; /* workload is mixed with queries and transactions */
+    inputCount = 2;
+
+    /* allocate memory for input parameters */
+    autoConfigInterface.iParams.pElements =
+      (db2AutoConfigElement *)malloc(sizeof(db2AutoConfigElement) *
+                                     inputCount);
+
+    /* set up the interface for calling db2AutoConfig */
+    autoConfigInterface.iProductID = DB2_SG_PID_DEFAULT;
+    strcpy(autoConfigInterface.iDbAlias, dbName);
+    strcpy(autoConfigInterface.iProductVersion, "1.1");
+
+    /*** IMPORTANT - this time the configuration parameters
+     ***             are not automatically applied
+     ***/
+    autoConfigInterface.iApply = DB2_SG_APPLY;
+
+    autoConfigInterface.iParams.numElements = 2;
+    autoConfigInterface.iParams.pElements[0].token =
+      DB2_SG_MEMORY_PERCENTAGE;
+    autoConfigInterface.iParams.pElements[0].value = mem_percent;
+    autoConfigInterface.iParams.pElements[1].token = DB2_SG_WORKLOAD;
+    autoConfigInterface.iParams.pElements[1].value = workload;
+
+  /* 4 AUTOCONFIG CALL */
+
+    rc = db2AutoConfig(db2Version970, &autoConfigInterface, &sqlca);
+    printf("______+DB2AUTOCONFIG_________\n");
+    CHCKERR("db2 connect to sample");
+
+  /* 5 PRINT RECOMMENDATION AND DIAGNOSTITCS */
+
+    if (rc == DB2_SG_RC_OK)
+    {
+      printf("NUMBER OF DIAGNOSTICS: %d\n",
+             autoConfigInterface.oResult.oDiagnostics.numElements);
+
+      if (autoConfigInterface.oResult.oDiagnostics.numElements > 0)
+      {
+        /* handle the diagnostic results */
+        printf("==>resource values are not optimizable, "
+	       "diagnostics produced: ");
+        print_info(&((autoConfigInterface.oResult).oDiagnostics));
+        printf("___________________\n");
+      }
+
+      if (autoConfigInterface.oResult.oOldDbValues.numElements > 0)
+      {
+        /* handle the configuration results */
+        printf("==> resource values are optimizable "
+               "recommendations produced:\n");
+        printf("==> NUMBER OF PRODUCED OLD DB CFG RECOMMENDATIONS: %d\n",
+               autoConfigInterface.oResult.oOldDbValues.numElements);
+        printf("==> PRODUCED VALUES\n");
+        print_infodb(autoConfigInterface.oResult.oOldDbValues.pConfigs,
+                     autoConfigInterface.oResult.oOldDbValues.numElements);
+        printf("___________________\n");
+      }
+
+      if (autoConfigInterface.oResult.oNewDbValues.numElements > 0)
+      {
+        printf("==> NUMBER OF PRODUCED NEW DB CFG RECOMMENDATIONS: %d\n",
+               autoConfigInterface.oResult.oNewDbValues.numElements);
+        printf("==> PRODUCED VALUES\n");
+        print_infodb(autoConfigInterface.oResult.oNewDbValues.pConfigs,
+                     autoConfigInterface.oResult.oNewDbValues.numElements);
+        printf("___________________\n");
+      }
+
+      if (autoConfigInterface.oResult.oOldDbmValues.numElements > 0)
+      {
+        printf("==> NUMBER OF PRODUCED OLD DBM CFG RECOMMENDATIONS: %d\n",
+               autoConfigInterface.oResult.oOldDbmValues.numElements);
+        printf("==> PRODUCED VALUES\n");
+        print_infodbm(autoConfigInterface.oResult.oOldDbmValues.pConfigs,
+                      autoConfigInterface.oResult.oOldDbmValues.numElements);
+        printf("___________________\n");
+      }
+
+      if (autoConfigInterface.oResult.oNewDbmValues.numElements > 0)
+      {
+        printf("==> NUMBER OF PRODUCED NEW DBM CFG RECOMMENDATIONS: %d\n",
+               autoConfigInterface.oResult.oNewDbmValues.numElements);
+        printf("==> PRODUCED VALUES\n");
+        print_infodbm(autoConfigInterface.oResult.oNewDbmValues.pConfigs,
+                      autoConfigInterface.oResult.oNewDbmValues.numElements);
+        printf("___________________\n");
+      }
+
+  /* 6 FREE MEMORY */
+
+      /* must free all the memory allocated by db2AutoConfig() */
+      db2AutoConfigFreeMemory(db2Version970, &autoConfigInterface, &sqlca);
+    }
+    else
+    {
+      /* handle error */
+      printf("ERROR in API CALL\n");
+    }
+
+    /* disconnect from node */
+    EXEC SQL CONNECT RESET;
+    printf("______CONNECT RESET\n");
+    CHCKERR("connect reset");
+  }
+  return 0;
+} /* main */
+

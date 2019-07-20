@@ -1,0 +1,276 @@
+      ***********************************************************************
+      ** (c) Copyright IBM Corp. 2007 All rights reserved.
+      ** 
+      ** The following sample of source code ("Sample") is owned by International 
+      ** Business Machines Corporation or one of its subsidiaries ("IBM") and is 
+      ** copyrighted and licensed, not sold. You may use, copy, modify, and 
+      ** distribute the Sample in any form without payment to IBM, for the purpose of 
+      ** assisting you in the development of your applications.
+      ** 
+      ** The Sample code is provided to you on an "AS IS" basis, without warranty of 
+      ** any kind. IBM HEREBY EXPRESSLY DISCLAIMS ALL WARRANTIES, EITHER EXPRESS OR 
+      ** IMPLIED, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED WARRANTIES OF 
+      ** MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE. Some jurisdictions do 
+      ** not allow for the exclusion or limitation of implied warranties, so the above 
+      ** limitations or exclusions may not apply to you. IBM shall not be liable for 
+      ** any damages you suffer as a result of using, copying, modifying or 
+      ** distributing the Sample, even if IBM has been advised of the possibility of 
+      ** such damages.
+      ***********************************************************************
+      **
+      ** SOURCE FILE NAME: dbstat.sqb 
+      **
+      ** SAMPLE: Reorganize table and run statistics
+      **
+      ** DB2 APIs USED:
+      **         db2gReorg     -- REORGANIZE TABLE
+      **         db2gRunstats  -- RUN STATISTICS
+      **
+      ** SQL STATEMENTS USED:
+      **         BEGIN DECLARE SECTION 
+      **         END DECLARE SECTION 
+      **         CREATE INDEX
+      **         CONNECT
+      **         DROP
+      **
+      ** OUTPUT FILE: dbstat.out (available in the online documentation)
+      ***********************************************************************
+      **
+      ** For more information on the sample programs, see the README file. 
+      **
+      ** For information on developing COBOL applications, see the 
+      ** Application Development Guide.
+      **
+      ** For information on DB2 APIs, see the Administrative API Reference.
+      **
+      ** For information on using SQL statements, see the SQL Reference. 
+      **
+      ** For the latest information on programming, compiling, and running
+      ** DB2 applications, visit the DB2 application development website: 
+      **     http://www.software.ibm.com/data/db2/udb/ad
+      ***********************************************************************
+
+       Identification Division.
+       Program-ID. "dbstat".
+
+       Data Division.
+       Working-Storage Section.
+
+           copy "sql.cbl".
+           copy "sqlca.cbl".
+           copy "sqlutil.cbl".
+           copy "db2ApiDf.cbl".
+      * host variables for REORGANIZE TABLE and RUN STATISTICS
+           EXEC SQL BEGIN DECLARE SECTION END-EXEC.
+       01 qualifier-table pic x(27).
+
+       77 statement         pic x(254).
+       01 db2instc          pic x(9).
+
+           EXEC SQL END DECLARE SECTION END-EXEC.
+
+       77 errloc              pic x(80).
+       77 rc                  pic s9(9) comp-5.
+       77 version-num         PIC 9(9) COMP-5.
+
+      * variables for REORGANIZE TABLE and RUN STATISTICS
+       77 tablespace-len      pic 9(4) comp-5 value 0.
+       77 tablespace          pic x(254).
+       77 indexname-len       pic 9(4) comp-5 value 14.
+       77 indexname           pic x(14) value "sample.testind".
+       77 qualifier-table-len pic 9(4) comp-5 value 0.
+       77 num-indexes         pic 9(4) comp-5 value 1.
+
+      * Column names
+       01 COLUMN-NAMES.
+         05 COLUMN-NAME OCCURS 5 TIMES  pic x(20).
+
+      * Columns to Collect Stats on
+       01 COLUMN-DATA.
+         05 L-COLUMN-DATA OCCURS 2 TIMES.
+           10 PI-COLUMN-NAME     USAGE IS POINTER.
+           10 I-COLUMN-NAME-LEN  PIC 9(4) COMP-5.
+           10 I-COLUMN-FLAGS     PIC S9(4) COMP-5.
+
+      * Pointers to column info structures
+       01 COLUMN-DATA-POINTERS.
+         05 COLUMN-DATA-POINTER occurs 2 times pointer.
+
+      * Columns Groups to Collect Stats on
+       01 COLUMN-GRP-DATA.
+         05 L-COLUMN-GRP-DATA OCCURS 2 TIMES.
+           10 PI-GROUP-COLUMN-NAMES USAGE IS POINTER.
+           10 PI-GROUP-COL-NAMES-LEN USAGE IS POINTER.
+           10 I-GROUP-SIZE       PIC S9(4) COMP-5.
+           10 I-NUM-FREQ-VALUES  PIC S9(4) COMP-5.
+           10 I-NUM-QUANTILES    PIC S9(4) COMP-5.
+           10 FILLER                 PIC X(2).
+
+      * Pointers to column group info structures
+       01 COLUMN-GRP-DATA-POINTERS.
+         05 COLUMN-GRP-DATA-POINTER occurs 2 times pointer.
+
+      * Pointers to group column names
+       01 L-GRP-COL-NAMES-POINTERS.
+         05 GRP-COL-NAMES-POINTERS occurs 2 times.
+           10 GRP-COL-NAMES-POINTER occurs 3 times pointer.
+
+      * Array of group column names lengths
+       01 L-GRP-COL-NAMES-LENS.
+         05 GRP-COL-NAMES-LENS occurs 2 times.
+           10 GRP-COL-NAMES-LEN OCCURS 5 TIMES PIC 9(4) COMP-5.
+
+       01 list-of-lengths.
+         05 i-length occurs 1 times pic 9(4) comp-5.
+       01 list-of-indexes.
+         05 l-index occurs 1 times pointer.
+
+       Procedure Division.
+       dbstat Section.
+           display "Sample COBOL program: DBSTAT".
+
+           display "Enter your userid: " with no advancing. 
+           accept db2instc.
+
+           EXEC SQL CONNECT TO sample END-EXEC.
+
+           move "CONNECT TO SAMPLE" to errloc.
+           call "checkerr" using SQLCA errloc.
+
+           EXEC SQL DROP INDEX sample.testind END-EXEC.
+
+           display "CREATE INDEX".
+           EXEC SQL CREATE INDEX sample.testind ON staff (salary)
+                END-EXEC.
+           move "CONNECT TO SAMPLE" to errloc.
+           call "checkerr" using SQLCA errloc.
+
+      * concatenate 'db2instc' with ".staff" into 'qualifier-table'.
+           move spaces to qualifier-table.
+           string db2instc delimited by " ", ".staff" delimited by
+               size into qualifier-table.
+
+           inspect qualifier-table tallying qualifier-table-len for
+               characters before initial " ".
+
+      * set up reorg structure
+           move DB2REORG-OBJ-TABLE-OFFLINE to DB2-REORG-TYPE.
+           move DB2REORG-OPTION-NONE to DB2-REORG-FLAGS.
+           move DB2REORG-ALL-NODES to DB2-NODE-LIST-FLAG.
+           move 0 to DB2-NUM-NODES.
+           set DB2-P-NODE-LIST      to NULL.
+
+           move qualifier-table-len to 
+                        DB2-TABLE-NAME-LEN in DB2-TABLE-STRUCT.
+           set DB2-P-TABLE-NAME in DB2-TABLE-STRUCT     to 
+                        address of qualifier-table.
+           move 0 to DB2-ORDER-BY-INDEX-LEN in DB2-TABLE-STRUCT.
+           set DB2-P-ORDER-BY-INDEX in DB2-TABLE-STRUCT to NULL.
+           MOVE 0 TO DB2-SYS-TEMP-SPACE-LEN in DB2-TABLE-STRUCT.
+           set DB2-P-SYS-TEMP-SPACE in DB2-TABLE-STRUCT to NULL.
+
+           display "REORGanizing TABLE " qualifier-table.
+      ********************************************
+      * REORGANIZING TABLE STATISTICS API called *
+      ********************************************
+           call "db2gReorg" using 
+                                 by value     DB2VERSION810
+                                 by reference DB2G-REORG-STRUCT
+                                 by reference sqlca
+                          returning rc.
+           move "reorganizing the STAFF table" to errloc.
+           call "checkerr" using SQLCA errloc.
+
+           display "RUNning STATISTICS".
+      *******************************************
+      * Setup Runstats structures               *
+      *******************************************
+           move SQL-REL8100 to version-num.
+           move 0 to  DB2-I-SAMPLING-OPTION.
+           set DB2-PI-TABLENAME to address of qualifier-table.
+           move qualifier-table-len to DB2-I-TABLENAME-LEN.
+           move DB2RUNSTATS-ALL-COLUMNS to DB2-I-RUNSTATS-FLAGS.
+           move 2 to DB2-I-NUM-COLUMNS.
+           move 0 to DB2-I-NUM-COLDIST.
+           move 2 to DB2-I-NUM-COL-GROUPS.
+           move 0 to DB2-I-PARALLELISM-OPTION.
+           move -1 to DB2-I-TABLE-DEF-FREQ-VALUES.
+           move -1 to DB2-I-TABLE-DEF-QUANTILES.
+
+      * Initialize column names vector. They will be used for both
+      * column stats and column group stats
+           move 'id' to column-name(1).
+           move 'name' to column-name(2).
+           move 'dept' to column-name(3).
+           move 'years' to column-name(4).
+
+      * Gather columns stats on id and name
+           set PI-COLUMN-NAME(1) to address of column-name(2).
+           move 4 to I-COLUMN-NAME-LEN(1).
+           move DB2RUNSTATS-COLUMN-LIKE-STATS to I-COLUMN-FLAGS(1).
+
+           set PI-COLUMN-NAME(2) to address of column-name(1).
+           move 2 to I-COLUMN-NAME-LEN(2).
+           move 0 to I-COLUMN-FLAGS(2).
+
+           set COLUMN-DATA-POINTER(1) to address of L-COLUMN-DATA(1).
+           set COLUMN-DATA-POINTER(2) to address of L-COLUMN-DATA(2).
+           set DB2-PI-COLUMN-LIST to address of COLUMN-DATA-POINTERS.
+
+      * Gather column group stats on (id,name) and (dept,years)
+           set GRP-COL-NAMES-POINTER(1 1) to address of column-name(1).
+           set GRP-COL-NAMES-POINTER(1 2) to address of column-name(2).
+           move 2 to GRP-COL-NAMES-LEN(1 1).
+           move 4 to GRP-COL-NAMES-LEN(1 2).
+           set PI-GROUP-COLUMN-NAMES(1) 
+             to address of GRP-COL-NAMES-POINTERS(1).
+           set PI-GROUP-COL-NAMES-LEN(1) 
+             to address of GRP-COL-NAMES-LENS(1).
+           move 2 to I-GROUP-SIZE(1). 
+           move 0 to I-NUM-FREQ-VALUES(1).
+           move 0 to I-NUM-QUANTILES(1).
+
+           set GRP-COL-NAMES-POINTER(2 1) to address of column-name(3).
+           set GRP-COL-NAMES-POINTER(2 2) to address of column-name(4).
+           move 4 to GRP-COL-NAMES-LEN(2 1).
+           move 5 to GRP-COL-NAMES-LEN(2 2).
+           set PI-GROUP-COLUMN-NAMES(2) 
+             to address of GRP-COL-NAMES-POINTERS(2).
+           set PI-GROUP-COL-NAMES-LEN(2) 
+             to address of GRP-COL-NAMES-LENS(2).
+           move 2 to I-GROUP-SIZE(2). 
+           move 0 to I-NUM-FREQ-VALUES(2).
+           move 0 to I-NUM-QUANTILES(2).
+
+           set COLUMN-GRP-DATA-POINTER(1) 
+             to address of L-COLUMN-GRP-DATA(1).
+           set COLUMN-GRP-DATA-POINTER(2) 
+             to address of L-COLUMN-GRP-DATA(2).
+           set DB2-PI-COLUMN-GROUP-LIST 
+             to address of COLUMN-GRP-DATA-POINTERS.
+
+      * Gather index stats on index testind
+           move 1 to DB2-I-NUM-INDEXES.
+           set l-index(1) to address of indexname.
+           set DB2-PI-INDEX-LIST to address of list-of-indexes.
+
+           move indexname-len to i-length(1).
+           set DB2-PI-INDEX-NAMES-LEN to address of list-of-lengths.
+
+      *****************************
+      * RUN STATISTICS API called *
+      *****************************
+           call "db2gRunstats" using
+                                 by value version-num
+                                 by reference DB2G-RUNSTATS-DATA
+                                 by reference sqlca
+                             returning rc.
+
+           move "stats" to errloc.
+           call "checkerr" using SQLCA errloc.
+
+           EXEC SQL CONNECT RESET END-EXEC.
+           move "CONNECT RESET" to errloc.
+           call "checkerr" using SQLCA errloc.
+
+       End-dbstat. stop run.

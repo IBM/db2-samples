@@ -1,0 +1,229 @@
+/****************************************************************************
+** (c) Copyright IBM Corp. 2007 All rights reserved.
+** 
+** The following sample of source code ("Sample") is owned by International 
+** Business Machines Corporation or one of its subsidiaries ("IBM") and is 
+** copyrighted and licensed, not sold. You may use, copy, modify, and 
+** distribute the Sample in any form without payment to IBM, for the purpose of 
+** assisting you in the development of your applications.
+** 
+** The Sample code is provided to you on an "AS IS" basis, without warranty of 
+** any kind. IBM HEREBY EXPRESSLY DISCLAIMS ALL WARRANTIES, EITHER EXPRESS OR 
+** IMPLIED, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED WARRANTIES OF 
+** MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE. Some jurisdictions do 
+** not allow for the exclusion or limitation of implied warranties, so the above 
+** limitations or exclusions may not apply to you. IBM shall not be liable for 
+** any damages you suffer as a result of using, copying, modifying or 
+** distributing the Sample, even if IBM has been advised of the possibility of 
+** such damages.
+*****************************************************************************
+**
+** SOURCE FILE NAME: dbconn.sqC 
+**    
+** SAMPLE: How to connect to and disconnect from a database 
+**           
+** DB2 API USED:
+**         db2DatabaseRestart -- RESTART DATABASE
+**         sqlefrce -- FORCE APPLICATION
+**
+** SQL STATEMENT USED:
+**         CONNECT 
+**
+** OUTPUT FILE: dbconn.out (available in the online documentation)
+*****************************************************************************
+**
+** For more information on the sample programs, see the README file.
+**
+** For information on developing C++ applications, see the Application
+** Development Guide.
+**
+** For information on using SQL statements, see the SQL Reference.
+**
+** For information on DB2 APIs, see the Administrative API Reference.
+**
+** For the latest information on programming, compiling, and running DB2
+** applications, visit the DB2 application development website at
+**     http://www.software.ibm.com/data/db2/udb/ad
+****************************************************************************/
+
+#include <string.h>
+#include <sqlenv.h>
+#include <sqlutil.h>
+#include <db2ApiDf.h>
+#include "utilemb.h"
+#if ((__cplusplus >= 199711L) && !defined DB2HP && !defined DB2AIX) || \
+    (DB2LINUX && (__LP64__ || (__GNUC__ >= 3)) )
+   #include <iostream>
+   using namespace std; 
+#else
+   #include <iostream.h>
+#endif
+
+EXEC SQL BEGIN DECLARE SECTION;
+  char dcAlias[15];
+  char dcUser[129];
+  char dcPswd[15];
+EXEC SQL END DECLARE SECTION;
+
+int AllApplicationsConnectedToAllDatabasesForceOff();
+
+class DbConn: public Db
+{
+  public:
+    int Connect();
+    int Restart();
+    int Disconnect();
+};
+
+int DbConn::Connect()
+{
+  struct sqlca sqlca;
+
+  strcpy(dcAlias, alias);
+  strcpy(dcUser, user);
+  strcpy(dcPswd, pswd);
+
+  cout << "\n-----------------------------------------------------------";
+  cout << "\nUSE THE SQL STATEMENT:" << endl;
+  cout << "  CONNECT TO" << endl;
+  cout << "TO CONNECT TO A DATABASE." << endl;
+
+  // connect to a database
+  cout << "\n  Execute the statement" << endl;
+  cout << "    CONNECT TO " << alias << endl;
+
+  if (strlen(dcUser) == 0)
+  {
+    EXEC SQL CONNECT TO :dcAlias;
+    EMB_SQL_CHECK("Database -- Connect");
+  }
+  else
+  {
+    EXEC SQL CONNECT TO :dcAlias USER :dcUser USING :dcPswd;
+    EMB_SQL_CHECK("database -- connect with userid and password");
+  }
+
+  return 0;
+} //DbConn::Connect
+
+int DbConn::Restart()
+{
+  struct sqlca sqlca;
+  struct db2RestartDbStruct dbRestartParam;
+
+  strcpy(dcAlias, alias);
+  strcpy(dcUser, user);
+  strcpy(dcPswd, pswd);
+
+  cout << "\n-----------------------------------------------------------";
+  cout << "\nUSE THE DB2 API:" << endl;
+  cout << "  db2DatabaseRestart -- RESTART DATABASE" << endl;
+  cout << "TO RESTART A DATABASE." << endl;
+
+  // restart a database
+  dbRestartParam.piDatabaseName = dcAlias;
+  dbRestartParam.piUserId = dcUser;
+  dbRestartParam.piPassword = dcPswd;
+  dbRestartParam.piTablespaceNames = NULL;
+  cout << "\n  Restart a database." << endl;
+  cout << "    database alias: " << dcAlias << endl;
+
+  // restart database
+  db2DatabaseRestart(db2Version970, &dbRestartParam, &sqlca);
+  DB2_API_CHECK("Database -- Restart");
+
+  return 0;
+} //DbConn::Restart
+
+int DbConn::Disconnect()
+{
+  struct sqlca sqlca;
+
+  cout << "\n-----------------------------------------------------------";
+  cout << "\nUSE THE SQL STATEMENT:" << endl;
+  cout << "  CONNECT RESET";
+  cout << "\nTO DISCONNECT FROM THE CURRENT DATABASE." << endl;
+
+  // disconnect from the database
+  cout << "\n  Execute the statement" << endl;
+  cout << "    CONNECT RESET" << endl;
+
+  EXEC SQL CONNECT RESET;
+  EMB_SQL_CHECK("Database -- Disconnect");
+
+  return 0;
+} //DbConn::Disconnect
+
+int AllApplicationsConnectedToAllDatabasesForceOff()
+{
+  struct sqlca sqlca;
+
+  cout << "\n-----------------------------------------------------------";
+  cout << "\nUSE THE DB2 API:" << endl;
+  cout << "  sqlefrce -- FORCE APPLICATION" << endl;
+  cout << "TO FORCE OFF ALL THE APPLICATIONS CONNECTED TO ALL DATABASES.";
+  cout << endl;
+
+  // force off all the appl. connected to all databases
+  cout << "\n  Force off all applications connected to all databases.";
+  cout << endl;
+
+  // force all applications
+  sqlefrce(SQL_ALL_USERS, NULL, SQL_ASYNCH, &sqlca);
+  DB2_API_CHECK("DBM Config. -- Set");
+
+  return 0;
+} //AllApplicationsConnectedToAllDatabasesForceOff
+
+int main(int argc, char *argv[])
+{
+  int rc = 0;
+  CmdLineArgs check;
+  Instance inst;
+  DbConn db;
+
+  EXEC SQL BEGIN DECLARE SECTION;
+    char dbAlias[15];
+    char user[129];
+    char pswd[15];
+  EXEC SQL END DECLARE SECTION;
+
+  char nodeName[SQL_INSTNAME_SZ + 1];
+
+  // check the command line arguments
+  rc = check.CmdLineArgsCheck3(argc, argv, db, inst);
+  if (rc != 0)
+  {
+    return rc;
+  }
+
+  cout << "\nTHIS SAMPLE SHOWS HOW TO CONNECT TO/DISCONNECT FROM DATABASES.";
+  cout << endl;
+
+  rc = db.Connect();
+  rc = db.Restart();
+  rc = db.Disconnect();
+
+  // attach to a local or remote instance
+  rc = inst.Attach();
+  if (rc != 0)
+  {
+    return rc;
+  }
+
+  // The next function will disconnect all the applications from all
+  // the databases located in the instance you are attached to.
+  // Uncomment the next function if this is acceptable.
+
+  // rc = AllApplicationsConnectedToAllDatabasesForceOff();
+
+  // detach from the local or remote instance
+  rc = inst.Detach();
+  if (rc != 0)
+  {
+    return rc;
+  }
+
+  return rc;
+} //main
+

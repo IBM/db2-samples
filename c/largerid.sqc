@@ -1,0 +1,857 @@
+/****************************************************************************
+** (c) Copyright IBM Corp. 2007 All rights reserved.
+** 
+** The following sample of source code ("Sample") is owned by International 
+** Business Machines Corporation or one of its subsidiaries ("IBM") and is 
+** copyrighted and licensed, not sold. You may use, copy, modify, and 
+** distribute the Sample in any form without payment to IBM, for the purpose of 
+** assisting you in the development of your applications.
+** 
+** The Sample code is provided to you on an "AS IS" basis, without warranty of 
+** any kind. IBM HEREBY EXPRESSLY DISCLAIMS ALL WARRANTIES, EITHER EXPRESS OR 
+** IMPLIED, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED WARRANTIES OF 
+** MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE. Some jurisdictions do 
+** not allow for the exclusion or limitation of implied warranties, so the above 
+** limitations or exclusions may not apply to you. IBM shall not be liable for 
+** any damages you suffer as a result of using, copying, modifying or 
+** distributing the Sample, even if IBM has been advised of the possibility of 
+** such damages.
+*****************************************************************************
+**
+** SOURCE FILE NAME: largerid.sqc
+**
+** SAMPLE: How to enable Large RIDs support on both new tables/tablespaces and
+**         existing tables/tablespaces.
+**
+** DB2 APIs USED:
+**         db2Reorg -- Reorganize a Table or Index
+**
+** SQL STATEMENTS USED:
+**         ALTER TABLESPACE
+**         CREATE TABLE
+**         CREATE TABLESPACE
+**         DROP
+**
+** SQL STRUCTURES USED:
+**         sqlca
+**
+** OUTPUT FILE: largerid.out (available in the online documentation)
+*****************************************************************************
+**
+** For more information on the sample programs, see the README file.
+**
+** For information on developing C applications, see the Application
+** Development Guide.
+**
+** For information on using SQL statements, see the SQL Reference.
+**
+** For the latest information on programming, building, and running DB2
+** applications, visit the DB2 application development website:
+**     http://www.software.ibm.com/data/db2/udb/ad
+****************************************************************************/
+
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+#include <sqlenv.h>
+#include <sqlutil.h>
+#include "utilemb.h"
+#include <db2ApiDf.h>
+
+/* Function prototypes */
+int DMSTbspaceCreate(char serverWorkingPath[]);  
+int TbCreate(void);             
+int PartitionedTbCreate(void);  
+int CreateIndex(void);            
+int TbAlterSpace(void);        
+int ConvertTbSpace(void);     
+int TbDetachPartition(void); 
+int TbAttachPartition(void);    
+int ReorgIndex(void);      
+int TbReorganize(void);
+int SchemaNameGet(void);        
+int IndexDrop(void);            
+int TbDrop(void);               
+int TablespacesDrop(void);     
+
+EXEC SQL INCLUDE SQLCA;         /* Includes SQL communication area */
+
+EXEC SQL BEGIN DECLARE SECTION; /* Host variable declare section */
+  char stmt[20000];
+  char strStmt[257];
+  char tableName[129];
+  char tableName1[129];
+  char tableName2[129];
+  char tableName3[129];
+  char schemaName[129];
+EXEC SQL END DECLARE SECTION;
+
+int main(int argc, char *argv[])
+{
+  int rc = 0;
+  char nodeName[SQL_INSTNAME_SZ + 1];
+  char serverWorkingPath[SQL_PATH_SZ + 1];
+  char dbAlias[SQL_ALIAS_SZ + 1];
+  char user[USERID_SZ + 1];
+  char pswd[PSWD_SZ + 1];
+
+  /* Check the command line arguments */
+  rc = CmdLineArgsCheck3(argc, argv, dbAlias, nodeName, user, pswd);
+  if (rc != 0)
+  {
+    return rc;
+  }
+
+  printf("\nTHIS SAMPLE SHOWS HOW TO ENABLE LARGE RID SUPPORT ON TABLES\n");
+
+  /* Attach to a local or remote instance */
+  rc = InstanceAttach(nodeName, user, pswd);
+  if (rc != 0)
+  {
+    return rc;
+  }
+
+  /* Get server working path */
+  rc = ServerWorkingPathGet(dbAlias, serverWorkingPath);
+  if (rc != 0)
+  {
+    return rc;
+  }
+
+  /* Detach from the local or remote instance */
+  rc = InstanceDetach(nodeName);
+  if (rc != 0)
+  {
+    return rc;
+  }
+
+  /* Connect to the database */
+  DbConn(dbAlias, user, pswd);
+  if (rc != 0)
+  {
+    return rc;
+  }
+
+  rc = DMSTbspaceCreate(serverWorkingPath); /* Creates regular  DMS 
+                                                       tablespaces */
+
+  printf("\n************************************************************\n");
+  printf("\nTHE FOLLOWING SCENARIO SHOWS HOW TO ENABLE LARGE RID SUPPORT\n");
+  printf("     FOR A NON-PARTITIONED TABLE\n");
+  printf("\n************************************************************\n");
+
+  rc = TbCreate();      /* Creates a non-partitioned table */
+  rc = CreateIndex();   /* Creates index on a table */
+  rc = TbAlterSpace();  /* Changes table space from regular to large */
+  rc = ReorgIndex();    /* Reorganize indexes defined on a table */
+  rc = SchemaNameGet(); /* Gets schema name for a particular table */
+  rc = IndexDrop();     /* Drop indexes defined on a table */
+  
+  printf("\n************************************************************\n"); 
+  printf("\nTHE FOLLOWING SCENARIO SHOWS HOW TO ENABLE LARGE RID SUPPORT\n");
+  printf("     FOR A PARTITIONED TABLE\n");
+  printf("\n************************************************************\n");
+
+  rc = PartitionedTbCreate(); /* Creates a partitioned table */
+  rc = TbDetachPartition();   /* Remove partition from a partitioned table */
+  rc = ConvertTbSpace();      /* Changes table space from regular to large */
+  rc = TbReorganize();        /* Reorganize table */
+  rc = TbAttachPartition();   /* Add partition to a partitioned table */
+  rc = TbDrop();              /* Drop tables */
+  rc = TablespacesDrop();     /* Drop tablespaces */
+
+  /* Disconnect from the database */
+  DbDisconn(dbAlias);
+  if (rc != 0)
+  {
+    return rc;
+  }
+
+  return 0;
+} /* main */
+
+int DMSTbspaceCreate(char serverWorkingPath[])
+{
+  int rc = 0;
+  struct sqlca sqlca;
+  char containerFileName[SQL_PATH_SZ + 1];
+  char containerFileName1[SQL_PATH_SZ + 1];
+  char containerFileName2[SQL_PATH_SZ + 1];
+  char containerFileName3[SQL_PATH_SZ + 1];
+
+  printf("\n-----------------------------------------------------------");
+  printf("\nUSE THE SQL STATEMENT:\n");
+  printf("  CREATE REGULAR TABLESPACE\n");
+  printf("TO CREATE A REGULAR DMS TABLE SPACES.\n");
+
+  /* Create regular DMS table space dms_tspace */
+  strcpy(containerFileName, serverWorkingPath);
+  strcat(containerFileName, PATH_SEP);
+  strcat(containerFileName, "dms_cont.dat");
+
+  sprintf(strStmt, "CREATE REGULAR TABLESPACE dms_tspace "
+                   "  MANAGED BY DATABASE "
+                   "  USING(FILE '%s' 10000)" , containerFileName);
+ 
+  printf("\n  Execute the statement\n");
+  printf("    CREATE REGULAR TABLESPACE dms_tspace\n"
+         "      MANAGED BY DATABASE\n"
+         "        USING(FILE 'dms_cont.dat' 10000)\n");
+
+  EXEC SQL EXECUTE IMMEDIATE :strStmt;
+  EMB_SQL_CHECK("DMS tablespace -- create");
+
+  /* Commit transaction */
+  EXEC SQL COMMIT;
+  EMB_SQL_CHECK("transaction -- commit");
+
+  /* Create regular DMS table space dms_tspace1 */
+  strcpy(containerFileName1, serverWorkingPath);
+  strcat(containerFileName1, PATH_SEP);
+  strcat(containerFileName1, "dms_cont1.dat");
+  
+  sprintf(strStmt, "CREATE REGULAR TABLESPACE dms_tspace1 "
+                   "  MANAGED BY DATABASE "
+                   "  USING(FILE '%s' 10000)" , containerFileName1);
+
+  printf("\n  Execute the statement\n");
+  printf("    CREATE REGULAR TABLESPACE dms_tspace1\n"
+         "      MANAGED BY DATABASE\n"
+         "        USING(FILE 'dms_cont1.dat' 10000)\n");
+
+  EXEC SQL EXECUTE IMMEDIATE :strStmt;
+  EMB_SQL_CHECK("DMS tablespace -- create");
+
+  /* Commit transaction */
+  EXEC SQL COMMIT;
+  EMB_SQL_CHECK("transaction -- commit");
+
+  /* Create regular DMS table space dms_tspace2 */
+  strcpy(containerFileName2, serverWorkingPath);
+  strcat(containerFileName2, PATH_SEP);
+  strcat(containerFileName2, "dms_cont2.dat");
+  
+  sprintf(strStmt, "CREATE REGULAR TABLESPACE dms_tspace2 "
+                   "  MANAGED BY DATABASE "
+                   "  USING(FILE '%s' 10000)" , containerFileName2);
+
+  printf("\n  Execute the statement\n");
+  printf("    CREATE REGULAR TABLESPACE dms_tspace2\n"
+         "      MANAGED BY DATABASE\n"
+         "        USING(FILE 'dms_cont.dat2' 10000)\n");
+
+  EXEC SQL EXECUTE IMMEDIATE :strStmt;
+  EMB_SQL_CHECK("DMS tablespace -- create");
+
+  /* Commit transaction */
+  EXEC SQL COMMIT;
+  EMB_SQL_CHECK("transaction -- commit");
+
+  /* Create regular DMS table space dms_tspace3 */
+  strcpy(containerFileName3, serverWorkingPath);
+  strcat(containerFileName3, PATH_SEP);
+  strcat(containerFileName3, "dms_cont3.dat");
+
+  sprintf(strStmt, "CREATE REGULAR TABLESPACE dms_tspace3 "
+                   "  MANAGED BY DATABASE "
+                   "  USING(FILE '%s' 10000)" , containerFileName3);
+
+  printf("\n  Execute the statement\n");
+  printf("    CREATE REGULAR TABLESPACE dms_tspace3\n"
+         "      MANAGED BY DATABASE\n"
+         "        USING(FILE 'dms_cont3.dat' 10000)\n");
+
+  EXEC SQL EXECUTE IMMEDIATE :strStmt;
+  EMB_SQL_CHECK("DMS tablespace -- create");
+
+  /* Commit transaction */
+  EXEC SQL COMMIT;
+  EMB_SQL_CHECK("transaction -- commit");
+
+  return 0;
+} /* DMSTbspaceCreate */
+
+int TbCreate(void)
+{
+  int rc = 0;
+
+  printf("\nUSE THE SQL STATEMENT\n");
+  printf("  CREATE TABLE\n");
+  printf("TO CREATE A NON-PARTITIONED TABLE:\n");
+
+  /* Create table in 'dms_tspace' regular DMS tablespace */
+  printf("\n Execute the statement\n");
+  printf("   CREATE TABLE large(min INT,\n");
+  printf("                      max INT)\n");
+  printf("     IN dms_tspace\n");
+
+  EXEC SQL CREATE TABLE large(min INT,
+                              max INT)
+             IN dms_tspace;
+  
+  EMB_SQL_CHECK("Table -- Create");
+ 
+  /* Commit transaction */
+  EXEC SQL COMMIT;
+  EMB_SQL_CHECK("Transaction -- Commit");
+
+  return rc;
+} /* Tbcreate */
+
+int PartitionedTbCreate(void)
+{
+  int rc = 0;
+
+  printf("\nUSE THE SQL STATEMENT\n");
+  printf("  CREATE TABLE\n");
+  printf("TO CREATE A PARTITIONED TABLE:\n");
+
+  /*Create a partitioned table in regular DMS tablespaces i.e part1 is placed
+    at dms_tspace1, part2 is placed at dms_tspace2 and part3 at dms_tspace3*/
+
+  printf("\n Execute the statement\n");
+  printf(" CREATE TABLE large_ptab(max INT NOT NULL,\n");
+  printf("                         CONSTRAINT CC CHECK (max>0))\n");
+  printf("   PARTITION BY RANGE (max)\n");
+  printf("     (PART  part1 STARTING FROM (1) ENDING (3) IN dms_tspace1,\n");
+  printf("     PART part2 STARTING FROM (4) ENDING (6) IN dms_tspace2,\n");
+  printf("     PART part3 STARTING FROM (7) ENDING (9) IN dms_tspace3);\n");
+
+  EXEC SQL CREATE TABLE large_ptab(max INT NOT NULL,
+                                   CONSTRAINT CC CHECK (max>0))
+             PARTITION BY RANGE (max)
+               (PART  part1 STARTING FROM (1) ENDING (3) IN dms_tspace1,
+               PART part2 STARTING FROM (4) ENDING (6) IN dms_tspace2,
+               PART part3 STARTING FROM (7) ENDING (9) IN dms_tspace3);
+
+  EMB_SQL_CHECK("Table -- Create");
+  
+  /* Commit transaction */
+  EXEC SQL COMMIT;
+  EMB_SQL_CHECK("Transaction -- Commit");
+
+  return rc;
+} /* PartitionedTbCreate */  
+ 
+int CreateIndex(void)
+{
+  int rc = 0;
+
+  printf("\n-----------------------------------------------------------");
+  printf("\nUSE THE SQL STATEMENT\n");
+  printf("  CREATE INDEX\n");
+  printf("TO CREATE AN INDEX\n");
+
+  /* Create Index */
+  printf("\n  Execute the statement\n");  
+  printf("    CREATE INDEX INDEX2 ON large (min)\n");
+  EXEC SQL CREATE INDEX index2 ON large (min); 
+  EMB_SQL_CHECK("Index -- Create");
+
+  /* Commit transaction */
+  EXEC SQL COMMIT;
+  EMB_SQL_CHECK("Transaction -- Commit");
+
+  return rc;
+} /* CreateIndex */
+
+int TbAlterSpace(void)
+{
+  int rc = 0;
+
+  printf("\n-----------------------------------------------------------");
+  printf("\nUSE THE SQL STATEMENT\n");
+  printf("  ALTER TABLESPACE\n");
+  printf("TO CONVERT REGULAR DMS TABLESPACE TO LARGE DMS TABLESPACE:\n");
+  
+  /* Convert regular DMS tablespace 'dms_tspace' to large DMS tablespace */
+  printf("\n  Execute the statement");
+  printf("\n    ALTER TABLESPACE dms_tspace CONVERT TO LARGE\n");
+ 
+  strcpy(stmt, "ALTER TABLESPACE dms_tspace CONVERT TO LARGE");
+  
+  EXEC SQL EXECUTE IMMEDIATE :stmt;
+
+  /* Commit transaction */
+  EXEC SQL COMMIT;
+  EMB_SQL_CHECK("Transaction -- Commit");
+  
+  return rc;
+} /* TbAlterSpace */
+
+/* If a partitioned table has data partitions in different regular DMS
+   tablespaces, then the tablespaces cannot be converted to large
+   with the current definition.
+   To do this, first detach all the partitions of the table, later
+   convert all the tablespaces to large, reorg all the detached
+   partitions to support large RID. Finally, reattach the partitions.
+   Now the entire table supports large RIDs. */
+
+int TbDetachPartition(void)
+{
+  int rc = 0;
+  printf("\n-----------------------------------------------------------");
+  printf("\nUSE THE SQL STATEMENT\n");
+  printf("  ALTER TABLE\n");
+  printf("TO DETACH PARTITION FROM A TABLE:\n");
+ 
+  /* Detach partitions from base table into some temporary tables */
+  printf("\nExecute the statement\n");
+  printf("ALTER TABLE large_ptab DETACH PARTITION part3 INTO TABLE temp3\n");
+  EXEC SQL ALTER TABLE large_ptab DETACH PARTITION part3 INTO TABLE temp3;
+  EXEC SQL COMMIT;
+  EMB_SQL_CHECK("COMMIT");
+
+  waitForDetachPart();
+
+  EXEC SQL DROP PROCEDURE tableExists;
+  EMB_SQL_CHECK("DROP PROCEDURE tableExists");
+
+  EXEC SQL DROP PROCEDURE waitForDetach;
+  EMB_SQL_CHECK("DROP PROCEDURE waitForDetach");
+
+  printf("ALTER TABLE large_ptab DETACH PARTITION part2 INTO TABLE temp2\n");
+  EXEC SQL ALTER TABLE large_ptab DETACH PARTITION part2 INTO TABLE temp2;
+ 
+  /* Commit transaction */ 
+  EXEC SQL COMMIT;
+  EMB_SQL_CHECK("Transaction -- Commit");
+  waitForDetachPart();
+  
+
+  if (rc != 0)
+  {
+    return rc;
+  }
+
+  return 0;
+} /* TbDetachPartition */  
+
+int ConvertTbSpace(void)
+{
+  int rc = 0;
+
+  printf("\n-----------------------------------------------------------");
+  printf("\nUSE THE SQL STATEMENT\n");
+  printf("  ALTER TABLESPACE\n");
+  printf("TO CONVERT REGULAR DMS TABLESPACE TO LARGE DMS TABLESPACE:\n");
+
+  /* Convert regular DMS tablespaces to large DMS tablespaces */ 
+  printf("\n  Execute the statement");
+  
+  printf("\n    ALTER TABLESPACE dms_tspace3 CONVERT TO LARGE\n");
+  strcpy(stmt, "ALTER TABLESPACE dms_tspace3 CONVERT TO LARGE");
+  EXEC SQL EXECUTE IMMEDIATE :stmt;
+
+  printf("\n    ALTER TABLESPACE dms_tspace2 CONVERT TO LARGE\n");
+  strcpy(stmt, "ALTER TABLESPACE dms_tspace2 CONVERT TO LARGE");
+  EXEC SQL EXECUTE IMMEDIATE :stmt;
+
+  printf("\n    ALTER TABLESPACE dms_tspace1 CONVERT TO LARGE\n");
+  strcpy(stmt, "ALTER TABLESPACE dms_tspace1 CONVERT TO LARGE");
+  EXEC SQL EXECUTE IMMEDIATE :stmt;
+
+  /* Commit transaction */
+  EXEC SQL COMMIT;
+  EMB_SQL_CHECK("Transaction -- Commit");
+
+  return rc;
+} /* ConvertTbSpace */
+
+int TbReorganize(void)
+{
+  int rc = 0;
+  struct sqlca sqlca;
+  char fullTableName1[258];
+  char fullTableName2[258];
+  char fullTableName3[258];
+  db2ReorgStruct paramStruct;
+  db2Uint32 versionNumber = db2Version1010;
+
+  printf("\n-----------------------------------------------------------");
+  printf("\nUSE THE DB2 APIs:\n");
+  printf("  db2Reorg -- Reorganize a Table or Index\n");
+  printf("TO REORGANIZE A TABLE OR INDEX.\n");
+
+  /* Get fully qualified name of the table */
+  strcpy(tableName1, "large_ptab");
+  rc = SchemaNameGet();
+  if (rc != 0)
+  {
+    return rc;
+  }
+
+  strcpy(fullTableName1, schemaName);
+  strcpy(fullTableName2, schemaName);
+  strcpy(fullTableName3, schemaName);
+  strcat(fullTableName1, ".");
+  strcat(fullTableName2, ".");
+  strcat(fullTableName3, ".");
+  strcat(fullTableName1, tableName1);
+
+  printf("  Reorganize the table: %s\n", fullTableName1);
+
+  /* Set the parameters */
+  memset(&paramStruct, '\0', sizeof(paramStruct));
+  paramStruct.reorgObject.tableStruct.pTableName = fullTableName1;
+  paramStruct.reorgObject.tableStruct.pOrderByIndex = NULL;
+  paramStruct.reorgObject.tableStruct.pSysTempSpace = NULL;
+  paramStruct.reorgType = DB2REORG_OBJ_TABLE_OFFLINE;
+  paramStruct.reorgFlags = DB2REORG_LONGLOB;
+  paramStruct.nodeListFlag = DB2_ALL_NODES;
+  paramStruct.numNodes = 0;
+  paramStruct.pNodeList = NULL;
+
+  /* Reorganize table 'large_ptab' */
+  rc = db2Reorg(versionNumber, &paramStruct, &sqlca);
+
+  strcpy(tableName2, "temp2");
+  strcat(fullTableName2, tableName2);
+
+  printf("  Reorganize the table: %s\n", fullTableName2);
+ 
+  paramStruct.reorgObject.tableStruct.pTableName = fullTableName2;
+
+  /* Reorganize table 'temp2' */
+  rc = db2Reorg(versionNumber, &paramStruct, &sqlca);
+  DB2_API_CHECK("table -- reorganize");
+
+  strcpy(tableName3, "temp3");
+  strcat(fullTableName3, tableName3);
+
+  printf("  Reorganize the table: %s\n", fullTableName3);
+
+  paramStruct.reorgObject.tableStruct.pTableName = fullTableName3;
+  /* Reorganize table 'temp3' */
+  rc = db2Reorg(versionNumber, &paramStruct, &sqlca);
+  DB2_API_CHECK("table -- reorganize");
+
+  /* Commit transaction */
+  EXEC SQL COMMIT;
+  EMB_SQL_CHECK("Transaction -- Commit");
+ 
+  return 0;
+} /* TbReorganize */
+  
+int TbAttachPartition(void)
+{
+  int rc = 0;
+  printf("\n-----------------------------------------------------------");
+  printf("\nUSE THE SQL STATEMENT\n");
+  printf("  ALTER TABLE\n");
+  printf("TO ATTACH A PARTITION TO A TABLE:\n");
+
+  /* Reattach the reorganized detached partitions for table to support 
+     large RIDs. */
+  printf("\n Execute the statement\n");
+  printf(" ALTER TABLE large_ptab ATTACH PARTITION part2\n"); 
+  printf("   STARTING FROM (4) ENDING (6) FROM TABLE temp2\n");
+
+  EXEC SQL ALTER TABLE large_ptab ATTACH PARTITION part2 
+             STARTING FROM (4) ENDING (6) FROM TABLE temp2;
+  
+  printf(" ALTER TABLE large_ptab ATTACH PARTITION part3\n");
+  printf("   STARTING FROM (7) ENDING (9) FROM TABLE temp3\n");
+
+  EXEC SQL ALTER TABLE large_ptab ATTACH PARTITION part3
+             STARTING FROM (7) ENDING (9) FROM TABLE temp33;
+
+  /* Commit transaction */
+  EXEC SQL COMMIT;
+  EMB_SQL_CHECK("Transaction -- Commit");
+
+  return rc;
+} /* TbAttachPartition */
+
+
+/* This function uses 'db2Reorg' API to reorganize all indexes defined on a
+   table by rebuilding the index data into unfragmented, physically 
+   contiguous pages. 
+   This will permit the table use 4-byte page numbers but not enable
+   the table to use more than 255 slots on a page. */
+int ReorgIndex(void)
+{
+  int rc = 0;
+  struct sqlca sqlca;
+  char fullTableName[258];
+  db2ReorgStruct paramStruct;
+  db2Uint32 versionNumber = db2Version1010;
+
+  printf("\n-----------------------------------------------------------");
+
+  printf("\nUSE THE DB2 APIs:\n");
+  printf("  db2Reorg -- Reorganize a Table or Index\n");
+  printf("TO REORGANIZE A TABLE OR INDEX.\n");
+
+  /* get fully qualified name of the table */
+  strcpy(tableName, "LARGE");
+  rc = SchemaNameGet();
+  if (rc != 0)
+  {
+    return rc;
+  }
+
+  strcpy(fullTableName, schemaName);
+  strcat(fullTableName, ".");
+  strcat(fullTableName, tableName);
+
+  printf("\n  Execute the statement\n");
+  printf("  Reorganize all indexes defined on table : %s\n", fullTableName);
+
+  /* setup parameters */
+  memset(&paramStruct, '\0', sizeof(paramStruct));
+  paramStruct.reorgObject.tableStruct.pTableName = fullTableName;
+  paramStruct.reorgObject.tableStruct.pOrderByIndex = NULL;
+  paramStruct.reorgObject.tableStruct.pSysTempSpace = NULL;
+  paramStruct.reorgType = DB2REORG_OBJ_INDEXESALL;
+  paramStruct.nodeListFlag = DB2_ALL_NODES;
+  paramStruct.numNodes = 0;
+  paramStruct.pNodeList = NULL;
+
+  paramStruct.reorgFlags = DB2REORG_ALLOW_WRITE;
+
+  /* reorganize index */
+  rc = db2Reorg(versionNumber, &paramStruct, &sqlca);
+  DB2_API_CHECK("Index -- reorganize");
+
+  return rc;
+} /* ReorgIndex */
+
+int ServerWorkingPathGet(char dbAlias[], char serverWorkingPath[])
+{
+  int rc = 0;
+  struct sqlca sqlca;
+  db2CfgParam cfgParameters[1];
+  db2Cfg cfgStruct;
+  char serverLogPath[SQL_PATH_SZ + 1];
+  char dbAlias_upper[SQL_ALIAS_SZ + 1] = { 0 };
+  int ctr = 0;
+  int len;
+
+  /* initialize cfgParameters */
+  cfgParameters[0].flags = 0;
+  cfgParameters[0].token = SQLF_DBTN_LOGPATH;
+  cfgParameters[0].ptrvalue =
+    (char *)malloc((SQL_PATH_SZ + 1) * sizeof(char));
+
+  /* initialize cfgStruct */
+  cfgStruct.numItems = 1;
+  cfgStruct.paramArray = cfgParameters;
+  cfgStruct.flags = db2CfgDatabase;
+  cfgStruct.dbname = dbAlias;
+
+  /* get database configuration */
+  db2CfgGet(db2Version1010, (void *)&cfgStruct, &sqlca);
+  DB2_API_CHECK("server log path -- get");
+
+  strcpy(serverLogPath, cfgParameters[0].ptrvalue);
+  free(cfgParameters[0].ptrvalue);
+
+  /* get server working path */
+  /* for example, if the serverLogPath = "C:\DB2\NODE0001\....". */
+  /* keep for serverWorkingPath "C:\DB2" only. */
+
+  for (ctr = 0; ctr < strlen (dbAlias); ctr++)
+  {
+    dbAlias_upper[ctr] = toupper (dbAlias[ctr]);
+  }
+  dbAlias_upper[ctr] = '\0';  /* terminate the constructed string */
+
+  len = (int)(strstr(serverLogPath, "NODE") - serverLogPath - 1);
+  memcpy(serverWorkingPath, serverLogPath, len);
+  serverWorkingPath[len] = '\0';
+
+  return 0;
+} /* ServerWorkingPathGet */
+ 
+int SchemaNameGet(void)
+{
+  struct sqlca sqlca;
+
+  /* get table schema name */
+  EXEC SQL SELECT tabschema INTO :schemaName
+             FROM syscat.tables
+               WHERE tabname = :tableName;
+  EMB_SQL_CHECK("table schema name -- get");
+
+  /* get rid of spaces from the end of schemaName */
+  strtok(schemaName, " ");
+
+  return 0;
+} /* SchemaNameGet */
+
+int IndexDrop(void)
+{
+  int rc = 0;
+
+  printf("\n-----------------------------------------------------------");
+  printf("\nUSE THE SQL STATEMENT\n");
+  printf("  DROP Index\n");
+  printf("TO DROP A INDEX:\n");
+
+  /* Drop index */ 
+  printf("\n  Execute the statement\n");
+  printf("    DROP INDEX INDEX2\n");
+
+  EXEC SQL DROP INDEX index2 ;
+  EMB_SQL_CHECK("Table -- Drop");
+
+  /* Commit Transaction */
+  EXEC SQL COMMIT;
+  EMB_SQL_CHECK("Transaction -- Commit");
+
+  return rc;
+} /* IndexDrop */
+
+int TbDrop(void)
+{
+  int rc = 0;
+
+  printf("\n-----------------------------------------------------------");
+  printf("\nUSE THE SQL STATEMENT\n");
+  printf("  DROP\n");
+  printf("TO DROP A TABLE:\n");
+
+  /* Drop the tables */
+  printf("\n  Execute the statement\n");
+  printf("    DROP TABLE large\n");
+
+  EXEC SQL DROP TABLE large;
+  EMB_SQL_CHECK("Table -- Drop");
+  
+  printf("    DROP TABLE large_ptab\n");
+  EXEC SQL DROP TABLE large_ptab;
+  EMB_SQL_CHECK("Table -- Drop");
+
+  /* Commit Transaction */
+  EXEC SQL COMMIT;
+  EMB_SQL_CHECK("Transaction -- Commit");
+
+  EXEC SQL DROP PROCEDURE tableExists;
+  EMB_SQL_CHECK("DROP PROCEDURE tableExists");
+
+  EXEC SQL DROP PROCEDURE waitForDetach;
+  EMB_SQL_CHECK("DROP PROCEDURE waitForDetach");
+
+
+  return rc;
+} /* Tbdrop */
+   
+int TablespacesDrop(void)
+{
+  int rc = 0;
+  struct sqlca sqlca;
+
+  printf("\n-----------------------------------------------------------");
+  printf("\nUSE THE SQL STATEMENTS:\n");
+  printf("  DROP\n");
+  printf("TO DROP TABLE SPACES.\n");
+
+  /* Drop table spaces */
+  printf("\n  Execute the statements");
+  printf("\n  DROP TABLESPACE dms_tspace\n");
+
+  EXEC SQL DROP TABLESPACE dms_tspace;
+  EMB_SQL_CHECK("tablespaces -- drop");
+  
+  printf("\n  DROP TABLESPACE dms_tspace1\n");
+
+  EXEC SQL DROP TABLESPACE dms_tspace1;
+  EMB_SQL_CHECK("tablespaces -- drop");
+
+  printf("\n  DROP TABLESPACE dms_tspace2\n");
+
+  EXEC SQL DROP TABLESPACE dms_tspace2;
+  EMB_SQL_CHECK("tablespaces -- drop");
+
+  
+  printf("\n  DROP TABLESPACE dms_tspace3\n");
+
+  EXEC SQL DROP TABLESPACE dms_tspace3;
+  EMB_SQL_CHECK("tablespaces -- drop");
+ 
+  /* Commit Transaction */ 
+  EXEC SQL COMMIT;
+  EMB_SQL_CHECK("transaction -- commit");
+  printf("\n-----------------------------------------------------------\n");  
+  
+  return 0;
+} /* TablespacesDrop */
+
+
+int waitForDetachPart()
+{
+
+  strcpy(stmt, "create procedure tableExists (IN schemaName varchar(128), IN tableName varchar(128), OUT notFound int)"
+               "specific tableExists "
+               "BEGIN "
+               "declare dpid int; "
+               "declare tabCheck cursor for "
+               "select DATAPARTITIONID from sysibm.sysdatapartitions where tabschema = schemaName and tabname = tableName; "
+               "declare exit handler for NOT FOUND "
+               "set notFound = 1; "
+               "open tabCheck; "
+               "fetch tabCheck into dpid; "
+               "close tabCheck; "
+               "END ");
+
+  EXEC SQL EXECUTE IMMEDIATE :stmt;
+  EMB_SQL_CHECK("EXECUTE IMMEDIATE");
+
+  strcpy(stmt, "create procedure waitForDetach "
+               "(OUT msg varchar(128), IN schemaName varchar(128), IN tableName varchar(128), IN partName varchar(128) DEFAULT NULL) "
+               "specific waitForDetach "
+               "language SQL "
+               "BEGIN "
+               "declare dpid int; "
+               "declare dpstate char; "
+               "declare done int default 0; "
+               " declare tabNotFound int default 0; "
+               "declare allDetachCheck cursor for "
+               "select DATAPARTITIONID, STATUS from sysibm.sysdatapartitions "
+               "where tabschema = schemaName and tabname = tableName and (status = 'L' OR status = 'D'); "
+               "declare oneDetachCheck cursor for "
+               "select DATAPARTITIONID, STATUS from sysibm.sysdatapartitions "
+               "where tabschema = schemaName and tabname = tableName and datapartitionname = partName; "
+               "declare continue handler for NOT FOUND "
+               "set done = 1; "
+               "set current lock timeout 120; "
+               "call tableExists (schemaName, tableName, tabNotFound); "
+               "if tabNotFound = 1 "
+               "THEN "
+               "set msg = 'Table not found'; "
+               "RETURN -1; "
+               "END IF; "
+               "wait_loop: "
+               " LOOP "
+               "if partName IS NOT NULL "
+               "THEN "
+               "open oneDetachCheck; "
+               "fetch oneDetachCheck into dpid, dpstate; "
+               "IF done <> 1 AND (dpstate = '' OR dpstate = 'A') "
+               "THEN "
+               "set msg = 'Cannot waitForDetach if DETACH was not issued on this partition'; "
+               "return -1; "
+               " END IF; "
+               "close oneDetachCheck; "
+               "ELSE "
+               "open allDetachCheck; "
+               "fetch allDetachCheck into dpid, dpstate; "
+               "close allDetachCheck; "
+               "END IF; "
+               "if done = 1 "
+               "THEN "
+               "set msg = 'DETACH completed'; "
+               "LEAVE wait_loop; "
+               "ELSE "
+               "ITERATE wait_loop; "
+               " END IF; "
+               "END LOOP; "
+               "END");
+
+  EXEC SQL EXECUTE IMMEDIATE :stmt;
+  EMB_SQL_CHECK("EXECUTE IMMEDIATE");
+
+  return 0;
+
+}

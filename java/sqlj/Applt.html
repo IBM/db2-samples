@@ -1,0 +1,33 @@
+<html>
+<!-- To run this Applet sample, you have to modify the values of the     -->
+<!-- following parameters in the < applet >  tag. You can run this       -->
+<!-- sample with JDBC Type 4 driver.                                     -->
+
+<!-- To use the JDBC Type 4 driver, you have to:                         -->
+<!--      a. change myServer to the hostname of the machine on which     -->
+<!--         the JDBC server is running                                  -->
+<!--      b. change myPort to is an available port number (the default   -->
+<!--         port number is normally 50000 for DB2 UDB and 446 for Host  -->
+<!--         Databases)                                                  -->
+<!--      c. change myId to the DB2 instance user ID                     -->
+<!--      d. change myPassword to the password corresponding to the      -->
+<!--         above id.                                                   -->
+
+
+<head>
+    <title>DB2 SQLJ Sample Applet </title>
+</head>
+
+<body>
+<h1> <center>DB2 SQLJ Sample Applet </center></h1>
+<center>
+	<applet code="Applt.class" width=325 height=275 archive="db2jcc_license_cu.jar,db2jcc.jar">
+        <param name=server value='myServer'>
+        <param name=port value='myPort'>
+        <param name=userid value='myId'>
+        <param name=password value='myPassword'>
+</applet>
+</center>
+</body>
+
+</html>

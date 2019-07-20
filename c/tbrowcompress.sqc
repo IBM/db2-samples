@@ -1,0 +1,1078 @@
+/****************************************************************************
+** (c) Copyright IBM Corp. 2007 All rights reserved.
+** 
+** The following sample of source code ("Sample") is owned by International 
+** Business Machines Corporation or one of its subsidiaries ("IBM") and is 
+** copyrighted and licensed, not sold. You may use, copy, modify, and 
+** distribute the Sample in any form without payment to IBM, for the purpose of 
+** assisting you in the development of your applications.
+** 
+** The Sample code is provided to you on an "AS IS" basis, without warranty of 
+** any kind. IBM HEREBY EXPRESSLY DISCLAIMS ALL WARRANTIES, EITHER EXPRESS OR 
+** IMPLIED, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED WARRANTIES OF 
+** MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE. Some jurisdictions do 
+** not allow for the exclusion or limitation of implied warranties, so the above 
+** limitations or exclusions may not apply to you. IBM shall not be liable for 
+** any damages you suffer as a result of using, copying, modifying or 
+** distributing the Sample, even if IBM has been advised of the possibility of 
+** such damages.
+*****************************************************************************
+**
+** SOURCE FILE NAME: tbrowcompress.sqc
+**    
+** SAMPLE: How to perform row compression on a table
+**
+**         This sample shows:
+**         1. How to enable the row compression after a table is created.
+**         2. How to enable the row compression during table creation.
+**         3. Usage of the options to REORG to use the exiting dictionary
+**            or creating a new dictionary.
+**         4. How to estimate the effectiveness of the compression.
+** 
+** SQL STATEMENTS USED:
+**         ALTER TABLE
+**         COMMIT
+**         CREATE TABLE
+**         DECLARE
+**         DELETE
+**         DROP TABLE
+**         FETCH
+**         INSERT
+**         OPEN
+**         PREPARE
+**         SELECT
+**         UPDATE                                                      
+**
+** DB2 APIs USED:
+**         db2Reorg ----- REORGANIZE A TABLE OR INDEX
+**         db2Import  --- IMPORT DATA TO A TABLE
+**         db2Export ---- EXPORT DATA TO A FILE
+**         db2Runstats -- UPDATE THE STATISTICS OF A TABLE
+**         db2Inspect --- CHECK THE ARCHITECTURAL INTEGRITY
+**      
+** STRUCTURES USED:
+**         sqlca
+**         db2ReorgStruct
+**         db2RunstatsData
+**         db2ImportStruct
+**         db2ExportStruct
+**         db2InspectStruct
+**
+** OUTPUT FILE: tbrowcompress.out (available in the online documentation)
+*****************************************************************************
+**
+** For more information on the sample programs, see the README file.
+**
+** For information on developing C applications, see the Application
+** Development Guide.
+**
+** For information on using SQL statements, see the SQL Reference.
+**
+** For information on DB2 APIs, see the Administrative API Reference.
+**
+** For the latest information on programming, building, and running DB2 
+** applications, visit the DB2 application development website: 
+**     http://www.software.ibm.com/data/db2/udb/ad
+****************************************************************************/
+
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+#include <sqlenv.h>
+#include <sqlcodes.h>
+#include <sqlutil.h>
+#include <db2ApiDf.h>
+#include "utilemb.h"
+
+EXEC SQL INCLUDE SQLCA;
+
+EXEC SQL BEGIN DECLARE SECTION;
+  char strStmt[1000];
+  short len;
+  char  stmt[200];
+  char tableName[129];
+  char schemaName[129];
+  sqlint32 avgrowsize;
+  sqlint32  avgcompressedrowsize;
+  sqlint32 pctpagessaved;
+  sqlint32 avgrowcompressionratio;
+  sqlint32 pctrowscompressed;
+  sqlint32 emp_no;
+  double sal;
+EXEC SQL END DECLARE SECTION;
+
+/* Function prototypes */
+int GetLoadData(void);
+int EnableRowCompressionForTables(void);
+int DisableRowCompressionForTables(void);
+int InspectCompression(char *);
+int ReorgTable(void);
+int ImportData(void);
+int ExportData(void);
+int InspectTable(char *);
+
+int main(int argc, char *argv[])
+{
+  int rc = 0;
+  struct sqlca sqlca = {0};
+  char dbAlias[SQL_ALIAS_SZ + 1]; 
+  char user[USERID_SZ + 1];
+  char pswd[PSWD_SZ + 1];
+
+  /* Check the command line arguments */
+  rc = CmdLineArgsCheck1(argc, argv, dbAlias, user, pswd);
+  if (rc != 0)
+  {
+    return rc;
+  }
+
+  printf("\nTHIS SAMPLE SHOWS HOW TO USE ROW COMPRESSION ON A TABLE.\n");
+
+  /* Connect to the database */
+  rc = DbConn(dbAlias, user, pswd);
+  if (rc != 0)
+  {
+    return rc;
+  }
+
+  rc = GetLoadData();                   /* To load table data into a file. */
+  rc = EnableRowCompressionForTables(); /* To Enable Row Compression
+                                           on table.*/
+  rc = DisableRowCompressionForTables();/* To disable row compression on
+                                           tables.                         */
+  rc = InspectCompression(dbAlias);     /* To inspect the compression.     */
+
+  /* Disconnect from the database */
+  rc = DbDisconn(dbAlias);
+  if (rc != 0)
+  {
+    return rc;
+  }
+                                                                                
+  return 0;
+} /* End main */
+
+/* Prepare data for import */
+int GetLoadData()
+{
+  int rc = 0;
+  struct sqlca sqlca = {0};
+  char *dataFileName="dummy.del";
+
+  printf("\n-----------------------------------------------------------");
+  printf("\nUSE THE SQL STATEMENT:\n");
+  printf("  CREATE\n");
+  printf("TO CREATE A TABLE.\n");
+
+  printf("\n  Execute the statements:");
+  printf("\n    CREATE TABLE temp (empno INT, sal DOUBLE)");
+  printf("\n    COMMIT\n");
+
+  /* Create a temporary table */
+  strcpy(strStmt, "CREATE TABLE temp (empno INT, sal DOUBLE)");
+  EXEC SQL EXECUTE IMMEDIATE :strStmt;
+  EMB_SQL_CHECK("Create Table -- temp");
+
+  EXEC SQL COMMIT;
+  EMB_SQL_CHECK("Transaction -- Commit");
+
+  printf("\nUSE THE SQL STATEMENT:\n");
+  printf("  INSERT\n");
+  printf("TO INSERT DATA INTO A TABLE USING VALUES.\n");
+
+  printf("\n  Execute the statements:");
+  printf("\n    INSERT INTO temp VALUES(100, 20000)");
+  printf("\n    INSERT INTO temp VALUES(200, 30000)");
+  printf("\n    INSERT INTO temp VALUES(100, 30500)");
+  printf("\n    INSERT INTO temp VALUES(300, 20000)");
+  printf("\n    INSERT INTO temp VALUES(400, 30000)");
+  printf("\n    COMMIT\n");
+
+  /* Insert data into the table and export the data in order to obtain 
+     dummy.del file in the required format for load. */
+
+  strcpy(strStmt, "INSERT INTO temp VALUES(100, 20000)");
+  EXEC SQL EXECUTE IMMEDIATE :strStmt;
+  EMB_SQL_CHECK("INSERT INTO -- temp");
+
+  strcpy(strStmt, "INSERT INTO temp VALUES(200, 30000)");
+  EXEC SQL EXECUTE IMMEDIATE :strStmt;
+  EMB_SQL_CHECK("INSERT INTO -- temp");
+
+  strcpy(strStmt, "INSERT INTO temp VALUES(100, 30500)");
+  EXEC SQL EXECUTE IMMEDIATE :strStmt;
+  EMB_SQL_CHECK("INSERT INTO -- temp");
+
+  strcpy(strStmt, "INSERT INTO temp VALUES(300, 20000)");
+  EXEC SQL EXECUTE IMMEDIATE :strStmt;
+  EMB_SQL_CHECK("INSERT INTO -- temp");
+
+  strcpy(strStmt, "INSERT INTO temp VALUES(400, 30000)");
+  EXEC SQL EXECUTE IMMEDIATE :strStmt;
+  EMB_SQL_CHECK("INSERT INTO -- temp");
+
+  EXEC SQL COMMIT;
+  EMB_SQL_CHECK("Transaction -- Commit");
+
+  /* Export the data to a file dummy.del. */
+  rc = ExportData();
+
+  printf("\nUSE THE SQL STATEMENT:\n");
+  printf("  DROP\n");
+  printf("TO DROP A TABLE.\n");
+
+  printf("\n  Execute the statements:");
+  printf("\n    DROP TABLE temp");
+  printf("\n    COMMIT\n");
+
+  /* Drop the table. */
+  strcpy(strStmt, "DROP TABLE temp");
+  EXEC SQL EXECUTE IMMEDIATE :strStmt;
+  EMB_SQL_CHECK("Drop Table -- temp");
+
+  EXEC SQL COMMIT;
+  EMB_SQL_CHECK("Transaction -- Commit");
+
+  return rc;
+} /* End GetLoadData */
+
+/* How to enable row compression for a table */
+int EnableRowCompressionForTables()
+{
+  int rc = 0;
+  struct sqlca sqlca = {0};
+
+  printf("\n-----------------------------------------------------------");
+  printf("\nUSE THE SQL STATEMENT:\n");
+  printf("  CREATE\n");
+  printf("TO CREATE A TABLE WITHOUT ENABLING ROW COMPRESSION.\n");
+
+  printf("\n  Execute the statements:");
+  printf("\n    CREATE TABLE empl(emp_no INT, salary DOUBLE)");
+  printf("\n    COMMIT\n");
+
+  /* Create a table without enabling row compression.*/
+  strcpy(strStmt, "CREATE TABLE empl(emp_no INT, salary DOUBLE)");
+  EXEC SQL EXECUTE IMMEDIATE :strStmt;
+  EMB_SQL_CHECK("Create Table -- empl");
+
+  EXEC SQL COMMIT;
+  EMB_SQL_CHECK("Transaction -- Commit");
+
+  /* Perform a load operation to load five rows of data into emp.
+     (The file dummy.del contains five rows of data). */
+  rc = ImportData();
+
+  printf("\nUSE THE SQL STATEMENT:\n");
+  printf("  ALTER\n");
+  printf("TO ENABLE THE ROW COMPRESSION FOR A TABLE.\n");
+
+  printf("\n  Execute the statements:");
+  printf("\n    ALTER TABLE empl COMPRESS YES");
+  printf("\n    COMMIT\n");
+
+  /* Enable row compression on the table 'empl'.*/
+  strcpy(strStmt, "ALTER TABLE empl COMPRESS YES");
+  EXEC SQL EXECUTE IMMEDIATE :strStmt;
+  EMB_SQL_CHECK("Alter Table -- Compress Yes");
+
+  EXEC SQL COMMIT;
+  EMB_SQL_CHECK("Transaction -- Commit");
+
+  /* Perform non-inplace reorg to compress rows and to retain 
+     existing dictionary. */
+  rc = ReorgTable();
+ 
+  printf("\nUSE THE SQL STATEMENT:\n");
+  printf("  DROP\n");
+  printf("TO DROP A TABLE.\n");
+
+  printf("\n  Execute the statements:");
+  printf("\n    DROP TABLE empl");
+  printf("\n    COMMIT\n");
+
+  /* Drop the table. */
+  strcpy(strStmt, "DROP TABLE empl");
+  EXEC SQL EXECUTE IMMEDIATE :strStmt;
+  EMB_SQL_CHECK("Drop Table -- empl");
+
+  EXEC SQL COMMIT;
+  EMB_SQL_CHECK("Transaction -- Commit");
+
+  return rc;
+
+} /* End EnableRowCompressionForTables */
+
+/* How to disable row compression for a table */
+int DisableRowCompressionForTables()
+{
+  int rc = 0;
+  struct sqlca sqlca = {0};
+
+  printf("\n-----------------------------------------------------------");
+  printf("\nUSE THE SQL STATEMENT:\n");
+  printf("  CREATE\n");
+  printf("TO CREATE A TABLE WITH ROW COMPRESSION ENABLED.\n");
+
+  printf("\n  Execute the statements:");
+  printf("\n    CREATE TABLE empl(emp_no INT, salary DOUBLE) COMPRESS YES");
+  printf("\n    COMMIT\n");
+
+  /* Create a table with row compression enabled.*/
+  strcpy(strStmt, "CREATE TABLE empl(emp_no INT, salary DOUBLE) ");
+  strcat(strStmt, "COMPRESS YES");
+  EXEC SQL EXECUTE IMMEDIATE :strStmt;
+  EMB_SQL_CHECK("Create Table -- empl");
+
+  EXEC SQL COMMIT;
+  EMB_SQL_CHECK("Transaction -- Commit");
+
+  /* Import data into table.*/
+  rc = ImportData();
+
+  /* Perform reorg to compress rows.*/
+  rc = ReorgTable();
+
+  printf("\nUSE THE SQL STATEMENT:\n");
+  printf("  INSERT\n");
+  printf("TO INSERT DATA INTO THE TABLE.\n");
+
+  printf("\n  Execute the statements:");
+  printf("\n    INSERT INTO empl VALUES(400, 30000)");
+  printf("\n    COMMIT\n");
+
+  /* Perform modifications on table.*/
+  strcpy(strStmt, "INSERT INTO empl VALUES(400, 30000)");
+  EXEC SQL EXECUTE IMMEDIATE :strStmt;
+  EMB_SQL_CHECK("INSERT INTO -- empl");
+
+  EXEC SQL COMMIT;
+  EMB_SQL_CHECK("Transaction -- Commit");
+
+  printf("\nUSE THE SQL STATEMENT:\n");
+  printf("  UPDATE\n");
+  printf("TO MODIFY THE VALUES IN A TABLE.\n");
+
+  printf("\n  Execute the statements:");
+  printf("\n    UPDATE empl SET salary = salary + 1000");
+  printf("\n    COMMIT\n");
+
+  strcpy(strStmt, "UPDATE empl SET salary = salary + 1000");
+  EXEC SQL EXECUTE IMMEDIATE :strStmt;
+  EMB_SQL_CHECK("Update -- empl");
+
+  EXEC SQL COMMIT;
+  EMB_SQL_CHECK("Transaction -- Commit");
+
+  printf("\nUSE THE SQL STATEMENT:\n");
+  printf("  DELETE\n");
+  printf("TO DELETE THE DATA FROM A TABLE.\n");
+
+  printf("\n  Execute the statements:");
+  printf("\n    DELETE FROM empl WHERE emp_no = 200");
+  printf("\n    COMMIT\n");
+
+  strcpy(strStmt, "DELETE FROM empl WHERE emp_no = 200");
+  EXEC SQL EXECUTE IMMEDIATE :strStmt;
+  EMB_SQL_CHECK("Delete From -- empl");
+
+  EXEC SQL COMMIT;
+  EMB_SQL_CHECK("Transaction -- Commit");
+
+  printf("\nUSE THE SQL STATEMENT:\n");
+  printf("  ALTER\n");
+  printf("TO DISABLE THE ROW COMPRESSION FOR THE TABLE.\n");
+
+  printf("\n  Execute the statements:");
+  printf("\n    ALTER TABLE empl COMPRESS NO");
+  printf("\n    COMMIT\n");
+
+  /* Disable row compression for the table.*/
+  strcpy(strStmt, "ALTER TABLE empl COMPRESS NO");
+  EXEC SQL EXECUTE IMMEDIATE :strStmt;
+  EMB_SQL_CHECK("Alter Table -- Compress No");
+
+  EXEC SQL COMMIT;
+  EMB_SQL_CHECK("Transaction -- Commit");
+
+  /* Perform reorg to remove existing dictionary.
+     New dictionary will be created and all the rows processed by the reorg 
+     are decompressed. */
+  rc = ReorgTable();
+
+  printf("\nUSE THE SQL STATEMENT:\n");
+  printf("  DROP\n");
+  printf("TO DROP THE TABLE.\n");
+
+  printf("\n  Execute the statements:");
+  printf("\n    DROP TABLE empl");
+  printf("\n    COMMIT\n");
+
+  /* Drop the table.*/
+  strcpy(strStmt, "DROP TABLE empl");
+  EXEC SQL EXECUTE IMMEDIATE :strStmt;
+  EMB_SQL_CHECK("Drop Table -- empl");
+
+  EXEC SQL COMMIT;
+  EMB_SQL_CHECK("Transaction -- Commit");
+
+  return rc;
+} /* End DisableRowCompressionForTables */
+
+/* Inspect the extent of row compression for a table */
+int InspectCompression(char dbAlias[])
+{
+  int rc = 0;
+  struct sqlca sqlca = {0};
+
+  printf("\n-----------------------------------------------------------");
+  printf("\nUSE THE SQL STATEMENT:\n");
+  printf("  CREATE\n");
+  printf("TO CREATE A TABLE.\n");
+
+  printf("\n  Execute the statements:");
+  printf("\n    CREATE TABLE empl(emp_no INT, salary DOUBLE)");
+  printf("\n    COMMIT\n");
+
+  /* Create a table, load data, perform some modifications on the table.
+     All the rows will be in non-compressed state till reorg is performed.*/
+  strcpy(strStmt, "CREATE TABLE empl(emp_no INT, salary DOUBLE)");
+  EXEC SQL EXECUTE IMMEDIATE :strStmt;
+  EMB_SQL_CHECK("Create Table -- empl");
+
+  EXEC SQL COMMIT;
+  EMB_SQL_CHECK("Transaction -- Commit");
+
+  /* Import Data from file 'dummy.del' */
+  rc = ImportData();
+
+  printf("\nUSE THE SQL STATEMENT:\n");
+  printf("  ALTER\n");
+  printf("TO ENABLE THE ROW COMPRESSION FOR A TABLE.\n");
+
+  printf("\n  Execute the statements:");
+  printf("\n    ALTER TABLE empl COMPRESS YES");
+  printf("\n    COMMIT\n");
+
+  strcpy(strStmt, "ALTER TABLE empl COMPRESS YES");
+  EXEC SQL EXECUTE IMMEDIATE :strStmt;
+  EMB_SQL_CHECK("Alter Table -- Compress Yes");
+
+  EXEC SQL COMMIT;
+  EMB_SQL_CHECK("Transaction -- Commit");
+
+  printf("\nUSE THE SQL STATEMENT:\n");
+  printf("  INSERT\n");
+  printf("TO INSERT DATA INTO THE TABLE.\n");
+
+  printf("\n  Execute the statements:");
+  printf("\n    INSERT INTO empl VALUES(400, 30000)");
+  printf("\n    COMMIT\n");
+
+  strcpy(strStmt, "INSERT INTO empl VALUES(400, 30000)");
+  EXEC SQL EXECUTE IMMEDIATE :strStmt;
+  EMB_SQL_CHECK("Insert Into -- empl");
+
+  EXEC SQL COMMIT;
+  EMB_SQL_CHECK("Transaction -- Commit");
+
+  /* Perform inspect to estimate the effectiveness of compression.
+     Inspect has to be run before the REORG utility.
+     Inspect allows you to look over tablespaces and tables for their
+     architectural integrity.
+     'ResultOutput.txt' file contains percentage of bytes saved from compression,
+     Percentage of rows ineligible for compression due to small row size,
+     Compression dictionary size, Expansion dictionary size etc.
+     To view the contents of 'ResultOutput.txt' file perform
+     db2inspf ResultOutput.txt FormattedOutput.txt;
+     This formats the 'ResultOutput.txt' file to readable form. */
+  rc = InspectTable(dbAlias);
+
+  /* Perform Reorg on the table  */
+  rc = ReorgTable();
+
+  printf("\nUSE THE SQL STATEMENT:\n");
+  printf("  INSERT\n");
+  printf("TO INSERT DATA INTO THE TABLE.\n");
+
+  printf("\n  Execute the statements:");
+  printf("\n    INSERT INTO empl VALUES(500, 40000)");
+  printf("\n    COMMIT\n");
+
+  /* All the rows will be compressed including the one inserted after
+     reorg.*/
+  strcpy(strStmt, "INSERT INTO empl VALUES(500, 40000)");
+  EXEC SQL EXECUTE IMMEDIATE :strStmt;
+  EMB_SQL_CHECK("INSERT INTO -- empl");
+
+  EXEC SQL COMMIT;
+  EMB_SQL_CHECK("Transaction -- Commit");
+
+  printf("\nUSE THE SQL STATEMENT:\n");
+  printf("  ALTER\n");
+  printf("TO DISABLE ROW COMPRESSION FOR A TABLE.\n");
+
+  printf("\n  Execute the statements:");
+  printf("\n    ALTER TABLE empl COMPRESS NO");
+  printf("\n    COMMIT\n");
+
+  /* Disable row compression for the table.
+     Rows inserted after this will be non-compressed. */
+  strcpy(strStmt, "ALTER TABLE empl COMPRESS NO");
+  EXEC SQL EXECUTE IMMEDIATE :strStmt;
+  EMB_SQL_CHECK("Alter Table -- Compress No");
+
+  EXEC SQL COMMIT;
+  EMB_SQL_CHECK("Transaction -- Commit");
+
+  printf("\nUSE THE SQL STATEMENT:\n");
+  printf("  INSERT\n");
+  printf("TO INSERT DATA INTO THE TABLE.\n");
+
+  printf("\n  Execute the statements:");
+  printf("\n    INSERT INTO empl VALUES(600, 40500)");
+  printf("\n    COMMIT\n");
+
+  strcpy(strStmt, "INSERT INTO empl VALUES(600, 40500)");
+  EXEC SQL EXECUTE IMMEDIATE :strStmt;
+  EMB_SQL_CHECK("INSERT INTO-- empl");
+
+  EXEC SQL COMMIT;
+  EMB_SQL_CHECK("Transaction -- Commit");
+
+  printf("\nUSE THE SQL STATEMENT:\n");
+  printf("  ALTER\n");
+  printf("TO ENABLE ROW COMPRESSION FOR A TABLE.\n");
+
+  printf("\n  Execute the statements:");
+  printf("\n    ALTER TABLE empl COMPRESS YES");
+  printf("\n    COMMIT\n");
+
+  /* Enable row compression again to compress the rows inserted later.*/
+  strcpy(strStmt, "ALTER TABLE empl COMPRESS YES");
+  EXEC SQL EXECUTE IMMEDIATE :strStmt;
+  EMB_SQL_CHECK("Alter table -- Compress Yes");
+
+  EXEC SQL COMMIT;
+  EMB_SQL_CHECK("Transaction -- Commit");
+
+  printf("\nUSE THE SQL STATEMENT:\n");
+  printf("  INSERT\n");
+  printf("TO INSERT DATA INTO THE TABLE.\n");
+
+  printf("\n  Execute the statements:");
+  printf("\n    INSERT INTO empl VALUES(700, 40600)");
+  printf("\n    COMMIT\n");
+
+  strcpy(strStmt, "INSERT INTO empl VALUES(700, 40600)");
+  EXEC SQL EXECUTE IMMEDIATE :strStmt;
+  EMB_SQL_CHECK("INSERT INTO -- empl");
+
+  EXEC SQL COMMIT;
+  EMB_SQL_CHECK("Transaction -- Commit");
+
+  /* Perform runstats to measure the effectiveness of compression using
+     compression related catalog fields. New columns will be updated to
+     catalog table after runstats if performed on a compressed table. */
+  rc = TbRunstats();
+
+  /* Display the contents of 'empl' table.*/
+  printf("\nUSE THE SQL STATEMENT:\n");
+  printf("  SELECT\n");
+  printf("TO SELECT ROWS FROM A TABLE.\n");
+
+  printf("\n  Execute the statement");
+  printf("\n    SELECT * FROM empl");
+
+  printf("\n\n  Results:\n");
+  printf("   EMP_NO  SALARY\n");
+  printf("   ------  ------\n");
+
+  strcpy(strStmt,"SELECT * FROM empl");
+
+  EXEC SQL PREPARE stmt FROM :strStmt;
+  EXEC SQL COMMIT;
+
+  /* Declare the cursor */
+  EXEC SQL DECLARE c1 CURSOR FOR stmt;
+  EXEC SQL COMMIT;
+
+  /* Open cursor */
+  EXEC SQL OPEN c1;
+  EMB_SQL_CHECK("cursor -- open");
+
+  /* Fetch cursor */
+  EXEC SQL FETCH c1 INTO :emp_no, :sal;
+  EMB_SQL_CHECK("cursor -- fetch");
+
+  while (sqlca.sqlcode != 100)
+  {
+    printf("      %d %6.2f\n",emp_no, sal);
+
+    EXEC SQL FETCH c1 INTO :emp_no, :sal;
+    EMB_SQL_CHECK("cursor -- fetch");
+
+  }
+
+  /* Close cursor */
+  EXEC SQL CLOSE c1;
+  EMB_SQL_CHECK("cursor -- close");
+
+
+  /* Display the contents of 'SYSCAT.TABLES' to measure effectiveness
+     of compression. */
+  printf("\nUSE THE SQL STATEMENT:\n");
+  printf("  SELECT\n");
+  printf("TO SELECT ROWS FROM A TABLE.\n");
+
+  printf("\n  Execute the statement\n");
+  printf("    SELECT avgrowsize, avgcompressedrowsize, pctpagessaved,\n"
+         "           avgrowcompressionratio,pctrowscompressed \n"
+         "      FROM SYSCAT.TABLES WHERE tabname = 'EMPL'");
+
+  printf("\n\n  Results:\n");
+  printf("    AvRowSize AvCmprsdRowSize PerPgSaved"
+            " AvgRowCmprRatio PerRowsCmprsd\n");
+  printf("    --------- --------------- ----------"
+            " --------------- -------------\n");
+
+  /* Declare the cursor */
+  EXEC SQL DECLARE c CURSOR FOR SELECT avgrowsize,
+                                       avgcompressedrowsize,
+                                       pctpagessaved,
+                                       avgrowcompressionratio,
+                                       pctrowscompressed
+             FROM SYSCAT.TABLES WHERE tabname = 'EMPL';
+
+  /* Open cursor */
+  EXEC SQL OPEN c;
+  EMB_SQL_CHECK("cursor -- open");
+
+  /* Fetch cursor */
+  EXEC SQL FETCH c INTO :avgrowsize,
+                        :avgcompressedrowsize,
+                        :pctpagessaved,
+                        :avgrowcompressionratio,
+                        :pctrowscompressed;
+  EMB_SQL_CHECK("cursor -- fetch");
+
+  while (sqlca.sqlcode != 100)
+  {
+    printf("        %d %11d %13d  %10d   %14d\n", avgrowsize,
+                                                  avgcompressedrowsize,
+                                                  pctpagessaved,
+                                                  avgrowcompressionratio,
+                                                  pctrowscompressed);
+
+    EXEC SQL FETCH c INTO :avgrowsize,
+                          :avgcompressedrowsize,
+                          :pctpagessaved,
+                          :avgrowcompressionratio,
+                          :pctrowscompressed;
+  EMB_SQL_CHECK("cursor -- fetch");
+
+  }
+
+  /* Close cursor */
+  EXEC SQL CLOSE c;
+  EMB_SQL_CHECK("cursor -- close");
+
+  printf("\nUSE THE SQL STATEMENT:\n");
+  printf("  DROP\n");
+  printf("TO DROP A TABLE.\n");
+
+  printf("\n  Execute the statements:");
+  printf("\n    DROP TABLE empl");
+  printf("\n    COMMIT\n");
+
+  /* Drop the table. */
+  strcpy(strStmt, "DROP TABLE empl");
+  EXEC SQL EXECUTE IMMEDIATE :strStmt;
+  EMB_SQL_CHECK("Drop Table -- empl");
+
+  EXEC SQL COMMIT;
+  EMB_SQL_CHECK("Transaction -- Commit");
+
+  return rc;
+} /* End InspectCompression */
+
+/* Reorganize a table and update its statistics */
+int ReorgTable()
+{
+  int rc = 0;
+  struct sqlca sqlca;
+  db2ReorgStruct paramStruct;
+  db2Uint32 versionNumber = db2Version1010;
+
+  printf("\nUSE THE DB2 API:\n");
+  printf("  db2Reorg -- Reorganize a Table or Index\n");
+  printf("TO REORGANIZE A TABLE OR INDEX.\n");
+
+  strcpy(tableName, "empl");
+  
+  printf("  Reorganize the table: %s\n", tableName);
+
+  /* Setup parameters */
+  memset(&paramStruct, '\0', sizeof(paramStruct));
+  paramStruct.reorgObject.tableStruct.pTableName    = tableName;
+  paramStruct.reorgObject.tableStruct.pOrderByIndex = NULL;
+  paramStruct.reorgObject.tableStruct.pSysTempSpace = NULL;
+  paramStruct.reorgType    = DB2REORG_OBJ_TABLE_OFFLINE;
+  paramStruct.reorgFlags   = DB2REORG_KEEP_DICTIONARY;
+  paramStruct.nodeListFlag = DB2_ALL_NODES;
+  paramStruct.numNodes     = 0;
+  paramStruct.pNodeList    = NULL;
+
+  /* Reorganize table. */
+  rc = db2Reorg(versionNumber, &paramStruct, &sqlca);
+  DB2_API_CHECK("table -- reorganize");
+  
+  return 0;
+} /* End ReorgTable */
+
+/* Imports data from a file into a table */
+int ImportData()
+{ 
+  int rc = 0;
+  struct sqlca sqlca = {0};
+  struct sqldcol dataDescriptor = {0};
+  char actionString[256];
+  struct sqlchar *pAction = {0};
+  char msgFileName[128];
+  struct db2ImportIn inputInfo = {0};
+  struct db2ImportOut outputInfo = {0};
+  struct db2ImportStruct importParmStruct = {0};
+  int commitcount = 10;
+  char *dataFileName="dummy.del"; /* The file 'dummy.del' contains
+                                     imported table data.           */
+  
+  printf("\nUSE THE DB2 API:\n");
+  printf("  db2Import -- Import\n");
+  printf("TO IMPORT DATA TO A TABLE.\n");
+
+  /* Import table */
+  dataDescriptor.dcolmeth = SQL_METH_D;
+  strcpy(actionString, "INSERT INTO empl");
+  pAction = (struct sqlchar *)malloc(sizeof(short) +
+                                     sizeof(actionString) + 1);
+  pAction->length = strlen(actionString);
+  strcpy(pAction->data, actionString);
+  strcpy(msgFileName, "tbimport.MSG");
+
+  /* Setup db2ImportIn structure */
+  inputInfo.iRowcount     = inputInfo.iRestartcount = 0;
+  inputInfo.iSkipcount    = inputInfo.iWarningcount = 0;
+  inputInfo.iNoTimeout    = 0;
+  inputInfo.iAccessLevel  = SQLU_ALLOW_NO_ACCESS;
+  inputInfo.piCommitcount = &commitcount;
+
+  printf("\n    Import table.\n");
+  printf("    client source file name : %s\n", dataFileName);
+  printf("    action                  : %s\n", actionString);
+  printf("    client message file name: %s\n", msgFileName);
+
+  importParmStruct.piDataFileName    = dataFileName;
+  importParmStruct.piLobPathList     = NULL;
+  importParmStruct.piDataDescriptor  = &dataDescriptor;
+  importParmStruct.piActionString    = pAction;
+  importParmStruct.piFileType        = SQL_DEL;
+  importParmStruct.piFileTypeMod     = NULL;
+  importParmStruct.piMsgFileName     = msgFileName;
+  importParmStruct.piImportInfoIn    = &inputInfo;
+  importParmStruct.poImportInfoOut   = &outputInfo;
+  importParmStruct.piNullIndicators  = NULL;
+  importParmStruct.iCallerAction     = SQLU_INITIAL;
+
+  /* Import table */
+  db2Import(db2Version1010,
+            &importParmStruct,
+            &sqlca);
+
+  DB2_API_CHECK("table -- import");
+
+  /* Free memory allocated */
+  free(pAction);
+
+  /* Display import info */
+  printf("\n    Import info.\n");
+  printf("    rows read     : %ld\n", (int)outputInfo.oRowsRead);
+  printf("    rows skipped  : %ld\n", (int)outputInfo.oRowsSkipped);
+  printf("    rows inserted : %ld\n", (int)outputInfo.oRowsInserted);
+  printf("    rows updated  : %ld\n", (int)outputInfo.oRowsUpdated);
+  printf("    rows rejected : %ld\n", (int)outputInfo.oRowsRejected);
+  printf("    rows committed: %ld\n", (int)outputInfo.oRowsCommitted);
+
+  return 0;
+} /* End ImportData */
+
+/* Exports the table data into a file */
+int ExportData()
+{
+  int rc = 0;
+  struct sqlca sqlca = {0};
+  struct sqldcol dataDescriptor = {0};
+  char actionString[256];
+  struct sqllob *pAction = {0};
+  char msgFileName[128];
+  struct db2ExportOut outputInfo = {0};
+  struct db2ExportStruct exportParmStruct = {0};
+  char *dataFileName="dummy.del"; /* The file 'dummmy.del' will contain 
+                                     exported table data. */
+
+  printf("\nUSE THE DB2 API:\n");
+  printf("  db2Export -- Export\n");
+  printf("TO EXPORT DATA TO A FILE.\n");
+
+  printf("\n    Be sure to complete all table operations and release\n");
+  printf("  all locks before starting an export operation. This\n");
+  printf("  can be done by issuing a COMMIT after closing all\n");
+  printf("  cursors opened WITH HOLD, or by issuing a ROLLBACK.\n");
+  printf("  Please refer to the 'Administrative API Reference'\n");
+  printf("  for the details.\n");
+
+  /* Export data */
+  dataDescriptor.dcolmeth = SQL_METH_D;
+  strcpy(actionString, "SELECT * FROM temp");
+  pAction = (struct sqllob *)malloc(sizeof(sqluint32) +
+                                     sizeof(actionString) + 1);
+  pAction->length = strlen(actionString);
+  strcpy(pAction->data, actionString);
+  strcpy(msgFileName, "tbexport.MSG");
+
+  exportParmStruct.piDataFileName    = dataFileName;
+  exportParmStruct.piLobPathList     = NULL;
+  exportParmStruct.piLobFileList     = NULL;
+  exportParmStruct.piDataDescriptor  = &dataDescriptor;
+  exportParmStruct.piActionString    = pAction;
+  exportParmStruct.piFileType        = SQL_DEL;
+  exportParmStruct.piFileTypeMod     = NULL;
+  exportParmStruct.piMsgFileName     = msgFileName;
+  exportParmStruct.iCallerAction     = SQLU_INITIAL;
+  exportParmStruct.poExportInfoOut   = &outputInfo;
+
+  printf("\n    Export data.\n");
+  printf("    client destination file name: %s\n", dataFileName);
+  printf("    action                      : %s\n", actionString);
+  printf("    client message file name    : %s\n", msgFileName);
+
+  /* Export data */
+  db2Export(db2Version1010,
+            &exportParmStruct,
+            &sqlca);
+
+  DB2_API_CHECK("data -- export");
+
+  /* Free memory allocated */
+  free(pAction);
+
+  return 0;
+} /* End ExportData */
+
+/* Performs an inspect on the table for architectural integrity */
+int InspectTable(char dbAlias[])
+{
+  int rc = 0;
+  struct sqlca sqlca;
+
+  char *diagpath;
+
+  #if (defined(DB2NT))
+    char *db2path; /* Path where db2 is installed */
+    char *db2instance;
+  #else
+    char *home; /* Instance owners home directory */
+  #endif
+
+  /* Declare and initialize a 'db2InspectStruct' structure 'inspectstruct' */
+  db2InspectStruct inspectStruct = {0};
+  char cmd1[256];
+  char cmd2[256];
+  
+  db2CfgParam cfgParameters[1];
+  db2Cfg cfgStruct;
+
+  /* Initialize cfgParameters */
+  cfgParameters[0].flags = 0;
+  cfgParameters[0].token = SQLF_KTN_DIAGPATH;
+  cfgParameters[0].ptrvalue =
+    (char *)malloc(sizeof(char) * (SQL_FFDCPATH_SZ + 1));
+
+  /* Initialize cfgStruct */
+  cfgStruct.numItems = 1;
+  cfgStruct.paramArray = cfgParameters;
+  cfgStruct.flags = db2CfgDatabaseManager;
+  cfgStruct.dbname = dbAlias;
+
+  /* Try getting the diagpath from db2CfgGet */
+  db2CfgGet(db2Version1010, (void *)&cfgStruct, &sqlca);
+  DB2_API_CHECK("DBM Config. Defaults -- Get");
+
+  diagpath = cfgStruct.paramArray[0].ptrvalue;
+
+  /* If diagpath wasn't obtainable from db2CfgGet, set diagpath to the
+     default value (operating system dependent) */
+  if(diagpath[0] == '\0')
+  {
+    #if(defined(DB2NT))
+      db2path = getenv("DB2PATH");
+      db2instance = getenv("DB2INSTANCE");
+      if(db2path == NULL || db2instance == NULL)
+      {
+        printf("\nError getting the diagpath, exiting.");
+        return 1;
+      }
+      sprintf(diagpath, "%s\\%s\\", db2path, db2instance);
+    #else
+      home = getenv("HOME");
+      if(home == NULL)
+      {
+        printf("\nError getting the diagpath, exiting.");
+        return 1;
+      }
+      sprintf(diagpath, "%s/sqllib/db2dump/", home);
+    #endif
+  }
+
+  /* "db2inspf" utility will be used to format the Result file
+     into formatted text file. */
+  sprintf(cmd1, "db2inspf \"%sResultOutput.txt\" FormattedOutput.txt", diagpath);
+
+  /* This option specifies the inspect action. This value estimates
+     the effectiveness of row compression on the table. */
+  inspectStruct.iAction = DB2INSPECT_ACT_ROWCMPEST_TBL;
+
+  /* The table name for which row compression is being estimated. */                 
+  inspectStruct.piTableName = "empl";
+
+  inspectStruct.piSchemaName        = NULL;
+  inspectStruct.iBeginCheckOption   = DB2INSPECT_BEGIN_FROM_START;
+  inspectStruct.iAllNodeFlag        = DB2_ALL_NODES;
+  inspectStruct.piResultsName       = "ResultOutput.txt";
+  inspectStruct.piDataFileName      = NULL;
+  inspectStruct.iObjectErrorState   = DB2INSPECT_ERROR_STATE_NORMAL;
+  inspectStruct.iLevelObjectData    = DB2INSPECT_LEVEL_NORMAL;
+  inspectStruct.iLevelObjectBlkMap  = DB2INSPECT_LEVEL_NORMAL;
+  inspectStruct.iLevelObjectIndex   = DB2INSPECT_LEVEL_NORMAL;
+  inspectStruct.iLevelObjectLong    = DB2INSPECT_LEVEL_NORMAL;
+  inspectStruct.iLevelObjectLOB     = DB2INSPECT_LEVEL_NORMAL;
+  inspectStruct.iLevelExtentMap     = DB2INSPECT_LEVEL_NORMAL;
+  inspectStruct.iKeepResultfile     = DB2INSPECT_RESFILE_KEEP_ALWAYS;
+  inspectStruct.iLimitErrorReported = DB2INSPECT_LIMIT_ERROR_DEFAULT;
+
+  printf(
+    "\n    CALL THE DB2 API 'db2Inspect' TO CHECK THE ARCHITECTURAL"
+    " INTEGRITY"
+    "\n    OF THE TABLE 'empl' WHICH STORES THE RESULTS IN THE FILE"
+    " 'ResultOutput.txt'\n");
+
+  /* Use the DB2 API db2Inspect */
+  db2Inspect(db2Version1010, (void *)&inspectStruct, &sqlca);
+  DB2_API_CHECK("DB -- INSPECT");
+
+  /* Invoke the db2inspf command to format the result file
+     'ResultOutput.txt' */
+  printf(
+    "\n    FORMAT THE UNFORMATTED RESULT FILE"
+    " 'ResultOutput.txt' AND"
+    "\n    SAVE IT IN A FILE 'FormattedOutput.txt' BY ISSUING THE COMMAND:\n"
+    "\n        %s\n",cmd1);
+  rc = system(cmd1);
+
+  /* Remove the file 'ResultOutput.txt'.
+     In case of MPP environment, no. of result files created will be equal
+     to the no. of nodes available, so ResultOutput.* will remove all the
+     files created. */
+  #if (defined(DB2NT))
+    sprintf(cmd2, "del \"%sResultOutput.*\"", diagpath);
+  #else
+    sprintf(cmd2, "rm -f %sResultOutput.*", diagpath);
+  #endif
+  rc = system(cmd2);
+
+  return 0;
+} /* End InspectTable */ 
+
+/* Performs Runstats on the table */
+int TbRunstats(void)
+{
+  int rc = 0;
+  struct sqlca sqlca;
+  char fullTableName[258];
+  db2Uint32 versionNumber = db2Version1010;
+  db2RunstatsData runStatData = {0};
+  db2ColumnData *columnList;
+
+  printf("\nUSE THE DB2 API:\n");
+  printf("  db2Runstats -- Runstats\n");
+  printf("TO UPDATE THE STATISTICS OF A TABLE.\n");
+
+  /* Get fully qualified name of the table */
+  strcpy(tableName, "EMPL");
+  rc = SchemaNameGet();
+  if (rc != 0)
+  {
+    return rc;
+  }
+
+  strcpy(fullTableName, schemaName);
+  strcat(fullTableName, ".");
+  strcat(fullTableName, tableName);
+
+  printf("  Update statistics for the table: %s\n", fullTableName);
+
+  columnList = (struct db2ColumnData *)malloc(sizeof(struct db2ColumnData));
+  columnList->piColumnName = (unsigned char *)"emp_no";
+  columnList->iColumnFlags = DB2RUNSTATS_COLUMN_LIKE_STATS;
+
+  printf("\nPerforming runstats on table EMPLOYEE for column emp_no\n");
+  printf("with the following options:\n");
+  printf("    Distribution statistics for all partitions\n");
+  printf("    Frequent values for table set to 30\n");
+  printf("    Quantiles for table set to -1 (NUM_QUANTILES as in DB Cfg)\n");
+  printf("    Allow others to have read-only while gathering statistics\n");
+
+  /* Runstats on table */
+  runStatData.iIndexSamplingOption     = 0;
+  runStatData.iSamplingOption          = 0;
+  runStatData.piTablename              = (unsigned char *) fullTableName;
+  runStatData.piColumnList             = NULL;
+  runStatData.piColumnDistributionList = NULL;
+  runStatData.piColumnGroupList        = NULL;
+  runStatData.piIndexList              = NULL;
+  runStatData.iRunstatsFlags           = DB2RUNSTATS_ALL_COLUMNS |
+                       DB2RUNSTATS_DISTRIBUTION | DB2RUNSTATS_ALLOW_READ;
+  runStatData.iNumColumns              = 0;
+  runStatData.iNumColdist              = 0;
+  runStatData.iNumColGroups            = 0;
+  runStatData.iNumIndexes              = 0;
+  runStatData.iParallelismOption       = 0;
+  runStatData.iTableDefaultFreqValues  = 30;
+  runStatData.iTableDefaultQuantiles   = -1;
+  runStatData.iUtilImpactPriority      = 100;
+
+  db2Runstats(versionNumber, &runStatData, &sqlca);
+
+  DB2_API_CHECK("table -- runstats");
+
+  free(columnList);
+
+  return rc;
+} /* End TbRunstats */
+
+
+/* Gets the schema name of the table */
+int SchemaNameGet(void)
+{
+  struct sqlca sqlca;
+
+  /* Get table schema name */
+  EXEC SQL SELECT tabschema INTO :schemaName
+    FROM syscat.tables
+    WHERE tabname = :tableName;
+  EMB_SQL_CHECK("table schema name -- get");
+
+  /* Get rid of spaces from the end of schemaName */
+  strtok(schemaName, " ");
+
+  return 0;
+} /* End SchemaNameGet */

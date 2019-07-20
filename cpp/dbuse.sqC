@@ -1,0 +1,497 @@
+/****************************************************************************
+** (c) Copyright IBM Corp. 2007 All rights reserved.
+** 
+** The following sample of source code ("Sample") is owned by International 
+** Business Machines Corporation or one of its subsidiaries ("IBM") and is 
+** copyrighted and licensed, not sold. You may use, copy, modify, and 
+** distribute the Sample in any form without payment to IBM, for the purpose of 
+** assisting you in the development of your applications.
+** 
+** The Sample code is provided to you on an "AS IS" basis, without warranty of 
+** any kind. IBM HEREBY EXPRESSLY DISCLAIMS ALL WARRANTIES, EITHER EXPRESS OR 
+** IMPLIED, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED WARRANTIES OF 
+** MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE. Some jurisdictions do 
+** not allow for the exclusion or limitation of implied warranties, so the above 
+** limitations or exclusions may not apply to you. IBM shall not be liable for 
+** any damages you suffer as a result of using, copying, modifying or 
+** distributing the Sample, even if IBM has been advised of the possibility of 
+** such damages.
+*****************************************************************************
+**
+** SOURCE FILE NAME: dbuse.sqC 
+**    
+** SAMPLE: How to use a database 
+**           
+** SQL STATEMENTS USED:
+**         CREATE TABLE
+**         DROP
+**         DELETE
+**         PREPARE
+**         EXECUTE
+**         EXECUTE IMMEDIATE
+**         COMPOUND SQL (EMBEDDED)
+**
+** OUTPUT FILE: dbuse.out (available in the online documentation)
+*****************************************************************************
+**
+** For more information on the sample programs, see the README file.
+**
+** For information on developing C++ applications, see the Application
+** Development Guide.
+**
+** For information on using SQL statements, see the SQL Reference.
+**
+** For the latest information on programming, compiling, and running DB2
+** applications, visit the DB2 application development website at
+**     http://www.software.ibm.com/data/db2/udb/ad
+****************************************************************************/
+
+#include <string.h>
+#include <sqlenv.h>
+#include <sqlutil.h>
+#include "utilemb.h"
+#if ((__cplusplus >= 199711L) && !defined DB2HP && !defined DB2AIX) || \
+    (DB2LINUX && (__LP64__ || (__GNUC__ >= 3)) )
+   #include <iostream>
+   using namespace std; 
+#else
+   #include <iostream.h>
+#endif
+
+class DbUse
+{
+  public:
+    int StaticStmtInvoke();
+    int StaticStmtWithHostVarsInvoke();
+    int DynamicStmtEXECUTE_IMMEDIATE();
+    int DynamicStmtEXECUTE();
+    int DynamicStmtWithMarkersEXECUTEusingHostVars();
+    int DynamicStmtWithMarkersEXECUTEusingSQLDA();
+    int CompoundStmtInvoke();
+};
+
+int DbUse::StaticStmtInvoke()
+{
+  struct sqlca sqlca;
+
+  cout << "\n-----------------------------------------------------------";
+  cout << "\nUSE THE SQL STATEMENTS:" << endl;
+  cout << "  CREATE TABLE" << endl;
+  cout << "  DROP TABLE" << endl;
+  cout << "TO SHOW HOW TO EXECUTE STATIC SQL STATEMENTS." << endl;
+
+  // create a table
+  cout << "\n  Execute the statement" << endl;
+  cout << "    CREATE TABLE table1(col1 INTEGER)" << endl;
+
+  EXEC SQL CREATE TABLE table1(col1 INTEGER);
+  EMB_SQL_CHECK("CREATE TABLE -- Invoke");
+
+  // commit the transaction
+  cout << "  Execute COMMIT." << endl;
+
+  EXEC SQL COMMIT;
+  EMB_SQL_CHECK("CREATE TABLE -- Commit");
+
+  // drop a table
+  cout << "\n  Execute the statement" << endl;
+  cout << "    DROP TABLE table1" << endl;
+
+  EXEC SQL DROP TABLE table1;
+  EMB_SQL_CHECK("DROP TABLE -- Invoke");
+
+  // commit the transaction
+  cout << "  Execute COMMIT." << endl;
+
+  EXEC SQL COMMIT;
+  EMB_SQL_CHECK("DROP TABLE -- Commit");
+
+  return 0;
+} //DbUse::StaticStmtInvoke
+
+int DbUse::StaticStmtWithHostVarsInvoke()
+{
+  struct sqlca sqlca;
+
+  EXEC SQL BEGIN DECLARE SECTION;
+    short hostVar1;
+    char hostVar2[20];
+  EXEC SQL END DECLARE SECTION;
+
+  cout << "\n-----------------------------------------------------------";
+  cout << "\nUSE THE SQL STATEMENTS:" << endl;
+  cout << "  DELETE" << endl;
+  cout << "  ROLLBACK" << endl;
+  cout << "TO SHOW HOW TO USE HOST VARIABLES." << endl;
+
+  // execute a statement with host variables
+  cout << "\n  Execute" << endl;
+  cout << "    DELETE FROM org" << endl;
+  cout << "      WHERE deptnumb = :hostVar1 AND" << endl;
+  cout << "            division = :hostVar2" << endl;
+  cout << "  for" << endl;
+  cout << "    hostVar1 = 15" << endl;
+  cout << "    hostVar2 = 'Eastern'" << endl;
+
+  hostVar1 = 15;
+  strcpy(hostVar2, "Eastern");
+
+  EXEC SQL DELETE FROM org
+    WHERE deptnumb = :hostVar1 AND
+          division = :hostVar2;
+  EMB_SQL_CHECK("Delete with host variables -- Execute");
+
+  // rollback the transaction
+  cout << "\n  Rollback the transaction." << endl;
+
+  EXEC SQL ROLLBACK;
+  EMB_SQL_CHECK("Transaction -- Rollback");
+
+  return 0;
+} //DbUse::StaticStmtWithHostVarsInvoke
+
+int DbUse::DynamicStmtEXECUTE_IMMEDIATE()
+{
+  struct sqlca sqlca;
+
+  EXEC SQL BEGIN DECLARE SECTION;
+    char stmt1[50];
+    char stmt2[50];
+  EXEC SQL END DECLARE SECTION;
+
+  cout << "\n-----------------------------------------------------------";
+  cout << "\nUSE THE SQL STATEMENTS:" << endl;
+  cout << "  EXECUTE IMMEDIATE" << endl;
+  cout << "TO EXECUTE SQL STATEMENTS THROUGH 'EXECUTE IMMEDIATE'." << endl;
+
+  // create a table
+  strcpy(stmt1, "CREATE TABLE table1(col1 INTEGER)");
+  cout << "\n  Execute the statement" << endl;
+  cout << "    EXECUTE IMMEDIATE :stmt1" << endl;
+  cout << "  for" << endl;
+  cout << "    stmt1 = " << stmt1 << endl;
+
+  EXEC SQL EXECUTE IMMEDIATE :stmt1;
+  EMB_SQL_CHECK("Stmt1 -- EXECUTE IMMEDIATE");
+
+  // drop a table
+  strcpy(stmt2, "DROP TABLE table1");
+  cout << "\n  Execute the statement" << endl;
+  cout << "    EXECUTE IMMEDIATE :stmt2" << endl;
+  cout << "  for" << endl;
+  cout << "    stmt2 = " << stmt2 << endl;
+
+  EXEC SQL EXECUTE IMMEDIATE :stmt2;
+  EMB_SQL_CHECK("Stmt2 -- EXECUTE IMMEDIATE");
+
+  return 0;
+} //DbUse::DynamicStmtEXECUTE_IMMEDIATE
+
+int DbUse::DynamicStmtEXECUTE()
+{
+  struct sqlca sqlca;
+
+  EXEC SQL BEGIN DECLARE SECTION;
+    char hostVarStmt[50];
+  EXEC SQL END DECLARE SECTION;
+
+  cout << "\n-----------------------------------------------------------";
+  cout << "\nUSE THE SQL STATEMENTS:" << endl;
+  cout << "  PREPARE" << endl;
+  cout << "  EXECUTE" << endl;
+  cout << "TO EXECUTE SQL STATEMENTS THROUGH 'EXECUTE'." << endl;
+
+  // prepare the statement
+  strcpy(hostVarStmt, "DELETE FROM org WHERE deptnumb = 15");
+  cout << "\n  Execute the statement" << endl;
+  cout << "    PREPARE Stmt FROM :hostVarStmt" << endl;
+  cout << "  for" << endl;
+  cout << "    hostVarStmt = " << hostVarStmt << endl;
+
+  EXEC SQL PREPARE Stmt FROM :hostVarStmt;
+  EMB_SQL_CHECK("Stmt -- Prepare");
+
+  // execute the statement
+  cout << "\n  Execute the statement" << endl;
+  cout << "    EXECUTE Stmt" << endl;
+
+  EXEC SQL EXECUTE Stmt;
+  EMB_SQL_CHECK("Stmt -- Execute");
+
+  // ROLLBACK the transaction
+  cout << "\n  Rollback the transaction." << endl;
+
+  EXEC SQL ROLLBACK;
+  EMB_SQL_CHECK("Transaction -- Rollback");
+
+  return 0;
+} //DbUse::DynamicStmtEXECUTE
+
+int DbUse::DynamicStmtWithMarkersEXECUTEusingHostVars()
+{
+  struct sqlca sqlca;
+
+  EXEC SQL BEGIN DECLARE SECTION;
+    char hostVarStmt1[50];
+    short hostVarDeptnumb;
+  EXEC SQL END DECLARE SECTION;
+
+  cout << "\n-----------------------------------------------------------";
+  cout << "\nUSE THE SQL STATEMENTS:" << endl;
+  cout << "  PREPARE" << endl;
+  cout << "  EXECUTE" << endl;
+  cout << "TO EXECUTE SQL STATEMENTS THROUGH 'EXECUTE' WITH HOST VARIABLES."
+       << endl;
+
+  // prepare the statement
+  strcpy(hostVarStmt1, "DELETE FROM org WHERE deptnumb = ?");
+  cout << "\n  Execute the statement" << endl;
+  cout << "    PREPARE Stmt1 FROM :hostVarStmt1" << endl;
+  cout << "  for" << endl;
+  cout << "    hostVarStmt1 = " << hostVarStmt1 << endl;
+
+  EXEC SQL PREPARE Stmt1 FROM :hostVarStmt1;
+  EMB_SQL_CHECK("Stmt1 -- Prepare");
+
+  // execute the statement for hostVarDeptnumb = 15
+  hostVarDeptnumb = 15;
+  cout << "\n  Execute the statement" << endl;
+  cout << "    EXECUTE Stmt1 USING :hostVarDeptnumb" << endl;
+  cout << "  for" << endl;
+  cout << "    hostVarDeptnumb = " << hostVarDeptnumb << endl;
+
+  EXEC SQL EXECUTE Stmt1 USING :hostVarDeptnumb;
+  EMB_SQL_CHECK("Stmt1 -- Execute with Host Variables 1");
+
+  // execute the statement for hostVarDeptnumb = 84
+  hostVarDeptnumb = 84;
+  cout << "\n  Execute the statement" << endl;
+  cout << "    EXECUTE Stmt1 USING :hostVarDeptnumb" << endl;
+  cout << "  for" << endl;
+  cout << "    hostVarDeptnumb = " << hostVarDeptnumb << endl;
+
+  EXEC SQL EXECUTE Stmt1 USING :hostVarDeptnumb;
+  EMB_SQL_CHECK("Stmt1 -- Execute with Host Variables 2");
+
+  // rollback the transaction
+  cout << "\n  Rollback the transaction." << endl;
+
+  EXEC SQL ROLLBACK;
+  EMB_SQL_CHECK("Transaction -- Rollback");
+
+  return 0;
+} //DbUse::DynamicStmtWithMarkersEXECUTEusingHostVars
+
+int DbUse::DynamicStmtWithMarkersEXECUTEusingSQLDA()
+{
+  struct sqlca sqlca;
+
+  struct sqlda *pSqlda;
+  short deptnumb;
+  short deptnumbInd;
+
+  EXEC SQL BEGIN DECLARE SECTION;
+    char hostVarStmt2[50];
+  EXEC SQL END DECLARE SECTION;
+
+  cout << "\n-----------------------------------------------------------";
+  cout << "\nUSE THE SQL STATEMENTS:" << endl;
+  cout << "  PREPARE" << endl;
+  cout << "  EXECUTE USING DESCRIPTOR" << endl;
+  cout << "TO EXECUTE SQL STATEMENTS THROUGH 'EXECUTE' WITH SQLDA." << endl;
+
+  // prepare the statement
+  strcpy(hostVarStmt2, "DELETE FROM org WHERE deptnumb = ?");
+  cout << "\n  Execute the statement" << endl;
+  cout << "    PREPARE Stmt2 FROM :hostVarStmt2" << endl;
+  cout << "  for" << endl;
+  cout << "    hostVarStmt2 = DELETE FROM org WHERE deptnumb = ?" << endl;
+
+  EXEC SQL PREPARE Stmt2 FROM :hostVarStmt2;
+  EMB_SQL_CHECK("Stmt2 -- Prepare");
+
+  // initialize sqlda
+  cout << "\n  Initialize the SQLDA structure." << endl;
+  pSqlda = (struct sqlda *)new char[SQLDASIZE(1)]; // one marker
+  strncpy(pSqlda->sqldaid, "SQLDA   ", sizeof(pSqlda->sqldaid));
+  pSqlda->sqldabc = (sqlint32) SQLDASIZE(1);
+  pSqlda->sqln = 1; // one marker
+  pSqlda->sqld = 1;
+
+  pSqlda->sqlvar[0].sqltype = SQL_TYP_NSMALL;
+  pSqlda->sqlvar[0].sqllen = sizeof(short);
+  pSqlda->sqlvar[0].sqldata = (char *)&deptnumb;
+  pSqlda->sqlvar[0].sqlind = (short *)&deptnumbInd;
+
+  // execute the statement for deptnumb=15
+  deptnumb = 15;
+  cout << "\n  Execute the statement" << endl;
+  cout << "    EXECUTE THE STATEMENT Stmt2 USING DESCRIPTOR :*pSqlda"
+       << endl;
+  cout << "  for" << endl;
+  cout << "    deptnumb = " << deptnumb << endl;
+
+  EXEC SQL EXECUTE Stmt2 USING DESCRIPTOR :*pSqlda;
+  EMB_SQL_CHECK("Stmt2 -- Execute with SQLDA");
+
+  // execute the statement for deptnumb=84
+  deptnumb = 84;
+  cout << "\n  Execute the statement" << endl;
+  cout << "    EXECUTE THE STATEMENT Stmt2 USING DESCRIPTOR :*pSqlda"
+       << endl;
+  cout << "  for" << endl;
+  cout << "    deptnumb = " << deptnumb << endl;
+
+  EXEC SQL EXECUTE Stmt2 USING DESCRIPTOR :*pSqlda;
+  EMB_SQL_CHECK("Stmt2 -- Execute with SQLDA");
+
+  // ROLLBACK the transaction
+  cout << "\n  Rollback the transaction." << endl;
+
+  EXEC SQL ROLLBACK;
+  EMB_SQL_CHECK("Transaction -- Rollback");
+
+  // release the memory allocated
+  delete [] pSqlda;
+
+  return 0;
+} //DbUse::DynamicStmtWithMarkersEXECUTEusingSQLDA
+
+int DbUse::CompoundStmtInvoke()
+{
+  struct sqlca sqlca;
+
+  EXEC SQL BEGIN DECLARE SECTION;
+    char subStmt1[200];
+    char subStmt2[200];
+    char subStmt3[200];
+  EXEC SQL END DECLARE SECTION;
+
+  cout << "\n-----------------------------------------------------------";
+  cout << "\nUSE THE SQL STATEMENTS:" << endl;
+  cout << "  CREATE TABLE" << endl;
+  cout << "  PREPARE" << endl;
+  cout << "  COMPOUND SQL (EMBEDDED)" << endl;
+  cout << "  EXECUTE" << endl;
+  cout << "  DROP TABLE" << endl;
+  cout << "TO EXECUTE COMPOUND SQL STATEMENTS." << endl;
+
+  // create the table awards
+  cout << "\n  Execute the statement" << endl;
+  cout << "    CREATE TABLE awards(id INTEGER, award CHAR(12)" << endl;
+
+  EXEC SQL CREATE TABLE awards(id INTEGER, award CHAR(12));
+  EMB_SQL_CHECK("awards TABLE -- Create");
+
+  // prepare the substatements
+  strcpy(subStmt1, "INSERT INTO awards(id, award) ");
+  strcat(subStmt1, "  SELECT id, 'Sales Merit' ");
+  strcat(subStmt1, "    FROM staff ");
+  strcat(subStmt1, "    WHERE job = 'Sales' AND (comm/100 > years) ");
+  cout << "\n  Prepare the substatement1" << endl;
+  cout << "    INSERT INTO awards(id, award)" << endl;
+  cout << "      SELECT id, 'Sales Merit'" << endl;
+  cout << "        FROM staff" << endl;
+  cout << "        WHERE job = 'Sales' AND (comm/100 > years)" << endl;
+
+  EXEC SQL PREPARE SubStmt1 FROM :subStmt1;
+  EMB_SQL_CHECK("Substatement1 -- Prepare");
+
+  strcpy(subStmt2, "INSERT INTO awards(id, award) ");
+  strcat(subStmt2, "  SELECT id, 'Clerk Merit' ");
+  strcat(subStmt2, "    FROM staff ");
+  strcat(subStmt2, "    WHERE job = 'Clerk' AND (comm/50 > years) ");
+  cout << "\n  Prepare the substatement2" << endl;
+  cout << "    INSERT INTO awards(id, award)" << endl;
+  cout << "      SELECT id, 'Clerk Merit'" << endl;
+  cout << "        FROM staff" << endl;
+  cout << "        WHERE job = 'Clerk' AND (comm/50 > years)" << endl;
+
+  EXEC SQL PREPARE SubStmt2 FROM :subStmt2;
+  EMB_SQL_CHECK("Substatement2 -- Prepare");
+
+  strcpy(subStmt3, "INSERT INTO awards(id, award) ");
+  strcat(subStmt3, "  SELECT id, 'Best' concat job ");
+  strcat(subStmt3, "    FROM staff ");
+  strcat(subStmt3, "    WHERE comm = (SELECT max(comm) ");
+  strcat(subStmt3, "                    FROM staff ");
+  strcat(subStmt3, "                    WHERE job = 'Clerk') ");
+  cout << "\n  Prepare the substatement3" << endl;
+  cout << "    INSERT INTO awards(id, award)" << endl;
+  cout << "      SELECT id, 'Best' concat job" << endl;
+  cout << "        FROM staff" << endl;
+  cout << "        WHERE comm = (SELECT max(comm)" << endl;
+  cout << "                        FROM staff" << endl;
+  cout << "                        WHERE job = 'Clerk')" << endl;
+
+  EXEC SQL PREPARE SubStmt3 FROM :subStmt3;
+  EMB_SQL_CHECK("Substatement3 -- Prepare");
+
+  // Execute the embedded compound statement
+  cout << "\n  Execute the statement" << endl;
+  cout << "    BEGIN COMPOUND NOT ATOMIC STATIC" << endl;
+  cout << "      EXECUTE SubStmt1;" << endl;
+  cout << "      EXECUTE SubStmt2;" << endl;
+  cout << "      EXECUTE SubStmt3;" << endl;
+  cout << "      COMMIT;" << endl;
+  cout << "    END COMPOUND;" << endl;
+
+  EXEC SQL BEGIN COMPOUND NOT ATOMIC STATIC
+    EXECUTE SubStmt1;
+    EXECUTE SubStmt2;
+    EXECUTE SubStmt3;
+    COMMIT;
+  END COMPOUND;
+  EMB_SQL_CHECK("Compound -- Invoke");
+
+  // drop the table awards
+  cout << "\n  Execute the statement" << endl;
+  cout << "    DROP TABLE awards" << endl;
+
+  EXEC SQL DROP TABLE awards;
+  EMB_SQL_CHECK("awards TABLE -- Drop");
+
+  return 0;
+} //DbUse::CompoundStmtInvoke
+
+int main(int argc, char *argv[])
+{
+  int rc = 0;
+  CmdLineArgs check;
+  DbUse use;
+  DbEmb db;
+
+  // check the command line arguments
+  rc = check.CmdLineArgsCheck1(argc, argv, db);
+  if (rc != 0)
+  {
+    return rc;
+  }
+
+  cout << "\nTHIS SAMPLE SHOWS HOW TO USE A DATABASE." << endl;
+
+  // connect to the database
+  rc = db.Connect();
+  if (rc != 0)
+  {
+    return rc;
+  }
+
+  rc = use.StaticStmtInvoke();
+  rc = use.StaticStmtWithHostVarsInvoke();
+  rc = use.DynamicStmtEXECUTE_IMMEDIATE();
+  rc = use.DynamicStmtEXECUTE();
+  rc = use.DynamicStmtWithMarkersEXECUTEusingHostVars();
+  rc = use.DynamicStmtWithMarkersEXECUTEusingSQLDA();
+  rc = use.CompoundStmtInvoke();
+
+  // disconnect from the database
+  rc = db.Disconnect();
+  if (rc != 0)
+  {
+    return rc;
+  }
+
+  return 0;
+} //main
+

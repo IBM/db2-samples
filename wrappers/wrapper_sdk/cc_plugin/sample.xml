@@ -1,0 +1,57 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE wrapper SYSTEM "wrapper.dtd">
+<wrapper wrapper_id="sample wrapper" sample_contents="Y" userid_required="N">
+	<server_kind display_name="SAMPLE_SVRKIND">
+	</server_kind>
+	<description>SAMPLE_WRAPPER_DESC</description>
+	<libraries aix="libsample.a" windows="sample.dll" solaris="libsample.so" linux="libsample.so" hpux="libsample.sl" />
+	<wrapper_options>
+		<option name="DB2_FENCED"
+		description="SAMPLE_WRPOPT_DB2_FENCED_DESC"
+		required="Y" editable="Y" alter="Y" default="N" platform="all" hints="SAMPLE_WRPOPT_DB2_FENCED_HINT">
+		<values multivalue="N">
+			<setting>Y</setting>
+			<setting>N</setting>
+		</values>
+		</option>
+	</wrapper_options>
+	<nicknames user_defined_cols="Y" ddl_syntax="with_columns">
+	<nickname_options>
+		<option name="FILE_PATH"
+		description="SAMPLE_NNOPT_FILE_PATH_DESC"
+		required="N" editable="Y" alter="Y">
+		</option>
+	</nickname_options>
+	</nicknames>
+	<column_datatypes>
+		<datatype>CHARACTER</datatype>
+		<datatype>VARCHAR</datatype>
+		<datatype>INTEGER</datatype>
+		<datatype>DECIMAL</datatype>
+		<datatype>DOUBLE</datatype>
+	</column_datatypes>
+	<discover class_name="com.ibm.db2.tools.wrapperTools.extensions.DefaultDiscoveryImpl">
+		<property name="DiscoveryTypes">Nickname</property>
+		<property name="DataObjectDiscoveryStoredProcedureName">SAMPLE</property>
+		<generic_gui>
+		<option name="DIRECTORY"
+		description="SAMPLE_GUIOPT_DIRECTORY_DESC"
+		required="Y" editable="Y">
+		</option>
+		<option name="EXTENSION"
+		description="SAMPLE_GUIOPT_EXTENSION_DESC"
+		required="Y" editable="Y">
+		</option>
+		<option name="SUB_DIRECTORY"
+		description="SAMPLE_GUIOPT_SUB_DIRECTORY_DESC"
+		required="Y" editable="Y" default="N">
+		<values>"
+			<setting>Y</setting>"
+			<setting>N</setting>"
+		</values>
+		</option>
+		</generic_gui>
+		<serverObject_gui>
+		</serverObject_gui>
+	</discover>
+</wrapper>

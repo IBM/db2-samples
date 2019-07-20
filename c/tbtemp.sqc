@@ -1,0 +1,613 @@
+/****************************************************************************
+** (c) Copyright IBM Corp. 2007 All rights reserved.
+** 
+** The following sample of source code ("Sample") is owned by International 
+** Business Machines Corporation or one of its subsidiaries ("IBM") and is 
+** copyrighted and licensed, not sold. You may use, copy, modify, and 
+** distribute the Sample in any form without payment to IBM, for the purpose of 
+** assisting you in the development of your applications.
+** 
+** The Sample code is provided to you on an "AS IS" basis, without warranty of 
+** any kind. IBM HEREBY EXPRESSLY DISCLAIMS ALL WARRANTIES, EITHER EXPRESS OR 
+** IMPLIED, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED WARRANTIES OF 
+** MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE. Some jurisdictions do 
+** not allow for the exclusion or limitation of implied warranties, so the above 
+** limitations or exclusions may not apply to you. IBM shall not be liable for 
+** any damages you suffer as a result of using, copying, modifying or 
+** distributing the Sample, even if IBM has been advised of the possibility of 
+** such damages.
+*****************************************************************************
+**
+** SOURCE FILE NAME: tbtemp.sqc
+**
+** SAMPLE: How to use a declared temporary table
+**          
+**         This sample:
+**         1. Creates a user temporary table space required for declared 
+**            temporary tables
+**         2. Creates and populates a declared temporary table 
+**         3. Shows that the declared temporary table exists after a commit 
+**            and shows the declared temporary table's use in a procedure
+**         4. Shows that the temporary table can be recreated with the same 
+**            name using the "with replace" option and without "not logged"
+**            clause, to enable logging.
+**         5. Shows the creation of an index on the temporary table.
+**         6. Show the usage of "describe" command to obtain information
+**            regarding the tempraroy table.
+**         7. Shows the usage of db2RunStats API to to update statistics 
+**            about the physical characteristics of a temp table and the 
+**            associated indexes.
+**         8. Shows that the temporary table is implicitly dropped with a  
+**            disconnect from the database
+**         9. Drops the user temporary table space
+**  
+**         The following objects are made and later removed:
+**         1. a user temporary table space named usertemp1 
+**         2. a declared global temporary table named temptb1
+**         (If objects with these names already exist, an error message
+**         will be printed out.)
+**
+** SQL STATEMENTS USED:
+**         CLOSE
+**         CREATE USER TEMPORARY TABLESPACE
+**         CREATE INDEX
+**         DECLARE CURSOR
+**         DECLARE GLOBAL TEMPORARY TABLE
+**         DESCRIBE 
+**         DROP TABLESPACE
+**         FETCH
+**         INCLUDE
+**         INSERT
+**         OPEN 
+**         PREPARE
+**
+** DB2 APIs USED:
+**         db2RunStats
+**
+** STRUCTURES USED:
+**         sqlca
+**         sqlda
+**
+** OUTPUT FILE: tbtemp.out (available in the online documentation)
+*****************************************************************************
+**
+** For more information on the sample programs, see the README file.
+**
+** For information on developing C applications, see the Application
+** Development Guide.
+**
+** For information on using SQL statements, see the SQL Reference.
+**
+** For the latest information on programming, building, and running DB2 
+** applications, visit the DB2 application development website: 
+**     http://www.software.ibm.com/data/db2/udb/ad
+****************************************************************************/
+
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+#include <sqlenv.h>
+#include <sqlcodes.h>
+#include <sqlutil.h>
+#include <db2ApiDf.h>
+#include <sqlda.h>
+#include "utilemb.h" 
+
+/* Prototypes:
+    main
+      |_CreateTablespace
+      |_DeclareTempTable
+      |   |_PopulateTempTable
+      |   |_ShowTableContents
+      |_ShowAfterCommit
+      |   |_ShowTableContents
+      |_RecreateTempTableWithLogging
+      |   |_PopulateTempTable
+      |   |_ShowTableContents
+      |_CreateIndex
+      |_UpdateStatistics
+      |_DescribeTemporaryTable
+      |   |_NumToAscii      
+      |_DropTablespace
+*/
+
+int CreateTablespace(void);
+int DeclareTempTable(void);
+int ShowAfterCommit(void);
+int RecreateTempTableWithLogging(void);
+int CreateIndex(void);
+int UpdateStatistics(void);
+int DescribeTemporaryTable(void);
+int PopulateTempTable(void);
+int ShowTableContents(void);
+int DropTablespace(void);
+char *NumToAscii(int);
+
+EXEC SQL INCLUDE SQLCA;
+
+/* Variables to store data from the department table */
+EXEC SQL BEGIN DECLARE SECTION;
+  char deptno[4];
+  char deptname[30];
+  char mgrno[7];
+  short mgrnoInd; /* use an indicator because null values are possible */
+  char admrdept[4];
+  char location[17];
+  short locationInd; /* use an indicator because null values are possible */
+  char strStmt[100];
+EXEC SQL END DECLARE SECTION;
+
+int main(int argc, char *argv[])
+{
+  int rc = 0;
+  char dbAlias[SQL_ALIAS_SZ + 1];
+  char user[USERID_SZ + 1];
+  char pswd[PSWD_SZ + 1];
+
+  /* Check the command line arguments */
+  rc = CmdLineArgsCheck1(argc, argv, dbAlias, user, pswd);
+  if (rc != 0)
+  {
+    return rc;
+  }
+
+  printf("\nTHIS SAMPLE SHOWS HOW TO USE DECLARED TEMPORARY TABLES.\n");
+
+  /* Connect to database*/
+  printf("\n-----------------------------------------------------------");
+  rc = DbConn(dbAlias, user, pswd);
+  if (rc != 0)
+  {
+    return rc;
+  }
+
+  /* Make sure a user temporary table space exists before creating the
+     table */
+  CreateTablespace();
+
+  /* Show how to make a declared temporary table */
+  DeclareTempTable();
+
+  /* Show that the temporary table exists in ShowAfterCommit() even though
+     it was declared in DeclareTempTable(). The temporary table is
+     accessible to the whole session as the connection still exists at this
+     point. Show that the temporary table exists after a commit. */ 
+  ShowAfterCommit();
+
+  /* Declare the temporary table again. The old one will be dropped and a 
+     new one will be made. */
+  RecreateTempTableWithLogging();
+  
+  /* Create an index for the global temporary table */
+  CreateIndex();
+  
+  /* Update temporary table statistics using db2RunStats */
+  UpdateStatistics();
+
+  /* Use the Describe Command to describe the temp table */
+  DescribeTemporaryTable();
+  
+  /* Disconnect from the database. This implicitly drops the temporary  
+     table. Alternatively, an explicit drop statement could have 
+     been used.*/
+  printf("\n-----------------------------------------------------------");
+  rc = DbDisconn(dbAlias);
+  if (rc != 0)
+  {
+    return rc;
+  }
+  printf("\nTHE DECLARED TEMPORARY TABLE IS IMPLICITLY DROPPED.\n");
+
+  /* Connect to database*/
+  printf("\n-----------------------------------------------------------");
+  rc = DbConn(dbAlias, user, pswd);
+  if (rc != 0)
+  {
+    return rc;
+  }
+    
+  /* Clean up - remove the table space that was created earlier.
+     Note: The table space can only be dropped after the temporary table is 
+     dropped. */
+  DropTablespace();
+
+  /* Disconnect from the database */
+  printf("\n-----------------------------------------------------------");
+  rc = DbDisconn(dbAlias);
+  if (rc != 0)
+  {
+    return rc;
+  }
+
+  return rc;
+} /* main */
+
+/* Create a user temporary table space for the temporary table.  A user 
+   temporary table space is required for temporary tables. This type of  
+   table space is not created at database creation time. */
+int CreateTablespace(void)
+{
+  printf("\n-----------------------------------------------------------");
+  printf("\nUSE THE SQL STATEMENT:\n");
+  printf("  CREATE USER TEMPORARY TABLESPACE \n");
+  printf("TO MAKE A USER TEMPORARY TABLESPACE FOR THE TEMPORARY TABLE\n");
+  printf("IN A DIRECTORY CALLED usertemp, RELATIVE TO THE DATABASE\n"); 
+  printf("\n  Perform:\n");
+  printf("    EXEC SQL CREATE USER TEMPORARY TABLESPACE usertemp1\n");
+  EXEC SQL CREATE USER TEMPORARY TABLESPACE usertemp1;
+  EMB_SQL_CHECK("create user temporary tablespace");
+
+  return sqlca.sqlcode;
+} /* CreateTablespace */
+
+/* Declare a temporary table with the same columns as the one for the 
+   database's department table.  Populate the temporary table and
+   show the contents. */
+int DeclareTempTable(void)
+{
+  int rc = 0;
+
+  /* Declare the declared temporary table.  It is created empty. */
+  printf("\n-----------------------------------------------------------");
+  printf("\nUSE THE SQL STATEMENT:\n");
+  printf("  DECLARE GLOBAL TEMPORARY TABLE\n");
+  printf("TO MAKE A GLOBAL DECLARED TEMPORARY TABLE WITH THE SAME\n");
+  printf("COLUMNS AS THE DEPARTMENT TABLE.\n"); 
+  printf("\n  Perform:\n");
+  printf("    EXEC SQL DECLARE GLOBAL TEMPORARY TABLE temptb1 \n");
+  printf("      LIKE department \n");
+  printf("      NOT LOGGED\n");
+  EXEC SQL DECLARE GLOBAL TEMPORARY TABLE temptb1 
+    LIKE department
+    NOT LOGGED;
+  EMB_SQL_CHECK("declare global temporary table");
+  rc = sqlca.sqlcode;
+  if (rc != 0)
+  {
+    return rc;
+  }
+
+  rc = PopulateTempTable();
+  if (rc != 0)
+  {
+    return rc;
+  }
+
+  rc = ShowTableContents();
+
+  return rc;
+} /* DeclareTempTable */
+
+/* Show that the temporary table still exists after the commit. All the 
+   rows will be deleted because the temporary table was declared, by default,
+   with "on commit delete rows".  If "on commit preserve rows" was used,
+   then the rows would have remained.  */
+int ShowAfterCommit(void)
+{
+  int rc = 0;
+
+  printf("\n-----------------------------------------------------------");
+  printf("\nUSE THE SQL STATEMENT:\n");
+  printf("  COMMIT\n");
+  printf("TO SHOW THAT THE TEMP TABLE EXISTS AFTER A COMMIT BUT WITH\n");
+  printf("ALL ROWS DELETED\n");
+  printf("\n  Perform:\n"); 
+  printf("      EXEC SQL COMMIT\n");  
+  EXEC SQL COMMIT;
+  EMB_SQL_CHECK("commit");
+  rc = sqlca.sqlcode;
+  if (rc != 0)
+  {
+    return rc;
+  }
+
+  rc = ShowTableContents();
+
+  return rc;
+} /* ShowAfterCommit */
+
+/* Declare the temp table temptb1 again this time with logging option,
+   thereby replacing the existing one.If the "with replace" option 
+   is not used, then an error will result if the table name is already 
+   associated with an existing temporary table. Populate and show the 
+   contents again. */
+int RecreateTempTableWithLogging(void)
+{
+  int rc = 0;
+
+  /* Declare the declared temporary table again, this time without the
+     NOT LOGGED clause. It is created empty. */
+  printf("\n-----------------------------------------------------------");
+  printf("\nUSE THE SQL STATEMENT:\n");
+  printf("  DECLARE GLOBAL TEMPORARY TABLE\n");
+  printf("TO REPLACE A GLOBAL DECLARED TEMPORARY TABLE WITH A NEW\n");
+  printf("TEMPORARY TABLE OF THE SAME NAME WITH LOGGING ENABLED.\n"); 
+  printf("\n  Perform:\n");
+  printf("    EXEC SQL DECLARE GLOBAL TEMPORARY TABLE temptb1 \n");
+  printf("      LIKE department \n");
+  printf("      WITH REPLACE\n");
+  printf("      ON COMMIT PRESERVE ROWS\n");
+  EXEC SQL DECLARE GLOBAL TEMPORARY TABLE temptb1 
+    LIKE department
+    WITH REPLACE
+    ON COMMIT PRESERVE ROWS;
+  EMB_SQL_CHECK("declare global temporary table with replace");
+  rc = sqlca.sqlcode;
+  if (rc != 0)
+  {
+    return rc;
+  }
+
+  rc = PopulateTempTable();
+  if (rc != 0)
+  {
+    return rc;
+  }
+
+  rc = ShowTableContents();
+    
+  return sqlca.sqlcode;
+} /* RecreateTempTableWithLogging */
+
+/* Create Index command can be used on temporary tables to improve 
+   the performance of queries */
+int CreateIndex(void)
+{
+ printf("\n-----------------------------------------------------------");
+ printf("\n Indexes can be created for temporary tables. Indexing a table\n");
+ printf(" optimizes query performance \n");
+ 
+ printf("\n CREATE INDEX session.tb1ind \n");
+ printf("               ON session.temptb1 (deptno DESC) \n");  
+ printf("               DISALLOW REVERSE SCANS \n");
+ EXEC SQL CREATE INDEX session.tb1ind 
+                       ON session.temptb1(deptno DESC)
+                       DISALLOW REVERSE SCANS ;
+                        
+ printf("\n Following clauses in create index are not supported \n");
+ printf(" for temporary tables:\n");
+ printf("   SPECIFICATION ONLY\n");
+ printf("   CLUSTER\n");
+ printf("   EXTEND USING\n");
+ printf("   Option SHRLEVEL will have no effect when creating indexes \n");
+ printf("   on DGTTs and will be ignored \n");
+ 
+ printf("\n Indexes can be dropped by issuing DROP INDEX statement, \n");
+ printf(" or they will be implicitly dropped when the underlying temp \n");
+ printf(" table is dropped.\n");
+ 
+ return sqlca.sqlcode;
+} /* CreateIndex */
+
+/* db2RunStats updates statistics about the characteristics of the temp  
+   table and/or any associated indexes. These characteristics include, 
+   among many others, number of records, number of pages, and average 
+   record length. */
+int UpdateStatistics(void)
+{
+  struct sqlca sqlca;
+  char fullTableName[258];
+  db2Uint32 versionNumber = db2Version1010;
+  db2RunstatsData runStatData = {0};
+  
+  printf("\n-----------------------------------------------------------");
+  printf("\nUSE THE DB2 API:\n");
+  printf("  db2Runstats -- Runstats\n");
+  printf("TO UPDATE session.temptb1 STATISTICS.\n");
+  
+  strcpy(fullTableName, "session.temptb1");
+    
+  /* runstats table */
+  runStatData.iIndexSamplingOption = 0;
+  runStatData.iSamplingOption = 0;
+  runStatData.piTablename = ( unsigned char *) fullTableName;
+  runStatData.piColumnList = NULL;
+  runStatData.piColumnDistributionList = NULL;
+  runStatData.piColumnGroupList = NULL;
+  runStatData.piIndexList = NULL;
+  runStatData.iRunstatsFlags = DB2RUNSTATS_ALL_INDEXES;
+  runStatData.iNumColumns = 0;
+  runStatData.iNumColdist = 0;
+  runStatData.iNumColGroups = 0;
+  runStatData.iNumIndexes = 0;
+  runStatData.iParallelismOption = 0;
+  runStatData.iTableDefaultFreqValues = 0;
+  runStatData.iTableDefaultQuantiles = 0;
+  runStatData.iUtilImpactPriority      = 100;
+
+  db2Runstats (versionNumber, &runStatData, &sqlca);
+
+  DB2_API_CHECK("table -- runstats");
+  
+  printf("\n Viewing of runstat data on declared temporary tables or\n");
+  printf(" indexes on declared temporary tables is not supported\n");
+  
+  return sqlca.sqlcode;
+} /* UpdateStatistics */
+
+/* Use the Describe Command to describe the temporary table created.
+   DESCRIBE TABLE command cannot be used with temp table.However,
+   DESCRIBE statement can be used with SELECT statement to get
+   table information. */
+int DescribeTemporaryTable(void)
+{
+  int i;
+  struct sqlca sqlca;
+  struct sqlda *pSqlda = (struct sqlda *)malloc(SQLDASIZE(6));
+  
+  printf("\n-----------------------------------------------------------");
+  printf("\n Use the DESCRIBE COMMAND to describe temporary table\n");
+  strcpy(strStmt, "SELECT * FROM session.temptb1");
+  printf("\n  Perform:\n");
+  printf("\n DESCRIBE SELECT * FROM session.temptb1\n"); 
+
+  pSqlda->sqln = 6;
+  
+  /* prepare the select statement */
+  EXEC SQL PREPARE stmt FROM :strStmt;
+  EMB_SQL_CHECK("statement -- prepare");
+  
+  /* Information regarding the SELECT statement is fetched into
+     the sqlda structure variable */
+  EXEC SQL DESCRIBE stmt INTO :*pSqlda;
+  EMB_SQL_CHECK("statement -- describe");
+
+  /* Display the contents of the sqlda structure */
+  printf("\nSQLDA Information\n");
+  printf("\n sqldaid: SQLDA     sqldabc: %d  sqln: %d  sqld: %d\n",
+          pSqlda->sqldabc, pSqlda->sqln, pSqlda->sqld);
+  printf("\n Column Information\n\n");
+  printf(" sqltype          sqllen  sqlname.data         sqlname.length\n");
+  printf(" ---------------  ------  -------------------  --------------\n");
+  
+  for(i = 0; i < pSqlda->sqld ; i++)
+  {
+    printf("\n %4d %-10s  %6d  %-19s  %14d", pSqlda->sqlvar[i].sqltype,
+            NumToAscii(pSqlda->sqlvar[i].sqltype), pSqlda->sqlvar[i].sqllen,
+            pSqlda->sqlvar[i].sqlname.data, pSqlda->sqlvar[i].sqlname.length);
+  }
+  printf("\n");
+  
+  free(pSqlda);
+  
+  return sqlca.sqlcode;
+} /* DescribeTemporaryTable */
+
+/* DESCRIBE command returns the statement information in SQLDA structure.
+   SQLTYPE field is returned as an integer and has to be mapped to the 
+   sql type name */
+char *NumToAscii(int sqlTypeNum)
+{
+  char * sqlTypeName = (char*)malloc(12 * sizeof(char));
+
+  switch(sqlTypeNum)
+  {
+    case 384 :
+    case 385 : strcpy(sqlTypeName, "DATE"); 
+               break;
+    case 388 :
+    case 389 : strcpy(sqlTypeName, "TIME");
+               break;
+    case 392 :
+    case 393 : strcpy(sqlTypeName, "TIMESTAMP");  
+               break;
+    case 448 :
+    case 449 : strcpy(sqlTypeName, "VARCHAR"); 
+               break;
+    case 452 :
+    case 453 : strcpy(sqlTypeName, "CHARACTER");
+               break;
+    case 480 :
+    case 481 : strcpy(sqlTypeName, "FLOAT");
+               break;
+    case 484 :
+    case 485 : strcpy(sqlTypeName, "DECIMAL");
+               break;
+    case 496 :
+    case 497 : strcpy(sqlTypeName, "INTEGER");
+               break;
+    case 500 :
+    case 501 : strcpy(sqlTypeName, "SMALLINT");
+               break;
+    default :  strcpy(sqlTypeName, "UNKNOWN TYPE"); 
+  }            
+  return sqlTypeName;
+} /* NumToAscii */
+
+/* Populate the temporary table with the department table's contents. */
+int PopulateTempTable(void)
+{
+
+  /* Populating the temporary table is done the same way as a normal table
+     except the qualifier "session" is required whenever the table name
+     is referenced. */
+  printf("\nUSE THE SQL STATEMENT:\n");
+  printf("  INSERT\n");
+  printf("TO POPULATE THE DECLARED TEMPORARY TABLE WITH DATA FROM\n");
+  printf("THE DEPARTMENT TABLE\n"); 
+  printf("\n  Perform:\n");
+  printf("      EXEC SQL INSERT INTO session.temptb1\n"); 
+  printf("        (SELECT deptno, deptname, mgrno, admrdept, location\n");
+  printf("           FROM department)\n");
+  EXEC SQL INSERT INTO session.temptb1
+    (SELECT deptno, deptname, mgrno, admrdept, location 
+       FROM department);
+  EMB_SQL_CHECK("insert");
+  return sqlca.sqlcode;
+} /* PopulateTempTable */
+
+/* Use cursors to access each row of the declared temporary table and then
+   print each row.  This function assumes that the declared temporary table
+   exists. This access is the same as accessing a normal table except the 
+   qualifier, "session", is required in the table name. */
+int ShowTableContents(void)
+{
+
+  printf("\n  SELECT * FROM session.temptb1\n");
+  printf("    DEPT# DEPTNAME                     MGRNO  ADMRDEPT LOCATION\n");
+  printf("    ----- ---------------------------- ------ -------- --------\n");
+
+  /* Declare cursor */
+  EXEC SQL DECLARE c1 CURSOR FOR SELECT * FROM session.temptb1;
+
+  /* Open cursor */
+  EXEC SQL OPEN c1; 
+  EMB_SQL_CHECK("cursor -- open");
+
+  /* Fetch cursor */
+  EXEC SQL FETCH c1 INTO :deptno, 
+                         :deptname, 
+                         :mgrno :mgrnoInd, /* null value indicator */
+                         :admrdept, 
+                         :location :locationInd; /* null value indicator */ 
+  EMB_SQL_CHECK("cursor -- fetch");
+  while (sqlca.sqlcode != 100)
+  {
+    if (mgrnoInd < 0)
+    {
+      /* the manager number was a null value so print a hyphen instead */
+      sprintf(mgrno, "-");
+    }
+    if (locationInd < 0)
+    {
+      /* the location was a null value so print a hyphen instead */
+      sprintf(location, "-");
+    }   
+    printf("    %-5s %-28s %-6s %-8s %-8s\n", 
+           deptno, 
+           deptname,
+           mgrno,
+           admrdept,
+           location);
+    EXEC SQL FETCH c1 INTO :deptno, 
+                           :deptname, 
+                           :mgrno :mgrnoInd, /* null value indicator */
+                           :admrdept, 
+                           :location :locationInd; /* null value indicator */
+    EMB_SQL_CHECK("cursor -- fetch");
+  }
+
+  /* Close cursor */
+  EXEC SQL CLOSE c1;
+  EMB_SQL_CHECK("cursor -- close");
+
+  return 0;
+} /* ShowTableContents */
+
+/* Drop the user temporary table space.  This function assumes that the
+   table space can be dropped.  If the declared temporary table still exists
+   in the table space, then the table space cannot be dropped. */
+int DropTablespace(void)
+{
+
+  printf("\n-----------------------------------------------------------");
+  printf("\nUSE THE SQL STATEMENT:\n");
+  printf("  DROP TABLESPACE \n");
+  printf("TO REMOVE THE TABLE SPACE THAT THIS PROGRAM CREATED\n");
+  printf("\n  Perform:\n");
+  printf("    EXEC SQL DROP TABLESPACE usertemp1\n");
+  EXEC SQL DROP TABLESPACE usertemp1;
+  EMB_SQL_CHECK("drop tablespace");
+  
+  return sqlca.sqlcode;
+} /* DropTablespace */

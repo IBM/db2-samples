@@ -1,0 +1,13 @@
+
+-- Note:
+-- Migrate Monitor control tables from V9.1 to V9.5.
+-- 
+--
+
+ALTER TABLE ASN.IBMSNAP_MONPARMS
+  ADD COLUMN  DELAY  CHAR(1) DEFAULT 'N';
+  
+UPDATE ASN.IBMSNAP_MONPARMS SET ARCH_LEVEL = '0905';
+COMMIT;
+
+

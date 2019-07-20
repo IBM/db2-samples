@@ -1,0 +1,320 @@
+/*****************************************************************************
+** (c) Copyright IBM Corp. 2007 All rights reserved.
+**
+** The following sample of source code ("Sample") is owned by International
+** Business Machines Corporation or one of its subsidiaries ("IBM") and is
+** copyrighted and licensed, not sold. You may use, copy, modify, and
+** distribute the Sample in any form without payment to IBM, for the purpose of
+** assisting you in the development of your applications.
+**
+** The Sample code is provided to you on an "AS IS" basis, without warranty of
+** any kind. IBM HEREBY EXPRESSLY DISCLAIMS ALL WARRANTIES, EITHER EXPRESS OR
+** IMPLIED, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED WARRANTIES OF
+** MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE. Some jurisdictions do
+** not allow for the exclusion or limitation of implied warranties, so the above
+** limitations or exclusions may not apply to you. IBM shall not be liable for
+** any damages you suffer as a result of using, copying, modifying or
+** distributing the Sample, even if IBM has been advised of the possibility of
+** such damages.
+*****************************************************************************
+**
+** SOURCE FILE NAME: xmlschema.sqc
+**
+** SAMPLE: How to register xml schema
+**
+** SAMPLE USAGE SCENARIO: Consider a user who needs to insert an XML type value
+** into the table. The user would like to ensure that the XML value conforms to a
+** deterministic XML schema.
+**
+** PROBLEM: User has schema's for all the XML values and like to validate the values
+** as per schema while inserting it to the tables.
+**
+** SOLUTION:
+** To achieve the goal, the sample will follow the following steps:
+** a) Register the primary XML schema
+** b) Add the XML schema documents to the primary XML schema to ensure that the
+**    schema is deterministic
+** c) Insert an XML value into an existing XML column and perform validation
+** 
+** SQL STATEMENTS USED:
+**         PREPARE
+**         EXECUTE 
+**
+** STORED PROCEDURE USED
+**         SYSPROC.XSR_REGISTER
+**         SYSPROC.XSR_ADDSCHEMADOC
+**         SYSPROC.XSR_COMPLETE
+**
+** SQL/XML FUNCTION USED
+**         XMLVALIDATE
+**         XMLPARSE
+**
+**  PREREQUISITE: copy product.xsd, order.xsd, 
+**                customer.xsd, header.xsd Schema files, order.xml XML 
+**                document from xml/data directory to working 
+**                directory.
+** OUTPUT FILE: xmlschema.out (available in the online documentation)
+*****************************************************************************
+**
+** For more information on the sample programs, see the README file.
+**
+** For information on developing C applications, see the Application
+** Development Guide.
+**
+** For information on using SQL statements, see the SQL Reference.
+**
+** For the latest information on programming, building, and running DB2
+** applications, visit the DB2 application development website:
+**     http://www.software.ibm.com/data/db2/udb/ad
+****************************************************************************/
+
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+#include <sqlenv.h>
+#include <sqlutil.h>
+#include "utilemb.h"
+
+/* support functions */
+int registerxmlschema(void);
+int addxmlschemadoc(char *);
+int insertValidatexml(void);
+
+EXEC SQL INCLUDE SQLCA;
+
+EXEC SQL BEGIN DECLARE SECTION;
+  short in_ind = 0;
+  short null_ind = -1;
+  char RelSchema[1024];
+  char SchemaName[1024];
+  char SchemaLocation[1024];
+  char PrimaryDocument[1024];
+  char MultipleSchema1[1024];
+  char MultipleSchema2[1024];
+  char MultipleSchema3[1024]; 
+  char XmlDocName[1024]; 
+  short isshred=0;
+  SQL TYPE IS BLOB_FILE xmlfile;
+  SQL TYPE IS BLOB(1M) *xmlobjp; 
+  SQL TYPE IS BLOB_FILE xsdfile;
+  SQL TYPE is BLOB(1M) *xsdobjp;
+  SQL TYPE IS BLOB(1M) temp;
+  char stmt[16384];
+  sqlint32 poid=10;
+  char status[10];
+  char name[128];
+  char schema[128];
+EXEC SQL END DECLARE SECTION;
+
+int main(int argc, char *argv[])
+{
+  int rc = 0;
+  char dbAlias[SQL_ALIAS_SZ + 1];
+  char user[USERID_SZ + 1];
+  char pswd[PSWD_SZ + 1];
+
+  strcpy((char *)RelSchema,"POSAMPLE");
+  strcpy((char *)SchemaName,"order");
+  strcpy((char *)SchemaLocation, "http://www.test.com/order");
+  strcpy((char *)PrimaryDocument,"order.xsd");
+  strcpy((char *)MultipleSchema1,"header.xsd");
+  strcpy((char *)MultipleSchema2,"customer.xsd");
+  strcpy((char *)MultipleSchema3,"product.xsd");
+  strcpy((char *)XmlDocName,"order.xml"); 
+
+  /* check the command line arguments */
+  rc = CmdLineArgsCheck1(argc, argv, dbAlias, user, pswd);
+  if (rc != 0)
+  {
+    return rc;
+  }
+
+  /* connect to database */
+  rc = DbConn(dbAlias, user, pswd);
+  if (rc != 0)
+  {
+    return rc;
+  }
+  /* register the xmlschema */ 
+  rc=registerxmlschema();
+
+  /* select from catalog tables to check the entry for the schema registered */
+
+  EXEC SQL SELECT objectschema, objectname INTO :schema,:name FROM syscat.xsrobjects WHERE objectname='ORDER'; 
+  EMB_SQL_CHECK("SELECT FROM SYSCAT.XSROBJECTS");
+  
+  printf("-------------------------------------------------------------------------\n");
+  printf("\n select the information about the registered schema from catalog table");
+  printf("\n RELATIONAL SCHEMA       RELATIONAL ID FOR XML SCHEMA\n");
+  printf("   %s                        %s  \n ",schema, name); 
+
+ /* insert the xml value validating with the registered schema */
+  rc=insertValidatexml();
+  
+  /* Delete the row */
+  EXEC SQL DELETE FROM purchaseorder WHERE poid=10;
+  EMB_SQL_CHECK("DELETE FROM PURCHASEORDER");
+  
+  /* drop the registered schema */
+  EXEC SQL DROP XSROBJECT posample.order;
+  EMB_SQL_CHECK("DROP XSROBJECT ORDER");
+  EXEC SQL COMMIT;
+} /* main */
+
+int registerxmlschema()
+{
+  struct sqlca sqlca;
+  FILE *testfile;
+  strcpy(xsdfile.name, PrimaryDocument);
+  xsdfile.name_length = strlen(xsdfile.name);
+  xsdfile.file_options = SQL_FILE_READ;
+ 
+  /* read the BLOB file into a BLOB variable */ 
+  if (xsdfile.name_length > 0)
+    {
+      testfile = fopen( xsdfile.name, "r" );
+      if ( testfile != NULL )
+        {
+          fclose( testfile );
+          if ((xsdobjp = (struct xsdobjp_t *)
+                                     malloc (sizeof (*xsdobjp))) != NULL )
+            {
+               memset(xsdobjp, 0, sizeof(*xsdobjp));
+               EXEC SQL VALUES (:xsdfile) INTO :*xsdobjp;
+            }
+        }
+      else
+        {
+           printf("fopen() error.\n");
+           printf("Error accessing file: %s \n", xsdfile.name);
+           exit(0);
+        }
+    }
+
+  
+  printf("----------------------------------------------------------------\n"); 
+  printf("\nFilename : %s\n",xsdfile.name);
+  printf("XSD Data : %s\n",xsdobjp->data);
+  printf("CALLING SYSPROC.XSR_REGISTER TO REGISTER THE SCHEMA %s......\n\n",SchemaName);
+  
+  /* call SYSPROC.XSR_REGISTER to register the primary schema */ 
+  EXEC SQL CALL SYSPROC.XSR_REGISTER(:RelSchema,
+                                     :SchemaName,
+                                     :SchemaLocation,
+                                     :*xsdobjp,
+                                     :*xsdobjp:null_ind );
+ 
+  EMB_SQL_CHECK("CALLING SYSPROC.XSR_REGISTER");
+ 
+  /* call the function to all the xml schema document to primary schema */
+  /* add schema document header.xsd */ 
+  addxmlschemadoc(MultipleSchema1);
+  
+  /* add schema document customer.xsd */
+  addxmlschemadoc(MultipleSchema2);
+  
+  /* add schema document product.xsd */
+  addxmlschemadoc(MultipleSchema3);
+
+  /* call SYSPROC.XSR_COMPLETE the complete the registeration of the schema */ 
+  printf("----------------------------------------------------------------\n");
+  printf("CALLING  SYSPROC.XSR_COMPLETE TO COMPLETE THE SCHEMA REGISTERATION.....\n\n");
+  EXEC SQL CALL SYSPROC.XSR_COMPLETE(:RelSchema,
+                                     :SchemaName,
+                                     :*xsdobjp:null_ind,
+                                     :isshred);
+  EMB_SQL_CHECK("CALLING SYSPROC.XSR_COMPLETE");
+  EXEC SQL COMMIT;
+  return 0;
+} /* registerxmlschema */ 
+
+
+int addxmlschemadoc(char *xmlschemadoc)
+{
+  FILE *testfile;
+  strcpy((char *)RelSchema,"POSAMPLE");
+  strcpy((char *)SchemaName,"order");
+  strcpy((char *)SchemaLocation, "http://www.test.com/order");
+  strcpy(xsdfile.name, xmlschemadoc);
+  xsdfile.name_length = strlen(xsdfile.name);
+  xsdfile.file_options = SQL_FILE_READ;
+  
+  /* read the xsd file into a BLOB variable */ 
+  if (xsdfile.name_length > 0)
+    {
+      testfile = fopen( xsdfile.name, "r" );
+      if ( testfile != NULL )
+        {
+          fclose( testfile );
+          if ((xsdobjp = (struct xsdobjp_t *)
+                                     malloc (sizeof (*xsdobjp))) != NULL )
+            {
+               memset(xsdobjp, 0, sizeof(*xsdobjp));
+               EXEC SQL VALUES (:xsdfile) INTO :*xsdobjp;
+            }
+        }
+      else
+        {
+           printf("fopen() error.\n");
+           printf("Error accessing file: %s \n", xsdfile.name);
+           exit(0);
+        }
+    }
+
+  printf("-----------------------------------------------------------------------------\n"); 
+  printf("\nFilename : %s\n",xsdfile.name);
+  printf("Data : %s\n",xsdobjp->data);
+  /* call SYSPROC.XSR_ADDSCHEMADOC to add the xml schema document */ 
+  printf("CALLING SYSPROC.XSR_ADDSCHEMADOC TO ADD THE SCHEMA DOCUMENT %s......\n\n",xmlschemadoc);
+  EXEC SQL CALL SYSPROC.XSR_ADDSCHEMADOC(:RelSchema,
+                                         :SchemaName,
+                                         :SchemaLocation,
+                                         :*xsdobjp,
+                                         :*xsdobjp:null_ind );
+  EMB_SQL_CHECK("CALLING SYSPROC.XSR_ADDSCHEMADOC FOR FIRST DOCUMENT");
+  return 0;
+} /* addxmlschemadoc */ 
+
+int insertValidatexml()
+{
+  FILE *testfile=NULL;
+  strcpy(status,"shipped"); 
+  strcpy(xmlfile.name,"order.xml");
+  xmlfile.name_length = strlen(xmlfile.name);
+  xmlfile.file_options = SQL_FILE_READ;
+  
+  /* read the xml value */ 
+  if (xmlfile.name_length > 0)
+    {
+      testfile = fopen( xmlfile.name, "r" );
+      if ( testfile != NULL )
+        {
+          fclose(testfile);
+          if ((xmlobjp = (struct xmlobjp_t *)
+                                     malloc (sizeof (*xmlobjp))) != NULL )
+            {
+               memset(xmlobjp, 0, sizeof(*xmlobjp));
+               EXEC SQL VALUES (:xmlfile) INTO :*xmlobjp;
+            }
+        }
+      else
+        {
+           printf("fopen() error.\n");
+           printf("Error accessing file: %s \n", xmlfile.name);
+           exit(0);
+        }
+    }
+  printf("-------------------------------------------------------------------------\n");
+  printf("Filename : %s\n",xmlfile.name);
+  printf("Data : %s\n",xmlobjp->data);
+  printf("\n inserting xml value......"); 
+  sprintf( stmt,"INSERT INTO PURCHASEORDER (poid,status,porder)"
+              " VALUES(?,?,xmlvalidate(xmlparse(document cast(? as BLOB))"
+              "ACCORDING TO XMLSCHEMA ID posample.order))");
+  EXEC SQL PREPARE s1 FROM :stmt;
+  EMB_SQL_CHECK("PREAPRE STATEMENT"); 
+  EXEC SQL EXECUTE s1 using :poid, :status, :*xmlobjp;
+  EMB_SQL_CHECK("EXECUTE STATEMENT");
+  return 0;
+} /* insertValidatexml */
+

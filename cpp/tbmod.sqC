@@ -1,0 +1,934 @@
+/****************************************************************************
+** (c) Copyright IBM Corp. 2007 All rights reserved.
+** 
+** The following sample of source code ("Sample") is owned by International 
+** Business Machines Corporation or one of its subsidiaries ("IBM") and is 
+** copyrighted and licensed, not sold. You may use, copy, modify, and 
+** distribute the Sample in any form without payment to IBM, for the purpose of 
+** assisting you in the development of your applications.
+** 
+** The Sample code is provided to you on an "AS IS" basis, without warranty of 
+** any kind. IBM HEREBY EXPRESSLY DISCLAIMS ALL WARRANTIES, EITHER EXPRESS OR 
+** IMPLIED, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED WARRANTIES OF 
+** MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE. Some jurisdictions do 
+** not allow for the exclusion or limitation of implied warranties, so the above 
+** limitations or exclusions may not apply to you. IBM shall not be liable for 
+** any damages you suffer as a result of using, copying, modifying or 
+** distributing the Sample, even if IBM has been advised of the possibility of 
+** such damages.
+*****************************************************************************
+**
+** SOURCE FILE NAME: tbmod.sqC 
+**    
+** SAMPLE: How to modify table data 
+**           
+** SQL STATEMENTS USED:
+**         DELETE 
+**         DECLARE CURSOR 
+**         OPEN
+**         FETCH
+**         CLOSE
+**         INSERT
+**         UPDATE
+**
+** OUTPUT FILE: tbmod.out (available in the online documentation)
+*****************************************************************************
+**
+** For more information on the sample programs, see the README file.
+**
+** For information on developing C++ applications, see the Application
+** Development Guide.
+**
+** For information on using SQL statements, see the SQL Reference.
+**
+** For the latest information on programming, compiling, and running DB2
+** applications, visit the DB2 application development website at
+**     http://www.software.ibm.com/data/db2/udb/ad
+****************************************************************************/
+
+#include <sqlenv.h>
+#include <sqlutil.h>
+#include "utilemb.h"
+#if ((__cplusplus >= 199711L) && !defined DB2HP && !defined DB2AIX) || \
+    (DB2LINUX && (__LP64__ || (__GNUC__ >= 3)) )
+   #include <iomanip>
+   #include <iostream>
+   using namespace std; 
+#else
+   #include <iomanip.h>
+   #include <iostream.h>
+#endif
+
+EXEC SQL BEGIN DECLARE SECTION;
+  short id;
+  char name[10];
+  short dept;
+  char job[10];
+  short jobInd;
+  short years;
+  short yearsInd;
+  double salary;
+  double comm;
+  short commInd;
+  char empno[7];
+  char workdept[8];
+EXEC SQL END DECLARE SECTION;
+
+class TbMod
+{
+  public:
+    // types of insert
+    int InsertUsingValues();
+    int InsertUsingFullselect();
+
+    // types of update
+    int UpdateWithoutSubqueries();
+    int UpdateUsingSubqueryInSetClause();
+    int UpdateUsingSubqueryInWhereClause();
+    int UpdateUsingCorrelatedSubqueryInSetClause();
+    int UpdateUsingCorrelatedSubqueryInWhereClause();
+    int PositionedUpdateWithoutSubqueries();
+    int PositionedUpdateUsingSubqueryInSetClause();
+    int PositionedUpdateUsingCorrelatedSubqueryInSetClause();
+
+    // types of delete
+    int DeleteWithoutSubqueries();
+    int DeleteUsingSubqueryInWhereClause();
+    int DeleteUsingCorrelatedSubqueryInWhereClause();
+    int PositionedDelete();
+
+  private:
+    // support functions
+    int StaffTbContentDisplay();
+};
+
+int TbMod::StaffTbContentDisplay()
+{
+  struct sqlca sqlca;
+
+  cout << "\n  SELECT * FROM staff WHERE id >= 310" << endl;
+  cout << "    ID  NAME     DEPT JOB   YEARS SALARY   COMM" << endl;
+  cout << "    --- -------- ---- ----- ----- -------- -------" << endl;
+
+  EXEC SQL DECLARE posCur0 CURSOR FOR SELECT * FROM staff WHERE id >= 310;
+
+  EXEC SQL OPEN posCur0;
+  EMB_SQL_CHECK("cursor -- open");
+
+  EXEC SQL FETCH posCur0 INTO :id, :name, :dept, :job:jobInd,
+                              :years:yearsInd, :salary, :comm:commInd;
+  EMB_SQL_CHECK("cursor -- fetch");
+
+  while (sqlca.sqlcode != 100)
+  {
+    cout << "    " << setw(3) << id;
+    cout.setf(ios::left, ios::adjustfield);
+    cout << " " << setw(8) << name;
+    cout.setf(ios::right, ios::adjustfield);
+    cout << " " << setw(4) << dept;
+
+    if (jobInd >= 0)
+    {
+      cout << " " << setw(5) << job;
+    }
+    else
+    {
+      cout << "     -";
+    }
+
+    if (yearsInd >= 0)
+    {
+      cout << " " << setw(5) << years;
+    }
+    else
+    {
+      cout << "     -";
+    }
+    cout << " " << setw(7) << setprecision(2) << salary;
+
+    if (commInd >= 0)
+    {
+      cout << " " << setw(7) << comm;
+    }
+    else
+    {
+      cout << "       -";
+    }
+    cout << endl;
+
+    EXEC SQL FETCH posCur0 INTO :id, :name, :dept, :job:jobInd,
+                                :years:yearsInd, :salary, :comm:commInd;
+    EMB_SQL_CHECK("cursor -- fetch");
+  }
+
+  EXEC SQL CLOSE posCur0;
+  EMB_SQL_CHECK("cursor -- close");
+
+  return 0;
+} //TbMod::StaffTbContentDisplay
+
+int TbMod::InsertUsingValues()
+{
+  int rc = 0;
+  struct sqlca sqlca;
+
+  cout << "\n-----------------------------------------------------------";
+  cout << "\nUSE THE SQL STATEMENT:" << endl;
+  cout << "  INSERT" << endl;
+  cout << "TO INSERT DATA INTO A TABLE USING VALUES." << endl;
+
+  // display the initial content of the table
+  rc = StaffTbContentDisplay();
+
+  // insert using values into the table
+  cout << "\n  Invoke the statement" << endl;
+  cout << "    INSERT INTO staff(id, name, dept, job, salary)" << endl;
+  cout << "      VALUES(380, 'Pearce', 38, 'Clerk', 13217.50)," << endl;
+  cout << "            (390, 'Hachey', 38, 'Mgr', 21270.00)," << endl;
+  cout << "            (400, 'Wagland', 38, 'Clerk', 14575.00)" << endl;
+
+  EXEC SQL INSERT INTO staff(id, name, dept, job, salary)
+    VALUES(380, 'Pearce', 38, 'Clerk', 13217.50),
+          (390, 'Hachey', 38, 'Mgr', 21270.00),
+          (400, 'Wagland', 38, 'Clerk', 14575.00);
+  EMB_SQL_CHECK("table -- insert using values");
+
+  // display final content of the table
+  rc = StaffTbContentDisplay();
+
+  // rollback the transaction
+  DbEmb::TransRollback();
+
+  return 0;
+} //TbMod::InsertUsingValues
+
+int TbMod::InsertUsingFullselect()
+{
+  int rc = 0;
+  struct sqlca sqlca;
+
+  cout << "\n-----------------------------------------------------------";
+  cout << "\nUSE THE SQL STATEMENT:" << endl;
+  cout << "  INSERT" << endl;
+  cout << "TO INSERT DATA INTO A TABLE USING FULLSELECT." << endl;
+
+  // display initial content of the table
+  rc = StaffTbContentDisplay();
+
+  // insert into the table using fullselect
+  cout << "\n  Invoke the statement" << endl;
+  cout << "    INSERT INTO staff(id, name, dept, salary)" << endl;
+  cout << "      SELECT INTEGER(empno)+100, lastname, 77, salary" << endl;
+  cout << "        FROM employee" << endl;
+  cout << "        WHERE INTEGER(empno) >= 310" << endl;
+  cout << "        AND INTEGER(empno) <= 340" << endl;
+
+  EXEC SQL INSERT INTO staff(id, name, dept, salary)
+    SELECT INTEGER(empno) + 100, lastname, 77, salary
+      FROM employee
+      WHERE INTEGER(empno) >= 310
+      AND INTEGER(empno) <= 340;
+  EMB_SQL_CHECK("table -- insert using fullselect");
+
+  // display final content of the table
+  rc = StaffTbContentDisplay();
+
+  // rollback the transaction
+  DbEmb::TransRollback();
+
+  return 0;
+} //TbMod::InsertUsingFullselect
+
+int TbMod::UpdateWithoutSubqueries()
+{
+  int rc = 0;
+  struct sqlca sqlca;
+
+  cout << "\n-----------------------------------------------------------";
+  cout << "\nUSE THE SQL STATEMENT:" << endl;
+  cout << "  UPDATE" << endl;
+  cout << "TO UPDATE TABLE DATA." << endl;
+
+  // display initial content of the table
+  rc = StaffTbContentDisplay();
+
+  // update the table
+  cout << "\n  Invoke the statement" << endl;
+  cout << "    UPDATE staff SET salary = salary + 1000" << endl;
+  cout << "      WHERE id >= 310 AND dept = 84" << endl;
+
+  EXEC SQL UPDATE staff SET salary = salary + 1000
+    WHERE id >= 310 AND dept = 84;
+  EMB_SQL_CHECK("table -- update");
+
+  // display final content of the table
+  rc = StaffTbContentDisplay();
+
+  // rollback the transaction
+  DbEmb::TransRollback();
+
+  return 0;
+} //TbMod::UpdateWithoutSubqueries
+
+int TbMod::UpdateUsingSubqueryInSetClause()
+{
+  int rc = 0;
+  struct sqlca sqlca;
+
+  cout << "\n-----------------------------------------------------------";
+  cout << "\nUSE THE SQL STATEMENT:" << endl;
+  cout << "  UPDATE" << endl;
+  cout << "TO UPDATE TABLE DATA" << endl;
+  cout << "USING SUBQUERY IN 'SET' CLAUSE." << endl;
+
+  // display initial content of the table
+  rc = StaffTbContentDisplay();
+
+  // update the table using subquery in SET clause
+  cout << "\n  Invoke the statement" << endl;
+  cout << "    UPDATE staff SET salary = (SELECT MIN(salary)" << endl;
+  cout << "                                 FROM staff" << endl;
+  cout << "                                 WHERE id >= 310)" << endl;
+  cout << "      WHERE id = 350" << endl;
+
+  EXEC SQL UPDATE staff SET salary = (SELECT MIN(salary)
+                                        FROM staff
+                                        WHERE id >= 310)
+    WHERE id = 350;
+  EMB_SQL_CHECK("table -- update using subquery in SET clause");
+
+  // display final content of the table
+  rc = StaffTbContentDisplay();
+
+  // rollback the transaction
+  DbEmb::TransRollback();
+
+  return 0;
+} //TbMod::UpdateUsingSubqueryInSetClause
+
+int TbMod::UpdateUsingSubqueryInWhereClause()
+{
+  int rc = 0;
+  struct sqlca sqlca;
+
+  cout << "\n-----------------------------------------------------------";
+  cout << "\nUSE THE SQL STATEMENT:" << endl;
+  cout << "  UPDATE" << endl;
+  cout << "TO UPDATE TABLE DATA" << endl;
+  cout << "USING SUBQUERY IN 'WHERE' CLAUSE." << endl;
+
+  // display initial content of the table
+  rc = StaffTbContentDisplay();
+
+  // update the table using subquery in WHERE clause
+  cout << "\n  Invoke the statement" << endl;
+  cout << "    UPDATE staff SET comm = 250.00" << endl;
+  cout << "      WHERE dept = 84 AND" << endl;
+  cout << "            salary < (SELECT AVG(salary)" << endl;
+  cout << "                        FROM staff" << endl;
+  cout << "                        WHERE id >= 310 AND dept = 84)" << endl;
+
+  EXEC SQL UPDATE staff SET comm = 250.00
+    WHERE dept = 84 AND 
+          salary < (SELECT AVG(salary)
+                      FROM staff
+                      WHERE id >= 310 AND dept = 84);
+  EMB_SQL_CHECK("table -- update using subquery in WHERE clause");
+
+  // display final content of the table
+  rc = StaffTbContentDisplay();
+
+  // rollback the transaction
+  DbEmb::TransRollback();
+
+  return 0;
+} //TbMod::UpdateUsingSubqueryInWhereClause
+
+int TbMod::UpdateUsingCorrelatedSubqueryInSetClause()
+{
+  int rc = 0;
+  struct sqlca sqlca;
+
+  cout << "\n-----------------------------------------------------------";
+  cout << "\nUSE THE SQL STATEMENT:" << endl;
+  cout << "  UPDATE" << endl;
+  cout << "TO UPDATE TABLE DATA" << endl;
+  cout << "USING CORRELATED SUBQUERY IN 'SET' CLAUSE." << endl;
+
+  // display initial content of the table
+  rc = StaffTbContentDisplay();
+
+  // update the table data using correlated subquery in SET clause
+  cout << "\n  Invoke the statement" << endl;
+  cout << "    UPDATE staff s1" << endl;
+  cout << "      SET comm = 0.01 * (SELECT MIN(salary)" << endl;
+  cout << "                           FROM staff s2" << endl;
+  cout << "                           WHERE id >= 310 AND" << endl;
+  cout << "                                 s2.dept = s1.dept)" << endl;
+  cout << "      WHERE id >= 340" << endl;
+
+  EXEC SQL UPDATE staff s1
+    SET comm = 0.01 * (SELECT MIN(salary)
+                         FROM staff s2
+                         WHERE id >= 310 AND
+                               s2.dept = s1.dept)
+    WHERE id >= 340;
+  EMB_SQL_CHECK("table -- update using correl. subquery in SET clause");
+
+  // display final content of the table
+  rc = StaffTbContentDisplay();
+
+  // rollback the transaction
+  DbEmb::TransRollback();
+
+  return 0;
+} //TbMod::UpdateUsingCorrelatedSubqueryInSetClause
+
+int TbMod::UpdateUsingCorrelatedSubqueryInWhereClause()
+{
+  int rc = 0;
+  struct sqlca sqlca;
+
+  cout << "\n-----------------------------------------------------------";
+  cout << "\nUSE THE SQL STATEMENT:" << endl;
+  cout << "  UPDATE" << endl;
+  cout << "TO UPDATE TABLE DATA" << endl;
+  cout << "USING CORRELATED SUBQUERY IN 'WHERE' CLAUSE." << endl;
+
+  // display initial content of the table
+  rc = StaffTbContentDisplay();
+
+  // update the table using correlated subquery in WHERE clause
+  cout << "\n  Invoke the statement" << endl;
+  cout << "    UPDATE staff s1 SET comm = 700" << endl;
+  cout << "      WHERE id >= 340 AND" << endl;
+  cout << "            salary < (SELECT AVG(salary)" << endl;
+  cout << "                        FROM staff s2" << endl;
+  cout << "                        WHERE id >= 310 AND" << endl;
+  cout << "                              s2.dept = s1.dept)" << endl;
+
+  EXEC SQL UPDATE staff s1 SET comm = 700
+    WHERE id >= 340 AND
+          salary < (SELECT AVG(salary)
+                      FROM staff s2
+                      WHERE id >= 310 AND
+                            s2.dept = s1.dept);
+  EMB_SQL_CHECK("table -- update using correl. subquery in WHERE clause");
+
+  // display final content of the table
+  rc = StaffTbContentDisplay();
+
+  // rollback the transaction
+  DbEmb::TransRollback();
+
+  return 0;
+} //TbMod::UpdateUsingCorrelatedSubqueryInWhereClause
+
+int TbMod::PositionedUpdateWithoutSubqueries()
+{
+  int rc = 0;
+  struct sqlca sqlca;
+
+  cout << "\n-----------------------------------------------------------";
+  cout << "\nUSE THE SQL STATEMENTS:" << endl;
+  cout << "  DECLARE CURSOR" << endl;
+  cout << "  OPEN" << endl;
+  cout << "  FETCH" << endl;
+  cout << "  UPDATE" << endl;
+  cout << "  CLOSE" << endl;
+  cout << "TO PERFORM POSITIONED UPDATE ON A ROW." << endl;
+
+  // display initial content of the table
+  rc = StaffTbContentDisplay();
+
+  cout << "\n  Invoke the statements:" << endl;
+  cout << "    DECLARE posCur1 CURSOR FOR" << endl;
+  cout << "      SELECT name, dept FROM staff WHERE id >= 310";
+  cout << " FOR UPDATE OF comm" << endl;
+  cout << "    OPEN posCur1" << endl;
+  cout << "    FETCH posCur1 INTO :name, :dept" << endl;
+  cout << "    while (successful fetch)" << endl;
+  cout << "    {" << endl;
+  cout << "      if (dept != 84)" << endl;
+  cout << "      {" << endl;
+  cout << "        UPDATE staff SET comm = NULL";
+  cout << " WHERE CURRENT OF posCur1" << endl;
+  cout << "      }" << endl;
+  cout << "      FETCH posCur1 INTO :name, :dept" << endl;
+  cout << "    }" << endl;
+
+  // declare cursor
+  EXEC SQL DECLARE posCur1 CURSOR FOR
+      SELECT name, dept FROM staff WHERE id >= 310 FOR UPDATE OF comm;
+
+  // open cursor
+  EXEC SQL OPEN posCur1;
+  EMB_SQL_CHECK("cursor -- open");
+
+  // fetch cursor
+  EXEC SQL FETCH posCur1 INTO :name, :dept;
+  EMB_SQL_CHECK("cursor -- fetch");
+
+  while (sqlca.sqlcode != 100)
+  {
+    if (dept != 84)
+    {
+      EXEC SQL UPDATE staff SET comm = NULL WHERE CURRENT OF posCur1;
+      EMB_SQL_CHECK("table -- positioned update");
+    }
+
+    EXEC SQL FETCH posCur1 INTO :name, :dept;
+    EMB_SQL_CHECK("cursor -- fetch");
+  }
+
+  // close cursor
+  EXEC SQL CLOSE posCur1;
+  EMB_SQL_CHECK("cursor -- close");
+
+  // display final content of the table
+  rc = StaffTbContentDisplay();
+
+  // rollback the transaction
+  DbEmb::TransRollback();
+
+  return 0;
+} //TbMod::PositionedUpdateWithoutSubqueries
+
+int TbMod::PositionedUpdateUsingSubqueryInSetClause()
+{
+  int rc = 0;
+  struct sqlca sqlca;
+
+  cout << "\n-----------------------------------------------------------";
+  cout << "\nUSE THE SQL STATEMENTS:" << endl;
+  cout << "  DECLARE CURSOR" << endl;
+  cout << "  OPEN" << endl;
+  cout << "  FETCH" << endl;
+  cout << "  UPDATE" << endl;
+  cout << "  CLOSE" << endl;
+  cout << "TO PERFORM POSITIONED UPDATE ON A ROW" << endl;
+  cout << "USING SUBQUERY IN 'SET' CLAUSE." << endl;
+
+  // display initial content of the table
+  rc = StaffTbContentDisplay();
+
+  cout << "\n  Invoke the statements:" << endl;
+  cout << "    DECLARE posCur2 CURSOR FOR" << endl;
+  cout << "      SELECT name, dept FROM staff WHERE id >= 310";
+  cout << " FOR UPDATE OF comm" << endl;
+  cout << "    OPEN posCur2" << endl;
+  cout << "    FETCH posCur2 INTO :name, :dept" << endl;
+  cout << "    while (successful fetch)" << endl;
+  cout << "    {" << endl;
+  cout << "      if (dept != 84)" << endl;
+  cout << "      {" << endl;
+  cout << "        UPDATE staff\n";
+  cout << "          SET comm = 0.01 * (SELECT AVG(salary)\n";
+  cout << "                               FROM staff\n";
+  cout << "                               WHERE id >= 310)\n";
+  cout << "          WHERE CURRENT OF posCur2\n";
+  cout << "      }" << endl;
+  cout << "      FETCH posCur2 INTO :name, :dept" << endl;
+  cout << "    }" << endl;
+
+  // declare cursor
+  EXEC SQL DECLARE posCur2 CURSOR FOR
+    SELECT name, dept FROM staff WHERE id >= 310 FOR UPDATE OF comm;
+
+  // open cursor
+  EXEC SQL OPEN posCur2;
+  EMB_SQL_CHECK("cursor -- open");
+
+  // fetch cursor
+  EXEC SQL FETCH posCur2 INTO :name, :dept;
+  EMB_SQL_CHECK("cursor -- fetch");
+
+  while (sqlca.sqlcode != 100)
+  {
+    if (dept != 84)
+    {
+      EXEC SQL UPDATE staff
+        SET comm = 0.01 * (SELECT AVG(salary)
+                             FROM staff
+                             WHERE id >= 310)
+	WHERE CURRENT OF posCur2;
+      EMB_SQL_CHECK("table -- positioned update using subquery");
+    }
+
+    EXEC SQL FETCH posCur2 INTO :name, :dept;
+    EMB_SQL_CHECK("cursor -- fetch");
+  }
+
+  // close cursor
+  EXEC SQL CLOSE posCur2;
+  EMB_SQL_CHECK("cursor -- close");
+
+  // display final content of the table
+  rc = StaffTbContentDisplay();
+
+  // rollback the transaction
+  DbEmb::TransRollback();
+
+  return 0;
+} //TbMod::PositionedUpdateUsingSubqueryInSetClause
+
+int TbMod::PositionedUpdateUsingCorrelatedSubqueryInSetClause()
+{
+  int rc = 0;
+  struct sqlca sqlca;
+
+  cout << "\n-----------------------------------------------------------";
+  cout << "\nUSE THE SQL STATEMENTS:" << endl;
+  cout << "  DECLARE CURSOR" << endl;
+  cout << "  OPEN" << endl;
+  cout << "  FETCH" << endl;
+  cout << "  UPDATE" << endl;
+  cout << "  CLOSE" << endl;
+  cout << "TO PERFORM POSITIONED UPDATE ON A ROW" << endl;
+  cout << "USING CORRELATED SUBQUERY IN 'SET' CLAUSE." << endl;
+
+  // display initial content of the table
+  rc = StaffTbContentDisplay();
+
+  cout << "\n  Invoke the statements:" << endl;
+  cout << "    DECLARE posCur3 CURSOR FOR" << endl;
+  cout << "      SELECT name, dept FROM staff WHERE id >= 310";
+  cout << " FOR UPDATE OF comm" << endl;
+  cout << "    OPEN posCur3" << endl;
+  cout << "    FETCH posCur3 INTO :name, :dept" << endl;
+  cout << "    while (successful fetch)" << endl;
+  cout << "    {" << endl;
+  cout << "      if (dept != 84)" << endl;
+  cout << "      {" << endl;
+  cout << "        UPDATE staff s1\n";
+  cout << "          SET comm = 0.01 * (SELECT AVG(salary)" << endl;
+  cout << "                               FROM staff s2" << endl;
+  cout << "                               WHERE id >= 310 AND" << endl;
+  cout << "                                     s2.dept = s1.dept)" << endl;
+  cout << "          WHERE CURRENT OF posCur3" << endl;
+  cout << "      }" << endl;
+  cout << "      FETCH posCur3 INTO :name, :dept" << endl;
+  cout << "    }" << endl;
+
+  // declare cursor
+  EXEC SQL DECLARE posCur3 CURSOR FOR
+    SELECT name, dept FROM staff WHERE id >= 310 FOR UPDATE OF comm;
+
+  // open cursor
+  EXEC SQL OPEN posCur3;
+  EMB_SQL_CHECK("cursor -- open");
+
+  // fetch cursor
+  EXEC SQL FETCH posCur3 INTO :name, :dept;
+  EMB_SQL_CHECK("cursor -- fetch");
+
+  while (sqlca.sqlcode != 100)
+  {
+    if (dept != 84)
+    {
+      EXEC SQL UPDATE staff s1
+        SET comm = 0.01 * (SELECT AVG(salary)
+                             FROM staff s2
+                             WHERE id >= 310 AND
+                                   s2.dept = s1.dept)
+        WHERE CURRENT OF posCur3;
+      EMB_SQL_CHECK("table -- pos. update using correl. subquery");
+    }
+
+    EXEC SQL FETCH posCur3 INTO :name, :dept;
+    EMB_SQL_CHECK("cursor -- fetch");
+  }
+
+  // close cursor
+  EXEC SQL CLOSE posCur3;
+  EMB_SQL_CHECK("cursor -- close");
+
+  // display final content of the table
+  rc = StaffTbContentDisplay();
+
+  // rollback the transaction
+  DbEmb::TransRollback();
+
+  return 0;
+} //TbMod::UpdateUsingCorrelatedSubqueryInSetClause
+
+int TbMod::DeleteWithoutSubqueries()
+{
+  int rc = 0;
+  struct sqlca sqlca;
+
+  cout << "\n-----------------------------------------------------------";
+  cout << "\nUSE THE SQL STATEMENT:" << endl;
+  cout << "  DELETE" << endl;
+  cout << "TO DELETE TABLE DATA." << endl;
+
+  // display initial content of the table
+  rc = StaffTbContentDisplay();
+
+  // delete the table data without subqueries */
+  cout << "\n  Invoke the statement" << endl;
+  cout << "    DELETE FROM staff WHERE id >= 310 AND salary > 20000 AND job != 'Sales'" << endl;
+
+  EXEC SQL DELETE FROM staff WHERE id >= 310 AND salary > 20000 AND job != 'Sales';
+  EMB_SQL_CHECK("table -- delete without subqueries");
+
+  // display final content of the table
+  rc = StaffTbContentDisplay();
+
+  // rollback the transaction
+  DbEmb::TransRollback();
+
+  return 0;
+} //TbMod::DeleteWithoutSubqueries
+
+int TbMod::DeleteUsingSubqueryInWhereClause()
+{
+  int rc = 0;
+  struct sqlca sqlca;
+
+  cout << "\n-----------------------------------------------------------";
+  cout << "\nUSE THE SQL STATEMENT:" << endl;
+  cout << "  DELETE" << endl;
+  cout << "TO DELETE TABLE DATA" << endl;
+  cout << "USING SUBQUERY IN 'WHERE' CLAUSE." << endl;
+
+  // display initial content of the table
+  rc = StaffTbContentDisplay();
+
+  // display selected content from employee table
+  cout << "\n  SELECT empno, salary, workdept FROM employee";
+  cout << " WHERE workdept = 'E11'" << endl;
+  cout << "    EMPNO  SALARY     WORKDEPT" << endl;
+  cout << "    ------ ---------- --------" << endl;
+
+  EXEC SQL DECLARE c0 CURSOR FOR
+    SELECT empno, salary, workdept FROM employee WHERE workdept = 'E11';
+
+  EXEC SQL OPEN c0;
+  EMB_SQL_CHECK("cursor -- open");
+
+  EXEC SQL FETCH c0 INTO :empno, :salary, :workdept;
+  EMB_SQL_CHECK("cursor -- fetch");
+
+  while (sqlca.sqlcode != 100)
+  {
+    cout << "    " << setw(6) << empno;
+    cout.setf(ios::right, ios::adjustfield);
+    cout << " " << setw(10) << setprecision(2) << salary;
+    cout.setf(ios::left, ios::adjustfield);
+    cout << " " << setw(8) << workdept << endl;
+
+    EXEC SQL FETCH c0 INTO :empno, :salary, :workdept;
+    EMB_SQL_CHECK("cursor -- fetch");
+  }
+
+  EXEC SQL CLOSE c0;
+  EMB_SQL_CHECK("cursor -- close");
+
+  // delete the table data using subquery in WHERE clause
+  cout << "\n  Execute the statement" << endl;
+  cout << "    DELETE FROM staff" << endl;
+  cout << "      WHERE id >= 310 AND" << endl;
+  cout << "            job != 'Sales' AND" << endl;
+  cout << "            salary > (SELECT AVG(salary)" << endl;
+  cout << "                        FROM employee" << endl;
+  cout << "                        WHERE workdept = 'E11')" << endl;
+
+  EXEC SQL DELETE FROM staff
+    WHERE id >= 310 AND
+          job != 'Sales' AND
+          salary > (SELECT AVG(salary)
+                      FROM employee
+                      WHERE workdept = 'E11');
+  EMB_SQL_CHECK("table -- insert using values");
+
+  // display final content of the table
+  rc = StaffTbContentDisplay();
+
+  // rollback the transaction
+  DbEmb::TransRollback();
+
+  return 0;
+} //TbMod::DeleteUsingSubqueryInWhereClause
+
+int TbMod::DeleteUsingCorrelatedSubqueryInWhereClause()
+{
+  int rc = 0;
+  struct sqlca sqlca;
+
+  cout << "\n-----------------------------------------------------------";
+  cout << "\nUSE THE SQL STATEMENT:" << endl;
+  cout << "  DELETE" << endl;
+  cout << "TO DELETE TABLE DATA" << endl;
+  cout << "USING A CORRELATED SUBQUERY IN 'WHERE' CLAUSE." << endl;
+
+  // display initial content of the table
+  rc = StaffTbContentDisplay();
+
+  // delete using correlated subquery in WHERE clause from the table
+  cout << "\n  Execute the statement" << endl;
+  cout << "    DELETE FROM staff s1" << endl;
+  cout << "      WHERE id >= 310 AND" << endl;
+  cout << "            job != 'Sales' AND" << endl;
+  cout << "            salary < (SELECT AVG(salary)" << endl;
+  cout << "                        FROM staff s2" << endl;
+  cout << "                        WHERE s2.dept = s1.dept)" << endl;
+
+  EXEC SQL DELETE FROM staff s1
+    WHERE id >= 310 AND
+          job != 'Sales' AND
+          salary < (SELECT AVG(salary)
+                      FROM staff s2
+                      WHERE s2.dept = s1.dept);
+  EMB_SQL_CHECK("table -- delete using correl. subquery in WHERE clause");
+
+  // display final content of the table
+  rc = StaffTbContentDisplay();
+
+  // rollback the transaction
+  DbEmb::TransRollback();
+
+  return 0;
+} //TbMod::TbDeleteUsingCorrelatedSubqueryInWhereClause
+
+int TbMod::PositionedDelete()
+{
+  int rc = 0;
+  struct sqlca sqlca;
+
+  cout << "\n-----------------------------------------------------------";
+  cout << "\nUSE THE SQL STATEMENTS:" << endl;
+  cout << "  DECLARE CURSOR" << endl;
+  cout << "  OPEN" << endl;
+  cout << "  FETCH" << endl;
+  cout << "  DELETE" << endl;
+  cout << "  CLOSE" << endl;
+  cout << "TO PERFORM POSITIONED DELETE ON A ROW." << endl;
+
+  // display initial content of the table
+  rc = StaffTbContentDisplay();
+
+  cout << "\n  Invoke the statements:" << endl;
+  cout << "    DECLARE posCur4 CURSOR FOR" << endl;
+  cout << "      SELECT name, dept FROM staff WHERE id >= 310 AND job != 'Sales'" << endl;
+  cout << "    OPEN posCur4" << endl;
+  cout << "    FETCH posCur4 INTO :name, :dept" << endl;
+  cout << "    while (successful fetch)" << endl;
+  cout << "    {" << endl;
+  cout << "      if (dept != 84)" << endl;
+  cout << "      {" << endl;
+  cout << "        DELETE FROM staff WHERE CURRENT OF posCur4" << endl;
+  cout << "      }" << endl;
+  cout << "      FETCH posCur4 INTO :name, :dept" << endl;
+  cout << "    }" << endl;
+
+  // declare cursor
+  EXEC SQL DECLARE posCur4 CURSOR FOR
+    SELECT name, dept FROM staff WHERE id >= 310 AND job != 'Sales' ;
+
+  // open cursor
+  EXEC SQL OPEN posCur4;
+  EMB_SQL_CHECK("cursor -- open");
+
+  // fetch cursor
+  EXEC SQL FETCH posCur4 INTO :name, :dept;
+  EMB_SQL_CHECK("cursor -- fetch");
+
+  while (sqlca.sqlcode != 100)
+  {
+    if (dept != 84)
+    {
+      EXEC SQL DELETE FROM staff WHERE CURRENT OF posCur4;
+      EMB_SQL_CHECK("table -- positioned delete");
+    }
+
+    EXEC SQL FETCH posCur4 INTO :name, :dept;
+    EMB_SQL_CHECK("cursor -- fetch");
+  }
+
+  // close cursor
+  EXEC SQL CLOSE posCur4;
+  EMB_SQL_CHECK("cursor -- close");
+
+  // display final content of the table
+  rc = StaffTbContentDisplay();
+
+  // rollback the transaction
+  DbEmb::TransRollback();
+
+  return 0;
+} //TbMod::PositionedDelete
+
+int main(int argc, char *argv[])
+{
+  int rc = 0;
+  struct sqlca sqlca;
+  CmdLineArgs check;
+  DbEmb db;
+  TbMod mod;
+
+  // check the command line arguments
+  rc = check.CmdLineArgsCheck1(argc, argv, db);
+  if (rc != 0)
+  {
+    return rc;
+  }
+
+  cout.setf(ios::fixed, ios::floatfield);
+  cout << "\nTHIS SAMPLE SHOWS HOW TO MODIFY TABLE DATA." << endl;
+
+  cout << "\n  THERE ARE THREE WAYS TO MODIFY TABLE DATA:" << endl;
+  cout << "    INSERT ROW(S)" << endl;
+  cout << "    UPDATE ROW(S)" << endl;
+  cout << "    DELETE ROW(S)" << endl;
+  cout << "  THIS SAMPLE SHOWS ALL TYPES OF INSERT, UPDATE AND DELETE"
+       << endl;
+  cout << "  EXECUTING THE STATEMENTS STATICALLY, WITHOUT PARAMETERS."
+       << endl;
+  cout << "\n  HOWEVER, FOR EVERY TYPE, ALL THE METHODS" << endl;
+  cout << "  DESCRIBED IN THE SAMPLE dbuse CAN BE USED, AS FOLLOWS:" << endl;
+  cout << "    StaticStmtInvoke" << endl;
+  cout << "    StaticStmtWithHostVarsInvoke" << endl;
+  cout << "    DynamicStmtEXECUTE_IMMEDIATE" << endl;
+  cout << "    DynamicStmtEXECUTE" << endl;
+  cout << "    DynamicStmtWithMarkersEXECUTEusingHostVars" << endl;
+  cout << "    DynamicStmtWithMarkersEXECUTEusingSQLDA" << endl;
+  cout << "    CompoundStmtInvoke" << endl;
+
+  // connect to the database
+  rc = db.Connect();
+  if (rc != 0)
+  {
+    return rc;
+  }
+
+  // types of Insert
+  rc = mod.InsertUsingValues();
+  rc = mod.InsertUsingFullselect();
+
+  // types of Update
+  rc = mod.UpdateWithoutSubqueries();
+  rc = mod.UpdateUsingSubqueryInSetClause();
+  rc = mod.UpdateUsingSubqueryInWhereClause();
+  rc = mod.UpdateUsingCorrelatedSubqueryInSetClause();
+  rc = mod.UpdateUsingCorrelatedSubqueryInWhereClause();
+  rc = mod.PositionedUpdateWithoutSubqueries();
+  rc = mod.PositionedUpdateUsingSubqueryInSetClause();
+  rc = mod.PositionedUpdateUsingCorrelatedSubqueryInSetClause();
+
+  // types of Delete
+  rc = mod.DeleteWithoutSubqueries();
+  rc = mod.DeleteUsingSubqueryInWhereClause();
+  rc = mod.DeleteUsingCorrelatedSubqueryInWhereClause();
+  rc = mod.PositionedDelete();
+
+  // disconnect from the database
+  rc = db.Disconnect();
+  if (rc != 0)
+  {
+    return rc;
+  }
+
+  return 0;
+} //main
+

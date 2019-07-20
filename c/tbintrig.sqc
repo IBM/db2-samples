@@ -1,0 +1,839 @@
+/****************************************************************************
+** (c) Copyright IBM Corp. 2007 All rights reserved.
+** 
+** The following sample of source code ("Sample") is owned by International 
+** Business Machines Corporation or one of its subsidiaries ("IBM") and is 
+** copyrighted and licensed, not sold. You may use, copy, modify, and 
+** distribute the Sample in any form without payment to IBM, for the purpose of 
+** assisting you in the development of your applications.
+** 
+** The Sample code is provided to you on an "AS IS" basis, without warranty of 
+** any kind. IBM HEREBY EXPRESSLY DISCLAIMS ALL WARRANTIES, EITHER EXPRESS OR 
+** IMPLIED, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED WARRANTIES OF 
+** MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE. Some jurisdictions do 
+** not allow for the exclusion or limitation of implied warranties, so the above 
+** limitations or exclusions may not apply to you. IBM shall not be liable for 
+** any damages you suffer as a result of using, copying, modifying or 
+** distributing the Sample, even if IBM has been advised of the possibility of 
+** such damages.
+*****************************************************************************
+**
+** SOURCE FILE NAME: tbintrig.sqc 
+**    
+** SAMPLE: How to use an 'INSTEAD OF' trigger on a view 
+**           
+** SQL STATEMENTS USED:
+**         DECLARE CURSOR 
+**         SELECT
+**         OPEN
+**         FETCH
+**         CLOSE
+**         CREATE TABLE
+**         EXECUTE IMMEDIATE
+**         PREPARE
+**         DROP
+**         CREATE TRIGGER
+**         INSERT
+**         DELETE
+**         UPDATE
+**
+** OUTPUT FILE: tbintrig.out (available in the online documentation)
+*****************************************************************************
+**
+** For more information on the sample programs, see the README file.
+**
+** For information on developing C applications, see the Application
+** Development Guide.
+**
+** For information on using SQL statements, see the SQL Reference.
+**
+** For the latest information on programming, building, and running DB2 
+** applications, visit the DB2 application development website: 
+**        http://www.software.ibm.com/data/db2/udb/ad
+****************************************************************************/
+
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+#include <sqlenv.h>
+#include <sqlutil.h>
+#include "utilemb.h"
+
+int NormalUpdate(void);
+int UpdateWithInsteadOfTrigger(void);
+int StaffvContentDisplay(char *);
+int InsteadOfUpdateTriggerCreate(void);
+int CreateViewStaffV(void);
+int MutliTableUpdate(void);
+int CreatePersonsVTriggers(void);
+int CreateTablesAndView(void);
+int PersonsVContentDisplay(void);
+
+EXEC SQL BEGIN DECLARE SECTION;
+  char dbAlias[15];
+  char user[15];
+  char pswd[15];
+  short id;
+  char name[10];
+  short dept;
+  char job[10];
+  short jobInd;
+  short years;
+  short yearsInd;
+  double salary;
+  double comm;
+  short commInd;
+  short nbemp;
+  char emp_name[10];
+  double sal;
+  char status[15];
+  char employee_name[10];
+  double salary_record;
+  char change_date[15];
+  char strStmt[1024];
+  char personsname[20];
+  sqlint32 ssn;
+  char company[20];
+  short compInd;
+  char university[20];
+  short univInd;
+  char major[10];
+  short majorInd;
+  short salaryInd;
+EXEC SQL END DECLARE SECTION;
+
+int main(int argc, char *argv[])
+{
+  int rc = 0;
+  struct sqlca sqlca;
+
+  char dbAlias[SQL_ALIAS_SZ + 1];
+  char user[USERID_SZ + 1];
+  char pswd[PSWD_SZ + 1];
+
+  /* check the command line arguments */
+  rc = CmdLineArgsCheck1(argc, argv, dbAlias, user, pswd);
+  if (rc != 0)
+  {
+    return rc;
+  }
+
+  printf("\n  THIS SAMPLE SHOWS HOW TO USE 'INSTEAD OF' TRIGGERS.\n");
+
+  /* connect to database */
+  rc = DbConn(dbAlias, user, pswd);
+  if (rc != 0)
+  {
+    return rc;
+  }
+
+  /* Create a view 'staffv' of the table 'staff' */
+  rc = CreateViewStaffV();
+
+  /* Demonstrate an UPDATE operation before an INSTEAD OF UPDATE trigger
+     is created */
+  rc = NormalUpdate();
+
+  /* Demonstrate the same UPDATE operation after an INSTEAD OF UPDATE trigger
+     is created */
+  rc = UpdateWithInsteadOfTrigger();
+
+  /* Demonstrate how to update a number of tables through a common view and
+     the use of a set of 'INSTEAD OF' triggers */ 
+  rc = MutliTableUpdate();
+
+  /* Disconnect from the database */
+  rc = DbDisconn(dbAlias);
+  if (rc != 0)
+  {
+    return rc;
+  }
+
+  return 0;
+} /* main */
+
+/* This function creates a view 'staffv' of the table 'staff' */
+int CreateViewStaffV(void)
+{
+  struct sqlca sqlca;
+  printf("\n  CREATE A VIEW 'staffv' OF THE TABLE 'staff'\n");
+  printf("\n  INVOKE THE STATEMENT:\n");
+  printf("\n    CREATE VIEW staffv(ID, NAME, DEPT, JOB, YEARS, SALARY, COMM)"
+         "\n      AS SELECT * FROM staff WHERE ID >= 310\n");
+  EXEC SQL CREATE VIEW staffv(ID, NAME, DEPT, JOB, YEARS, SALARY, COMM)
+             AS SELECT * FROM staff WHERE ID >= 310;
+  EMB_SQL_CHECK("create--view");
+
+  EXEC SQL COMMIT;
+  return 0;
+}
+
+/* Helper function: This function displays the results of a query specified
+   by 'selectstmt' on the 'staffv' view */
+int StaffvContentDisplay(char *selectstmt)
+{
+  struct sqlca sqlca;
+
+  printf("\n  %s\n\n", selectstmt);
+  printf("    ID  NAME     DEPT JOB   YEARS SALARY   COMM\n");
+  printf("    --- -------- ---- ----- ----- -------- --------\n");
+
+  /* Declare a CURSOR to store the results of the query specified by
+     'selectstmt' */
+  strcpy(strStmt,
+         selectstmt);
+  EXEC SQL PREPARE S1 FROM :strStmt;
+  EMB_SQL_CHECK("after prepare");
+
+  EXEC SQL DECLARE c1 CURSOR FOR s1;
+  EMB_SQL_CHECK("declare cursor");
+
+  EXEC SQL OPEN c1;
+  EMB_SQL_CHECK("cursor -- open");
+
+  /* Retrieve and display the results of the query */
+  EXEC SQL FETCH c1 INTO :id, :name, :dept, :job:jobInd, :years:yearsInd,
+                         :salary, :comm:commInd;
+  EMB_SQL_CHECK("cursor -- fetch");
+
+  while (sqlca.sqlcode != 100)
+  {
+    printf("    %3d %-8.8s %4d", id, name, dept);
+    if (jobInd >= 0)
+    {
+      printf(" %-5.5s", job);
+    }
+    else
+    {
+      printf("     -");
+    }
+    if (yearsInd >= 0)
+    {
+      printf(" %5d", years);
+    }
+    else
+    {
+      printf("     -");
+    }
+    printf(" %7.2f", salary);
+    if (commInd >= 0)
+    {
+      printf(" %7.2f\n", comm);
+    }
+    else
+    {
+      printf("       -\n");
+    }
+
+    EXEC SQL FETCH c1 INTO :id, :name, :dept, :job:jobInd, :years:yearsInd,
+                           :salary, :comm:commInd;
+    EMB_SQL_CHECK("cursor -- fetch");
+  }
+
+  EXEC SQL CLOSE c1;
+  EMB_SQL_CHECK("cursor -- close");
+
+  return 0;
+} /* StaffvContentDisplay */
+
+/* This method demonstrates an UPDATE operation before an 'INSTEAD OF UPDATE'
+   trigger is created */
+int InsteadOfUpdateTriggerCreate(void)
+{
+  int rc = 0;
+  struct sqlca sqlca;
+
+  printf("\n  CREATE AN 'INSTEAD OF UPDATE' TRIGGER CALLED 'staff_raise'\n");
+
+  /* Create a trigger which apart from the original update, raises the salary
+     further based on the number of years the employee has served */
+  strcpy(strStmt, 
+         "CREATE TRIGGER staff_raise INSTEAD OF UPDATE ON staffv"
+         "  REFERENCING NEW AS n OLD AS o "
+         "  FOR EACH ROW "
+         "  BEGIN ATOMIC "
+         "    VALUES(CASE "
+         "             WHEN n.ID = o.ID THEN 0 "
+         "             ELSE RAISE_ERROR('70002', 'Must not change ID') "
+         "           END); "
+         "    UPDATE STAFF AS S "
+         "      SET (ID, NAME, DEPT, JOB, YEARS, COMM, SALARY) "
+         "        = (n.ID, n.NAME, n.DEPT, n.JOB, n.YEARS, n.COMM, "
+         "           CASE "
+         "             WHEN n.YEARS IS NULL THEN o.salary "
+         "             WHEN n.YEARS <= 2 THEN n.salary + 500 "
+         "             WHEN n.YEARS <= 4 THEN n.salary + 1000 "
+         "             WHEN n.YEARS <= 6 THEN n.salary + 2000 "
+         "             WHEN n.YEARS <= 8 THEN n.salary + 3500 "
+         "             WHEN n.YEARS <= 10 THEN n.salary + 5500 "
+         "             ELSE n.salary + 6000 "
+         "           END) "
+         "      WHERE n.ID = S.ID; "
+         "  END ");
+
+  printf("\n    CREATE TRIGGER staff_raise INSTEAD OF UPDATE ON staffv"
+         "\n      REFERENCING NEW AS n OLD AS o "
+         "\n      FOR EACH ROW "
+         "\n      BEGIN ATOMIC "
+         "\n        VALUES(CASE "
+         "\n                 WHEN n.ID = o.ID THEN 0 "
+         "\n                 ELSE RAISE_ERROR('70002', 'Must not change ID')"
+         "\n               END); "
+         "\n        UPDATE STAFF AS S "
+         "\n          SET (ID, NAME, DEPT, JOB, YEARS, COMM, SALARY) "
+         "\n            = (n.ID, n.NAME, n.DEPT, n.JOB, n.YEARS, n.COMM, "
+         "\n               CASE "
+         "\n                 WHEN n.YEARS IS NULL THEN o.salary "
+         "\n                 WHEN n.YEARS <= 2 THEN n.salary + 500 "
+         "\n                 WHEN n.YEARS <= 4 THEN n.salary + 1000 "
+         "\n                 WHEN n.YEARS <= 6 THEN n.salary + 2000 "
+         "\n                 WHEN n.YEARS <= 8 THEN n.salary + 3500 "
+         "\n                 WHEN n.YEARS <= 10 THEN n.salary + 5500 "
+         "\n                 ELSE n.salary + 6000 "
+         "\n               END) "
+         "\n          WHERE n.ID = S.ID; "
+         "\n      END\n");
+
+  EXEC SQL EXECUTE IMMEDIATE :strStmt;
+  EMB_SQL_CHECK("trigger -- create");
+
+  EXEC SQL COMMIT;
+  EMB_SQL_CHECK("create trigger -- commit");
+
+  return 0;
+} /* TbInsteadOfUpdateTriggerUse */
+
+/* This function demonstrates an UPDATE operation before an
+   'INSTEAD OF UPDATE' trigger has been created */
+int NormalUpdate(void)
+{
+  int rc = 0;
+  struct sqlca sqlca;
+  char *selectstring = "SELECT * FROM staffv WHERE ID = 340";
+
+  printf("\n  -----------------------------------------------------------");
+  printf("\n  USE THE SQL STATEMENTS:");
+  printf("\n\n    ROLLBACK");
+  printf("\n    UPDATE");
+  printf("\n\n  TO DISPLAY THE RESULTS OF AN UPDATE STATEMENT ON THE VIEW"
+         " 'staffv'"
+         "\n  BEFORE AN 'INSTEAD OF UPDATE' TRIGGER IS CREATED.\n");
+
+  /* Display the contents of the row in 'staffv' that is going to be
+     updated */
+  printf("\n  CONTENT OF A ROW IN 'staffv' VIEW BEFORE IT IS UPDATED\n");
+  rc = StaffvContentDisplay(selectstring);
+
+  /* Update the 'staffv' view */
+  printf("\n  INVOKE THE STATEMENT:\n");
+  printf("\n    UPDATE staffv SET years=4,COMM=50 WHERE ID = 340\n");
+
+  strcpy(strStmt, 
+         "UPDATE staffv SET years=4,COMM=50 WHERE ID = 340");
+  EXEC SQL EXECUTE IMMEDIATE :strStmt;
+  EMB_SQL_CHECK("table -- update");
+
+  /* Display the contents of the row in 'staffv' after updating it */
+  printf("\n  CONTENTS OF THE ROW IN 'staffv' AFTER UPDATING IT\n");
+  rc = StaffvContentDisplay(selectstring);
+
+  /* Rollback the changes made to the view */
+  EXEC SQL ROLLBACK;
+  return 0;
+}
+
+/* This function demonstrate an UPDATE operation after an 'INSTEAD OF UPDATE'
+   trigger has been created */
+int UpdateWithInsteadOfTrigger(void)
+{
+  int rc = 0;
+  struct sqlca sqlca;
+  char *selectstring = "SELECT * FROM staffv WHERE ID = 340";
+
+  printf("\n  -----------------------------------------------------------");
+  printf("\n  USE THE SQL STATEMENTS:\n");
+  printf("\n    CREATE TRIGGER");
+  printf("\n    UPDATE");
+  printf("\n    ROLLBACK");
+  printf("\n    COMMIT\n");
+  printf("\n  TO DISPLAY THE RESULTS OF THE SAME UPDATE STATEMENT ON THE "
+         "VIEW "
+         "\n  'staffv' AFTER CREATING AN 'INSTEAD OF UPDATE' TRIGGER.\n");
+
+  /* Create an 'INSTEAD OF UPDATE' trigger */
+  rc = InsteadOfUpdateTriggerCreate();
+
+  /* Display the row to be updated in 'staffv' before an UPDATE statement is
+     issued */
+  printf("\n  CONTENTS OF THE ROW IN 'staffv' BEFORE IT IS UPDATED\n");
+  rc = StaffvContentDisplay(selectstring);
+
+  /* Issue an UPDATE statement to update the 'staffv' view */
+  printf("\n  INVOKE THE SAME STATEMENT:\n");
+  printf("\n    UPDATE staffv SET years=4,COMM=50 WHERE ID = 340\n");
+
+  strcpy(strStmt, 
+         "UPDATE staffv SET years=4,COMM=50 WHERE ID = 340");
+  EXEC SQL EXECUTE IMMEDIATE :strStmt;
+  EMB_SQL_CHECK("table -- update");
+
+  /* Display the contents of the row in 'staffv' after updating it with the
+     UPDATE statement */
+  printf("\n  CONTENTS OF THE ROW IN 'staffv' AFTER INVOKING THE UPDATE "
+         "STATEMENT,"
+         "\n  WHICH NOW CAUSES THE 'INSTEAD OF UPDATE' TRIGGER TO FIRE\n");
+  rc = StaffvContentDisplay(selectstring);
+
+  /* Rollback changes made to the view */
+  EXEC SQL ROLLBACK;
+
+  /* Drop the trigger */
+  EXEC SQL DROP TRIGGER staff_raise;
+  EMB_SQL_CHECK("trigger -- drop");
+  EXEC SQL COMMIT;
+
+  /* Drop the view */
+  printf("\n  DROP VIEW 'STAFFV'\n");
+  EXEC SQL DROP VIEW STAFFV;
+  return 0;
+}
+
+/* This function creates tables: PERSONS, STUDENTS and EMPLOYEES and
+   creates a view called PERSONS_V */
+int CreateTablesAndView(void)
+{
+  struct sqlca sqlca;
+
+  /* Create the table PERSONS */
+  printf("\n  INVOKE THE STATEMENTS:\n");
+  printf("\n    CREATE TABLE PERSONS(ssn INT NOT NULL, name VARCHAR(20)"
+         " NOT NULL)\n");
+
+  EXEC SQL CREATE TABLE PERSONS(ssn INT NOT NULL, name VARCHAR(20) NOT NULL);
+  EMB_SQL_CHECK("table -- create");
+
+  /* Create the table EMPLOYEES */
+  printf("\n    CREATE TABLE EMPLOYEES(ssn INT NOT NULL,"
+         "\n                           company VARCHAR(20) NOT NULL,"
+         "\n                           salary DECIMAL(9,2))\n");
+
+  EXEC SQL CREATE TABLE EMPLOYEES(ssn INT NOT NULL,
+                                  company VARCHAR(20) NOT NULL,
+                                  salary DECIMAL(9,2));
+  EMB_SQL_CHECK("table -- create");
+
+  /* Create the table STUDENTS */
+  printf("\n    CREATE TABLE STUDENTS(ssn INT NOT NULL,"
+         "\n                          university VARCHAR(20) NOT NULL,"
+         "\n                          major VARCHAR(10))\n");
+
+  EXEC SQL CREATE TABLE STUDENTS(ssn INT NOT NULL,
+                                 university VARCHAR(20) NOT NULL,
+                                 major VARCHAR(10));
+  EMB_SQL_CHECK("table -- create");
+
+  /* Create the view PERSONS_V */
+  printf("\n    CREATE VIEW PERSONS_V(ssn, name, company, "
+         "\n                          salary, university, major) "
+         "\n      AS SELECT P.ssn, name, company, "
+         "\n                salary, university, major "
+         "\n           FROM PERSONS P LEFT OUTER JOIN EMPLOYEES E "
+         "\n                               ON P.ssn = E.ssn "
+         "\n                          LEFT OUTER JOIN STUDENTS S "
+         "\n                               ON P.ssn = S.ssn\n");
+
+  EXEC SQL CREATE VIEW PERSONS_V(ssn, name, company, 
+                                 salary, university, major)
+             AS SELECT P.ssn, name, company, 
+                       salary, university, major
+                  FROM PERSONS P LEFT OUTER JOIN EMPLOYEES E 
+                                      ON P.ssn = E.ssn
+                                 LEFT OUTER JOIN STUDENTS S
+                                      ON P.ssn = S.ssn;
+  EMB_SQL_CHECK("view -- create");
+
+  EXEC SQL COMMIT;
+  EMB_SQL_CHECK("transaction -- commit");
+  return 0;
+} /* CreateTablesAndView */
+
+/* This function creates INSTEAD OF triggers: INSERT_PERSONS_V,
+   UPDATE_PERSONS_V and DELETE_PERSONS_V on the view PERSONS_V */
+int CreatePersonsVTriggers(void)
+{
+  int rc = 0;
+  struct sqlca sqlca;
+
+  /* Create the INSTEAD OF INSERT trigger 'INSERT_PERSONS_V' */
+  printf("\n  CREATE AN 'INSTEAD OF INSERT' TRIGGER CALLED "
+         "'INSERT_PERSONS_V':\n"
+         "\n  INVOKE THE STATEMENT:\n");
+
+  printf("\n    CREATE TRIGGER INSERT_PERSONS_V "
+         "\n      INSTEAD OF INSERT ON PERSONS_V "
+         "\n      REFERENCING NEW AS n FOR EACH ROW "
+         "\n      BEGIN ATOMIC "
+         "\n        INSERT INTO PERSONS VALUES (n.ssn, n.name); "
+         "\n        IF n.university IS NOT NULL THEN "
+         "\n          INSERT INTO STUDENTS "
+         "\n            VALUES(n.ssn, n.university, n.major); "
+         "\n        END IF; "
+         "\n        IF n.company IS NOT NULL THEN "
+         "\n          INSERT INTO EMPLOYEES "
+         "\n            VALUES(n.ssn, n.company, n.salary); "
+         "\n        END IF; "
+         "\n      END\n");
+
+  strcpy(strStmt, 
+         "CREATE TRIGGER INSERT_PERSONS_V "
+         "  INSTEAD OF INSERT ON PERSONS_V "
+         "  REFERENCING NEW AS n FOR EACH ROW "
+         "  BEGIN ATOMIC "
+         "    INSERT INTO PERSONS VALUES (n.ssn, n.name); "
+         "    IF n.university IS NOT NULL THEN "
+         "      INSERT INTO STUDENTS "
+         "        VALUES(n.ssn, n.university, n.major); "
+         "    END IF; "
+         "    IF n.company IS NOT NULL THEN "
+         "      INSERT INTO EMPLOYEES "
+         "        VALUES(n.ssn, n.company, n.salary); "
+         "    END IF; "
+         "  END ");
+
+  EXEC SQL EXECUTE IMMEDIATE :strStmt;
+  EMB_SQL_CHECK("trigger -- create");
+
+  EXEC SQL COMMIT;
+  EMB_SQL_CHECK("create trigger -- commit");
+
+  /* Create the INSTEAD OF DELETE trigger 'DELETE_PERSONS_V' */
+  printf("\n  CREATE AN 'INSTEAD OF DELETE' TRIGGER CALLED "
+         "'DELETE_PERSONS_V':\n"
+         "\n  INVOKE THE STATEMENT:\n");
+
+  printf("\n    CREATE TRIGGER DELETE_PERSONS_V "
+         "\n      INSTEAD OF DELETE ON PERSONS_V "
+         "\n      REFERENCING OLD AS o FOR EACH ROW "
+         "\n      BEGIN ATOMIC "
+         "\n        DELETE FROM STUDENTS WHERE ssn = o.ssn; "
+         "\n        DELETE FROM EMPLOYEES WHERE ssn = o.ssn; "
+         "\n        DELETE FROM PERSONS WHERE ssn = o.ssn; "
+         "\n      END\n");
+
+  strcpy(strStmt, 
+         "CREATE TRIGGER DELETE_PERSONS_V "
+         "  INSTEAD OF DELETE ON PERSONS_V "
+         "  REFERENCING OLD AS o FOR EACH ROW "
+         "  BEGIN ATOMIC "
+         "    DELETE FROM STUDENTS WHERE ssn = o.ssn; "
+         "    DELETE FROM EMPLOYEES WHERE ssn = o.ssn; "
+         "    DELETE FROM PERSONS WHERE ssn = o.ssn; "
+         "  END ");
+
+  EXEC SQL EXECUTE IMMEDIATE :strStmt;
+  EMB_SQL_CHECK("trigger -- create");
+
+  EXEC SQL COMMIT;
+  EMB_SQL_CHECK("create trigger -- commit");
+
+  /* Create the INSTEAD OF UPDATE trigger 'UPDATE_PERSONS_V' */
+  printf("\n  CREATE AN 'INSTEAD OF UPDATE' TRIGGER CALLED "
+         "'UPDATE_PERSONS_V':\n"
+         "\n  INVOKE THE STATEMENT:\n");
+
+  printf("\n    CREATE TRIGGER UPDATE_PERSONS_V "
+         "\n      INSTEAD OF UPDATE ON PERSONS_V "
+         "\n      REFERENCING OLD AS o NEW AS n "
+         "\n      FOR EACH ROW "
+         "\n      BEGIN ATOMIC "
+         "\n        UPDATE PERSONS "
+         "\n          SET (ssn, name) = (n.ssn, n.name) "
+         "\n          WHERE ssn = o.ssn; "
+         "\n        IF n.university IS NOT NULL "
+         "\n           AND o.university IS NOT NULL THEN "
+         "\n          UPDATE STUDENTS "
+         "\n            SET (ssn, university, major) "
+         "\n              = (n.ssn, n.university, n.major) "
+         "\n            WHERE ssn = o.ssn; "
+         "\n        ELSEIF n.university IS NULL THEN "
+         "\n          DELETE FROM STUDENTS WHERE ssn = o.ssn; "
+         "\n        ELSE "
+         "\n          INSERT INTO STUDENTS "
+         "\n            VALUES(n.ssn, n.university, n.major); "
+         "\n        END IF; "
+         "\n        IF n.company IS NOT NULL "
+         "\n           AND o.company IS NOT NULL THEN "
+         "\n          UPDATE EMPLOYEES "
+         "\n            SET (ssn, company, salary) "
+         "\n              = (n.ssn, n.company, n.salary) "
+         "\n            WHERE ssn = o.ssn; "
+         "\n        ELSEIF n.company IS NULL THEN "
+         "\n          DELETE FROM EMPLOYEES WHERE ssn = o.ssn; "
+         "\n        ELSE "
+         "\n          INSERT INTO EMPLOYEES "
+         "\n            VALUES(n.ssn, n.company, n.salary); "
+         "\n        END IF; "
+         "\n      END\n");
+
+  strcpy(strStmt, 
+         "CREATE TRIGGER UPDATE_PERSONS_V "
+         "  INSTEAD OF UPDATE ON PERSONS_V "
+         "  REFERENCING OLD AS o NEW AS n "
+         "  FOR EACH ROW "
+         "  BEGIN ATOMIC "
+         "    UPDATE PERSONS "
+         "      SET (ssn, name) = (n.ssn, n.name) "
+         "      WHERE ssn = o.ssn; "
+         "    IF n.university IS NOT NULL "
+         "       AND o.university IS NOT NULL THEN "
+         "      UPDATE STUDENTS "
+         "        SET (ssn, university, major) "
+         "          = (n.ssn, n.university, n.major) "
+         "        WHERE ssn = o.ssn; "
+         "    ELSEIF n.university IS NULL THEN "
+         "      DELETE FROM STUDENTS WHERE ssn = o.ssn; "
+         "    ELSE "
+         "      INSERT INTO STUDENTS "
+         "        VALUES(n.ssn, n.university, n.major); "
+         "    END IF; "
+         "    IF n.company IS NOT NULL "
+         "       AND o.company IS NOT NULL THEN "
+         "      UPDATE EMPLOYEES "
+         "        SET (ssn, company, salary) "
+         "          = (n.ssn, n.company, n.salary) "
+         "        WHERE ssn = o.ssn; "
+         "    ELSEIF n.company IS NULL THEN "
+         "      DELETE FROM EMPLOYEES WHERE ssn = o.ssn; "
+         "    ELSE "
+         "      INSERT INTO EMPLOYEES "
+         "        VALUES(n.ssn, n.company, n.salary); "
+         "    END IF; "
+         "  END");
+
+  EXEC SQL EXECUTE IMMEDIATE :strStmt;
+  EMB_SQL_CHECK("trigger -- create");
+
+  EXEC SQL COMMIT;
+  EMB_SQL_CHECK("create trigger -- commit");
+  return 0;
+} /* CreatePersonsVTriggers */
+
+/* This function demonstrates how to update a number of tables through a
+   common view and the use of a set of 'INSTEAD OF' triggers */
+int MutliTableUpdate(void)
+{
+  int rc = 0;
+  struct sqlca sqlca;
+  printf("\n  -----------------------------------------------------------");
+  printf("\n  USE THE SQL STATEMENTS:\n\n");
+  printf("    CREATE TABLE\n");
+  printf("    CREATE VIEW\n");
+  printf("    CREATE TRIGGER\n");
+  printf("    INSERT\n");
+  printf("    UPDATE\n");
+  printf("    DELETE\n");
+  printf("    COMMIT\n");
+  printf("    ROLLBACK\n\n");
+  printf(
+    "  TO UPDATE DATA IN TABLES 'PERSONS' 'STUDENTS' AND 'EMPLOYEES'\n"
+    "  THROUGH A VIEW 'PERSONS_V' USING 'INSTEAD OF' TRIGGERS.\n\n"
+    "  NOTE: THE VIEW IS NEITHER INSERTABLE, UPDATABLE NOR DELETABLE, SO\n"
+    "  IN ORDER TO PERFORM THESE TABLE OPERATIONS, A FULL SET OF\n"
+    "  'INSTEAD OF' TRIGGERS NEEDS TO BE GENERATED. THE TRIGGERS MODIFY\n"
+    "  THE CONTENTS OF EACH TABLE INDIVIDUALLY WHEN AN OPERATION IS\n"
+    "  ATTEMPTED ON THE VIEW\n");
+
+  printf(
+    "\n  CREATE TABLES: 'PERSONS', 'EMPLOYEES' AND 'STUDENTS' AND CREATE A\n"
+    "  VIEW 'PERSONS_V'\n");
+
+  /*  Create the tables PERSONS, STUDENTS, EMPLOYEES, and the view
+      PERSONS_V */
+  rc = CreateTablesAndView();
+
+  /* Create the set of INSTEAD OF triggers */
+  rc = CreatePersonsVTriggers();
+
+  /* Insert values in tables PERSONS, STUDENTS, and EMPLOYEES by inserting
+     the values in the view PERSONS_V. This action will trigger the INSTEAD
+     OF INSERT trigger which will then insert the values in the individual
+     tables */
+  printf(
+    "\n  INSERT VALUES IN THE TABLES 'PERSONS', 'STUDENTS' AND 'EMPLOYEES'"
+    "\n  THROUGH THE VIEW 'PERSONS_V'\n"
+    "\n  INVOKE THE STATEMENT:\n");
+
+  printf(
+    "\n    INSERT INTO PERSONS_V"
+    "\n      VALUES(123456, 'Smith', NULL, NULL, NULL, NULL), "
+    "\n            (234567, 'Jones', 'Wmart', 20000, NULL, NULL), "
+    "\n            (345678, 'Miller', NULL, NULL, 'Harvard', 'Math'), "
+    "\n            (456789, 'McNuts', 'SelfEmp', 60000, 'UCLA', 'CS')\n");
+
+  strcpy(strStmt,
+         "INSERT INTO PERSONS_V VALUES "
+         "  (123456, 'Smith', NULL, NULL, NULL, NULL), "
+         "  (234567, 'Jones', 'Wmart', 20000, NULL, NULL), "
+         "  (345678, 'Miller', NULL, NULL, 'Harvard', 'Math'), "
+         "  (456789, 'McNuts', 'SelfEmp', 60000, 'UCLA', 'CS') ");
+
+  EXEC SQL EXECUTE IMMEDIATE :strStmt;
+  EMB_SQL_CHECK("tables--insert");
+
+  /* Display view content after the insertion of rows*/
+  printf("\n  CONTENTS OF 'PERSONS_V' AFTER THE 'INSERT' STATEMENT\n");
+  rc = PersonsVContentDisplay();
+
+  /* Update values in tables PERSONS, STUDENTS, and EMPLOYEES by updating the
+     values in the view PERSONS_V. This action will trigger the INSTEAD OF
+     UPDATE trigger which will then update the values in the individual
+     tables */
+  printf("\n  UPDATE THE TABLES 'PERSONS', 'STUDENTS' AND 'EMPLOYEES'"
+         "\n  THROUGH THE VIEW 'PERSONS_V'\n"
+         "\n  INVOKE THE STATEMENTS:\n");
+
+  printf(
+    "\n    UPDATE PERSONS_V"
+    "\n      SET (name, company, salary) = ('Johnson', 'Mickburgs', 15000)"
+    "\n      WHERE SSN = 123456\n"
+    "\n    UPDATE PERSONS_V"
+    "\n      SET (company, salary, university) = ('IBM', 70000, NULL)"
+    "\n      WHERE SSN = 345678\n");
+
+  strcpy(strStmt,
+         "UPDATE PERSONS_V "
+         "  SET (name, company, salary) = ('Johnson', 'Mickburgs', 15000) "
+         "  WHERE SSN = 123456");
+  EXEC SQL EXECUTE IMMEDIATE :strStmt;
+  EMB_SQL_CHECK("statement -- execute immediate");
+
+  strcpy(strStmt,
+         "UPDATE PERSONS_V SET (company, salary, university) "
+         "                   = ('IBM', 70000, NULL) "
+         "  WHERE SSN = 345678");
+
+  EXEC SQL EXECUTE IMMEDIATE :strStmt;
+  EMB_SQL_CHECK("statement -- execute immediate");
+
+  /* Display view content after updating */
+  printf("\n  CONTENTS OF 'PERSONS_V' AFTER THE 'UPDATE' STATEMENTS\n");
+  rc = PersonsVContentDisplay();
+
+  /* Delete rows from tables PERSONS, STUDENTS, and EMPLOYEES by deleting the
+     rows in the view PERSONS_V. This action will trigger the INSTEAD OF
+     DELETE trigger which will then delete rows from the individual tables */
+  printf(
+    "\n  DELETE ROWS FROM THE TABLES 'PERSONS', 'STUDENTS' AND 'EMPLOYEES'"
+    "\n  THROUGH THE VIEW 'PERSONS_V'\n"
+    "\n  INVOKE THE STATEMENT:\n");
+  printf("\n    DELETE FROM PERSONS_V WHERE NAME = 'Jones'\n");
+
+  strcpy(strStmt,
+         "DELETE FROM PERSONS_V WHERE NAME = 'Jones'");
+  EXEC SQL EXECUTE IMMEDIATE :strStmt;
+  EMB_SQL_CHECK("statement -- execute immediate");
+
+  /* Display view content after deleting rows */
+  printf("\n  CONTENTS OF 'PERSONS_V' AFTER THE 'DELETE' STATEMENT\n");
+  rc = PersonsVContentDisplay();
+
+  EXEC SQL ROLLBACK;
+
+  /* Drop the INSTEAD OF triggers */
+  printf("\n  DROP TRIGGERS: INSERT_PERSONS_V, DELETE_PERSONS_V, AND "
+         "UPDATE_PERSONS_V");
+
+  EXEC SQL DROP TRIGGER INSERT_PERSONS_V;
+  EMB_SQL_CHECK("trigger -- drop");
+  EXEC SQL DROP TRIGGER DELETE_PERSONS_V;
+  EMB_SQL_CHECK("trigger -- drop");
+  EXEC SQL DROP TRIGGER UPDATE_PERSONS_V;
+  EMB_SQL_CHECK("trigger -- drop");
+
+  /* Drop the tables PERSONS, STUDENTS, EMPLOYEES and the view PERSONS_V */
+  printf("\n  DROP TABLES: PERSONS, STUDENTS, AND EMPLOYEES"
+         "\n  DROP VIEW: PERSONS_V\n");
+
+  EXEC SQL DROP TABLE PERSONS;
+  EXEC SQL DROP VIEW PERSONS_V;
+  EXEC SQL DROP TABLE STUDENTS;
+  EXEC SQL DROP TABLE EMPLOYEES;
+  EXEC SQL COMMIT;
+
+  return 0;
+}
+
+/* This method displays the contents of the 'STAFFV' view */
+int PersonsVContentDisplay(void)
+{
+  struct sqlca sqlca;
+
+  printf("\n  SELECT * FROM persons_v ORDER BY ssn\n\n");
+  printf("    SSN     NAME    COMPANY   SALARY   UNIVERSITY MAJOR\n");
+  printf("    ------ ------- --------- --------- ---------- -----\n");
+
+  /* Declare a CURSOR to store the results of the query */
+  strcpy(strStmt,
+         "SELECT SSN, NAME, COMPANY, SALARY, UNIVERSITY, MAJOR"
+         "  FROM persons_v ORDER BY ssn");
+  EXEC SQL PREPARE S2 FROM :strStmt;
+  EMB_SQL_CHECK("after prepare");
+
+  EXEC SQL DECLARE c2 CURSOR FOR s2;
+  EMB_SQL_CHECK("declare cursor");
+
+  EXEC SQL OPEN c2;
+  EMB_SQL_CHECK("open cursor");
+
+  /* Retrieve and display the results of the query */
+  EXEC SQL FETCH c2 INTO :ssn, :personsname, :company:compInd,
+                         :salary:salaryInd, :university:univInd,
+                         :major:majorInd;
+  EMB_SQL_CHECK("fetch");
+
+  while (sqlca.sqlcode != 100)
+  {
+    printf("    %3d %-8.8s", ssn, personsname);
+    if (compInd >= 0)
+    {
+      printf("%-8.8s", company);
+    }
+    else
+    {
+      printf("   -    ");
+    }
+    if (salaryInd >= 0)
+    {
+      printf(" %9.2f", salary);
+    }
+    else
+    {
+      printf("    -     ");
+    }
+    if (univInd >= 0)
+    {
+      printf("   %-10.10s", university);
+    }
+    else
+    {
+      printf("     -     ");
+    }
+    if (majorInd >= 0)
+    {
+      printf(" %-8.8s\n", major);
+    }
+    else
+    {
+      printf("    -   \n");
+    }
+    EXEC SQL FETCH c2 INTO :ssn, :personsname, :company:compInd,
+                           :salary:salaryInd, :university:univInd,
+                           :major:majorInd;
+    EMB_SQL_CHECK("fetch");
+  }
+
+  EXEC SQL CLOSE C2;
+  EMB_SQL_CHECK("close");
+
+  return 0;
+} /* PersonsVContentDisplay */

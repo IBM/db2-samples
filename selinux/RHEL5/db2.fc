@@ -1,0 +1,52 @@
+#####
+# IBM DB2 files stored in /opt and /var
+####
+# Identify generic (bind, configuration, sample, etc) DB2 files
+/var/db2(/.*)?                                               gen_context(root:object_r:db2_var_t,s0)
+/opt/ibm/db2/V9.(1|5)(/.*)?                               -- gen_context(root:object_r:db2_file_t,s0)
+/opt/ibm/db2/V9.(1|5)(/.*)?                               -l gen_context(root:object_r:db2_file_t,s0)
+
+# Identify db2_exec_t files, exceptions. Note that order is important because
+# trailing rules override.
+/opt/ibm/db2/V9.(1|5)/adm/.*                                 gen_context(root:object_r:db2adm_exec_t,s0)
+/opt/ibm/db2/V9.(1|5)/adsm/.*                                gen_context(root:object_r:db2_exec_t,s0)
+/opt/ibm/db2/V9.(1|5)/bin/.*                                 gen_context(root:object_r:db2_exec_t,s0)
+/opt/ibm/db2/V9.(1|5)/bin/db2fmcd                         -- gen_context(root:object_r:db2fm_exec_t,s0)
+/opt/ibm/db2/V9.(1|5)/bin/db2refs.ndx                     -- gen_context(root:object_r:db2_file_t,s0)
+/opt/ibm/db2/V9.(1|5)/bin/MQLInstall.sql                  -- gen_context(root:object_r:db2_file_t,s0)
+/opt/ibm/db2/V9.(1|5)/bin/readme.pct                      -- gen_context(root:object_r:db2_file_t,s0)
+/opt/ibm/db2/V9.(1|5)/cfg/db2ln                           -- gen_context(root:object_r:db2_exec_t,s0)
+/opt/ibm/db2/V9.(1|5)/cfg/db2profile                      -- gen_context(root:object_r:db2_shell_script_t,s0)
+/opt/ibm/db2/V9.(1|5)/cfg/db2rmln                         -- gen_context(root:object_r:db2_exec_t,s0)
+/opt/ibm/db2/V9.(1|5)/das/bin/.*                             gen_context(root:object_r:db2_exec_t,s0)
+/opt/ibm/db2/V9.(1|5)/das/dasprofile                      -- gen_context(root:object_r:db2_shell_script_t,s0)
+/opt/ibm/db2/V9.(1|5)/das/lib/.*\.so(\..*)?                  gen_context(root:object_r:db2_shlib_t,s0)
+/opt/ibm/db2/V9.(1|5)/das/function/.*                     -- gen_context(root:object_r:db2_shlib_t,s0)
+/opt/ibm/db2/V9.(1|5)/dasfcn/.*                           -- gen_context(root:object_r:db2_shlib_t,s0)
+/opt/ibm/db2/V9.(1|5)/ha/tsa/.*                              gen_context(root:object_r:db2_exec_t,s0)
+/opt/ibm/db2/V9.(1|5)/function/.*                            gen_context(root:object_r:db2_shlib_t,s0)
+/opt/ibm/db2/V9.(1|5)/install/db2ls                       -- gen_context(root:object_r:db2_exec_t,s0)
+/opt/ibm/db2/V9.(1|5)/install/db2ls_exec                  -- gen_context(root:object_r:db2_exec_t,s0)
+/opt/ibm/db2/V9.(1|5)/instance/.*                            gen_context(root:object_r:db2_exec_t,s0)
+/opt/ibm/db2/V9.(1|5)/instance/common/.*                     gen_context(root:object_r:db2_file_t,s0)
+/opt/ibm/db2/V9.(1|5)/instance/native/.*                     gen_context(root:object_r:db2_file_t,s0)
+/opt/ibm/db2/V9.(1|5)/instance/native/install/db2help     -- gen_context(root:object_r:db2_exec_t,s0)
+/opt/ibm/db2/V9.(1|5)/instance/native/install/db2incpy    -- gen_context(root:object_r:db2_exec_t,s0)
+/opt/ibm/db2/V9.(1|5)/instance/native/install/db2iure     -- gen_context(root:object_r:db2_exec_t,s0)
+/opt/ibm/db2/V9.(1|5)/instance/native/install/db2_run_as  -- gen_context(root:object_r:db2_exec_t,s0)
+/opt/ibm/db2/V9.(1|5)/instance/native/install/qpmigrate   -- gen_context(root:object_r:db2_exec_t,s0)
+/opt/ibm/db2/V9.(1|5)/instance/native/install/qpsetup     -- gen_context(root:object_r:db2_exec_t,s0)
+/opt/ibm/db2/V9.(1|5)/lib(32|64)?/.*                         gen_context(root:object_r:db2_shlib_t,s0)
+/opt/ibm/db2/V9.(1|5)/security(32|64)?/db2aud                gen_context(root:object_r:db2_exec_t,s0)
+/opt/ibm/db2/V9.(1|5)/security(32|64)?/db2chkau              gen_context(root:object_r:db2_exec_t,s0)
+/opt/ibm/db2/V9.(1|5)/security(32|64)?/db2ckpw               gen_context(root:object_r:db2_exec_t,s0)
+/opt/ibm/db2/V9.(1|5)/security(32|64)?/db2flacc              gen_context(root:object_r:db2adm_exec_t,s0)
+/opt/ibm/db2/V9.(1|5)/security(32|64)?/plugin/IBM/client/.*\.so(\..*)?   gen_context(root:object_r:db2_shlib_t,s0)
+/opt/ibm/db2/V9.(1|5)/security(32|64)?/plugin/IBM/group/.*\.so(\..*)?    gen_context(root:object_r:db2_shlib_t,s0)
+/opt/ibm/db2/V9.(1|5)/security(32|64)?/plugin/IBM/server/.*\.so(\..*)?   gen_context(root:object_r:db2_shlib_t,s0)
+
+# Override any of the above rules: directories (hence the -d) should be labeled
+# db2_file_t instead of db2_exec_t
+/opt/ibm/db2/V9.(1|5)(/.*)?                               -d gen_context(root:object_r:db2_file_t,s0)
+/opt/ibm/db2/V9.(1|5)/java/.*                                gen_context(root:object_r:db2_java_t,s0)
+

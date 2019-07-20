@@ -1,0 +1,1037 @@
+/****************************************************************************
+** (c) Copyright IBM Corp. 2007 All rights reserved.
+** 
+** The following sample of source code ("Sample") is owned by International 
+** Business Machines Corporation or one of its subsidiaries ("IBM") and is 
+** copyrighted and licensed, not sold. You may use, copy, modify, and 
+** distribute the Sample in any form without payment to IBM, for the purpose of 
+** assisting you in the development of your applications.
+** 
+** The Sample code is provided to you on an "AS IS" basis, without warranty of 
+** any kind. IBM HEREBY EXPRESSLY DISCLAIMS ALL WARRANTIES, EITHER EXPRESS OR 
+** IMPLIED, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED WARRANTIES OF 
+** MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE. Some jurisdictions do 
+** not allow for the exclusion or limitation of implied warranties, so the above 
+** limitations or exclusions may not apply to you. IBM shall not be liable for 
+** any damages you suffer as a result of using, copying, modifying or 
+** distributing the Sample, even if IBM has been advised of the possibility of 
+** such damages.
+*****************************************************************************
+**
+** SOURCE FILE NAME: tbumqt.sqc
+**
+** SAMPLE: How to use user-maintained materialized query tables (summary
+**         tables).
+**
+**         This sample:
+**
+**         1. Query Table (UMQT) for the 'employee' table.
+**         2. Shows the usage and update mechanisms for non-partitioned UMQTs.
+**         3. Creates a new partitioned Maintained Materialized
+**            Query Table (MQT).
+**         4. Shows the availability of partitioned MQTs during SET INTEGRITY
+**            after add/detach of a partition via ALTER ADD PARTITION and
+**            ALTER DETACH PARTITION.
+**
+** SQL STATEMENTS USED:
+**         ALTER TABLE
+**         CREATE TABLE
+**         DROP
+**         INSERT
+**         SELECT
+**         SET CURRENT
+**         SET INTEGRITY
+**         REFRESH TABLE
+**
+** STRUCTURES USED:
+**         sqlca
+**
+** OUTPUT FILE: tbumqt.out (available in the online documentation)
+*****************************************************************************
+**
+** For more information on the sample programs, see the README file.
+**
+** For information on developing C applications, see the Application
+** Development Guide.
+**
+** For information on using SQL statements, see the SQL Reference.
+**
+** For the latest information on programming, building, and running DB2
+** applications, visit the DB2 application development website:
+**     http://www.software.ibm.com/data/db2/udb/ad
+****************************************************************************/
+
+#include <stdio.h>
+#include <string.h>
+#include <stdlib.h>
+#include <sqlenv.h>
+#include <sqlutil.h>
+#include <sqlcodes.h>
+#include "utilemb.h"
+#include <db2ApiDf.h>
+
+EXEC SQL INCLUDE SQLCA;
+
+EXEC SQL BEGIN DECLARE SECTION;
+ char workdept[4];
+ char strStmt[257];
+ short countworkdept;
+ sqlint32 max;
+ sqlint32 no_of_rows; 
+EXEC SQL END DECLARE SECTION;
+
+int AlterTable(void);
+int CreateMQT(void);
+int SetIntegrity(void);
+int ShowTableContents(void);
+int DropTables(void);
+int UpdateUserMQT(void);
+int SetRegisters(void);
+int DMSTbspaceCreate(char serverWorkingPath[]);
+int PartitionedTbCreate(void); 
+int CreateMQT_on_Partitionedtb(void);
+int CreatePartitioned_MQT(void);
+int DisplayTableData(void);
+int TablespacesDrop(void);
+ 
+int main(int argc, char *argv[])
+{
+  int rc = 0;
+  char dbAlias[SQL_ALIAS_SZ + 1];
+  char user[USERID_SZ + 1];
+  char pswd[PSWD_SZ + 1];
+  char nodeName[SQL_INSTNAME_SZ + 1] = { 0 };
+  char serverWorkingPath[SQL_PATH_SZ + 1];
+
+  /* Check the command line arguments */
+  rc = CmdLineArgsCheck1(argc, argv, dbAlias, user, pswd);
+  if (rc != 0)
+  {
+    return rc;
+  }
+
+  printf("\nTHIS SAMPLE SHOWS THE USAGE OF USER MAINTAINED MATERIALIZED");
+  printf("\nQUERY TABLES(UMQTs) and MATERIALIZED QUERY TABLES (MQTs).\n");
+
+  /* Attach to a local or remote instance */
+  rc = InstanceAttach(nodeName, user, pswd);
+  if (rc != 0)
+  {
+    return rc;
+  }
+
+  /* Get server working path */
+  rc = ServerWorkingPathGet(dbAlias, serverWorkingPath);
+  if (rc != 0)
+  {
+    return rc;
+  }
+
+  /* Detach from the local or remote instance */
+  rc = InstanceDetach(nodeName);
+  if (rc != 0)
+  {
+    return rc;
+  }
+
+  /* Connect to database*/
+  printf("\n-----------------------------------------------------------\n");
+  rc = DbConn(dbAlias, user, pswd);
+  if (rc != 0)
+  {
+    return rc;
+  }
+
+  /* Create Summary Tables */
+  rc = CreateMQT();
+  if (rc != 0)
+  {
+    return rc;
+  }
+
+
+  /* Bring the summary tables out of check-pending state */
+  rc = SetIntegrity();
+  if (rc != 0)
+  {
+    return rc;
+  }
+  /* Populate the base table and update the contents of the summary tables */
+  rc = UpdateUserMQT();
+  if (rc != 0)
+  {
+    return rc;
+  }
+
+  /* Set registers to optimize query processing by routing quieries to UMQT */
+  rc = SetRegisters();
+  if (rc != 0)
+  {
+    return rc;
+  }
+
+  /* Issue a select statement that is routed to the summary tables */
+  rc = ShowTableContents();
+  if (rc != 0)
+  {
+    return rc;
+  }
+
+  rc = DropTables();
+  if (rc != 0)
+  {
+    return rc;
+  }
+
+  /* Creates regular  DMS tablespaces */
+  rc = DMSTbspaceCreate(serverWorkingPath); 
+
+  printf("\n*******************************************************\n");
+  printf("\nTHE FOLLOWING SCENARIO SHOWS THE AVAILABILITY OF READ\n");
+  printf("    AND WRITE ACCESS TO THE ATTACHED TABLE AND ITS DEPENDENT\n");
+  printf("      REFRESH IMMEDIATE MQT\n");
+  printf("\n*******************************************************\n");
+
+  /* Creates a partitioned table */
+  rc = PartitionedTbCreate(); 
+
+  /* Creates MQT on a partitioned table */
+  rc = CreateMQT_on_Partitionedtb();
+
+  printf("\n*******************************************************\n");
+  printf("\nTHE FOLLOWING SCENARIO SHOWS HOW PARTITIONED MQT CAN BE");
+  printf("\n  MAINTAINED DURING SET INTEGRITY processing.\n"); 
+  printf("\n*******************************************************\n");
+ 
+  /* Creates a partitioned MQT on a partitioned table */ 
+  rc = CreatePartitioned_MQT();
+
+  /* Drops tablespaces */
+  rc = TablespacesDrop(); 
+
+  /* Disconnect from the database */
+  printf("\n-----------------------------------------------------------\n");
+  rc = DbDisconn(dbAlias);
+
+  return rc;
+} /* main */
+
+/* Create Summary Tables */
+int CreateMQT( void )
+{
+  int rc ;
+
+  printf("\nCreating UMQT on EMPLOYEE table...\n");
+
+  printf("\nUSE THE SQL STATEMENT:\n");
+  printf("  CREATE TABLE \n");
+  printf("To create a UMQT with deferred refresh\n\n");
+
+  printf("Execute the statement:\n");
+  printf("CREATE TABLE ADEFUSER AS \n");
+  printf("  (SELECT workdept, count(*) AS no_of_employees \n");
+  printf("  FROM employee GROUP BY workdept)\n");
+  printf("  DATA INITIALLY DEFERRED REFRESH DEFERRED\n");
+  printf("  MAINTAINED BY USER");
+
+  EXEC SQL CREATE TABLE ADEFUSER AS
+             (SELECT workdept, count(*) AS no_of_employees
+               FROM employee GROUP BY workdept)
+             DATA INITIALLY DEFERRED REFRESH DEFERRED
+             MAINTAINED BY USER;
+  EMB_SQL_CHECK(" create -- user MQT with deferred refresh ");
+  EXEC SQL COMMIT ;
+
+  rc = sqlca.sqlcode;
+  if (rc != 0)
+  {
+    return rc;
+  }
+  
+  printf("\n\nCREATE TABLE to create a UMQT with with immediate");
+  printf("\n  refresh option is not supported\n\n");
+  printf("Execute the statement:\n"); 
+  printf("CREATE TABLE AIMDUSR AS \n");
+  printf("  (SELECT workdept, count(*) AS no_of_employees \n");
+  printf("    FROM employee GROUP BY workdept)\n");
+  printf("  DATA INITIALLY DEFERRED REFRESH IMMEDIATE\n");
+  printf("  MAINTAINED BY USER\n");
+
+  EXEC SQL CREATE TABLE AIMDUSR AS
+             (SELECT workdept, count(*) AS no_of_employees
+               FROM employee GROUP BY workdept)
+             DATA INITIALLY DEFERRED REFRESH IMMEDIATE
+             MAINTAINED BY USER;
+  EXPECTED_ERR_CHECK(" create -- user MQT with immediate refresh ");
+  EXEC SQL COMMIT ;
+
+  return rc;
+} /* CreateMQT */
+
+/* Bring the summary tables out of check-pending state */
+int SetIntegrity(void)
+{
+  int rc = 0;
+
+  printf("\n-----------------------------------------------------------");
+  printf("\nUSE THE SQL STATEMENT:");
+  printf("\n  SET INTEGRITY \n");
+  printf("To bring the MQTs out of check pending state\n\n");
+
+  printf("Execute the statement:\n");
+  printf("EXEC SQL SET INTEGRITY FOR ADEFUSER ALL IMMEDIATE UNCHECKED\n");
+  EXEC SQL SET INTEGRITY FOR ADEFUSER ALL IMMEDIATE UNCHECKED;
+  EMB_SQL_CHECK(" set integrity ");
+
+  rc = sqlca.sqlcode;
+  return rc;
+}/* SetIntegrity */
+
+/* Populate the base table and update the contents of the summary tables */
+int UpdateUserMQT(void)
+{
+  char stmt[100];
+  printf("\n-----------------------------------------------------------\n");
+  printf("\nADEFUSER must be updated manually by the user \n");
+
+  printf("USE THE SQL STATEMENT:\n");
+  printf("  INSERT\n");
+  printf("TO UPDATE THE UMQT\n\n");
+  printf("Execute the statement:\n");
+  printf("EXEC SQL INSERT INTO ADEFUSER \n");
+  printf("           (SELECT workdept, count(*) AS no_of_employees\n");
+  printf("              FROM employee GROUP BY workdept)\n");
+
+  strcpy(stmt,"INSERT INTO ADEFUSER (SELECT workdept, count(*) AS ");
+  strcat(stmt,"no_of_employees FROM employee GROUP BY workdept)");
+  EXEC SQL EXECUTE IMMEDIATE :stmt ;
+
+  EMB_SQL_CHECK(" insert ");
+  EXEC SQL COMMIT;
+
+  return sqlca.sqlcode;
+} /* UpdateUserMQT */
+
+/* Set registers to optimize query processing by routing quieries to UMQT */
+int SetRegisters(void)
+{
+  /* The CURRENT REFRESH AGE special register must be set to a value other
+     than zero for the specified table types to be considered when optimizing
+     the processing of dynamic SQL queries. */
+
+  printf("\n-----------------------------------------------------------\n");
+  printf("The following registers must be set to route queries to UMQT\n");
+  printf("\n  SET CURRENT REFRESH AGE ANY\n");
+  printf("\nIndicates that any table types specified by CURRENT MAINTAINED \n");
+  printf("TABLE TYPES FOR OPTIMIZATION, and MQTs defined with REFRESH \n");
+  printf("IMMEDIATE option, can be used to optimize the \n");
+  printf("processing of a query. \n\n\n");
+
+  EXEC SQL SET CURRENT REFRESH AGE ANY;
+  EMB_SQL_CHECK(" set ");
+
+  printf("  SET CURRENT MAINTAINED TABLE TYPES FOR OPTIMIZATION USER \n\n");
+  printf("Specifies that user-maintained refresh-deferred materialized \n");
+  printf("query tables can be considered to optimize the processing of \n");
+  printf("dynamic SQL queries. \n");
+
+  EXEC SQL SET CURRENT MAINTAINED TABLE TYPES FOR OPTIMIZATION USER;
+  EMB_SQL_CHECK(" set ");
+
+  return sqlca.sqlcode;
+} /* SetRegisters */
+
+/* Issue a select statement that is routed to the summary tables */
+int ShowTableContents(void)
+{
+  char stmt1[100];
+
+  printf("\n-----------------------------------------------------------\n");
+  printf("USE THE SQL STATEMENT:\n");
+  printf("  SELECT\n");
+  printf("On EMPLOYEE table. This is routed to the UMQT ADEFUSER\n\n");
+
+  printf("Execute the statement:\n");
+  printf("SELECT workdept, count(*) AS no_of_employees \n");
+  printf("  FROM employee GROUP BY workdept\n\n");
+  printf("  DEPT CODE   NO. OF EMPLOYEES     \n");
+  printf("  ----------  ----------------\n");
+
+  /* Declare cursor */
+  EXEC SQL DECLARE c1 CURSOR FOR
+    SELECT workdept, count(*) AS no_of_employees
+      FROM employee GROUP BY workdept;
+
+  /* Open cursor */
+  EXEC SQL OPEN c1;
+  EMB_SQL_CHECK("cursor -- open");
+
+  /* Fetch cursor */
+  EXEC SQL FETCH c1 INTO :workdept, :countworkdept;
+
+  EMB_SQL_CHECK("cursor -- fetch");
+  while (sqlca.sqlcode != 100)
+  {
+    printf("    %4s %10d \n", workdept, countworkdept);
+    EXEC SQL FETCH c1 INTO :workdept, :countworkdept;
+    EMB_SQL_CHECK("cursor -- fetch");
+  }
+  EXEC SQL CLOSE c1;
+  EMB_SQL_CHECK("cursor -- close");
+
+  printf("\nExecute the statement:\n");
+  printf("A SELECT query on ADEFUSER yields similar results\n\n");
+  printf("SELECT * FROM ADEFUSER \n\n");
+  printf("  DEPT CODE   NO. OF EMPLOYEES     \n");
+  printf("  ----------  ----------------\n");
+
+  /* Declare cursor */
+  strcpy(stmt1, " SELECT * FROM ADEFUSER");
+
+  EXEC SQL PREPARE stmt FROM :stmt1;
+  EMB_SQL_CHECK("statement -- prepare");
+
+  EXEC SQL DECLARE c2 CURSOR FOR stmt;
+
+  /* Open cursor */
+  EXEC SQL OPEN c2;
+  EMB_SQL_CHECK("cursor -- open");
+
+  /* Fetch cursor */
+  EXEC SQL FETCH c2 INTO :workdept, :countworkdept;
+
+  EMB_SQL_CHECK("cursor -- fetch");
+  while (sqlca.sqlcode != 100)
+  {
+    printf("    %4s %10d \n", workdept, countworkdept);
+    EXEC SQL FETCH c2 INTO :workdept, :countworkdept;
+    EMB_SQL_CHECK("cursor -- fetch");
+  }
+  EXEC SQL CLOSE c2;
+  EMB_SQL_CHECK("cursor -- close");
+
+  return sqlca.sqlcode;
+} /* ShowTableContents */
+
+/* Creates regular DMS tablespaces */
+int DMSTbspaceCreate(char serverWorkingPath[])
+{
+  int rc = 0;
+  struct sqlca sqlca;
+
+  char containerFileName[SQL_PATH_SZ + 1];
+  char containerFileName1[SQL_PATH_SZ + 1];
+  char containerFileName2[SQL_PATH_SZ + 1];
+  char containerFileName3[SQL_PATH_SZ + 1];
+
+  printf("\n-----------------------------------------------------------");
+  printf("\nUSE THE SQL STATEMENT:\n");
+  printf("  CREATE REGULAR TABLESPACE\n");
+  printf("TO CREATE A REGULAR DMS TABLE SPACES.\n");
+
+  /* Create regular DMS table space dms_tspace */
+  strcpy(containerFileName, serverWorkingPath);
+  strcat(containerFileName, PATH_SEP);
+  strcat(containerFileName, "dms_conta.dat");
+
+  sprintf(strStmt, "CREATE REGULAR TABLESPACE dms_tspace "
+                   "  MANAGED BY DATABASE "
+                   "  USING(FILE '%s' 10000)" , containerFileName);
+
+  printf("\nExecute the statement:\n");
+  printf("CREATE REGULAR TABLESPACE dms_tspace\n"
+         "  MANAGED BY DATABASE\n"
+         "    USING(FILE 'dms_conta.dat' 10000)\n");
+
+  EXEC SQL EXECUTE IMMEDIATE :strStmt;
+  EMB_SQL_CHECK("DMS tablespace -- create");
+
+  /* Commit transaction */
+  EXEC SQL COMMIT;
+  EMB_SQL_CHECK("transaction -- commit");
+
+  /* Create regular DMS table space dms_tspace1 */
+  strcpy(containerFileName1, serverWorkingPath);
+  strcat(containerFileName1, PATH_SEP);
+  strcat(containerFileName1, "dms_conta1.dat");
+
+  sprintf(strStmt, "CREATE REGULAR TABLESPACE dms_tspace1 "
+                   "  MANAGED BY DATABASE "
+                   "  USING(FILE '%s' 10000)" , containerFileName1);
+
+  printf("\nExecute the statement:\n");
+  printf("CREATE REGULAR TABLESPACE dms_tspace1\n"
+         "  MANAGED BY DATABASE\n"
+         "    USING(FILE 'dms_conta1.dat' 10000)\n");
+
+  EXEC SQL EXECUTE IMMEDIATE :strStmt;
+  EMB_SQL_CHECK("DMS tablespace -- create");
+
+  /* Commit transaction */
+  EXEC SQL COMMIT;
+  EMB_SQL_CHECK("transaction -- commit");
+
+  /* Create regular DMS table space dms_tspace2 */
+  strcpy(containerFileName2, serverWorkingPath);
+  strcat(containerFileName2, PATH_SEP);
+  strcat(containerFileName2, "dms_conta2.dat");
+
+  sprintf(strStmt, "CREATE REGULAR TABLESPACE dms_tspace2 "
+                   "  MANAGED BY DATABASE "
+                   "  USING(FILE '%s' 10000)" , containerFileName2);
+
+  printf("\nExecute the statement:\n");
+  printf("CREATE REGULAR TABLESPACE dms_tspace2\n"
+         "  MANAGED BY DATABASE\n"
+         "    USING(FILE 'dms_cont.data2' 10000)\n");
+
+  EXEC SQL EXECUTE IMMEDIATE :strStmt;
+  EMB_SQL_CHECK("DMS tablespace -- create");
+
+  /* Commit transaction */
+  EXEC SQL COMMIT;
+  EMB_SQL_CHECK("transaction -- commit");
+
+  /* Create regular DMS table space dms_tspace3 */
+  strcpy(containerFileName3, serverWorkingPath);
+  strcat(containerFileName3, PATH_SEP);
+  strcat(containerFileName3, "dms_conta3.dat");
+
+  sprintf(strStmt, "CREATE REGULAR TABLESPACE dms_tspace3 "
+                   "  MANAGED BY DATABASE "
+                   "  USING(FILE '%s' 10000)" , containerFileName3);
+
+  printf("\nExecute the statement:\n");
+  printf("CREATE REGULAR TABLESPACE dms_tspace3\n"
+         "  MANAGED BY DATABASE\n"
+         "    USING(FILE 'dms_conta3.dat' 10000)\n");
+
+  EXEC SQL EXECUTE IMMEDIATE :strStmt;
+  EMB_SQL_CHECK("DMS tablespace -- create");
+
+  /* Commit transaction */
+  EXEC SQL COMMIT;
+  EMB_SQL_CHECK("transaction -- commit");
+
+  return 0;
+} /* DMSTbspaceCreate */
+
+/*Create a partitioned table in regular DMS tablespaces i.e part1 is placed
+  in dms_tspace1, part2 is placed in dms_tspace2 and part3 in dms_tspace3
+  and inserts data into it */
+int PartitionedTbCreate(void)
+{
+  int rc = 0;
+  struct sqlca sqlca;
+
+  printf("\nUSE THE SQL STATEMENT:\n");
+  printf("  CREATE TABLE\n");
+  printf("TO CREATE A PARTITIONED TABLE:\n");
+
+  printf("\nExecute the statement:\n");
+  printf(" CREATE TABLE fact_table(max INTEGER NOT NULL,\n");
+  printf("                         CONSTRAINT CC CHECK (max>0))\n");
+  printf("   PARTITION BY RANGE (max)\n");
+  printf("     (PART  part1 STARTING FROM (1) ENDING (3) IN dms_tspace1,\n");
+  printf("     PART part2 STARTING FROM (4) ENDING (6) IN dms_tspace2,\n");
+  printf("     PART part3 STARTING FROM (7) ENDING (9) IN dms_tspace3);\n");
+
+  EXEC SQL CREATE TABLE fact_table(max INTEGER NOT NULL,
+                                   CONSTRAINT CC CHECK (max>0))
+             PARTITION BY RANGE (max)
+               (PART  part1 STARTING FROM (1) ENDING (3) IN dms_tspace1,
+               PART part2 STARTING FROM (4) ENDING (6) IN dms_tspace2,
+               PART part3 STARTING FROM (7) ENDING (9) IN dms_tspace3);
+
+  EMB_SQL_CHECK("Table -- Create");
+
+  /* Commit transaction */
+  EXEC SQL COMMIT;
+  EMB_SQL_CHECK("Transaction -- Commit");
+
+  printf("\nUSE THE SQL STATEMENT:\n");
+  printf("  INSERT\n");
+  printf("TO INSERT DATA INTO A TABLE USING VALUES.\n");
+
+  printf("\nExecute the statements:");
+  printf("\nINSERT INTO fact_table VALUES (1), (2), (3), (4), (5)");
+  printf("\nINSERT INTO fact_table VALUES (6), (7), (8), (9)\n");
+ 
+  strcpy(strStmt, "INSERT INTO fact_table VALUES(1), (2), (3), (4), (5)");
+  EXEC SQL EXECUTE IMMEDIATE :strStmt;
+  EMB_SQL_CHECK("INSERT INTO -- fact_table"); 
+
+  strcpy(strStmt, "INSERT INTO fact_table VALUES (6), (7), (8), (9)");
+  EXEC SQL EXECUTE IMMEDIATE :strStmt;
+  EMB_SQL_CHECK("INSERT INTO -- fact_table");
+ 
+  EXEC SQL COMMIT;
+  EMB_SQL_CHECK("Transaction -- Commit");
+
+  return rc;
+} /* PartitionedTbCreate */
+
+/* Creates a MQT on a partitioned table. Performs SET INTEGRITY on MQT 
+   to bring it out of check pending state.*/
+int CreateMQT_on_Partitionedtb(void)
+{
+  int rc = 0;
+  char stmt2 [100];
+  struct sqlca sqlca = {0};
+
+  printf("\n-----------------------------------------------------------");
+  printf("\nUSE THE SQL STATEMENT:\n");
+  printf("  CREATE\n");
+  printf("TO CREATE MQT ON A PARTITIONED TABLE .\n");
+
+  printf("\nExecute the statement:");
+  printf("\nCREATE TABLE mqt_fact_table AS");
+  printf("\n  (SELECT max, COUNT (*) AS no_of_rows FROM fact_table)");
+  printf("\n     GROUP BY max) DATA INITIALLY DEFERRED REFRESH IMMEDIATE;");
+ 
+  EXEC SQL CREATE TABLE mqt_fact_table AS
+             (SELECT max, COUNT (*) AS no_of_rows FROM fact_table 
+             GROUP BY max) DATA INITIALLY DEFERRED REFRESH IMMEDIATE;
+
+  EMB_SQL_CHECK("Create Table -- mqt_fact_table");
+  
+  printf("\nUSE THE SQL STATEMENT:");
+  printf("\n  SET INTEGRITY");
+  printf("\nTO PERFORM SET INTEGRITY ON A TABLE\n");
+
+  printf("\nExecute the statement:"); 
+  printf("\n  SET INTEGRITY FOR mqt_fact_table IMMEDIATE CHECKED\n");
+
+  strcpy(strStmt, "SET INTEGRITY FOR mqt_fact_table IMMEDIATE CHECKED");
+
+  EXEC SQL EXECUTE IMMEDIATE :strStmt;
+
+  EXEC SQL COMMIT;
+  EMB_SQL_CHECK("Transaction -- Commit");
+
+  /* Display the contents of a table */ 
+  rc = DisplayTableData(); 
+
+  /* Alter a table by attaching a new partition to an existing table */ 
+  rc = AlterTable(); 
+
+  printf("\nUSE THE SQL STATEMENT:\n");
+  printf("  DROP\n");
+  printf("TO DROP A TABLE.\n");
+
+  printf("\nExecute the statements:");
+  printf("\nDROP TABLE mqt_fact_table");
+
+  EXEC SQL DROP TABLE mqt_fact_table;
+  EMB_SQL_CHECK("Drop Table -- mqt_fact_table");
+
+  printf("\nDROP TABLE fact_table");
+
+  EXEC SQL DROP TABLE fact_table;
+  EMB_SQL_CHECK("Drop Table -- fact_table");
+
+  EXEC SQL COMMIT;
+  EMB_SQL_CHECK("Transaction -- Commit");
+  printf("\nCOMMIT\n");
+ 
+  return rc;
+} /* CreateMQT_on_Partitionedtb */
+
+/* Creates a temporary table which will be attached to the base table.
+   Inserts data into a table. Alters a table by attaching a new partition 
+   to a base table. Performs SET INTEGRITY to bring a table and its dependent
+   MQT out of check pending state */ 
+int AlterTable(void)
+{
+
+ int rc = 0;
+ struct sqlca sqlca;
+
+ printf("\nUSE THE SQL STATEMENT:\n");
+ printf("    CREATE TABLE\n");
+ printf("TO CREATE A TABLE \n\n");
+
+ printf("Execute the statement: \n");
+ printf("  CREATE TABLE attach_part(max INTEGER NOT NULL) IN dms_tspace1\n");
+ 
+ EXEC SQL CREATE TABLE attach_part (max INTEGER NOT NULL) IN dms_tspace1;
+ EMB_SQL_CHECK(" Table -- Create ");
+
+ EXEC SQL COMMIT;
+ EMB_SQL_CHECK(" Transaction -- Commit ");
+
+ printf("\nExecute the statement: \n");
+ printf("INSERT INTO attach_part VALUES (10), (11), (12)\n\n");
+ 
+ strcpy(strStmt, "INSERT INTO attach_part VALUES (10), (11), (12)");
+
+ EXEC SQL EXECUTE IMMEDIATE :strStmt;
+ EMB_SQL_CHECK("INSERT INTO -- fact_table");
+
+ EXEC SQL COMMIT;
+ EMB_SQL_CHECK("Transaction -- Commit");
+  
+ printf("USE THE SQL STATEMENT:\n");
+ printf("  ALTER TABLE\n");
+ printf("TO ATTACH PARTITION TO A TABLE\n\n");
+ 
+ printf("Execute the statement:\n");
+ printf("ALTER TABLE fact_table ATTACH PARTITION\n");
+ printf("  STARTING (10) ENDING (12) FROM TABLE attach_part\n");
+
+ EXEC SQL ALTER TABLE fact_table ATTACH PARTITION STARTING (10) ENDING (12)
+            FROM TABLE attach_part;
+
+ EMB_SQL_CHECK(" Alter -- Table ");
+
+ EXEC SQL COMMIT;
+ EMB_SQL_CHECK(" Transaction -- Commit ");
+
+ printf("USE THE SQL STATEMENT:\n");
+ printf("  SET INTEGRITY \n");
+ printf("TO BRING TABLES OUT OF CHECK PENDING STATE\n\n");
+
+ printf("Execute the statement:\n");
+ printf("SET INTEGRITY FOR fact_table ALLOW WRITE ACCESS, mqt_fact_table\n");
+ printf("  ALLOW WRITE ACCESS IMMEDIATE CHECKED \n");
+
+ EXEC SQL SET INTEGRITY FOR fact_table ALLOW WRITE ACCESS, mqt_fact_table
+            ALLOW WRITE ACCESS IMMEDIATE CHECKED; 
+
+ EMB_SQL_CHECK(" Set Integrity --- Table");
+ EXEC SQL COMMIT;
+ EMB_SQL_CHECK(" Transaction -- Commit ");
+
+ return rc; 
+} /* AlterTable */ 
+
+/* Creates a partitioned MQT on a partitioned table with range less then 
+   that of base table. Perform REFRESH TABLE to get changes reflected into
+   MQT. Partition is added to and deleted from both base table and its 
+   dependent MQT. REFRESH TABLE is performed to get changes reflected 
+   into MQT */
+int CreatePartitioned_MQT(void)
+{
+  int rc =0;
+  char stmt3 [100];
+  char stmt4 [100];
+  char stmt5 [100];
+  struct sqlca sqlca;
+
+  /* Creates a partitioned table */
+  rc = PartitionedTbCreate();
+
+  printf("\nUSE THE SQL STATEMENT:\n");
+  printf("  CREATE\n");
+  printf("TO CREATE A PARTITIONED MQT ON A PARTITIONED TABLE .\n");
+
+  printf("\nExecute the statement:");
+  printf("\nCREATE TABLE mqt_fact_table AS");
+  printf("\n  (SELECT max, COUNT (*) AS no_of_rows FROM fact_table");
+  printf("\n  GROUP BY max) DATA INITIALLY DEFERRED REFRESH IMMEDIATE;");
+  printf("\n  PARTITION BY RANGE (max)");
+  printf("\n  (STARTING 0 ENDING 6 EVERY 3)\n"); 
+  
+  EXEC SQL CREATE TABLE mqt_fact_table AS
+             (SELECT max, COUNT (*) AS no_of_rows FROM fact_table
+             GROUP BY max) DATA INITIALLY DEFERRED REFRESH IMMEDIATE
+             PARTITION BY RANGE (max) (STARTING 0 ENDING 6 EVERY 3);
+
+  EMB_SQL_CHECK("Create Table -- mqt_fact_table");
+  
+  printf("\nUSE THE SQL STATEMENT:\n");
+  printf("  ALTER TABLE \n");
+  printf("TO ADD PARTITION TO MQT\n");
+
+  printf("\nExecute the statement:");
+  printf("\nALTER TABLE mqt_fact_table ADD PARTITION part4\n");
+  printf("    STARTING (7) ENDING (9)\n");
+  
+  EXEC SQL ALTER TABLE mqt_fact_table ADD PARTITION part4 
+	     STARTING (7) ENDING (9);
+  EMB_SQL_CHECK("ALTER TABLE -- mqt_fact_table");
+
+  printf("\nUSE THE SQL STATEMENT:\n");
+  printf("  REFRESH\n");
+  printf("TO REFRESH TABLE\n");
+
+  printf("\nExecute the statement:");
+  printf("\nREFRESH TABLE mqt_fact_table\n");
+  
+  EXEC SQL REFRESH TABLE mqt_fact_table;
+  EMB_SQL_CHECK("REFRESH  -- mqt_fact_table");
+
+  EXEC SQL COMMIT;
+  EMB_SQL_CHECK("Transaction -- Commited");
+
+  /* Display the contents of a table */
+  rc = DisplayTableData();
+
+  printf("\nUSE THE SQL STATEMENT:\n");
+  printf("  ALTER TABLE \n");
+  printf("TO DETACH A PARTITION FROM A TABLE\n");
+  
+  printf("\nExecute the statement:\n");
+  printf("  ALTER TABLE fact_table DETACH PARTITION part2\n");
+  printf("    INTO TABLE detach_part1\n");
+ 
+  printf("\n-----------------------------------------------------------");
+  EXEC SQL ALTER TABLE fact_table DETACH PARTITION part2 
+	     INTO TABLE detach_part1;
+  EMB_SQL_CHECK("ALTER -- fact_table");
+  EXEC SQL COMMIT;
+   
+  printf("\n-----------------------------------------------------------");
+  printf("\nUSE THE SQL STATEMENT:");
+  printf("\n  SET INTEGRITY \n");
+  printf("To bring the MQTs out of check pending state\n");
+
+  printf("\nExecute the statement:");
+  printf("\nSET INTEGRITY FOR mqt_fact_table IMMEDIATE CHECKED\n");
+  
+  EXEC SQL SET INTEGRITY FOR mqt_fact_table IMMEDIATE CHECKED;
+  EMB_SQL_CHECK(" set integrity ");
+
+  printf("\nExecute the statement:\n");
+  printf("  ALTER TABLE mqt_fact_table DETACH PARTITION part2\n");
+  printf("    INTO TABLE detach_part2\n");
+
+  EXEC SQL ALTER TABLE mqt_fact_table DETACH PARTITION part2 
+	     INTO TABLE detach_part2;
+  EMB_SQL_CHECK(" ALTER TABLE -- mqt_fact_table");
+  EXEC SQL COMMIT;
+
+  printf("\nUSE THE SQL STATEMENT:");
+  printf("\n  REFRESH\n");
+  printf("TO GET CHANGES REFLECTED\n");
+
+  printf("\nExecute the statement:");
+  printf("\n  REFRESH TABLE mqt_fact_table\n");
+
+  EXEC SQL REFRESH TABLE mqt_fact_table;
+  EMB_SQL_CHECK(" Refresh \n");
+  EXEC SQL COMMIT;
+
+  /* Display the contents of a table */
+  rc = DisplayTableData();
+
+  printf("\nExecute the statements:\n");
+  printf("  DROP TABLE mqt_fact_table\n");
+  EXEC SQL DROP TABLE mqt_fact_table;
+  EMB_SQL_CHECK("Table -- Drop");
+
+  printf("  DROP TABLE fact_table\n");
+  EXEC SQL DROP TABLE fact_table; 
+  EMB_SQL_CHECK("Table -- Drop");
+  
+  printf("  DROP TABLE detach_part1\n");
+  EXEC SQL DROP TABLE detach_part1; 
+  EMB_SQL_CHECK("Table -- Drop");
+  
+  printf("  DROP TABLE detach_part2\n");
+  EXEC SQL DROP TABLE detach_part2; 
+  EMB_SQL_CHECK("Table -- Drop");
+  return rc;
+} /* CreatePartitioned_MQT */  
+
+/* Display the contents of a table */
+int DisplayTableData(void)  
+{
+  int rc =0;
+  struct sqlca sqlca;
+
+ /* Display the contents of 'fact_table' table.*/
+  printf("\n-----------------------------------------------------------");
+  printf("\nUSE THE SQL STATEMENT:\n");
+  printf("  SELECT\n");
+  printf("TO SELECT ROWS FROM A TABLE.\n");
+
+  printf("\nExecute the statement:");
+  printf("\nSELECT * FROM fact_table\n");
+
+  printf("\nResults:\n");
+  printf("   MAX \n");
+  printf("  ------ \n");
+
+  strcpy(strStmt,"SELECT * FROM fact_table");
+
+  EXEC SQL PREPARE stmt4 FROM :strStmt;
+  EXEC SQL COMMIT;
+
+  /* Declare the cursor */
+  EXEC SQL DECLARE c5 CURSOR FOR stmt4;
+  EXEC SQL COMMIT;
+
+  /* Open cursor */
+  EXEC SQL OPEN c5;
+  EMB_SQL_CHECK("cursor -- open");
+
+  /* Fetch cursor */
+  EXEC SQL FETCH c5 INTO :max;
+  EMB_SQL_CHECK("cursor -- fetch");
+
+  while (sqlca.sqlcode != 100)
+  {
+    printf("  %3d \n", max);
+
+    EXEC SQL FETCH c5 INTO :max;
+    EMB_SQL_CHECK("cursor -- fetch");
+  }
+
+  /* Close cursor */
+  EXEC SQL CLOSE c5;
+  EMB_SQL_CHECK("cursor -- close");
+  EXEC SQL COMMIT;
+
+  /* Display the contents of 'mqt_fact_table' table.*/
+  printf("\n-----------------------------------------------------------");
+  printf("\nUSE THE SQL STATEMENT:\n");
+  printf("  SELECT\n");
+  printf("TO SELECT ROWS FROM A TABLE.\n");
+
+  printf("\nExecute the statement:");
+  printf("\nSELECT * FROM mqt_fact_table\n");
+
+  printf("\nResults:\n");
+  printf("   MAX    NO_OF_ROWS\n");
+  printf("  ------ ------------\n");
+
+  strcpy(strStmt,"SELECT * FROM mqt_fact_table");
+
+  EXEC SQL PREPARE stmt5 FROM :strStmt;
+  EXEC SQL COMMIT;
+
+  /* Declare the cursor */
+  EXEC SQL DECLARE c6 CURSOR FOR stmt5;
+  EXEC SQL COMMIT;
+
+  /* Open cursor */
+  EXEC SQL OPEN c6;
+  EMB_SQL_CHECK("cursor -- open");
+
+  /* Fetch cursor */
+  EXEC SQL FETCH c6 INTO :max, :no_of_rows;
+  EMB_SQL_CHECK("cursor -- fetch");
+
+  while (sqlca.sqlcode != 100)
+  {
+    printf("  %3d %8d\n", max, no_of_rows);
+
+    EXEC SQL FETCH c6 INTO :max, :no_of_rows;
+    EMB_SQL_CHECK("cursor -- fetch");
+
+  }
+
+  /* Close cursor */
+  EXEC SQL CLOSE c6;
+  EMB_SQL_CHECK("cursor -- close");
+  EXEC SQL COMMIT;
+  printf("\n-----------------------------------------------------------");
+  
+  return rc;
+} /* DisplayTableData */
+
+/* Drops tablespaces */
+int TablespacesDrop(void)
+{
+  int rc = 0;
+  struct sqlca sqlca;
+
+  printf("\n-----------------------------------------------------------");
+  printf("\nUSE THE SQL STATEMENT:\n");
+  printf("  DROP\n");
+  printf("TO DROP TABLE SPACES.\n");
+
+  /* Drop table spaces */
+  printf("\nExecute the statements:");
+  printf("\nDROP TABLESPACE dms_tspace\n");
+
+  EXEC SQL DROP TABLESPACE dms_tspace;
+  EMB_SQL_CHECK("tablespaces -- drop");
+
+  printf("\nDROP TABLESPACE dms_tspace1\n");
+
+  EXEC SQL DROP TABLESPACE dms_tspace1;
+  EMB_SQL_CHECK("tablespaces -- drop");
+
+  printf("\nDROP TABLESPACE dms_tspace2\n");
+
+  EXEC SQL DROP TABLESPACE dms_tspace2;
+  EMB_SQL_CHECK("tablespaces -- drop");
+
+
+  printf("\nDROP TABLESPACE dms_tspace3\n");
+
+  EXEC SQL DROP TABLESPACE dms_tspace3;
+  EMB_SQL_CHECK("tablespaces -- drop");
+
+  /* Commit Transaction */
+  EXEC SQL COMMIT;
+  EMB_SQL_CHECK("transaction -- commit");
+
+  return 0;
+} /* TablespacesDrop */
+
+/* Gets server working path */
+int ServerWorkingPathGet(char dbAlias[], char serverWorkingPath[])
+{
+  int rc = 0;
+  struct sqlca sqlca;
+  db2CfgParam cfgParameters[1];
+  db2Cfg cfgStruct;
+  char serverLogPath[SQL_PATH_SZ + 1];
+  char dbAlias_upper[SQL_ALIAS_SZ + 1] = { 0 };
+  int ctr = 0;
+  int len;
+
+  /* initialize cfgParameters */
+  cfgParameters[0].flags = 0;
+  cfgParameters[0].token = SQLF_DBTN_LOGPATH;
+  cfgParameters[0].ptrvalue =
+    (char *)malloc((SQL_PATH_SZ + 1) * sizeof(char));
+
+  /* initialize cfgStruct */
+  cfgStruct.numItems = 1;
+  cfgStruct.paramArray = cfgParameters;
+  cfgStruct.flags = db2CfgDatabase;
+  cfgStruct.dbname = dbAlias;
+
+  /* get database configuration */
+  db2CfgGet(db2Version1010, (void *)&cfgStruct, &sqlca);
+  DB2_API_CHECK("server log path -- get");
+
+  strcpy(serverLogPath, cfgParameters[0].ptrvalue);
+  free(cfgParameters[0].ptrvalue);
+
+  /* get server working path */
+  /* for example, if the serverLogPath = "C:\DB2\NODE0001\....". */
+  /* keep for serverWorkingPath "C:\DB2" only. */
+
+  for (ctr = 0; ctr < strlen (dbAlias); ctr++)
+  {
+    dbAlias_upper[ctr] = toupper (dbAlias[ctr]);
+  }
+  dbAlias_upper[ctr] = '\0';  /* terminate the constructed string */
+
+  len = ((int) (strstr(serverLogPath, "NODE")) - (int)serverLogPath - 1);
+  memcpy(serverWorkingPath, serverLogPath, len);
+  serverWorkingPath[len] = '\0';
+
+  return 0;
+} /* ServerWorkingPathGet */
+
+/* Drops a table */
+int DropTables(void)
+{
+  printf("\nDropping tables...\n\n");
+
+  printf("Execute the statement:\n");
+  printf("USE THE SQL STATEMENT:\n");
+  printf("  DROP\n");
+  printf("TO DROP THE UMQT ADEFUSER\n\n");
+
+  printf("EXEC SQL DROP TABLE ADEFUSER\n");
+  EXEC SQL DROP TABLE ADEFUSR;
+
+  return sqlca.sqlcode;
+} /* DropTables */

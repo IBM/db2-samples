@@ -1,0 +1,902 @@
+/****************************************************************************
+** (c) Copyright IBM Corp. 2007 All rights reserved.
+** 
+** The following sample of source code ("Sample") is owned by International 
+** Business Machines Corporation or one of its subsidiaries ("IBM") and is 
+** copyrighted and licensed, not sold. You may use, copy, modify, and 
+** distribute the Sample in any form without payment to IBM, for the purpose of 
+** assisting you in the development of your applications.
+** 
+** The Sample code is provided to you on an "AS IS" basis, without warranty of 
+** any kind. IBM HEREBY EXPRESSLY DISCLAIMS ALL WARRANTIES, EITHER EXPRESS OR 
+** IMPLIED, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED WARRANTIES OF 
+** MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE. Some jurisdictions do 
+** not allow for the exclusion or limitation of implied warranties, so the above 
+** limitations or exclusions may not apply to you. IBM shall not be liable for 
+** any damages you suffer as a result of using, copying, modifying or 
+** distributing the Sample, even if IBM has been advised of the possibility of 
+** such damages.
+*****************************************************************************
+**
+** SOURCE FILE NAME: tbtrig.sqC 
+**    
+** SAMPLE: How to use a trigger on a table 
+**           
+** SQL STATEMENTS USED:
+**         DECLARE CURSOR 
+**         SELECT
+**         OPEN
+**         FETCH
+**         CLOSE
+**         CREATE TABLE
+**         EXECUTE IMMEDIATE
+**         PREPARE
+**         DROP
+**         CREATE TRIGGER
+**         INSERT
+**         DELETE
+**         UPDATE
+**
+** OUTPUT FILE: tbtrig.out (available in the online documentation)
+*****************************************************************************
+**
+** For more information on the sample programs, see the README file.
+**
+** For information on developing C++ applications, see the Application
+** Development Guide.
+**
+** For information on using SQL statements, see the SQL Reference.
+**
+** For the latest information on programming, compiling, and running DB2
+** applications, visit the DB2 application development website at
+**     http://www.software.ibm.com/data/db2/udb/ad
+****************************************************************************/
+
+#include <string.h>
+#include <sqlenv.h>
+#include <sqlutil.h>
+#include "utilemb.h"
+#if ((__cplusplus >= 199711L) && !defined DB2HP && !defined DB2AIX) || \
+    (DB2LINUX && (__LP64__ || (__GNUC__ >= 3)) )
+   #include <iomanip>
+   #include <iostream>
+   using namespace std; 
+#else
+   #include <iomanip.h>
+   #include <iostream.h>
+#endif
+
+EXEC SQL BEGIN DECLARE SECTION;
+  short id;
+  char name[10];
+  short dept;
+  char job[10];
+  short jobInd;
+  short years;
+  short yearsInd;
+  double salary;
+  double comm;
+  short commInd;
+  short nbemp;
+  char emp_name[10];
+  double sal;
+  char status[16];
+  char employee_name[10];
+  double salary_record;
+  char change_date[15];
+  char strStmt[512];
+EXEC SQL END DECLARE SECTION;
+
+class TbTrig
+{
+  public:
+    int TbBeforeInsertTriggerUse();
+    int TbAfterInsertTriggerUse();
+    int TbBeforeDeleteTriggerUse();
+    int TbBeforeUpdateTriggerUse();
+    int TbAfterUpdateTriggerUse();
+  private:
+  // support functions
+    int StaffTbContentDisplay();
+    int StaffStatsTbCreate();
+    int StaffStatsTbContentDisplay();
+    int StaffStatsTbDrop();
+    int SalaryStatusTbCreate();
+    int SalaryStatusTbContentDisplay();
+    int SalaryStatusTbDrop();
+    int SalaryHistoryTbCreate();
+    int SalaryHistoryTbContentDisplay();
+    int SalaryHistoryTbDrop();
+};
+
+int TbTrig::StaffTbContentDisplay()
+{
+  struct sqlca sqlca;
+
+  cout << "\n  Select * from staff where id <= 50" << endl;
+
+  cout << "    ID  NAME     DEPT JOB   YEARS SALARY   COMM" << endl;
+  cout << "    --- -------- ---- ----- ----- -------- --------" << endl;
+
+  EXEC SQL DECLARE c1 CURSOR FOR
+    SELECT * FROM staff WHERE id <= 50;
+
+  EXEC SQL OPEN c1;
+  EMB_SQL_CHECK("cursor -- open");
+
+  EXEC SQL FETCH c1 INTO :id, :name, :dept, :job:jobInd,
+                         :years:yearsInd, :salary, :comm:commInd;
+  EMB_SQL_CHECK("cursor -- fetch");
+
+  while (sqlca.sqlcode != 100)
+  {
+    cout.setf(ios::right, ios::adjustfield);
+    cout << "    " << setw(3) << id;
+    cout.setf(ios::left, ios::adjustfield);
+    cout << " " << setw(8) << name;
+    cout.setf(ios::right, ios::adjustfield);
+    cout << " " << setw(4) << dept;
+    if (jobInd >= 0)
+    {
+      cout.setf(ios::left, ios::adjustfield);
+      cout << " " << setw(6) << job;
+    }
+    else
+    {
+      cout << "     -";
+    }
+    if (yearsInd >= 0)
+    {
+      cout.setf(ios::right, ios::adjustfield);
+      cout << setw(5) << years;
+    }
+    else
+    {
+      cout << "    -";
+    }
+    cout << " " << setw(8) << salary;
+    if (commInd >= 0)
+    {
+      cout << " " << setw(7) << comm;
+    }
+    else
+    {
+      cout << "       -";
+    }
+    cout << endl;
+
+    EXEC SQL FETCH c1 INTO :id, :name, :dept, :job:jobInd,
+                           :years:yearsInd, :salary, :comm:commInd;
+    EMB_SQL_CHECK("cursor -- fetch");
+  }
+
+  EXEC SQL CLOSE c1;
+  EMB_SQL_CHECK("cursor -- close");
+
+  return 0;
+} //TbTrig::StaffTbContentDisplay
+
+int TbTrig::StaffStatsTbCreate()
+{
+  struct sqlca sqlca;
+
+  cout << "\n  CREATE TABLE staff_stats(nbemp SMALLINT)" << endl;
+
+  EXEC SQL CREATE TABLE staff_stats(nbemp SMALLINT);
+  EMB_SQL_CHECK("table -- create");
+
+  cout << "\n  INSERT INTO staff_stats VALUES(SELECT COUNT(*) FROM staff)"
+       << endl;
+
+  strcpy(strStmt, 
+         "INSERT INTO staff_stats VALUES (SELECT COUNT(*) FROM staff)");
+
+  EXEC SQL EXECUTE IMMEDIATE :strStmt;
+  EMB_SQL_CHECK("statement -- execute immediate");
+
+  EXEC SQL COMMIT;
+  EMB_SQL_CHECK("transaction -- commit");
+
+  return 0;
+} //TbTrig::StaffStatsTbCreate
+
+int TbTrig::StaffStatsTbContentDisplay()
+{
+  struct sqlca sqlca;
+
+  cout << "\n  SELECT nbemp FROM staff_stats" << endl;
+  cout << "    NBEMP" << endl;
+  cout << "    -----" << endl;
+
+  strcpy(strStmt, "SELECT * FROM staff_stats");
+
+  EXEC SQL PREPARE stmt2 FROM :strStmt;
+  EMB_SQL_CHECK("statement -- prepare");
+
+  EXEC SQL DECLARE c2 CURSOR FOR stmt2;
+  EMB_SQL_CHECK("cursor -- declare");
+
+  EXEC SQL OPEN c2;
+  EMB_SQL_CHECK("cursor -- open");
+
+  EXEC SQL FETCH c2 INTO :nbemp;
+  EMB_SQL_CHECK("cursor -- fetch");
+
+  EXEC SQL CLOSE c2;
+
+  cout.setf(ios::right, ios::adjustfield);
+  cout << "    " << setw(5) << nbemp << endl;
+
+  return 0;
+} //TbTrig::StaffStatsTbContentDisplay
+
+int TbTrig::StaffStatsTbDrop()
+{
+  struct sqlca sqlca;
+
+  cout << "\n  DROP TABLE staff_stats" << endl;
+
+  EXEC SQL DROP TABLE staff_stats;
+  EMB_SQL_CHECK("table -- drop");
+
+  EXEC SQL COMMIT;
+  EMB_SQL_CHECK("transaction -- commit");
+
+  return 0;
+} //TbTrig::StaffStatsTbDrop
+
+int TbTrig::SalaryStatusTbCreate()
+{
+  struct sqlca sqlca;
+
+  cout << "\n  CREATE TABLE salary_status(emp_name VARCHAR(9)," << endl;
+  cout << "                             sal DECIMAL(7, 2)," << endl;
+  cout << "                             status CHAR(15))" << endl;
+
+  EXEC SQL CREATE TABLE salary_status(emp_name VARCHAR(9),
+                                      sal DECIMAL(7, 2),
+                                      status CHAR(15));
+  EMB_SQL_CHECK("table -- create");
+
+  cout << "\n  INSERT INTO salary_status" << endl;
+  cout << "  SELECT name, salary, 'Not Defined'" << endl;
+  cout << "  FROM staff" << endl;
+  cout << "  WHERE id <= 50" << endl;
+
+  strcpy(strStmt, "INSERT INTO salary_status "
+                  "SELECT name, salary, 'Not Defined' "
+                  "FROM staff "
+                  "WHERE id <= 50 ");
+
+  EXEC SQL EXECUTE IMMEDIATE :strStmt;
+  EMB_SQL_CHECK("statement -- execute immediate");
+
+  EXEC SQL COMMIT;
+  EMB_SQL_CHECK("transaction -- commit");
+
+  return 0;
+} //TbTrig::SalaryStatusTbCreate
+
+int TbTrig::SalaryStatusTbContentDisplay()
+{
+  struct sqlca sqlca;
+
+  cout << "\n  Select * from salary_status" << endl;
+  cout << "    EMP_NAME   SALARY   STATUS          " << endl;
+  cout << "    ---------- -------- ----------------" << endl;
+
+  strcpy(strStmt, "SELECT * FROM salary_status");
+
+  EXEC SQL PREPARE stmt3 FROM :strStmt;
+  EMB_SQL_CHECK("statement -- prepare");
+
+  EXEC SQL DECLARE c3 CURSOR FOR stmt3;
+  EMB_SQL_CHECK("cursor -- declare");
+
+  EXEC SQL OPEN c3;
+  EMB_SQL_CHECK("cursor -- open");
+
+  EXEC SQL FETCH c3 INTO :emp_name, :sal, :status;
+  EMB_SQL_CHECK("cursor -- fetch");
+
+  while (sqlca.sqlcode != 100)
+  {
+    cout.setf(ios::left, ios::adjustfield);
+    cout << "    " << setw(10) << emp_name
+         << " " << setw(7) << sal << " " << setw(15) << status << endl;
+
+    EXEC SQL FETCH c3 INTO :emp_name, :sal, :status;
+    EMB_SQL_CHECK("cursor -- fetch");
+  }
+  EXEC SQL CLOSE c3;
+
+  return 0;
+} //TbTrig::SalaryStatusTbContentDisplay
+
+int TbTrig::SalaryStatusTbDrop()
+{
+  struct sqlca sqlca;
+
+  cout << "\n  DROP TABLE salary_status" << endl;
+
+  EXEC SQL DROP TABLE salary_status;
+  EMB_SQL_CHECK("table -- drop");
+
+  EXEC SQL COMMIT;
+  EMB_SQL_CHECK("transaction -- commit");
+
+  return 0;
+} //TbTrig::SalaryStatusTbDrop
+
+int TbTrig::SalaryHistoryTbCreate()
+{
+  struct sqlca sqlca;
+
+  cout << "\n  CREATE TABLE salary_history(employee_name VARCHAR(9),\n";
+  cout << "                              salary_record DECIMAL(7, 2),\n";
+  cout << "                              change_date DATE)" << endl;
+
+  EXEC SQL CREATE TABLE salary_history(employee_name VARCHAR(9),
+                                       salary_record DECIMAL(7, 2),
+                                       change_date DATE);
+  EMB_SQL_CHECK("table -- create");
+
+  EXEC SQL COMMIT;
+  EMB_SQL_CHECK("transaction -- commit");
+
+  return 0;
+} //TbTrig::SalaryHistoryTbCreate
+
+int TbTrig::SalaryHistoryTbContentDisplay()
+{
+  struct sqlca sqlca;
+
+  cout << "\n  Select * from salary_history" << endl;
+  cout << "    EMPLOYEE_NAME  SALARY_RECORD  CHANGE_DATE" << endl;
+  cout << "    -------------- -------------- -----------" << endl;
+
+  strcpy(strStmt, "SELECT * FROM salary_history");
+
+  EXEC SQL PREPARE stmt4 FROM :strStmt;
+  EMB_SQL_CHECK("statement -- prepare");
+
+  EXEC SQL DECLARE c4 CURSOR FOR stmt4;
+  EMB_SQL_CHECK("cursor -- declare");
+
+  EXEC SQL OPEN c4;
+  EMB_SQL_CHECK("cursor -- open");
+
+  EXEC SQL FETCH c4 INTO :employee_name, :salary_record, :change_date;
+  EMB_SQL_CHECK("cursor -- fetch");
+
+  while (sqlca.sqlcode != 100)
+  {
+    cout.setf(ios::left, ios::adjustfield);
+    cout << "    " << setw(14) << employee_name;
+    cout.setf(ios::right, ios::adjustfield);
+    cout << " " << setw(14) << salary_record;
+    cout.setf(ios::left, ios::adjustfield);
+    cout << " " << setw(15) << change_date << endl;
+
+    EXEC SQL FETCH c4 INTO :employee_name, :salary_record, :change_date;
+    EMB_SQL_CHECK("cursor -- fetch");
+  }
+  EXEC SQL CLOSE c4;
+
+  return 0;
+} //TbTrig::SalaryHistoryTbContentDisplay
+
+int TbTrig::SalaryHistoryTbDrop()
+{
+  struct sqlca sqlca;
+
+  cout << "\n  DROP TABLE salary_history" << endl;
+
+  EXEC SQL DROP TABLE salary_history;
+  EMB_SQL_CHECK("table -- drop");
+
+  EXEC SQL COMMIT;
+  EMB_SQL_CHECK("transaction -- commit");
+
+  return 0;
+} //TbTrig::SalaryHistoryTbDrop
+
+int TbTrig::TbBeforeInsertTriggerUse()
+{
+  int rc = 0;
+  struct sqlca sqlca;
+
+  cout << "\n-----------------------------------------------------------";
+  cout << "\nUSE THE SQL STATEMENTS:" << endl;
+  cout << "  CREATE TRIGGER" << endl;
+  cout << "  COMMIT" << endl;
+  cout << "  INSERT" << endl;
+  cout << "  DROP TRIGGER" << endl;
+  cout << "TO SHOW A 'BEFORE INSERT' TRIGGER." << endl;
+
+  // display initial table content
+  rc = StaffTbContentDisplay();
+
+  cout << "\n  CREATE TRIGGER min_sal"
+       << "\n    NO CASCADE BEFORE"
+       << "\n    INSERT ON staff"
+       << "\n    REFERENCING NEW AS newstaff"
+       << "\n    FOR EACH ROW"
+       << "\n    BEGIN ATOMIC"
+       << "\n      SET newstaff.salary ="
+       << "\n        CASE"
+       << "\n          WHEN newstaff.job = 'Mgr' AND"
+       << " newstaff.salary < 17000.00"
+       << "\n            THEN 17000.00"
+       << "\n          WHEN newstaff.job = 'Sales' AND"
+       << " newstaff.salary < 14000.00"
+       << "\n            THEN 14000.00"
+       << "\n          WHEN newstaff.job = 'Clerk' AND"
+       << " newstaff.salary < 10000.00"
+       << "\n            THEN 10000.00"
+       << "\n          ELSE newstaff.salary"
+       << "\n        END;"
+       << "\n    END" << endl;
+
+  EXEC SQL CREATE TRIGGER min_sal
+    NO CASCADE BEFORE
+    INSERT ON staff
+    REFERENCING NEW AS newstaff
+    FOR EACH ROW
+    BEGIN ATOMIC
+      SET newstaff.salary =
+        CASE
+          WHEN newstaff.job = 'Mgr' AND newstaff.salary < 17000.00
+	    THEN 17000.00
+          WHEN newstaff.job = 'Sales' AND newstaff.salary < 14000.00
+            THEN 14000.00
+          WHEN newstaff.job = 'Clerk' AND newstaff.salary < 10000.00
+            THEN 10000.00
+          ELSE newstaff.salary
+        END;
+    END;
+  EMB_SQL_CHECK("trigger -- create");
+
+  EXEC SQL COMMIT;
+  EMB_SQL_CHECK("create trigger -- commit");
+
+  // insert using values into table
+  cout << "\n  Invoke the statement" << endl;
+  cout << "    INSERT INTO staff(id, name, dept, job, salary)" << endl;
+  cout << "      VALUES(25, 'Pearce', 38, 'Clerk', 7217.50)," << endl;
+  cout << "            (35, 'Hachey', 38, 'Mgr', 21270.00)," << endl;
+  cout << "            (45, 'Wagland', 38, 'Sales', 11575.00)" << endl;
+
+  EXEC SQL INSERT INTO staff(id, name, dept, job, salary)
+    VALUES(25, 'Pearce', 38, 'Clerk', 7217.50),
+          (35, 'Hachey', 38, 'Mgr', 21270.00),
+          (45, 'Wagland', 38, 'Sales', 11575.00);
+  EMB_SQL_CHECK("table -- insert using values");
+
+  // display final table content
+  rc = StaffTbContentDisplay();
+
+  // rollback transaction
+  cout << "\n  Rollback the transaction." << endl;
+
+  EXEC SQL ROLLBACK;
+  EMB_SQL_CHECK("transaction -- rollback");
+
+  cout << "\n  DROP TRIGGER min_sal" << endl;
+
+  EXEC SQL DROP TRIGGER min_sal;
+  EMB_SQL_CHECK("trigger -- drop");
+
+  EXEC SQL COMMIT;
+  EMB_SQL_CHECK("drop trigger -- commit");
+
+  return 0;
+} //TbTrig::TbBeforeInsertTriggerUse
+
+int TbTrig::TbAfterInsertTriggerUse()
+{
+  int rc = 0;
+  struct sqlca sqlca;
+
+  cout << "\n-----------------------------------------------------------";
+  cout << "\nUSE THE SQL STATEMENTS:" << endl;
+  cout << "  CREATE TRIGGER" << endl;
+  cout << "  COMMIT" << endl;
+  cout << "  INSERT" << endl;
+  cout << "  DROP TRIGGER" << endl;
+  cout << "TO SHOW AN 'AFTER INSERT' TRIGGER." << endl;
+
+  // create staff_stats table
+  rc = StaffStatsTbCreate();
+  if (rc != 0)
+  {
+    return 0;
+  }
+
+  // display staff_stats table content
+  rc = StaffStatsTbContentDisplay();
+
+  strcpy(strStmt,
+         "CREATE TRIGGER new_hire AFTER "
+         "  INSERT ON staff "
+         "  FOR EACH ROW "
+         "  BEGIN ATOMIC "
+         "    UPDATE staff_stats SET nbemp = nbemp + 1; "
+         "  END");
+
+  cout << "\n  CREATE TRIGGER new_hire AFTER"
+       << "\n    INSERT ON staff"
+       << "\n    FOR EACH ROW"
+       << "\n    BEGIN ATOMIC"
+       << "\n      UPDATE staff_stats SET nbemp = nbemp + 1;"
+       << "\n    END" << endl;
+
+  EXEC SQL EXECUTE IMMEDIATE :strStmt;
+  EMB_SQL_CHECK("trigger -- create");
+
+  EXEC SQL COMMIT;
+  EMB_SQL_CHECK("create trigger -- commit");
+
+  // insert using values into table
+  cout << "\n  Invoke the statement";
+  cout << "\n    INSERT INTO staff(id, name, dept, job, salary)";
+  cout << "\n      VALUES(25, 'Pearce', 38, 'Clerk', 7217.50),";
+  cout << "\n            (35, 'Hachey', 38, 'Mgr', 21270.00),";
+  cout << "\n            (45, 'Wagland', 38, 'Sales', 11575.00)" << endl;
+
+  EXEC SQL INSERT INTO staff(id, name, dept, job, salary)
+    VALUES(25, 'Pearce', 38, 'Clerk', 7217.50),
+          (35, 'Hachey', 38, 'Mgr', 21270.00),
+          (45, 'Wagland', 38, 'Sales', 11575.00);
+  EMB_SQL_CHECK("table -- insert using values");
+
+  // display staff_stats table content
+  rc = StaffStatsTbContentDisplay();
+
+  // rollback transaction
+  cout << "\n  Rollback the transaction." << endl;
+
+  EXEC SQL ROLLBACK;
+  EMB_SQL_CHECK("transaction -- rollback");
+
+  strcpy(strStmt, "  DROP TRIGGER new_hire");
+  cout << endl << strStmt << endl;
+
+  EXEC SQL EXECUTE IMMEDIATE :strStmt;
+  EMB_SQL_CHECK("trigger -- drop");
+
+  EXEC SQL COMMIT;
+  EMB_SQL_CHECK("drop trigger -- commit");
+
+  // drop staff_stats table
+  rc = StaffStatsTbDrop();
+
+  return 0;
+} //TbTrig::TbAfterInsertTriggerUse
+
+int TbTrig::TbBeforeDeleteTriggerUse()
+{
+  int rc = 0;
+  struct sqlca sqlca;
+  char sqlstate[5 + 1];
+  char sqlerrmsg[70 + 1];
+
+  cout << "\n-----------------------------------------------------------";
+  cout << "\nUSE THE SQL STATEMENTS:" << endl;
+  cout << "  CREATE TRIGGER" << endl;
+  cout << "  COMMIT" << endl;
+  cout << "  DELETE" << endl;
+  cout << "  DROP TRIGGER" << endl;
+  cout << "TO SHOW A 'BEFORE DELETE' TRIGGER." << endl;
+
+  // display initial table content
+  rc = StaffTbContentDisplay();
+
+  cout << "\n  CREATE TRIGGER do_not_delete_sales"
+       << "\n    NO CASCADE BEFORE"
+       << "\n    DELETE ON staff"
+       << "\n    REFERENCING OLD AS oldstaff"
+       << "\n    FOR EACH ROW"
+       << "\n    WHEN(oldstaff.job = 'Sales')"
+       << "\n    BEGIN ATOMIC"
+       << "\n      SIGNAL SQLSTATE '75000' "
+       << "('Sales can not be deleted now.');"
+       << "\n    END" << endl;
+
+  EXEC SQL CREATE TRIGGER do_not_delete_sales
+    NO CASCADE BEFORE
+    DELETE ON staff
+    REFERENCING OLD AS oldstaff
+    FOR EACH ROW
+    WHEN(oldstaff.job = 'Sales')
+    BEGIN ATOMIC
+      SIGNAL SQLSTATE '75000' ('Sales can not be deleted now.');
+    END;
+  EMB_SQL_CHECK("trigger -- create");
+
+  EXEC SQL COMMIT;
+  EMB_SQL_CHECK("create trigger -- commit");
+
+  // delete table
+  cout << "\n  Invoke the statement" << endl;
+  cout << "    DELETE FROM staff WHERE id <= 50" << endl;
+
+  EXEC SQL DELETE FROM staff WHERE id <= 50;
+
+  if (sqlca.sqlcode == -438)
+  {
+    memcpy(sqlstate, sqlca.sqlstate, 5);
+    sqlstate[5] = '\0';
+    memcpy(sqlerrmsg, sqlca.sqlerrmc, sqlca.sqlerrml);
+    sqlerrmsg[sqlca.sqlerrml] = '\0';
+
+    cout << "  SQL0438N " << sqlerrmsg
+         << " SQLSTATE = " << sqlstate << endl;
+  }
+  else
+  {
+    EMB_SQL_CHECK("table -- delete");
+  }
+
+  // display final table content
+  rc = StaffTbContentDisplay();
+
+  // rollback transaction
+  cout << "\n  Rollback the transaction." << endl;
+
+  EXEC SQL ROLLBACK;
+  EMB_SQL_CHECK("transaction -- rollback");
+
+  cout << "\n  DROP TRIGGER do_not_delete_sales" << endl;
+
+  EXEC SQL DROP TRIGGER do_not_delete_sales;
+  EMB_SQL_CHECK("trigger -- drop");
+
+  EXEC SQL COMMIT;
+  EMB_SQL_CHECK("drop trigger -- commit");
+
+  return 0;
+} //TbTrig::TbBeforeDeleteTriggerUse
+
+int TbTrig::TbBeforeUpdateTriggerUse()
+{
+  int rc = 0;
+  struct sqlca sqlca;
+
+  cout << "\n-----------------------------------------------------------";
+  cout << "\nUSE THE SQL STATEMENTS:" << endl;
+  cout << "  CREATE TRIGGER" << endl;
+  cout << "  COMMIT" << endl;
+  cout << "  UPDATE" << endl;
+  cout << "  DROP TRIGGER" << endl;
+  cout << "TO SHOW A 'BEFORE UPDATE' TRIGGER." << endl;
+
+  // create salary_status table
+  rc = SalaryStatusTbCreate();
+  if (rc != 0)
+  {
+    return 0;
+  }
+
+  // display salary_status table content
+  rc = SalaryStatusTbContentDisplay();
+
+  strcpy(strStmt, 
+         "CREATE TRIGGER sal_status "
+         "  NO CASCADE BEFORE "
+         "  UPDATE OF sal "
+         "  ON salary_status "
+         "  REFERENCING NEW AS new OLD AS old "
+         "  FOR EACH ROW "
+         "  BEGIN ATOMIC "
+         "    SET new.status = "
+         "      CASE "
+         "        WHEN new.sal < old.sal THEN 'Decreasing' "
+         "        WHEN new.sal > old.sal THEN 'Increasing' "
+         "      END; "
+         "  END ");
+
+  cout << "\n  CREATE TRIGGER salary_status"
+       << "\n    NO CASCADE BEFORE"
+       << "\n    UPDATE OF sal"
+       << "\n    ON salary_status"
+       << "\n    REFERENCING NEW AS new OLD AS old"
+       << "\n    FOR EACH ROW"
+       << "\n    BEGIN ATOMIC"
+       << "\n      SET new.status ="
+       << "\n        CASE"
+       << "\n          WHEN new.sal < old.sal THEN 'Decreasing'"
+       << "\n          WHEN new.sal > old.sal THEN 'Increasing'"
+       << "\n        END;"
+       << "\n    END" << endl;
+
+  EXEC SQL EXECUTE IMMEDIATE :strStmt;
+  EMB_SQL_CHECK("trigger -- create");
+
+  EXEC SQL COMMIT;
+  EMB_SQL_CHECK("create trigger -- commit");
+
+  // update table
+  cout << "\n  Invoke the statement" << endl;
+  cout << "    UPDATE salary_status SET sal = 18000.00" << endl;
+
+  strcpy(strStmt, "UPDATE salary_status SET sal = 18000.00");
+
+  EXEC SQL EXECUTE IMMEDIATE :strStmt;
+  EMB_SQL_CHECK("table -- update");
+
+  // display salary_status table content
+  rc = SalaryStatusTbContentDisplay();
+
+  // rollback transaction
+  cout << "\n  Rollback the transaction." << endl;
+
+  EXEC SQL ROLLBACK;
+  EMB_SQL_CHECK("transaction -- rollback");
+
+  strcpy(strStmt, "  DROP TRIGGER sal_status");
+  cout << endl << strStmt << endl;
+
+  EXEC SQL EXECUTE IMMEDIATE :strStmt;
+  EMB_SQL_CHECK("trigger -- drop");
+
+  EXEC SQL COMMIT;
+  EMB_SQL_CHECK("drop trigger -- commit");
+
+  // drop salary_status table
+  rc = SalaryStatusTbDrop();
+
+  return 0;
+} //TbTrig::TbBeforeUpdateTriggerUse
+
+int TbTrig::TbAfterUpdateTriggerUse()
+{
+  int rc = 0;
+  struct sqlca sqlca;
+
+  cout << "\n-----------------------------------------------------------";
+  cout << "\nUSE THE SQL STATEMENTS:" << endl;
+  cout << "  CREATE TRIGGER" << endl;
+  cout << "  COMMIT" << endl;
+  cout << "  UPDATE" << endl;
+  cout << "  DROP TRIGGER" << endl;
+  cout << "TO SHOW AN 'AFTER UPDATE' TRIGGER." << endl;
+
+  // create salary_history table
+  rc = SalaryHistoryTbCreate();
+  if (rc != 0)
+  {
+    return 0;
+  }
+
+  // display salary_history table content
+  rc = SalaryHistoryTbContentDisplay();
+
+  strcpy(strStmt,
+         "CREATE TRIGGER sal_history "
+         "  AFTER "
+         "  UPDATE OF salary ON staff "
+         "  REFERENCING NEW AS newstaff "
+         "  FOR EACH ROW "
+         "  BEGIN ATOMIC "
+         "    INSERT INTO salary_history "
+         "      VALUES(newstaff.name, newstaff.salary, CURRENT DATE); "
+         "  END ");
+
+  cout << "\n  CREATE TRIGGER sal_history"
+       << "\n    AFTER"
+       << "\n    UPDATE OF salary ON staff"
+       << "\n    REFERENCING NEW AS newstaff"
+       << "\n    FOR EACH ROW"
+       << "\n    BEGIN ATOMIC"
+       << "\n      INSERT INTO salary_history"
+       << "\n        VALUES(newstaff.name, newstaff.salary, CURRENT DATE);"
+       << "\n    END" << endl;
+
+  EXEC SQL EXECUTE IMMEDIATE :strStmt;
+  EMB_SQL_CHECK("trigger -- create");
+
+  EXEC SQL COMMIT;
+  EMB_SQL_CHECK("create trigger -- commit");
+
+  // update table
+  cout << "\n  Invoke the statement" << endl;
+  cout << "    UPDATE staff SET salary = 20000.00 WHERE name = 'Sanders'"
+       << endl;
+
+  EXEC SQL UPDATE staff SET salary = 20000.00 WHERE name = 'Sanders';
+  EMB_SQL_CHECK("table -- update");
+
+  cout << "\n  Invoke the statement" << endl;
+  cout << "    UPDATE staff SET salary = 21000.00 WHERE name = 'Sanders'"
+       << endl;
+
+  EXEC SQL UPDATE staff SET salary = 21000.00 WHERE name = 'Sanders';
+  EMB_SQL_CHECK("table -- update");
+
+  cout << "\n  Invoke the statement" << endl;
+  cout << "    UPDATE staff SET salary = 23000.00 WHERE name = 'Sanders'"
+       << endl;
+
+  EXEC SQL UPDATE staff SET salary = 23000.00 WHERE name = 'Sanders';
+  EMB_SQL_CHECK("table -- update");
+
+  cout << "\n  Invoke the statement" << endl;
+  cout << "    UPDATE staff SET salary = 20000.00 WHERE name = 'Hanes'"
+       << endl;
+
+  EXEC SQL UPDATE staff SET salary = 20000.00 WHERE name = 'Hanes';
+  EMB_SQL_CHECK("table -- update");
+
+  cout << "\n  Invoke the statement" << endl;
+  cout << "    UPDATE staff SET salary = 21000.00 WHERE name = 'Hanes'"
+       << endl;
+
+  EXEC SQL UPDATE staff SET salary = 21000.00 WHERE name = 'Hanes';
+  EMB_SQL_CHECK("table -- update");
+
+  // display salary_history table content
+  rc = SalaryHistoryTbContentDisplay();
+
+  // rollback transaction
+  cout << "\n  Rollback the transaction." << endl;
+
+  EXEC SQL ROLLBACK;
+  EMB_SQL_CHECK("transaction -- rollback");
+
+  strcpy(strStmt, "  DROP TRIGGER sal_history");
+  cout << endl << strStmt << endl;
+
+  EXEC SQL EXECUTE IMMEDIATE :strStmt;
+  EMB_SQL_CHECK("trigger -- drop");
+
+  EXEC SQL COMMIT;
+  EMB_SQL_CHECK("drop trigger -- commit");
+
+  // drop salary_history table
+  rc = SalaryHistoryTbDrop();
+
+  return 0;
+} //TbTrig::TbAfterUpdateTriggerUse
+
+int main(int argc, char *argv[])
+{
+  int rc = 0;
+  CmdLineArgs check;
+  TbTrig trig;
+  DbEmb db;
+
+  // check the command line arguments
+  rc = check.CmdLineArgsCheck1(argc, argv, db);
+  if (rc != 0)
+  {
+    return rc;
+  }
+
+  cout.setf(ios::fixed, ios::floatfield);
+  cout.precision(2);
+  cout << "\nTHIS SAMPLE SHOWS HOW TO USE TRIGGERS." << endl;
+
+  // connect to database
+  rc = db.Connect();
+  if (rc != 0)
+  {
+    return rc;
+  }
+
+  rc = trig.TbBeforeInsertTriggerUse();
+  rc = trig.TbAfterInsertTriggerUse();
+  rc = trig.TbBeforeDeleteTriggerUse();
+  rc = trig.TbBeforeUpdateTriggerUse();
+  rc = trig.TbAfterUpdateTriggerUse();
+
+  // disconnect from the database
+  rc = db.Disconnect();
+  if (rc != 0)
+  {
+    return rc;
+  }
+
+  return 0;
+} //main
+

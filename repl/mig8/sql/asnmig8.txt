@@ -1,0 +1,410 @@
+        "IBM Internal User's Guide for DB2 Replication Migration V8"
+            Gordon Slishman, slishman@vnet.ibm.com, 408-543-2451
+
+                              November 6, 2001
+
+
+
+INTRODUCTION:
+------------
+
+   "Migrating DataPropagator Relational V1 to V5" contains vital information
+spanning  some  78 pages, which busy users tend to read only after mistakes.
+To prevent trial-and-error mistakes in migration to V8, we have  abbreviated
+its  User's  Guide greatly.  Please study and understand the these few pages
+before you migrate DB2 Replication to V8.  If this  documentation  does  not
+suffice, please contact IBM.
+
+   The general announcement of DB2 and UDB Replication V8 occurred on ${date
+of  ga}.   The  installation  of  Replication V8 includes a 3-step migration
+process to convert Replication control tables and CD tables from UDB V5,  V6
+and  V7  formats to V8 format:  The first step creates new V8 control tables
+in a backup schema and tablespace, both specified by the user.   The  second
+step  backs  up  the existing Replication control tables and their dependent
+views.  The third step -- the dangerous one -- substitutes  the  V8  control
+tables  from  the  backup  schema  for  the  obsolete  control tables in the
+Replication control schema, 'ASN'.   Migration  V8  runs  both  locally  and
+remotely.
+
+
+PORTENTS OF MIGRATION PROBLEMS:
+-------- -- --------- --------
+
+   Although published, the Replication control  tables  have  never  been  a
+proper user interface;  manual updates invite inconsistency.  Therefore,
+
+   1. If you manipulate Replication control tables other than through normal
+operation  of  Capture,  Apply and IBM GUI administration tools, consult IBM
+before attempting to migrate to V8.  Even if your  tables  appear  to  work,
+they  may  differ  from specifications and the migration utility may produce
+unpredictable results.
+
+   2. If essential applications  depend  upon  Replication  control  tables,
+consult  IBM  before attempting to migrate to V8.  Inevitably, migration can
+disrupt an environment dependent on tables that change or even disappear.
+
+
+THE THREE STEPS:
+--- ----- -----
+
+   Because a clean execution of migration is critical, any anomaly  detected
+by migration causes immediate termination.
+
+
+   Step 1 is a set of SQL scripts, one script per DB2 server.   The  step  1
+scripts  reside in ${ *.sql repository }.  The user should browse the script
+appropriate for the server database to be  migrated.   The  scripts  contain
+                    ------
+default backup schema and tablespace names, which the user can easily change
+globally with his editor.  Designing backup schema and  tablespace  deserves
+little time and effort, as the life expectancy of the backup schema is a few
+hours.  The objective of step 1 is to create the new V8 tables in the backup
+schema  and to create a single database-independent representation of system
+catalogs.  Step 1 should run only once.  Its execution is system-dependent:
+
+UDB client: db2 -tsf $DB2server.sql
+            db2 bind asnmig8.bnd (to be included in $DB2server.sql)
+
+OS/390 clients may use SPUFI to run the appropriate script.
+
+AS/400 clients may use STRSQL ???
+
+   Step 2, named asnmig8, is a portable C/C++ application containing  static
+embedded  SQL.  Asnmig8 runs locally or remotely, requiring only a supported
+DB2 client-server combination  functionally  UDB  V5  or  later.   Supported
+operating systems include AIX, AS/400, OS/390, and Windows NT.
+
+Migration uses  NLS  for  internationalization  of  messages.   The  default
+NLSPATH  should suffice for migration installed via CD or the like. When the
+NLS catalog differs from  convention,  an  export  will  be  required,  e.g.
+"export NLSPATH=./%N.cat" on AIX.
+
+   Migration of a subsystem or database requires two invocations of asnmig8,
+one for the source server and one for the control server:
+
+   asnmig8 db $DB on source  server using schema $SA for backup
+      [ user $USER [ using $PASSWORD ] ]
+
+   asnmig8 db $DB on control server using schema $SA for backup
+      [ user $USER [ using $PASSWORD ] ]
+
+
+The "control server" migration involves Replication tables having to do with
+subscriptions  and  the  like,  while  a  "source server" migration involves
+everything else.
+
+Backup step 2 may be run any number of times before migration  step  3,  per
+control or source migration.  After step 3, step 2 will not run again unless
+preceded by fallback.
+
+   Step 3, also named asnmig8 copies tables from the backup schema into  the
+ASN schema and re-creates any views perturbed.
+
+   asnmig8 db $DB on source  server using schema $SA for migration
+      [ user $USER [ using $PASSWORD ] ]
+
+   asnmig8 db $DB on control server using schema $SA for migration
+      [ user $USER [ using $PASSWORD ] ]
+
+
+FALLBACK
+--------
+
+   After you determine that you are ready to migrate, the migration  process
+will successfully convert your Replication control tables to V8, and a valid
+reason for "falling back" should not exist.   After  migration  to  V8,  the
+fallback  mechanisms  are  limited  to (1) restoration of the control tables
+saved in the backup schema and  (2)  restoration  of  entire  database  from
+backup  media.   The reason for not providing an elaborate fallback facility
+is that a single mistaken transaction can render programmatic fallback to  a
+consistent state hopeless:  What data is corrupted?  How far replicated?  Is
+it behind firewalls?  ...  A "Measure twice; cut once"  mentality  surpasses
+any practicable fallback facility.
+
+   Migration input is tables and view; migration output is tables and views.
+If  the  input  tables  are valid, migration will produce valid output.  The
+simplest guarantee of valid input  is  not  to  modify  Replication  control
+tables  "by  hand."   Finally,  if  the  Replication  control tables have no
+dependents other than Capture and Apply, then  your  migration  to  V8  will
+succeed.
+
+   asnmig8 db $DB on source  server using schema $SA for fallback
+      [ user $USER [ using $PASSWORD ] ]
+
+   asnmig8 db $DB on control server using schema $SA for fallback
+      [ user $USER [ using $PASSWORD ] ]
+
+
+MESSAGES
+--------
+
+
+ASN5000E asnmig8 for <action> is abnormally ending at <time>.
+
+Explanation:  For reasons stated in preceding messages, migration is
+abnormally ending.
+
+User Response:  Study the preceding error messages and respond
+accordingly.
+
+--
+
+ASN5001I A successful <action> is complete at <time>.
+
+Explanation:  This migration step has completed successfully.
+
+User Response:  Proceed according the user's guide.
+
+--
+
+ASN5002E SQL error at line < source line > in function "< function name >", SQLCODE == < sqlcode >, SQLSTATE == < sqlstate >:
+
+Explanation:  The migration utility has detected an SQL error.
+Any associated error message from DB2 follows immediately.
+
+User Response:  Consult an appropriate DB2 message reference
+for an explanation of the SQLCODE and SQLSTATE.
+If the origin of the problem remains unclear, report the full
+ASN5002E message to IBM.
+
+--
+
+ASN5003E Migration does not recognize the DB2 server.
+
+Explanation:  The user has connected to an unsupported server.
+Migration abends.
+
+User Response:  Connect to only DB2/UDB, DB2/390 or DB2/400.
+
+--
+
+ASN5004E The prerequisite level of Capture has not run.
+
+Explanation:  Migration can run only after execution of a
+prerequisite service level of Capture.
+
+User Response:  Install and run the prerequisite Capture fixpack with:
+
+APAR IY15286 for UDB;
+APAR IY15286 for DB2/390;
+(Ellen will improve.)
+
+--
+
+ASN5005E The table serializing migration is missing.  Possible causes are incomplete Migration Step 1 or an incorrect backup schema 
+
+Explanation:  Migration creates temporary tables in its backup schema.
+The table which serializes migration execution is missing.
+
+User Response:  The user has probably not run the step 1 script
+for the server to be migrated.  That script will create the missing
+table.
+
+--
+
+ASN5006E The migration status table has < r > rows, not 2.
+
+Explanation:  Step 1 must run once and only once as documented,
+with exit upon first error.  Else, the backup schema may be empty
+or otherwise corrupted.
+
+User Response:  If the status table has 0 rows, then run Step 1.
+Otherwise, the status table indicates that Step 1 either failed to
+complete or ran after completion and ignored SQL errors.
+In the latter case, the user must drop all migration tables in
+the backup schema and rerun the Step 1 script.  Migration tables
+name all begin with 'IBMSN'.
+
+--
+
+ASN5007E The server or its version ( <version release> ) is not supported for migration.
+                                             -
+
+Explanation:  The server DB2 is running a version of DB2 not
+supported for migration.
+
+User Response:  Consult the Migration chapter in the
+Replication User's Guide and Reference for a list of
+DB2 hosts and versions supported for V8 Replication Migration.
+
+--
+
+ASN5008W The global row is missing.
+
+Explanation:  The migration utility finds no global row in the register
+table.  Therefore, The V8 restart table will be empty.
+
+User Response:  Run capture as appropriate to insert the global row.
+
+--
+
+ASN5009E The column definitions of <schema1>.<table1> and <schema2>.<table2> differ.
+
+Explanation:  A table and its backup are out of synch with
+respect to column definitions.
+
+User Response:  This message indicates manual interventions
+that corrupted the asn or backup schema.  Contact IBM.
+
+--
+
+ASN5011I Migration of database '<database>' on <server> server using schema '<backup schema>' for <action> is starting at <time>.
+                                                                                    -
+
+Explanation:  This informative message just echoes the user's
+migration invocation parameters to demonstrate communication.
+
+User Response:  None.
+
+--
+
+ASN5012E After DDL (step 1), only <control source>-server backup (step 2) is valid.
+                                          -
+
+Explanation:  After running the Step 1 script or after falling back, the user
+must run source or control migration for backup ( Step 2 ).
+
+User Response:  See the migration chapter in the
+Replication Guide and Reference for more information
+about migrating a control or source server for backup.
+
+--
+
+ASN5013E After backup (step 2), only <control source>-server backup (step 2) and migration (step 3) are valid.
+                                             -
+
+Explanation:  After running control or source backup ( Step 2 ),
+the user must either run backup again or migrate ( Step 3 ).
+
+User Response:  Per the User's Guide, re-run Step 2 or run Step 3.
+That is, backup again or migrate.
+
+--
+
+ASN5014E After migration (step 3), migration is complete, and only <control source >-server fallback is valid if desired.
+                                                                           -
+
+Explanation:  After running the migration utility on the control or
+source server ( Step 3, "for migration" ), you can only proceed to the
+fallback migration step (Step 4). From this step you can restore the control
+tables saved earlier in the backup table space. Your only other alternative
+is to restore the entire database from the backup media."
+
+User Response:  Read the migration chapter in the
+Replication Guide and Reference, and run a control or source server
+migration utility for fallback -- if fallback is truly desired.  Normally
+users do not run the migration utility for fallback.
+
+--
+
+ASN5015I asnmig8 usage:
+asnmig8 database $DB on @(source|control) server using schema $SCHEMA for @(backup|migration|fallback)
+
+Explanation:  This message presents migration utility invocation syntax when
+the user prompts with no arguments, -h, or invalid arguments.
+
+User Response:  Invoke the migration utility with the appropriate
+parameters. Refer to the migration chapter in the
+Replication Guide and Reference for more information.
+
+--
+
+ASN5016E <control source> server is already at version 8.x.
+                 -
+
+Explanation:  The migration utility has detected that the server database
+already contains Replication V8 <control source> tables.
+                                        -
+
+User Response:  Verify the migration utility invocation parameters.
+
+--
+
+ASN5017E Migration has detected an empty "warm start" table.
+
+Explanation:  Capture has not populated its warm start table.
+
+User Response:  Start and stop Capture according to the Replication User's Guide.
+
+--
+
+ASN5018W SQL warning at line < line > in function < function >, SQLCODE == < sqlcode >, SQLSTATE == < sqlstate >:
+
+Explanation:  The migration utility has detected an SQL warning.
+Any associated warning message from DB2 follows immediately.
+
+User Response:  Consult a DB2 message reference specific to your
+environment for an explanation of the SQLCODE and SQLSTATE.
+If the origin of the problem remains unclear, report the full
+ASN5018W message to IBM.
+
+--
+
+ASN5019I The remote database <database> is running <remote db> <version>.
+                                                          -
+
+Explanation:  The migration utility has connected with the named federated database.
+
+User Response:  None.
+
+--
+
+ASN5020E asnmig8.cat not found.
+
+Explanation:  The migration utility can not open its message catalog.
+
+User Response:  export NLSPATH appropriately, e.g. export NLSPATH=%N.cat
+
+-- FINIS --
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+

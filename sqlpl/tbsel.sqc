@@ -1,0 +1,272 @@
+/****************************************************************************
+** (c) Copyright IBM Corp. 2007 All rights reserved.
+** 
+** The following sample of source code ("Sample") is owned by International 
+** Business Machines Corporation or one of its subsidiaries ("IBM") and is 
+** copyrighted and licensed, not sold. You may use, copy, modify, and 
+** distribute the Sample in any form without payment to IBM, for the purpose of 
+** assisting you in the development of your applications.
+** 
+** The Sample code is provided to you on an "AS IS" basis, without warranty of 
+** any kind. IBM HEREBY EXPRESSLY DISCLAIMS ALL WARRANTIES, EITHER EXPRESS OR 
+** IMPLIED, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED WARRANTIES OF 
+** MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE. Some jurisdictions do 
+** not allow for the exclusion or limitation of implied warranties, so the above 
+** limitations or exclusions may not apply to you. IBM shall not be liable for 
+** any damages you suffer as a result of using, copying, modifying or 
+** distributing the Sample, even if IBM has been advised of the possibility of 
+** such damages.
+*****************************************************************************
+**
+** SOURCE FILE NAME: tbsel.sqc 
+**
+** SAMPLE: How to select from each of: insert, update, delete
+**
+**         This sample consists of a client application (this file) that calls
+**         an SQL stored procedure BUY_COMPANY (see tbselcreate.db2).
+**         The procedure BUY_COMPANY contains usage examples of a SELECT
+**         from a data change statement.
+**
+** CONTEXT:
+**         The context for this sample is that of a company "Company B" taking
+**         over company "Company A".  This sample illustrates how Company B
+**         incorporates data from table company_b into table company_a using
+**         an SQL stored procedure BUY_COMPANY.
+**
+**         The table company_b differs from table company_a.  In company_b there
+**         is a generated column for the employee ID. Another table salary_change
+**         records the old and new salaries of each employee transferred from
+**         Company A to Company B.  
+**         statement.
+**
+** PREREQUISITES:
+**        - Ensure existence of database for precompile purposes.
+**        - Ensure that the tables and stored procedure referenced in this program
+**          have been created.  To create these tables see the instructions in
+**          tbselcreate.db2
+**        - Use the makefile to precompile/bind/compile and link this client
+**          application  -or-
+**          -Precompile this application with the SQL precompiler (PREP in DB2) 
+**          -Bind this application to a database (BIND in DB2) 
+**          -Compile and link this application with the compiler supported on your platform.
+**
+**
+** SQL STATEMENTS USED:
+**         CONNECT 
+**         CALL
+**         SELECT 
+**
+** OUTPUT FILE: tbsel.out (available in the online documentation)
+*****************************************************************************
+**
+** For more information on the sample programs, see the README file.
+**
+** For information on creating SQL procedures and developing C applications,
+** see the Application Development Guide.
+**
+** For information on using SQL statements, see the SQL Reference.
+**
+** For the latest information on programming, building, and running DB2 
+** applications, visit the DB2 application development website: 
+**     http://www.software.ibm.com/data/db2/udb/ad
+****************************************************************************/
+
+#include <stdio.h>
+#include <stdlib.h>
+#include <sql.h> 
+#include <sqlda.h>
+#include <sqlca.h>
+#include <string.h>
+#include "utilemb.h"
+
+EXEC SQL INCLUDE SQLCA;
+
+int main(int argc, char *argv[]) 
+{
+  EXEC SQL BEGIN DECLARE SECTION;
+  char database[9];  /* string to hold input database name */
+  char userid[9];    /* string to hold input user ID */
+  char passwd[19];   /* string to hold input password */
+  char stmt[1200];   /* string to hold SQL statements used in this procedure*/
+  EXEC SQL END DECLARE SECTION;
+
+  /* Declare the output SQLDA */
+  struct sqlda *inout_sqlda = (struct sqlda *)
+  malloc(SQLDASIZE(1)); 
+
+  /* Declare the SQLCA */
+  struct sqlca sqlca;
+
+  char eBuffer[1024]; /* Error message buffer */
+
+  if (argc != 4) 
+  {
+     printf ("\nUSAGE: tbsel database userid passwd\n\n");
+     return 1;
+  }
+  strcpy (database, argv[1]);
+  strcpy (userid, argv[2]);
+  strcpy (passwd, argv[3]);
+  
+  /* Connect to database */
+  printf("Connect to database.\n");
+  EXEC SQL CONNECT TO :database USER :userid USING :passwd; 
+  EMB_SQL_CHECK("Connect to sample");
+
+  printf("\nOutput the contents of tables COMPANY_A and COMPANY_B");
+  printf("\nprior to the CALL of procedure BUY_COMPANY: \n");
+  
+  Print();
+  
+  /********************************************************\
+  * Call the procedures via the CALL statement              *
+  \********************************************************/
+  printf("\nIssue SQL to call procedure BUY_COMPANY:\n\n");
+  
+  sprintf(stmt, "CALL BUY_COMPANY ()");
+  printf("%s\n", stmt);
+
+   EXEC SQL prepare st from :stmt;
+   EMB_SQL_CHECK("PREPARE CALL STATEMENT");
+
+   EXEC SQL execute st; 
+   EMB_SQL_CHECK("EXECUTE CALL STATEMENT");
+
+   printf("\nOutput the contents of tables COMPANY_A and COMPANY_B");
+   printf("\nafter CALL of procedure BUY_COMPANY.\n");
+  
+   Print();
+   
+   /* ROLLBACK the stored procedure's actions.  If there was an error
+      report the error and then ROLLBACK the changes effected by the
+      stored procedure.  This is done to reset the data in the tables
+      requied by this sample so that this application can be invoked
+      again immediately with the same data.*/
+   if (SQLCODE == 0)
+   { /* Rollback the changes to the database */
+     EXEC SQL ROLLBACK;
+     printf("\nServer Procedure Complete.\n");
+   }
+   else
+   { /* print the error message, roll back the transaction and return */
+     sqlaintp (eBuffer, 1024, 80, &sqlca);
+     printf("\n%s\n", eBuffer);
+  
+     EXEC SQL ROLLBACK;
+     printf("Server Procedure Transaction Rolled Back.\n\n");
+     return 1;
+   }
+   
+
+  /* Free allocated memory. */
+  free( inout_sqlda ); 
+
+  /* Disconnect from database. */
+  EXEC SQL CONNECT RESET; 
+  EMB_SQL_CHECK("CONNECT RESET");
+  return 0;
+} /* main */
+
+/* The Print function outputs the data in the tables: company_a, company_b 
+   and salary_change.  For each table, a while loop and cursor are used to 
+   fetch and display row data.
+*/
+int Print(void)
+{
+  EXEC SQL BEGIN DECLARE SECTION;
+    short id;		/* Employee's ID */
+    short department;	/* Employee's department */
+    short years;        /* Number of years employee has worked with the 
+			   company */
+    short new_id;       /* Employee's new ID when they switch companies */
+
+    char name[10];      /* Employee's name */
+    char job[6];	/* Employee's job title */
+    char benefits[51];	/* Employee's benefits */
+
+    double salary;	/* Employee's current salary */
+    double old_salary;	/* Employee's old salary */
+  EXEC SQL END DECLARE SECTION;
+  int rc = 0;
+
+  char c1[] = "(SELECT ID, NAME, DEPARTMENT, JOB, YEARS, SALARY FROM company_a)";
+  char c2[] = "(SELECT ID, NAME, DEPARTMENT, JOB, YEARS, SALARY, BENEFITS, OLD_ID FROM company_b)";
+  char c3[] = "(SELECT ID, OLD_SALARY, SALARY FROM salary_change)";
+  
+  EXEC SQL PREPARE S1 FROM :c1;
+  EMB_SQL_CHECK("Prepare first SELECT cursor");
+
+  EXEC SQL PREPARE S2 FROM :c2;
+  EMB_SQL_CHECK("Prepare second SELECT cursor");
+
+  EXEC SQL PREPARE S3 FROM :c3;
+  EMB_SQL_CHECK("Prepare third SELECT cursor");
+  
+  EXEC SQL DECLARE company_a CURSOR FOR S1;
+  EMB_SQL_CHECK("Declare company_a cursor");
+
+  EXEC SQL DECLARE company_b CURSOR FOR S2;
+  EMB_SQL_CHECK("Declare company_b cursor");
+
+  EXEC SQL DECLARE salary_change CURSOR FOR S3;
+  EMB_SQL_CHECK("Declare salary_change cursor");
+  
+  EXEC SQL OPEN company_a;
+  EMB_SQL_CHECK("Open company_a cursor");
+
+  EXEC SQL OPEN company_b;
+  EMB_SQL_CHECK("Open company_b cursor");
+
+  EXEC SQL OPEN salary_change;
+  EMB_SQL_CHECK("Open salary_change cursor");
+    
+  EXEC SQL FETCH company_a INTO :id, :name, :department, :job, :years, :salary;
+  EMB_SQL_CHECK("Fetch from company_a");
+  
+  printf("\nSELECT * FROM company_a\n\n");
+  printf("ID     NAME      DEPARTMENT JOB   YEARS  SALARY\n");
+  printf("------ --------- ---------- ----- ------ ---------\n");
+  while (sqlca.sqlcode != 100)
+  {
+    printf("%-6d %-9s %-10d %-5s %-7d %-9.2f\n", id, name, department, job, years, salary);
+
+    EXEC SQL FETCH company_a INTO :id, :name, :department, :job, :years, :salary;
+    EMB_SQL_CHECK("Fetch from company_a");
+  }
+  
+  EXEC SQL FETCH company_b INTO :new_id, :name, :department, :job, :years, :salary, :benefits, :id;
+  EMB_SQL_CHECK("Fetch from company_b");
+  printf("\nSELECT * FROM company_b\n\n");
+  printf("ID     NAME      DEPARTMENT JOB   YEARS  SALARY    BENEFITS                                           OLD_ID\n");
+  printf("------ --------- ---------- ----- ------ --------- -------------------------------------------------- ------\n");
+  while (sqlca.sqlcode != 100)
+  {
+    printf("%-7d %-10s %-10d %-5s %-7d %-9.2f %-50s %-6d\n", new_id, name, department, job, years, salary, benefits, id);
+    EXEC SQL FETCH company_b INTO :new_id, :name, :department, :job, :years, :salary, :benefits, :id;
+    EMB_SQL_CHECK("Fetch from company_b");
+  }
+
+  EXEC SQL FETCH salary_change INTO :id, :old_salary, :salary;
+  EMB_SQL_CHECK("Fetch from salary_change");
+  printf("\nSELECT * FROM salary_change\n\n");
+  printf("ID     OLD_SALARY SALARY\n");
+  printf("------ ---------- ---------\n");
+  while (sqlca.sqlcode != 100)
+  {
+    printf("%-8d %-9.2f %-8.2f\n", id, old_salary, salary);
+    EXEC SQL FETCH salary_change INTO :id, :old_salary, :salary;
+    EMB_SQL_CHECK("Fetch from salary_change");
+  }
+
+  EXEC SQL CLOSE company_a;
+  EMB_SQL_CHECK("Close company_a cursor");
+
+  EXEC SQL CLOSE company_b;
+  EMB_SQL_CHECK("Close company_b cursor");
+
+  EXEC SQL CLOSE salary_change;
+  EMB_SQL_CHECK("Close salary_change cursor");
+  
+  return rc;
+} /* Print */
+

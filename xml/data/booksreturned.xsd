@@ -1,0 +1,42 @@
+<!-- global annotation-->
+<xs:schema xmlns:xs="http://www.w3.org/2001/XMLSchema" xmlns:db2-xdb="http://www.ibm.com/xmlns/prod/db2/xdb1" elementFormDefault="qualified" attributeFormDefault="unqualified">
+<xs:annotation>
+	<xs:appinfo>
+		<db2-xdb:defaultSQLSchema>xdb</db2-xdb:defaultSQLSchema>
+		<db2-xdb:table>
+			<db2-xdb:SQLSchema>xdb</db2-xdb:SQLSchema> 
+			<db2-xdb:name>BOOKS_AVAIL</db2-xdb:name>
+			<db2-xdb:rowSet>bookAvailRowSet</db2-xdb:rowSet>
+		</db2-xdb:table>
+	</xs:appinfo>
+</xs:annotation>	
+
+<xs:element name="books">
+    <xs:complexType>
+            <xs:sequence> 
+		<xs:element name="book" type="bookType" maxOccurs="unbounded" />
+            </xs:sequence> 
+    </xs:complexType>
+</xs:element>
+
+<xs:complexType name="bookType"> 
+	<xs:sequence> 
+		<xs:element name="book_title" type="xs:string">
+            <xs:annotation>
+                <xs:appinfo>
+                <db2-xdb:rowSetMapping>
+                   <db2-xdb:rowSet>bookAvailRowSet</db2-xdb:rowSet>
+                   <db2-xdb:column>BOOK_TITLE</db2-xdb:column>
+                </db2-xdb:rowSetMapping>
+                </xs:appinfo>
+            </xs:annotation>
+            </xs:element>
+ 		<xs:element name="author" type="xs:string" db2-xdb:rowSet="bookAvailRowSet" db2-xdb:column="AUTHNAME" /> 
+ 		<xs:element name="authid" type="xs:string" db2-xdb:rowSet="bookAvailRowSet" db2-xdb:column="AUTHID"/>
+    <xs:element name="price" type="xs:float" db2-xdb:rowSet="bookAvailRowSet" db2-xdb:column="PRICE" /> 
+	  <xs:element name="no_of_copies" type="xs:integer" db2-xdb:rowSet="bookAvailRowSet" db2-xdb:column="NO_OF_COPIES" /> 
+  </xs:sequence> 
+	<xs:attribute name="isbn" type="xs:string" db2-xdb:rowSet="bookAvailRowSet" db2-xdb:column="ISBN"/>
+ </xs:complexType> 
+</xs:schema>
+

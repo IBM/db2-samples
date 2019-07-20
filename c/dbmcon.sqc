@@ -1,0 +1,369 @@
+/****************************************************************************
+** (c) Copyright IBM Corp. 2007 All rights reserved.
+** 
+** The following sample of source code ("Sample") is owned by International 
+** Business Machines Corporation or one of its subsidiaries ("IBM") and is 
+** copyrighted and licensed, not sold. You may use, copy, modify, and 
+** distribute the Sample in any form without payment to IBM, for the purpose of 
+** assisting you in the development of your applications.
+** 
+** The Sample code is provided to you on an "AS IS" basis, without warranty of 
+** any kind. IBM HEREBY EXPRESSLY DISCLAIMS ALL WARRANTIES, EITHER EXPRESS OR 
+** IMPLIED, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED WARRANTIES OF 
+** MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE. Some jurisdictions do 
+** not allow for the exclusion or limitation of implied warranties, so the above 
+** limitations or exclusions may not apply to you. IBM shall not be liable for 
+** any damages you suffer as a result of using, copying, modifying or 
+** distributing the Sample, even if IBM has been advised of the possibility of 
+** such damages.
+*****************************************************************************
+**
+** SOURCE FILE NAME: dbmcon.sqc 
+**    
+** SAMPLE: How to use multiple databases
+**
+**         This sample program requires a second database 
+**         that has to be created as follows:
+**         - locally:
+**            db2 create db sample2
+**         - remotely:
+**            db2 attach to node_name
+**            db2 create db sample2
+**            db2 detach
+**            db2 catalog db sample2 as sample2 at node node_name
+**         If another name is used for the second database,
+**         it can be specified in the command line arguments
+**         as follows:
+**            dbmcon [dbAlias1 dbAlias2 [user1 pswd1 [user2 pswd2]]
+**         The second database can be dropped as follows:
+**         - locally:
+**            db2 drop db sample2
+**         - remotely:
+**            db2 attach to node_name
+**            db2 drop db sample2
+**            db2 detach
+**            db2 uncatalog db sample2
+**
+**         This sample also requires that the TCPIP listener is running. To
+**         ensure this, do the following:
+**         1. Set the environment variable DB2COMM to TCPIP as follows: 
+**         "db2set DB2COMM=TCPIP"
+**         2. Update the database manager configuration file with the TCP/IP 
+**         service name as specified in the services file:
+**         "db2 update dbm cfg using SVCENAME <TCP/IP service name>"
+**         You must do a "db2stop" and "db2start" for this setting to take
+**         effect.
+**           
+** DB2 API USED:
+**          sqlesetc -- SET CLIENT	 
+**
+** SQL STATEMENTS USED:
+**          CONNECT
+**          SET CONNECTION
+**          DISCONNECT
+**
+** OUTPUT FILE: dbmcon.out (available in the online documentation)
+*****************************************************************************
+**
+** For more information on the sample programs, see the README file.
+**
+** For information on developing C applications, see the Application
+** Development Guide.
+**
+** For information on using SQL statements, see the SQL Reference.
+**
+** For information on DB2 APIs, see the Administrative API Reference.
+**
+** For the latest information on programming, building, and running DB2 
+** applications, visit the DB2 application development website: 
+**     http://www.software.ibm.com/data/db2/udb/ad
+****************************************************************************/
+
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+#include <sqlenv.h>
+#include <sqlutil.h>
+#include "utilemb.h"
+#include "dbmcon1.h"
+#include "dbmcon2.h"
+
+int TwoDbConnectType1(void);
+int TwoDbConnectType2OnePhaseCommit(void);
+
+EXEC SQL BEGIN DECLARE SECTION;
+  char dbAlias1[15];
+  char dbAlias2[15];
+  char user1[129];
+  char user2[129];
+  char pswd1[15];
+  char pswd2[15];
+EXEC SQL END DECLARE SECTION;
+
+int main(int argc, char *argv[])
+{
+  int rc = 0;
+
+  /* check the command line arguments */
+  rc = CmdLineArgsCheck4(argc,
+                         argv,
+                         dbAlias1,
+                         dbAlias2,
+                         user1,
+                         pswd1,
+                         user2,
+                         pswd2);
+  if (rc != 0)
+  {
+    return rc;
+  }
+
+  printf("\nTHIS SAMPLE SHOWS HOW TO USE MULTIPLE DATABASES.\n");
+
+  rc = TwoDbConnectType1();
+  rc = TwoDbConnectType2OnePhaseCommit();
+
+  return 0;
+} /* end main */
+
+int TwoDbConnectType1(void)
+{
+  int rc = 0;
+  struct sqlca sqlca;
+
+  struct sqle_conn_setting clientAppInfo[2];
+
+  printf("\n-----------------------------------------------------------");
+  printf("\nUSE THE DB2 API:\n");
+  printf("  sqlesetc -- SET CLIENT\n");
+  printf("AND THE SQL STATEMENTS:\n");
+  printf("  CONNECT\n");
+  printf("  COMMIT\n");
+  printf("  CONNECT RESET\n");
+  printf("TO USE TYPE1 CONNECT TO TWO DATABASES.\n");
+
+  /* set client connection attributes */
+  printf("\n  Set the Client Connection Attributes to the values:\n");
+  printf("    SQL_CONNECT_TYPE = SQL_CONNECT_1\n");
+  printf("    SQL_DISCONNECT   = SQL_DISCONNECT_EXPL\n");
+
+  clientAppInfo[0].type = SQL_CONNECT_TYPE;
+  clientAppInfo[0].value = SQL_CONNECT_1;
+
+  clientAppInfo[1].type = SQL_DISCONNECT;
+  clientAppInfo[1].value = SQL_DISCONNECT_EXPL;
+
+  /* set client information */
+  sqlesetc(&clientAppInfo[0], 2, &sqlca);
+  DB2_API_CHECK("Client Connection Attributes -- set");
+
+  /* work with databases */
+  printf("\n  CONNECT TO %s\n", dbAlias1);
+  if (strlen(user1) > 0)
+  {
+    EXEC SQL CONNECT TO :dbAlias1 USER :user1 USING :pswd1;
+  }
+  else
+  {
+    EXEC SQL CONNECT TO :dbAlias1;
+  }
+  EMB_SQL_CHECK("first database -- connect");
+
+  rc = FirstDbCreateTable();
+
+  printf("    COMMIT\n");
+
+  EXEC SQL COMMIT;
+  EMB_SQL_CHECK("transaction -- commit");
+
+  printf("  CONNECT RESET\n");
+
+  EXEC SQL CONNECT RESET;
+  EMB_SQL_CHECK("connection -- reset");
+
+  printf("\n  CONNECT TO %s\n", dbAlias2);
+  if (strlen(user2) > 0)
+  {
+    EXEC SQL CONNECT TO :dbAlias2 USER :user2 USING :pswd2;
+  }
+  else
+  {
+    EXEC SQL CONNECT TO :dbAlias2;
+  }
+  EMB_SQL_CHECK("second database -- connect");
+
+  rc = SecondDbCreateTable();
+
+  printf("    COMMIT\n");
+
+  EXEC SQL COMMIT;
+  EMB_SQL_CHECK("transaction -- commit");
+
+  printf("  CONNECT RESET\n");
+
+  EXEC SQL CONNECT RESET;
+  EMB_SQL_CHECK("connection -- reset");
+
+  printf("\n  CONNECT TO %s\n", dbAlias1);
+  if (strlen(user1) > 0)
+  {
+    EXEC SQL CONNECT TO :dbAlias1 USER :user1 USING :pswd1;
+  }
+  else
+  {
+    EXEC SQL CONNECT TO :dbAlias1;
+  }
+  EMB_SQL_CHECK("first database -- connect");
+
+  rc = FirstDbDropTable();
+
+  printf("    COMMIT\n");
+
+  EXEC SQL COMMIT;
+  EMB_SQL_CHECK("transaction -- commit");
+
+  printf("  CONNECT RESET\n");
+
+  EXEC SQL CONNECT RESET;
+  EMB_SQL_CHECK("connection -- reset");
+
+  printf("\n  CONNECT TO %s\n", dbAlias2);
+  if (strlen(user2) > 0)
+  {
+    EXEC SQL CONNECT TO :dbAlias2 USER :user2 USING :pswd2;
+  }
+  else
+  {
+    EXEC SQL CONNECT TO :dbAlias2;
+  }
+  EMB_SQL_CHECK("first database -- connect");
+
+  rc = SecondDbDropTable();
+
+  printf("    COMMIT\n");
+
+  EXEC SQL COMMIT;
+  EMB_SQL_CHECK("transaction -- commit");
+
+  printf("  CONNECT RESET\n");
+
+  EXEC SQL CONNECT RESET;
+  EMB_SQL_CHECK("connection -- reset");
+
+  return 0;
+} /* TwoDbConnectType1 */
+
+int TwoDbConnectType2OnePhaseCommit(void)
+{
+  int rc = 0;
+  struct sqlca sqlca;
+  struct sqle_conn_setting clientAppInfo[3];
+
+  printf("\n-----------------------------------------------------------");
+  printf("\nUSE THE DB2 API:\n");
+  printf("  sqlesetc -- SET CLIENT\n");
+  printf("AND THE SQL STATEMENTS:\n");
+  printf("  CONNECT\n");
+  printf("  SET CONNECTION\n");
+  printf("  COMMIT\n");
+  printf("  DISCONNECT\n");
+  printf("TO USE TYPE2 - ONE PHASE CONNECT TO TWO DATABASES.\n");
+
+  /* set client connection attributes */
+  printf("\n  Set the Client Connection Attributes to the values:\n");
+  printf("    SQL_CONNECT_TYPE = SQL_CONNECT_2\n");
+  printf("    SQL_DISCONNECT   = SQL_DISCONNECT_EXPL\n");
+  printf("    SQL_SYNCPOINT    = SQL_SYNC_ONEPHASE\n");
+
+  clientAppInfo[0].type = SQL_CONNECT_TYPE;
+  clientAppInfo[0].value = SQL_CONNECT_2;
+
+  clientAppInfo[1].type = SQL_DISCONNECT;
+  clientAppInfo[1].value = SQL_DISCONNECT_EXPL;
+
+  clientAppInfo[2].type = SQL_SYNCPOINT;
+  clientAppInfo[2].value = SQL_SYNC_ONEPHASE;
+
+  /* set client information */
+  sqlesetc(&clientAppInfo[0], 3, &sqlca);
+  DB2_API_CHECK("Client Connection Attributes -- set");
+
+  /* work with databases */
+  printf("\n  CONNECT TO %s\n", dbAlias1);
+  if (strlen(user1) > 0)
+  {
+    EXEC SQL CONNECT TO :dbAlias1 USER :user1 USING :pswd1;
+  }
+  else
+  {
+    EXEC SQL CONNECT TO :dbAlias1;
+  }
+  EMB_SQL_CHECK("first database -- connect");
+
+  printf("\n  CONNECT TO %s\n", dbAlias2);
+  if (strlen(user2) > 0)
+  {
+    EXEC SQL CONNECT TO :dbAlias2 USER :user2 USING :pswd2;
+  }
+  else
+  {
+    EXEC SQL CONNECT TO :dbAlias2;
+  }
+  EMB_SQL_CHECK("second database -- connect");
+
+  printf("\n  SET CONNECTION %s\n", dbAlias1);
+
+  EXEC SQL SET CONNECTION :dbAlias1;
+  EMB_SQL_CHECK("first connection -- activate");
+
+  rc = FirstDbCreateTable();
+
+  printf("    COMMIT\n");
+
+  EXEC SQL COMMIT;
+  EMB_SQL_CHECK("transaction -- commit");
+
+  printf("\n  SET CONNECTION %s\n", dbAlias2);
+
+  EXEC SQL SET CONNECTION :dbAlias2;
+  EMB_SQL_CHECK("second connection -- activate");
+
+  rc = SecondDbCreateTable();
+
+  printf("    COMMIT\n");
+
+  EXEC SQL COMMIT;
+  EMB_SQL_CHECK("transaction -- commit");
+
+  printf("\n  SET CONNECTION %s\n", dbAlias1);
+
+  EXEC SQL SET CONNECTION :dbAlias1;
+  EMB_SQL_CHECK("first connection -- activate");
+
+  rc = FirstDbDropTable();
+
+  printf("    COMMIT\n");
+
+  EXEC SQL COMMIT;
+  EMB_SQL_CHECK("transaction -- commit");
+
+  printf("\n  SET CONNECTION %s\n", dbAlias2);
+
+  EXEC SQL SET CONNECTION :dbAlias2;
+  EMB_SQL_CHECK("second connection -- activate");
+
+  rc = SecondDbDropTable();
+
+  printf("    COMMIT\n");
+
+  EXEC SQL COMMIT;
+  EMB_SQL_CHECK("transaction -- commit");
+
+  printf("\n  DISCONNECT ALL\n");
+
+  EXEC SQL DISCONNECT ALL;
+  EMB_SQL_CHECK("all connections -- disconnect");
+
+  return 0;
+} /* TwoDbConnectType2OnePhaseCommit */
+

@@ -1,0 +1,52 @@
+-----------------------------------------------------------------------------
+-- (c) Copyright IBM Corp. 2007 All rights reserved.
+-- 
+-- The following sample of source code ("Sample") is owned by International 
+-- Business Machines Corporation or one of its subsidiaries ("IBM") and is 
+-- copyrighted and licensed, not sold. You may use, copy, modify, and 
+-- distribute the Sample in any form without payment to IBM, for the purpose of 
+-- assisting you in the development of your applications.
+-- 
+-- The Sample code is provided to you on an "AS IS" basis, without warranty of 
+-- any kind. IBM HEREBY EXPRESSLY DISCLAIMS ALL WARRANTIES, EITHER EXPRESS OR 
+-- IMPLIED, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED WARRANTIES OF 
+-- MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE. Some jurisdictions do 
+-- not allow for the exclusion or limitation of implied warranties, so the above 
+-- limitations or exclusions may not apply to you. IBM shall not be liable for 
+-- any damages you suffer as a result of using, copying, modifying or 
+-- distributing the Sample, even if IBM has been advised of the possibility of 
+-- such damages.
+-----------------------------------------------------------------------------
+--
+-- SOURCE FILE NAME: xmldb2batch.db2
+--
+-- SAMPLE: How to perform db2batch with a new datatype XML
+--
+-- PREREQUISITE: Copy "xmldb2batch_in.sql" to the current working directory.
+--
+-- SYSTEM COMMANDS USED:
+--         DB2BATCH
+-----------------------------------------------------------------------------
+--
+-- For more information about the command line processor (CLP) scripts,
+-- see the README file.
+--
+-- For information on using SQL statements, see the SQL Reference.
+--
+-- For the latest information on programming, building, and running DB2
+-- applications, visit the DB2 application development website:
+--     http://www.software.ibm.com/data/db2/udb/ad
+-----------------------------------------------------------------------------
+
+-- This sample will use a flat file called xmldb2batch_in.sql as input file
+
+-- Invoke db2batch from command line with the following options:
+
+-- -d    Database against which SQL statements are to be applied "SAMPLE"
+-- -f    Name of an input file containing SQL statements "xmldb2batch_in.sql"
+-- -s    Provides a summary table for each query or block of queries,
+--       containing elapsed time, CPU times, the rows fetched, and the rows printed
+-- -w    To set maximum result set column width "400"
+-- -r    An output file that will contain the query results. "xmldb2batch_out.sql"
+
+!db2batch -d sample -f xmldb2batch_in.sql -w 400 -s on -r xmldb2batch_out.sql;

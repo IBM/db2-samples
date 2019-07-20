@@ -1,0 +1,1077 @@
+/****************************************************************************
+** (c) Copyright IBM Corp. 2007 All rights reserved.
+** 
+** The following sample of source code ("Sample") is owned by International 
+** Business Machines Corporation or one of its subsidiaries ("IBM") and is 
+** copyrighted and licensed, not sold. You may use, copy, modify, and 
+** distribute the Sample in any form without payment to IBM, for the purpose of 
+** assisting you in the development of your applications.
+** 
+** The Sample code is provided to you on an "AS IS" basis, without warranty of 
+** any kind. IBM HEREBY EXPRESSLY DISCLAIMS ALL WARRANTIES, EITHER EXPRESS OR 
+** IMPLIED, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED WARRANTIES OF 
+** MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE. Some jurisdictions do 
+** not allow for the exclusion or limitation of implied warranties, so the above 
+** limitations or exclusions may not apply to you. IBM shall not be liable for 
+** any damages you suffer as a result of using, copying, modifying or 
+** distributing the Sample, even if IBM has been advised of the possibility of 
+** such damages.
+*****************************************************************************
+**
+** SOURCE FILE NAME: tbconstr.sqC 
+**    
+** SAMPLE: How to create, use, and drop constraints 
+**           
+** SQL STATEMENTS USED:
+**         CREATE TABLE 
+**         EXECUTE IMMEDIATE 
+**         PREPARE
+**         DECLARE CURSOR
+**         OPEN
+**         FETCH
+**         CLOSE
+**         DROP
+**         ALTER TABLE
+**
+** OUTPUT FILE: tbconstr.out (available in the online documentation)
+*****************************************************************************
+**
+** For more information on the sample programs, see the README file.
+**
+** For information on developing C++ applications, see the Application
+** Development Guide.
+**
+** For information on using SQL statements, see the SQL Reference.
+**
+** For the latest information on programming, compiling, and running DB2
+** applications, visit the DB2 application development website at
+**     http://www.software.ibm.com/data/db2/udb/ad
+****************************************************************************/
+
+#include <string.h>
+#include <sqlenv.h>
+#include <sqlutil.h>
+#include "utilemb.h"
+#if ((__cplusplus >= 199711L) && !defined DB2HP && !defined DB2AIX) || \
+    (DB2LINUX && (__LP64__ || (__GNUC__ >= 3)) )
+   #include <iomanip>
+   #include <iostream>
+   using namespace std; 
+#else
+   #include <iomanip.h>
+   #include <iostream.h>
+#endif
+
+EXEC SQL BEGIN DECLARE SECTION;
+  char strStmt[384];
+  char deptno[3 + 1];
+  char deptname[20 + 1];
+  char empno[4 + 1];
+  char empname[10 + 1];
+  char dept_no[3 + 1];
+  short dept_noInd;
+  char firstname[10 + 1];
+  char lastname[10 + 1];
+  double salary;
+EXEC SQL END DECLARE SECTION;
+
+class TbConstr
+{
+  public:
+    int Cn_NOT_NULL_Show();
+    int Cn_UNIQUE_Show();
+    int Cn_PRIMARY_KEY_Show();
+    int Cn_CHECK_Show();
+    int Cn_CHECK_INFO_Show();
+    int Cn_WITH_DEFAULT_Show();
+    int Cn_FK_OnInsertShow();
+    int Cn_FK_ON_UPDATE_NO_ACTION_Show();
+    int Cn_FK_ON_UPDATE_RESTRICT_Show();
+    int Cn_FK_ON_DELETE_CASCADE_Show();
+    int Cn_FK_ON_DELETE_SET_NULL_Show();
+    int Cn_FK_ON_DELETE_NO_ACTION_Show();
+
+    // support functions
+    int FK_TwoTablesCreate();
+    int FK_TwoTablesDisplay();
+    int FK_TwoTablesDrop();
+    int FK_Create(char *);
+    int FK_Drop();
+};
+
+int TbConstr::FK_TwoTablesCreate()
+{
+  struct sqlca sqlca;
+
+  cout << "\n  CREATE TABLE deptmt(deptno CHAR(3) NOT NULL," << endl
+       << "                    deptname VARCHAR(20)," << endl
+       << "                    "
+       << "CONSTRAINT pk_deptmt PRIMARY KEY(deptno))" << endl;
+
+  EXEC SQL CREATE TABLE deptmt(deptno CHAR(3) NOT NULL,
+                             deptname VARCHAR(20),
+                             CONSTRAINT pk_deptmt PRIMARY KEY(deptno));
+  EMB_SQL_CHECK("first table -- create");
+
+  cout << "\n  INSERT INTO deptmt VALUES('A00', 'ADMINISTRATION')," << endl
+       << "                         ('B00', 'DEVELOPMENT')," << endl
+       << "                         ('C00', 'SUPPORT')" << endl;
+
+  strcpy(strStmt, "INSERT INTO deptmt VALUES('A00', 'ADMINISTRATION'), "
+                  "                       ('B00', 'DEVELOPMENT'), "
+                  "                       ('C00', 'SUPPORT') ");
+
+  EXEC SQL EXECUTE IMMEDIATE :strStmt;
+  EMB_SQL_CHECK("first table -- insert");
+
+  cout << "\n  CREATE TABLE empl(empno CHAR(4)," << endl
+       << "                   empname VARCHAR(10)," << endl
+       << "                   dept_no CHAR(3))" << endl;
+
+  EXEC SQL CREATE TABLE empl(empno CHAR(4),
+                            empname VARCHAR(10),
+                            dept_no CHAR(3));
+  EMB_SQL_CHECK("second table -- create");
+
+  cout << "\n  INSERT INTO empl VALUES('0010', 'Smith', 'A00')," << endl
+       << "                        ('0020', 'Ngan', 'B00')," << endl
+       << "                        ('0030', 'Lu', 'B00')," << endl
+       << "                        ('0040', 'Wheeler', 'B00')," << endl
+       << "                        ('0050', 'Burke', 'C00')," << endl
+       << "                        ('0060', 'Edwards', 'C00')," << endl
+       << "                        ('0070', 'Lea', 'C00')" << endl;
+
+  strcpy(strStmt, "INSERT INTO empl VALUES('0010', 'Smith', 'A00'), "
+                  "                      ('0020', 'Ngan', 'B00'), "
+                  "                      ('0030', 'Lu', 'B00'), "
+                  "                      ('0040', 'Wheeler', 'B00'), "
+                  "                      ('0050', 'Burke', 'C00'), "
+                  "                      ('0060', 'Edwards', 'C00'), "
+                  "                      ('0070', 'Lea', 'C00')  ");
+
+  EXEC SQL EXECUTE IMMEDIATE :strStmt;
+  EMB_SQL_CHECK("second table -- insert");
+
+  EXEC SQL COMMIT;
+  EMB_SQL_CHECK("transaction -- commit");
+
+  return 0;
+} //TbConstr::FK_TwoTablesCreate
+
+int TbConstr::FK_TwoTablesDisplay()
+{
+  struct sqlca sqlca;
+
+  cout << "\n  SELECT * FROM deptmt" << endl;
+  cout << "    DEPTNO  DEPTNAME      " << endl;
+  cout << "    ------- --------------" << endl;
+
+  strcpy(strStmt, "SELECT * FROM deptmt");
+
+  EXEC SQL PREPARE stmt1 FROM :strStmt;
+  EMB_SQL_CHECK("stmt1 -- prepare");
+
+  EXEC SQL DECLARE c1 CURSOR FOR stmt1;
+
+  EXEC SQL OPEN c1;
+  EMB_SQL_CHECK("cursor -- open");
+
+  EXEC SQL FETCH c1 INTO :deptno, :deptname;
+  EMB_SQL_CHECK("cursor -- fetch");
+
+  while (sqlca.sqlcode != 100)
+  {
+    cout << "    " << setw(7) << deptno
+         << " " << setw(20) << deptname << endl;
+
+    EXEC SQL FETCH c1 INTO :deptno, :deptname;
+    EMB_SQL_CHECK("cursor -- fetch");
+  }
+
+  EXEC SQL CLOSE c1;
+  EMB_SQL_CHECK("cursor -- close");
+
+  cout << "\n  SELECT * FROM empl" << endl;
+
+  cout << "    EMPNO EMPNAME    DEPT_NO" << endl;
+  cout << "    ----- ---------- -------" << endl;
+
+  strcpy(strStmt, "SELECT * FROM empl");
+
+  EXEC SQL PREPARE stmt2 FROM :strStmt;
+  EMB_SQL_CHECK("stmt2 -- prepare");
+
+  EXEC SQL DECLARE c2 CURSOR FOR stmt2;
+
+  EXEC SQL OPEN c2;
+  EMB_SQL_CHECK("cursor -- open");
+
+  EXEC SQL FETCH c2 INTO :empno, :empname, :dept_no:dept_noInd;
+  EMB_SQL_CHECK("cursor -- fetch");
+
+  while (sqlca.sqlcode != 100)
+  {
+    cout << "    " << setw(5) << empno << " " << setw(10) << empname;
+    if (dept_noInd >= 0)
+    {
+      cout << " " << setw(3) << dept_no;
+    }
+    else
+    {
+      cout << " -";
+    }
+    cout << endl;
+
+    EXEC SQL FETCH c2 INTO :empno, :empname, :dept_no:dept_noInd;
+    EMB_SQL_CHECK("cursor -- fetch");
+  }
+
+  EXEC SQL CLOSE c2;
+  EMB_SQL_CHECK("cursor -- close");
+
+  return 0;
+} //TbConstr::FK_TwoTablesDisplay
+
+int TbConstr::FK_TwoTablesDrop()
+{
+  struct sqlca sqlca;
+
+  cout << "\n  DROP TABLE deptmt" << endl;
+
+  EXEC SQL DROP TABLE deptmt;
+  EMB_SQL_CHECK("first table -- drop");
+
+  cout << "  DROP TABLE empl" << endl;
+
+  EXEC SQL DROP TABLE empl;
+  EMB_SQL_CHECK("second table -- drop");
+
+  EXEC SQL COMMIT;
+  EMB_SQL_CHECK("transaction -- commit");
+
+  return 0;
+} //TbConstr::FK_TwoTablesDrop
+
+int TbConstr::FK_Create(char *ruleClause)
+{
+  struct sqlca sqlca;
+
+  cout << "\n  ALTER TABLE empl ADD CONSTRAINT fk_deptmt" << endl
+       << "    FOREIGN KEY(dept_no)" << endl
+       << "    REFERENCES deptmt(deptno)" << endl
+       << "    " << ruleClause << endl;
+
+  strcpy(strStmt, "ALTER TABLE empl ADD CONSTRAINT fk_deptmt "
+                  "  FOREIGN KEY(dept_no) "
+                  "  REFERENCES deptmt(deptno) ");
+  strcat(strStmt, ruleClause);
+
+  EXEC SQL EXECUTE IMMEDIATE :strStmt;
+  EMB_SQL_CHECK("foreign key -- create");
+
+  cout << "  COMMIT" << endl;
+
+  EXEC SQL COMMIT;
+  EMB_SQL_CHECK("transaction -- commit");
+
+  return 0;
+} //TbConstr::FK_Create
+
+int TbConstr::FK_Drop()
+{
+  struct sqlca sqlca;
+
+  cout << "\n  ALTER TABLE empl DROP CONSTRAINT fk_deptmt" << endl;
+  strcpy(strStmt, "ALTER TABLE empl DROP CONSTRAINT fk_deptmt ");
+
+  EXEC SQL EXECUTE IMMEDIATE :strStmt;
+  EMB_SQL_CHECK("foreign key -- drop");
+
+  cout << "  COMMIT" << endl;
+
+  EXEC SQL COMMIT;
+  EMB_SQL_CHECK("transaction -- commit");
+
+  return 0;
+} //TbConstr::FK_Drop
+
+int TbConstr::Cn_NOT_NULL_Show()
+{
+  int rc = 0;
+  struct sqlca sqlca;
+
+  cout << "\n-----------------------------------------------------------";
+  cout << "\nUSE THE SQL STATEMENTS:" << endl;
+  cout << "  CREATE TABLE" << endl;
+  cout << "  COMMIT" << endl;
+  cout << "  INSERT" << endl;
+  cout << "  DROP TABLE" << endl;
+  cout << "TO SHOW A 'NOT NULL' CONSTRAINT." << endl;
+
+  // create table
+  cout << "\n  CREATE TABLE empl_sal(lastname VARCHAR(10) NOT NULL," << endl
+       << "                       firstname VARCHAR(10)," << endl
+       << "                       salary DECIMAL(7, 2))" << endl;
+
+  EXEC SQL CREATE TABLE empl_sal(lastname VARCHAR(10) NOT NULL,
+                                firstname VARCHAR(10),
+                                salary DECIMAL(7, 2));
+  EMB_SQL_CHECK("table -- create");
+
+  cout << "  COMMIT" << endl;
+
+  EXEC SQL COMMIT;
+  EMB_SQL_CHECK("transaction -- commit");
+
+  // insert table
+  cout << "\n  INSERT INTO empl_sal VALUES(NULL, 'PHILIP', 17000.00)" << endl;
+  strcpy(strStmt, "INSERT INTO empl_sal VALUES(NULL, 'PHILIP', 17000.00) ");
+
+  EXEC SQL EXECUTE IMMEDIATE :strStmt;
+  EXPECTED_ERR_CHECK("table -- insert");
+
+  // drop table
+  cout << "\n  DROP TABLE empl_sal" << endl;
+
+  EXEC SQL DROP TABLE empl_sal;
+  EMB_SQL_CHECK("table -- drop");
+
+  return 0;
+} //TbConstr::Cn_NOT_NULL_Show
+
+int TbConstr::Cn_UNIQUE_Show()
+{
+  int rc = 0;
+  struct sqlca sqlca;
+
+  cout << "\n-----------------------------------------------------------";
+  cout << "\nUSE THE SQL STATEMENTS:" << endl;
+  cout << "  CREATE TABLE" << endl;
+  cout << "  COMMIT" << endl;
+  cout << "  INSERT" << endl;
+  cout << "  ALTER TABLE" << endl;
+  cout << "  DROP TABLE" << endl;
+  cout << "TO SHOW A 'UNIQUE' CONSTRAINT." << endl;
+
+  // create table
+  cout << "\n  CREATE TABLE empl_sal(lastname VARCHAR(10) NOT NULL," << endl
+       << "                       firstname VARCHAR(10) NOT NULL," << endl
+       << "                       salary DECIMAL(7, 2)," << endl
+       << "  CONSTRAINT unique_cn UNIQUE(lastname, firstname))" << endl;
+
+  EXEC SQL CREATE TABLE empl_sal(lastname VARCHAR(10) NOT NULL,
+                                firstname VARCHAR(10) NOT NULL,
+                                salary DECIMAL(7, 2),
+    CONSTRAINT unique_cn UNIQUE(lastname, firstname));
+  EMB_SQL_CHECK("table -- create");
+
+  cout << "  COMMIT" << endl;
+
+  EXEC SQL COMMIT;
+  EMB_SQL_CHECK("transaction -- commit");
+
+  // insert table
+  cout << "\n  INSERT INTO empl_sal VALUES('SMITH', 'PHILIP', 17000.00),"
+       << "\n                            ('SMITH', 'PHILIP', 21000.00) "
+       << endl;
+
+  strcpy(strStmt,
+         "INSERT INTO empl_sal VALUES('SMITH', 'PHILIP', 17000.00), "
+         "                          ('SMITH', 'PHILIP', 21000.00)  ");
+
+  EXEC SQL EXECUTE IMMEDIATE :strStmt;
+  EXPECTED_ERR_CHECK("table -- insert");
+
+  // drop constraint
+  cout << "\n  ALTER TABLE empl_sal DROP CONSTRAINT unique_cn" << endl;
+
+  EXEC SQL ALTER TABLE empl_sal DROP CONSTRAINT unique_cn;
+  EMB_SQL_CHECK("constrain -- drop");
+
+  // drop table
+  cout << "\n  DROP TABLE empl_sal" << endl;
+
+  EXEC SQL DROP TABLE empl_sal;
+  EMB_SQL_CHECK("table -- drop");
+
+  return 0;
+} //TbConstr::Cn_UNIQUE_Show
+
+int TbConstr::Cn_PRIMARY_KEY_Show()
+{
+  int rc = 0;
+  struct sqlca sqlca;
+
+  cout << "\n-----------------------------------------------------------";
+  cout << "\nUSE THE SQL STATEMENTS:" << endl;
+  cout << "  CREATE TABLE" << endl;
+  cout << "  COMMIT" << endl;
+  cout << "  INSERT" << endl;
+  cout << "  ALTER TABLE" << endl;
+  cout << "  DROP TABLE" << endl;
+  cout << "TO SHOW A 'PRIMARY KEY' CONSTRAINT." << endl;
+
+  // create table
+  cout << "\n  CREATE TABLE empl_sal(lastname VARCHAR(10) NOT NULL," << endl
+       << "                       firstname VARCHAR(10) NOT NULL," << endl
+       << "                       salary DECIMAL(7, 2)," << endl
+       << "  CONSTRAINT pk_cn PRIMARY KEY(lastname, firstname))" << endl;
+
+  EXEC SQL CREATE TABLE empl_sal(lastname VARCHAR(10) NOT NULL,
+                                firstname VARCHAR(10) NOT NULL,
+                                salary DECIMAL(7, 2),
+    CONSTRAINT pk_cn PRIMARY KEY(lastname, firstname));
+  EMB_SQL_CHECK("table -- create");
+
+  cout << "  COMMIT" << endl;
+
+  EXEC SQL COMMIT;
+  EMB_SQL_CHECK("transaction -- commit");
+
+  // insert table
+  cout << "\n  INSERT INTO empl_sal VALUES('SMITH', 'PHILIP', 17000.00),"
+       << "\n                            ('SMITH', 'PHILIP', 21000.00) "
+       << endl;
+
+  strcpy(strStmt,
+         "INSERT INTO empl_sal VALUES('SMITH', 'PHILIP', 17000.00), "
+         "                          ('SMITH', 'PHILIP', 21000.00) ");
+
+  EXEC SQL EXECUTE IMMEDIATE :strStmt;
+  EXPECTED_ERR_CHECK("table -- insert");
+
+  // drop constraint
+  cout << "\n  ALTER TABLE empl_sal DROP CONSTRAINT pk_cn" << endl;
+
+  EXEC SQL ALTER TABLE empl_sal DROP CONSTRAINT pk_cn;
+  EMB_SQL_CHECK("constraint -- drop");
+
+  // drop table
+  cout << "\n  DROP TABLE empl_sal" << endl;
+
+  EXEC SQL DROP TABLE empl_sal;
+  EMB_SQL_CHECK("table -- drop");
+
+  return 0;
+} //TbConstr::Cn_PRIMARY_KEY_Show
+
+int TbConstr::Cn_CHECK_Show()
+{
+  int rc = 0;
+  struct sqlca sqlca;
+
+  cout << "\n-----------------------------------------------------------";
+  cout << "\nUSE THE SQL STATEMENTS:" << endl;
+  cout << "  CREATE TABLE" << endl;
+  cout << "  COMMIT" << endl;
+  cout << "  INSERT" << endl;
+  cout << "  ALTER TABLE" << endl;
+  cout << "  DROP TABLE" << endl;
+  cout << "TO SHOW A 'CHECK' CONSTRAINT." << endl;
+
+  // create table
+  cout << "\n  CREATE TABLE empl_sal(lastname VARCHAR(10)," << endl
+       << "                       firstname VARCHAR(10)," << endl
+       << "                       salary DECIMAL(7, 2)," << endl
+       << "    CONSTRAINT check_cn CHECK(salary < 25000.00))" << endl;
+
+  EXEC SQL CREATE TABLE empl_sal(lastname VARCHAR(10),
+                                firstname VARCHAR(10),
+                                salary DECIMAL(7, 2),
+    CONSTRAINT check_cn CHECK(salary < 25000.00));
+  EMB_SQL_CHECK("table -- create");
+
+  cout << "  COMMIT" << endl;
+
+  EXEC SQL COMMIT;
+  EMB_SQL_CHECK("transaction -- commit");
+
+  // insert table
+  cout << "\n  INSERT INTO empl_sal VALUES('SMITH', 'PHILIP', 27000.00)"
+       << endl;
+  strcpy(strStmt, "INSERT INTO empl_sal VALUES('SMITH', 'PHILIP', 27000.00)");
+
+  EXEC SQL EXECUTE IMMEDIATE :strStmt;
+  EXPECTED_ERR_CHECK("table -- insert");
+
+  // drop constraint
+  cout << "\n  ALTER TABLE empl_sal DROP CONSTRAINT check_cn" << endl;
+
+  EXEC SQL ALTER TABLE empl_sal DROP CONSTRAINT check_cn;
+  EMB_SQL_CHECK("constrain -- drop");
+
+  // drop table
+  cout << "\n  DROP TABLE empl_sal" << endl;
+
+  EXEC SQL DROP TABLE empl_sal;
+  EMB_SQL_CHECK("table -- drop");
+
+  return 0;
+} //TbConstr::Cn_CHECK_Show
+
+int TbConstr::Cn_CHECK_INFO_Show()
+{
+  int rc = 0;
+  struct sqlca sqlca;
+
+  cout <<  "\n-----------------------------------------------------------";
+  cout <<  "\nUSE THE SQL STATEMENTS:\n";
+  cout <<  "  CREATE TABLE\n";
+  cout <<  "  COMMIT\n";
+  cout <<  "  INSERT\n";
+  cout <<  "  ALTER TABLE\n";
+  cout <<  "  DROP TABLE\n";
+  cout <<  "TO SHOW AN 'INFORMATIONAL' CONSTRAINT.\n";
+
+  // create table 
+  cout <<  "\n  CREATE TABLE empl(empno INTEGER NOT NULL PRIMARY KEY,\n"
+       <<  "                   name VARCHAR(10),\n"
+       <<  "                   firstname VARCHAR(20),\n"
+       <<  "                   salary INTEGER CONSTRAINT minsalary\n"
+       <<  "                          CHECK (salary >= 25000)\n"
+       <<  "                          NOT ENFORCED\n"
+       <<  "                          ENABLE QUERY OPTIMIZATION)\n";           
+
+  EXEC SQL CREATE TABLE empl(empno INTEGER NOT NULL PRIMARY KEY,
+                            name VARCHAR(10),
+                            firstname VARCHAR(20),
+                            salary INTEGER CONSTRAINT minsalary
+                                   CHECK (salary >= 25000)
+                                   NOT ENFORCED
+                                   ENABLE QUERY OPTIMIZATION);
+  EMB_SQL_CHECK("table -- create");
+
+  cout <<  "  COMMIT\n";
+  EXEC SQL COMMIT;
+  EMB_SQL_CHECK("transaction -- commit");
+
+  // Insert data that doesn't satisfy the constraint 'minsalary'. 
+  // Database manager does not enforce the constraint for IUD operations 
+  cout <<  "\n\nTO SHOW NOT ENFORCED OPTION\n";
+  cout <<  "\n  INSERT INTO empl VALUES(1, 'SMITH', 'PHILIP', 1000)\n\n";
+  strcpy(strStmt, "INSERT INTO empl VALUES(1, 'SMITH', 'PHILIP', 1000)");
+
+  EXEC SQL EXECUTE IMMEDIATE :strStmt;
+  EMB_SQL_CHECK("table -- insert");
+
+  // Alter the constraint to make it ENFORCED by database manager  
+  cout <<  "Alter the constraint to make it ENFORCED by database manager\n";
+  cout <<  "\n  ALTER TABLE empl ALTER CHECK minsalary ENFORCED\n";
+  strcpy(strStmt, "ALTER TABLE empl ALTER CHECK minsalary ENFORCED");
+
+  EXEC SQL EXECUTE IMMEDIATE :strStmt;
+  EXPECTED_ERR_CHECK("table -- alter");
+
+  // Delete entries from EMP Table 
+  cout <<  "\n  DELETE FROM empl\n";
+  strcpy(strStmt, "DELETE FROM empl");
+
+  EXEC SQL EXECUTE IMMEDIATE :strStmt;  
+  EMB_SQL_CHECK("table -- alter");
+
+  // Alter the constraint to make it ENFORCED by database manager 
+  cout <<  "\n\nTO SHOW ENFORCED OPTION\n";
+  cout <<  "\n  ALTER TABLE empl ALTER CHECK minsalary ENFORCED\n";
+  strcpy(strStmt, "ALTER TABLE empl ALTER CHECK minsalary ENFORCED");
+  EXEC SQL EXECUTE IMMEDIATE :strStmt;  
+  EMB_SQL_CHECK("table -- alter");
+
+  // Insert table with data not conforming to the constraint 'minsalary'
+  // Database manager does not enforce the constraint for IUD operations
+  cout <<  "\n  INSERT INTO empl VALUES(1, 'SMITH', 'PHILIP', 1000)\n";
+  strcpy(strStmt, "INSERT INTO empl VALUES(1, 'SMITH', 'PHILIP', 1000)");
+
+  EXEC SQL EXECUTE IMMEDIATE :strStmt;
+  EXPECTED_ERR_CHECK("table -- insert");
+
+  // drop table
+  cout <<  "\n  DROP TABLE empl\n";
+
+  EXEC SQL DROP TABLE empl;
+  EMB_SQL_CHECK("table -- drop");
+
+  return 0;
+} // TbConstr::Cn_CHECK_INFO_Show
+
+int TbConstr::Cn_WITH_DEFAULT_Show()
+{
+  int rc = 0;
+  struct sqlca sqlca;
+
+  cout << "\n-----------------------------------------------------------";
+  cout << "\nUSE THE SQL STATEMENTS:" << endl;
+  cout << "  CREATE TABLE" << endl;
+  cout << "  COMMIT" << endl;
+  cout << "  INSERT" << endl;
+  cout << "  DROP TABLE" << endl;
+  cout << "TO SHOW A 'WITH DEFAULT' CONSTRAINT." << endl;
+
+  // create table
+  cout << "\n  CREATE TABLE empl_sal(lastname VARCHAR(10)," << endl
+       << "                       firstname VARCHAR(10)," << endl
+       << "                       salary DECIMAL(7, 2)"
+       << " WITH DEFAULT 17000.00)" << endl;
+
+  EXEC SQL CREATE TABLE empl_sal(lastname VARCHAR(10),
+                                firstname VARCHAR(10),
+                                salary DECIMAL(7, 2) WITH DEFAULT 17000.00);
+  EMB_SQL_CHECK("table -- create");
+
+  cout << "  COMMIT" << endl;
+
+  EXEC SQL COMMIT;
+  EMB_SQL_CHECK("transaction -- commit");
+
+  // insert table
+  cout << "\n  INSERT INTO empl_sal(lastname, firstname)" << endl
+       << "    VALUES('SMITH', 'PHILIP')," << endl
+       << "          ('PARKER', 'JOHN')," << endl
+       << "          ('PEREZ', 'MARIA')" << endl;
+
+  strcpy(strStmt, "INSERT INTO empl_sal(lastname, firstname) "
+                  "  VALUES('SMITH', 'PHILIP'), "
+                  "        ('PARKER', 'JOHN'), "
+                  "        ('PEREZ', 'MARIA') ");
+
+  EXEC SQL EXECUTE IMMEDIATE :strStmt;
+  EMB_SQL_CHECK("table -- insert");
+
+  // display table
+  cout << "\n  SELECT * FROM empl_sal" << endl;
+
+  cout << "    LASTNAME   FIRSTNAME  SALARY  " << endl;
+  cout << "    ---------- ---------- --------" << endl;
+
+  strcpy(strStmt, "SELECT * FROM empl_sal");
+
+  EXEC SQL PREPARE stmt3 FROM :strStmt;
+  EMB_SQL_CHECK("stmt3 -- prepare");
+
+  EXEC SQL DECLARE c3 CURSOR FOR stmt3;
+
+  EXEC SQL OPEN c3;
+  EMB_SQL_CHECK("cursor -- open");
+
+  EXEC SQL FETCH c3 INTO :firstname, :lastname, :salary;
+  EMB_SQL_CHECK("cursor -- fetch");
+
+  while (sqlca.sqlcode != 100)
+  {
+    cout << "    " << setw(10) << firstname
+         << " " << setw(10) << lastname
+         << " " << setw(7) << salary << endl;
+
+    EXEC SQL FETCH c3 INTO :firstname, :lastname, :salary;
+    EMB_SQL_CHECK("cursor -- fetch");
+  }
+
+  EXEC SQL CLOSE c3;
+  EMB_SQL_CHECK("cursor -- close");
+
+  // drop table
+  cout << "\n  DROP TABLE empl_sal" << endl;
+
+  EXEC SQL DROP TABLE empl_sal;
+  EMB_SQL_CHECK("table -- drop");
+
+  return 0;
+} //TbConstr::Cn_WITH_DEFAULT_Show
+
+int TbConstr::Cn_FK_OnInsertShow()
+{
+  int rc = 0;
+  struct sqlca sqlca;
+
+  cout << "\n-----------------------------------------------------------";
+  cout << "\nUSE THE SQL STATEMENTS:" << endl;
+  cout << "  ALTER TABLE" << endl;
+  cout << "  COMMIT" << endl;
+  cout << "  INSERT" << endl;
+  cout << "  ROLLBACK" << endl;
+  cout << "TO SHOW HOW A FOREIGN KEY WORKS ON INSERT." << endl;
+
+  // display initial tables content
+  rc = FK_TwoTablesDisplay();
+
+  // create foreign key
+  rc = FK_Create("");
+
+  // insert parent table
+  cout << "\n  INSERT INTO deptmt VALUES('D00', 'SALES')" << endl;
+  strcpy(strStmt, "INSERT INTO deptmt VALUES('D00', 'SALES') ");
+
+  EXEC SQL EXECUTE IMMEDIATE :strStmt;
+  EMB_SQL_CHECK("parent table -- insert");
+
+  // insert child table
+  cout << "\n  INSERT INTO empl VALUES('0080', 'Pearce', 'E03')" << endl;
+  strcpy(strStmt, "INSERT INTO empl VALUES('0080', 'Pearce', 'E03') ");
+
+  EXEC SQL EXECUTE IMMEDIATE :strStmt;
+  EXPECTED_ERR_CHECK("child table -- insert");
+
+  // display final tables content
+  rc = FK_TwoTablesDisplay();
+
+  // rollback transaction
+  cout << "\n  ROLLBACK" << endl;
+
+  EXEC SQL ROLLBACK;
+  EMB_SQL_CHECK("transaction -- rollback");
+
+  // drop foreign key
+  rc = FK_Drop();
+
+  return 0;
+} //TbConstr::Cn_FK_OnInsertShow
+
+int TbConstr::Cn_FK_ON_UPDATE_NO_ACTION_Show()
+{
+  int rc = 0;
+  struct sqlca sqlca;
+
+  cout << "\n-----------------------------------------------------------";
+  cout << "\nUSE THE SQL STATEMENTS:" << endl;
+  cout << "  ALTER TABLE" << endl;
+  cout << "  COMMIT" << endl;
+  cout << "  UPDATE" << endl;
+  cout << "  ROLLBACK" << endl;
+  cout << "TO SHOW AN 'ON UPDATE NO ACTION' FOREIGN KEY." << endl;
+
+  // display initial tables content
+  rc = FK_TwoTablesDisplay();
+
+  // create foreign key
+  rc = FK_Create("ON UPDATE NO ACTION");
+
+  // update parent table
+  cout << "\n  UPDATE deptmt SET deptno = 'E01' WHERE deptno = 'A00'" << endl;
+  strcpy(strStmt, "UPDATE deptmt SET deptno = 'E01' WHERE deptno = 'A00' ");
+
+  EXEC SQL EXECUTE IMMEDIATE :strStmt;
+  EXPECTED_ERR_CHECK("parent table -- update");
+
+  cout << "\n  UPDATE deptmt SET deptno ="
+       << "\n    CASE"
+       << "\n      WHEN deptno = 'A00' THEN 'B00'"
+       << "\n      WHEN deptno = 'B00' THEN 'A00'"
+       << "\n    END"
+       << "\n    WHERE deptno = 'A00' OR deptno = 'B00'" << endl;
+
+  strcpy(strStmt, "UPDATE deptmt SET deptno = "
+                  "  CASE "
+                  "    WHEN deptno = 'A00' THEN 'B00' "
+                  "    WHEN deptno = 'B00' THEN 'A00' "
+                  "  END "
+                  "  WHERE deptno = 'A00' OR deptno = 'B00' ");
+
+  EXEC SQL EXECUTE IMMEDIATE :strStmt;
+  EMB_SQL_CHECK("parent table -- update");
+
+  // update child table
+  cout << "\n  UPDATE empl SET dept_no = 'G11' WHERE empname = 'Wheeler'"
+       << endl;
+  strcpy(strStmt,
+         "UPDATE empl SET dept_no = 'G11' WHERE empname = 'Wheeler' ");
+
+  EXEC SQL EXECUTE IMMEDIATE :strStmt;
+  EXPECTED_ERR_CHECK("child table -- update");
+
+  // display final tables content
+  rc = FK_TwoTablesDisplay();
+
+  // rollback transaction
+  cout << "\n  ROLLBACK" << endl;
+
+  EXEC SQL ROLLBACK;
+  EMB_SQL_CHECK("transaction -- rollback");
+
+  // drop foreign key
+  rc = FK_Drop();
+
+  return 0;
+} //TbConstr::Cn_FK_ON_UPDATE_NO_ACTION_Show
+
+int TbConstr::Cn_FK_ON_UPDATE_RESTRICT_Show()
+{
+  int rc = 0;
+  struct sqlca sqlca;
+
+  cout << "\n-----------------------------------------------------------";
+  cout << "\nUSE THE SQL STATEMENTS:" << endl;
+  cout << "  ALTER TABLE" << endl;
+  cout << "  COMMIT" << endl;
+  cout << "  UPDATE" << endl;
+  cout << "  ROLLBACK" << endl;
+  cout << "TO SHOW AN 'ON UPDATE RESTRICT' FOREIGN KEY." << endl;
+
+  // display initial tables content
+  rc = FK_TwoTablesDisplay();
+
+  // create foreign key
+  rc = FK_Create("ON UPDATE RESTRICT");
+
+  // update parent table
+  cout << "\n  UPDATE deptmt SET deptno = 'E01' WHERE deptno = 'A00'" << endl;
+  strcpy(strStmt, "UPDATE deptmt SET deptno = 'E01' WHERE deptno = 'A00' ");
+
+  EXEC SQL EXECUTE IMMEDIATE :strStmt;
+  EXPECTED_ERR_CHECK("parent table -- update");
+
+  cout << "\n  UPDATE deptmt SET deptno ="
+       << "\n    CASE"
+       << "\n      WHEN deptno = 'A00' THEN 'B00'"
+       << "\n      WHEN deptno = 'B00' THEN 'A00'"
+       << "\n    END"
+       << "\n    WHERE deptno = 'A00' OR deptno = 'B00'" << endl;
+
+  strcpy(strStmt, "UPDATE deptmt SET deptno = "
+                  "  CASE "
+                  "    WHEN deptno = 'A00' THEN 'B00' "
+                  "    WHEN deptno = 'B00' THEN 'A00' "
+                  "  END "
+                  "  WHERE deptno = 'A00' OR deptno = 'B00' ");
+
+  EXEC SQL EXECUTE IMMEDIATE :strStmt;
+  EXPECTED_ERR_CHECK("parent table -- update");
+
+  // update child table
+  cout << "\n  UPDATE empl SET dept_no = 'G11' WHERE empname = 'Wheeler'"
+       << endl;
+  strcpy(strStmt,
+         "UPDATE empl SET dept_no = 'G11' WHERE empname = 'Wheeler' ");
+
+  EXEC SQL EXECUTE IMMEDIATE :strStmt;
+  EXPECTED_ERR_CHECK("child table -- update");
+
+  // display final tables content
+  rc = FK_TwoTablesDisplay();
+
+  // rollback transaction
+  cout << "\n  ROLLBACK" << endl;
+
+  EXEC SQL ROLLBACK;
+  EMB_SQL_CHECK("transaction -- rollback");
+
+  // drop foreign key
+  rc = FK_Drop();
+
+  return 0;
+} //TbConstr::Cn_FK_ON_UPDATE_RESTRICT_Show
+
+int TbConstr::Cn_FK_ON_DELETE_CASCADE_Show()
+{
+  int rc = 0;
+  struct sqlca sqlca;
+
+  cout << "\n-----------------------------------------------------------";
+  cout << "\nUSE THE SQL STATEMENTS:" << endl;
+  cout << "  ALTER TABLE" << endl;
+  cout << "  COMMIT" << endl;
+  cout << "  DELETE" << endl;
+  cout << "  ROLLBACK" << endl;
+  cout << "TO SHOW AN 'ON DELETE CASCADE' FOREIGN KEY." << endl;
+
+  // display initial tables content
+  rc = FK_TwoTablesDisplay();
+
+  // create foreign key
+  rc = FK_Create("ON DELETE CASCADE");
+
+  // delete parent table
+  cout << "\n  DELETE FROM deptmt WHERE deptno = 'C00'" << endl;
+  strcpy(strStmt, "DELETE FROM deptmt WHERE deptno = 'C00' ");
+
+  EXEC SQL EXECUTE IMMEDIATE :strStmt;
+  EMB_SQL_CHECK("parent table -- delete");
+
+  // display tables content
+  rc = FK_TwoTablesDisplay();
+
+  // delete child table
+  cout << "\n  DELETE FROM empl WHERE empname = 'Wheeler'" << endl;
+  strcpy(strStmt, "DELETE FROM empl WHERE empname = 'Wheeler' ");
+
+  EXEC SQL EXECUTE IMMEDIATE :strStmt;
+  EMB_SQL_CHECK("child table -- delete");
+
+  // display final tables content
+  rc = FK_TwoTablesDisplay();
+
+  // rollback transaction
+  cout << "\n  ROLLBACK" << endl;
+
+  EXEC SQL ROLLBACK;
+  EMB_SQL_CHECK("transaction -- rollback");
+
+  // drop foreign key
+  rc = FK_Drop();
+
+  return 0;
+} //TbConstr::Cn_FK_ON_DELETE_CASCADE_Show
+
+int TbConstr::Cn_FK_ON_DELETE_SET_NULL_Show()
+{
+  int rc = 0;
+  struct sqlca sqlca;
+
+  cout << "\n-----------------------------------------------------------";
+  cout << "\nUSE THE SQL STATEMENTS:" << endl;
+  cout << "  ALTER TABLE" << endl;
+  cout << "  COMMIT" << endl;
+  cout << "  DELETE" << endl;
+  cout << "  ROLLBACK" << endl;
+  cout << "TO SHOW AN 'ON DELETE SET NULL' FOREIGN KEY." << endl;
+
+  // display initial tables content
+  rc = FK_TwoTablesDisplay();
+
+  // create foreign key
+  rc = FK_Create("ON DELETE SET NULL");
+
+  // delete parent table
+  cout << "\n  DELETE FROM deptmt WHERE deptno = 'C00'" << endl;
+  strcpy(strStmt, "DELETE FROM deptmt WHERE deptno = 'C00' ");
+
+  EXEC SQL EXECUTE IMMEDIATE :strStmt;
+  EMB_SQL_CHECK("parent table -- delete");
+
+  // display tables content
+  rc = FK_TwoTablesDisplay();
+
+  // delete child table
+  cout << "\n  DELETE FROM empl WHERE empname = 'Wheeler'" << endl;
+  strcpy(strStmt, "DELETE FROM empl WHERE empname = 'Wheeler' ");
+
+  EXEC SQL EXECUTE IMMEDIATE :strStmt;
+  EMB_SQL_CHECK("child table -- delete");
+
+  // display final tables content
+  rc = FK_TwoTablesDisplay();
+
+  // rollback transaction
+  cout << "\n  ROLLBACK" << endl;
+
+  EXEC SQL ROLLBACK;
+  EMB_SQL_CHECK("transaction -- rollback");
+
+  // drop foreign key
+  rc = FK_Drop();
+
+  return 0;
+} //TbConstr::Cn_FK_ON_DELETE_SET_NULL_Show
+
+int TbConstr::Cn_FK_ON_DELETE_NO_ACTION_Show()
+{
+  int rc = 0;
+  struct sqlca sqlca;
+
+  cout << "\n-----------------------------------------------------------";
+  cout << "\nUSE THE SQL STATEMENTS:" << endl;
+  cout << "  ALTER TABLE" << endl;
+  cout << "  COMMIT" << endl;
+  cout << "  DELETE" << endl;
+  cout << "  ROLLBACK" << endl;
+  cout << "TO SHOW AN 'ON DELETE NO ACTION' FOREIGN KEY." << endl;
+
+  // display initial tables content
+  rc = FK_TwoTablesDisplay();
+
+  // create foreign key
+  rc = FK_Create("ON DELETE NO ACTION");
+
+  // delete parent table
+  cout << "\n  DELETE FROM deptmt WHERE deptno = 'C00'" << endl;
+  strcpy(strStmt, "DELETE FROM deptmt WHERE deptno = 'C00' ");
+
+  EXEC SQL EXECUTE IMMEDIATE :strStmt;
+  EXPECTED_ERR_CHECK("parent table -- delete");
+
+  // delete child table
+  cout << "\n  DELETE FROM empl WHERE empname = 'Wheeler'" << endl;
+  strcpy(strStmt, "DELETE FROM empl WHERE empname = 'Wheeler' ");
+
+  EXEC SQL EXECUTE IMMEDIATE :strStmt;
+  EMB_SQL_CHECK("child table -- delete");
+
+  // display final tables content
+  rc = FK_TwoTablesDisplay();
+
+  // rollback transaction
+  cout << "\n  ROLLBACK" << endl;
+
+  EXEC SQL ROLLBACK;
+  EMB_SQL_CHECK("transaction -- rollback");
+
+  // drop foreign key
+  rc = FK_Drop();
+
+  return 0;
+} //TbConstr::Cn_FK_ON_DELETE_NO_ACTION_Show
+
+int main(int argc, char *argv[])
+{
+  int rc = 0;
+  CmdLineArgs check;
+  TbConstr constr;
+  DbEmb db;
+
+  // check the command line arguments
+  rc = check.CmdLineArgsCheck1(argc, argv, db);
+  if (rc != 0)
+  {
+    return rc;
+  }
+
+  cout.setf(ios::left, ios::adjustfield);
+  cout.setf(ios::fixed, ios::floatfield);
+  cout << setprecision(2);
+  cout << "\nTHIS SAMPLE SHOWS HOW TO CREATE/USE/DROP CONSTRAINTS." << endl;
+
+  // connect to database
+  rc = db.Connect();
+  if (rc != 0)
+  {
+    return rc;
+  }
+
+  rc = constr.Cn_NOT_NULL_Show();
+  rc = constr.Cn_UNIQUE_Show();
+  rc = constr.Cn_PRIMARY_KEY_Show();
+  rc = constr.Cn_CHECK_Show();
+  rc = constr.Cn_CHECK_INFO_Show();
+  rc = constr.Cn_WITH_DEFAULT_Show();
+
+  cout << "\n#####################################################\n"
+       << "#    Create tables for FOREIGN KEY sample functions #\n"
+       << "#####################################################" << endl;
+
+  rc = constr.FK_TwoTablesCreate();
+  if (rc != 0)
+  {
+    return rc;
+  }
+
+  rc = constr.Cn_FK_OnInsertShow();
+  rc = constr.Cn_FK_ON_UPDATE_NO_ACTION_Show();
+  rc = constr.Cn_FK_ON_UPDATE_RESTRICT_Show();
+  rc = constr.Cn_FK_ON_DELETE_CASCADE_Show();
+  rc = constr.Cn_FK_ON_DELETE_SET_NULL_Show();
+  rc = constr.Cn_FK_ON_DELETE_NO_ACTION_Show();
+
+  cout << "\n########################################################\n"
+       << "# Drop tables created for FOREIGN KEY sample functions #\n"
+       << "########################################################\n";
+
+  rc = constr.FK_TwoTablesDrop();
+
+  // disconnect from the databas
+  rc = db.Disconnect();
+  if (rc != 0)
+  {
+    return rc;
+  }
+
+  return 0;
+} //main
+

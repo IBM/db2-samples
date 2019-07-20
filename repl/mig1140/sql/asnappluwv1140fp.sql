@@ -1,0 +1,20 @@
+--********************************************************************/
+--                                                                   */
+--          IBM InfoSphere Replication Server                        */
+--      Version V11.4.0 for Linux, UNIX AND Windows                  */
+--                                                                   */
+--     Sample SQL Replication migration script for UNIX AND NT       */
+--     Licensed Materials - Property of IBM                          */
+--                                                                   */
+--     (C) Copyright IBM Corp. 2019. All Rights Reserved             */
+--                                                                   */
+--     US Government Users Restricted Rights - Use, duplication      */
+--     or disclosure restricted by GSA ADP Schedule Contract         */
+--     with IBM Corp.                                                */
+--                                                                   */
+--********************************************************************/
+-- Script to migrate SQL Apply tables from V11.5 fixpacks to the latest
+-- fixpack.
+--
+-- *********************************************************************
+

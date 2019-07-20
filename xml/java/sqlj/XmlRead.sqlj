@@ -1,0 +1,246 @@
+//***************************************************************************
+// (c) Copyright IBM Corp. 2007 All rights reserved.
+// 
+// The following sample of source code ("Sample") is owned by International 
+// Business Machines Corporation or one of its subsidiaries ("IBM") and is 
+// copyrighted and licensed, not sold. You may use, copy, modify, and 
+// distribute the Sample in any form without payment to IBM, for the purpose of 
+// assisting you in the development of your applications.
+// 
+// The Sample code is provided to you on an "AS IS" basis, without warranty of 
+// any kind. IBM HEREBY EXPRESSLY DISCLAIMS ALL WARRANTIES, EITHER EXPRESS OR 
+// IMPLIED, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED WARRANTIES OF 
+// MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE. Some jurisdictions do 
+// not allow for the exclusion or limitation of implied warranties, so the above 
+// limitations or exclusions may not apply to you. IBM shall not be liable for 
+// any damages you suffer as a result of using, copying, modifying or 
+// distributing the Sample, even if IBM has been advised of the possibility of 
+// such damages.
+//***************************************************************************
+//
+// SOURCE FILE NAME: XmlRead.sqlj
+//
+// SAMPLE: How to read XML columns from the table.
+//
+// SQL Statements USED:
+//	   FETCH
+//         SELECT
+//
+// Classes used from Util.sqlj are:
+//         Db
+//         SqljException
+//
+// OUTPUT FILE: XmlRead.out (available in the online documentation)
+// Output will vary depending on the JDBC driver connectivity used.
+//***************************************************************************
+//
+// For more information on the sample programs, see the README file.
+//
+// For information on developing SQLJ applications, see the Application
+// Development Guide.
+//
+// For information on using SQL statements, see the SQL Reference.
+//
+// For the latest information on programming, compiling, and running DB2
+// applications, visit the DB2 application development website at
+//     http://www.software.ibm.com/data/db2/udb/ad
+//**************************************************************************/
+
+import java.util.*;
+import java.io.*;
+import java.lang.*;
+import java.sql.*;
+import sqlj.runtime.*;
+import sqlj.runtime.ref.*;
+
+#sql iterator TbXMLRead_cursor1(int, String);
+#sql iterator TbXMLRead_cursor2(int, java.sql.Clob);
+#sql iterator TbXMLRead_cursor3(int, java.sql.Blob);
+
+class XmlRead
+{
+  public static void main(String argv[])
+  {
+    try
+    {
+      Db db = new Db(argv);
+
+      System.out.println();
+      System.out.println(
+        "THIS SAMPLE SHOWS HOW TO READ TABLE DATA.");
+
+      // connect to the 'sample' database
+      db.getDefaultContext();
+
+      // read table data
+      execQuery();
+      ReadClobData(); 
+      ReadBlobData();
+
+      // disconnect from the 'sample' database
+      db.disconnect();
+    }
+    catch (Exception e)
+    {
+      SqljException sqljExc = new SqljException(e);
+      sqljExc.handle();
+    }
+  } // main
+
+  static void execQuery()
+  {
+    try
+    {
+      System.out.println();
+      System.out.println(
+        "-------------------------------------------\n" +
+        "USE SQL SELECT \n" +
+        "  Statement\n" +
+        "TO EXECUTE A QUERY.");
+
+
+      // execute the query
+      System.out.println();
+      System.out.println(
+        "  Execute Statement:\n" +
+        "    SELECT cid,XMLSERIALIZE(info as varchar(600)"+
+        "  FROM customer WHERE cid < 1005 ORDER BY cid");
+
+      TbXMLRead_cursor1 cur1;
+  
+      #sql cur1 =  {
+          SELECT cid,XMLSERIALIZE(info as varchar(600)) 
+          FROM customer WHERE cid < 1005 ORDER BY cid};
+
+      System.out.println();
+      System.out.println("  Results:\n" +
+                       "   CUSTOMERID    CUSTOMERINFO \n" +
+                       "   ----------    --------------");
+
+      int customerid = 0;
+      String customerInfo = "";
+
+      // Read the data into customerid and customerInfo variables
+      #sql {FETCH :cur1 INTO :customerid, :customerInfo};
+
+      while (true)
+      {
+        if (cur1.endFetch())
+        {
+           break;
+        }
+
+        System.out.println("    " +
+                         Data.format(customerid,10) + " " +
+                         Data.format(customerInfo, 1024));
+        #sql {FETCH :cur1 INTO :customerid, :customerInfo};
+      }
+    }
+    catch (Exception e)
+    {
+       System.out.println(e);
+    }
+  } //execQuery
+ 
+  static void ReadClobData()
+  {
+    try
+    {
+      int customerid = 0;
+
+      String xmlData = "";
+      // Create a CLOB object
+      java.sql.Clob clobData =
+          com.ibm.db2.jcc.t2zos.DB2LobFactory.createClob(xmlData);
+
+      System.out.println();
+      System.out.println(" READ CLOB DATA FROM XML COLUMN\n");
+
+      TbXMLRead_cursor2 cur2;
+
+      System.out.println("SELECT cid, XMLSERIALIZE(info as clob)" +
+                        " from customer where cid < 1005 ORDER BY cid");
+
+      #sql cur2 = {SELECT cid, XMLSERIALIZE(info as clob)
+                   from customer where cid < 1005 ORDER BY cid};  
+
+      #sql {FETCH :cur2 INTO :customerid, :clobData};
+
+      String temp_clob = null;
+
+      while(true)
+      {
+         if (cur2.endFetch())
+         {
+           break;
+         }    
+
+         System.out.println("     " + 
+                           Data.format(customerid, 10) + "    ");
+ 
+         temp_clob = clobData.getSubString(1,(int) clobData.length()); 
+         System.out.println(temp_clob);
+
+         #sql {FETCH :cur2 INTO :customerid, :clobData};
+      }  
+    }
+    catch (Exception e)
+    {
+      System.out.println(e);
+    }
+  } //ReadClobData
+
+  static void ReadBlobData()
+  {
+    try
+    {
+      int customerid = 0;
+      Blob blobData = null;
+   
+      System.out.println();
+      System.out.println(" READ BLOB DATA FROM XML COLUMN\n");
+
+      TbXMLRead_cursor3 cur3;
+
+      System.out.println("SELECT cid, " +
+                        "XMLSERIALIZE(info as blob)" +
+                        " from customer where cid < 1005 ORDER BY cid");
+
+      #sql cur3 = {SELECT cid, 
+                   XMLSERIALIZE(info as blob)
+                   from customer where cid < 1005 ORDER BY cid};
+
+      #sql {FETCH :cur3 INTO :customerid, :blobData};
+
+      while(true)
+      {
+         if (cur3.endFetch())
+         {
+           break;
+         }
+
+         System.out.println("     " +
+                           Data.format(customerid, 10) + "    ");
+
+         String temp_string = ""; 
+         byte[] Array=blobData.getBytes(1, (int) blobData.length());
+         
+         for (int i =0; i < Array.length; i++ )
+         {
+           char temp_char;
+           temp_char = (char)Array[i]; 
+           temp_string += temp_char;
+         } 
+
+         System.out.println(temp_string);
+         System.out.println();
+
+         #sql {FETCH :cur3 INTO :customerid, :blobData};
+      }
+    }
+    catch (Exception e)
+    {
+      System.out.println(e);
+    }
+  } //ReadBlobData
+} //XmlRead

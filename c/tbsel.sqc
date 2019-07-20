@@ -1,0 +1,397 @@
+/****************************************************************************
+** (c) Copyright IBM Corp. 2007 All rights reserved.
+** 
+** The following sample of source code ("Sample") is owned by International 
+** Business Machines Corporation or one of its subsidiaries ("IBM") and is 
+** copyrighted and licensed, not sold. You may use, copy, modify, and 
+** distribute the Sample in any form without payment to IBM, for the purpose of 
+** assisting you in the development of your applications.
+** 
+** The Sample code is provided to you on an "AS IS" basis, without warranty of 
+** any kind. IBM HEREBY EXPRESSLY DISCLAIMS ALL WARRANTIES, EITHER EXPRESS OR 
+** IMPLIED, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED WARRANTIES OF 
+** MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE. Some jurisdictions do 
+** not allow for the exclusion or limitation of implied warranties, so the above 
+** limitations or exclusions may not apply to you. IBM shall not be liable for 
+** any damages you suffer as a result of using, copying, modifying or 
+** distributing the Sample, even if IBM has been advised of the possibility of 
+** such damages.
+*****************************************************************************
+**
+** SOURCE FILE NAME: tbsel.sqc
+**
+** SAMPLE: How to select from each of: insert, update, delete
+**
+** CREATING TABLES FOR THIS SAMPLE (Must be done prior to compiling/running
+** the sample):
+** Enter "tbselinit" while in the samples\c directory to create the
+** tables used by this sample.  The tbselinit script (UNIX and Linux)
+** or tbselinit.bat batch file (Windows) connects to the database,
+** runs tbseldrop.db2 to drop the tables if they previously existed, runs
+** tbselcreate.db2 which creates the sample tables, then disconnects from
+** the database.  Note that this is done automatically when you build the
+** client application "spclient" using the appropriate "make" utility for
+** your Operating System, and use the "makefile" provided with these
+** samples.
+**
+** SQL STATEMENTS USED:
+**         INCLUDE
+**         CREATE TABLE
+**         INSERT
+**         SELECT FROM INSERT
+**         SELECT FROM UPDATE
+**         SELECT FROM DELETE
+**         PREPARE
+**         DROP TABLE
+**
+** OUTPUT FILE: tbsel.out (available in the online documentation)
+*****************************************************************************
+**
+** For more information on the sample programs, see the README file.
+**
+** For information on developing C applications, see the Application
+** Development Guide.
+**
+** For information on using SQL statements, see the SQL Reference.
+**
+** For the latest information on programming, building, and running DB2
+** applications, visit the DB2 application development website:
+**     http://www.software.ibm.com/data/db2/udb/ad
+****************************************************************************/
+
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+#include <sqlenv.h>
+#include <sqlutil.h>
+#include "utilemb.h"
+
+int Insert(void);
+int Buy_company(void);
+int Print(void);
+int Drop(void);
+
+EXEC SQL INCLUDE SQLCA;
+
+EXEC SQL BEGIN DECLARE SECTION;
+  short id;         /* Employee's ID */
+  short department; /* Employee's department */
+  short years;      /* Number of years employee has worked with the
+                       company */
+  short new_id;     /* Employee's new ID when they switch companies */
+
+  char strStmt[512]; /* SQL statement to be executed */
+  char name[10];     /* Employee's name */
+  char job[6];       /* Employee's job title */
+  char benefits[50]; /* Employee's benefits */
+
+  double salary;      /* Employee's current salary */
+  double old_salary;  /* Employee's old salary */
+EXEC SQL END DECLARE SECTION;
+
+int main(int argc, char *argv[])
+{
+  int rc = 0;
+  char dbAlias[SQL_ALIAS_SZ + 1];
+  char user[USERID_SZ + 1];
+  char pswd[PSWD_SZ + 1];
+
+  /* Check the command line arguments. */
+  rc = CmdLineArgsCheck1(argc, argv, dbAlias, user, pswd);
+  if (rc != 0)
+    return rc;
+
+  printf("\nTHIS EXAMPLE SHOWS HOW TO SELECT FROM EACH OF: INSERT, UPDATE, DELETE.\n");
+
+  /* Connect to database. */
+  rc = DbConn(dbAlias, user, pswd);
+  if (rc != 0)
+    return rc;
+
+  rc = Insert();
+  rc = Print();
+  rc = Buy_company();
+  rc = Print();
+  rc = Drop();
+
+  /* Disconnect from database. */
+  rc = DbDisconn(dbAlias);
+  if (rc != 0)
+    return rc;
+  return 0;
+} /* Main */
+
+/* The Insert function populates the tables used by this sample. */
+int Insert(void)
+{
+  int rc = 0;
+
+  /* Please see tbselcreate.db2 for the table definitions.
+
+     The context for this sample is that of a Company B taking over
+     a Company A.  This sample illustrates how company B incorporates
+     data from table company_b into table company_a.
+  */
+
+  printf("\nINSERT INTO company_a VALUES(5275, 'Sanders', 20, 'Mgr', 15, 18357.50), \n"
+         " (5265, 'Pernal', 20, 'Sales', 1, 18171.25), \n"
+         " (5791, 'O''Brien', 38, 'Sales', 10, 18006.00)\n");
+
+  /* Populate table company_a with data. */
+  strcpy(strStmt,
+         "INSERT INTO company_a VALUES(5275, 'Sanders', 20, 'Mgr', 15, 18357.50), "
+         "(5265, 'Pernal', 20, 'Sales', 1, 18171.25), "
+         "(5791, 'O''Brien', 38, 'Sales', 10, 18006.00)");
+
+  EXEC SQL EXECUTE IMMEDIATE :strStmt;
+  EMB_SQL_CHECK("company_a -- Insert");
+
+  printf("\nINSERT INTO company_b VALUES(default, 'Naughton', 38, 'Clerk', 0, 12954.75, 'No Benefits', 0), \n"
+         " (default, 'Yamaguchi', 42, 'Clerk', 6, 10505.90, 'Basic Health Coverage', 0),\n"
+         " (default, 'Fraye', 51, 'Mgr', 6, 21150.00, 'Basic Health Coverage', 0), \n"
+         " (default, 'Williams', 51, 'Sales', 6, 19456.50, 'Basic Health Coverage', 0), \n"
+         " (default, 'Molinare', 10, 'Mgr', 7, 22959.20, 'Basic Health Coverage', 0)\n");
+
+  /* Populate table company_b with data. */
+  strcpy(strStmt,
+         "INSERT INTO company_b VALUES(default, 'Naughton', 38, 'Clerk', 0, 12954.75, 'No Benefits', 0), "
+         " (default, 'Yamaguchi', 42, 'Clerk', 6, 10505.90, 'Basic Health Coverage', 0), "
+         " (default, 'Fraye', 51, 'Mgr', 6, 21150.00, 'Basic Health Coverage', 0), "
+         " (default, 'Williams', 51, 'Sales', 6, 19456.50, 'Basic Health Coverage', 0), "
+         " (default, 'Molinare', 10, 'Mgr', 7, 22959.20, 'Basic Health Coverage', 0)");
+
+  EXEC SQL EXECUTE IMMEDIATE :strStmt;
+  EMB_SQL_CHECK("company_b -- Insert");
+
+  /* Commit */
+  EXEC SQL COMMIT;
+  EMB_SQL_CHECK("commit");
+
+  return rc;
+} /* Insert */
+
+/* The Buy_company function encapsulates the table updates after Company B
+   takes over Company A.  Each employees from table company_a is allocated
+   a benefits package.  The employee data is moved into table company_b.
+   Each employee's salary is increased by 5%.  The old and new salaries are
+   recorded in a table salary_change.
+*/
+int Buy_company(void)
+{
+  int rc = 0;
+
+  /* The following SELECT statement references a DELETE statement in its
+     FROM clause.  It deletes all rows from company_a, selecting all deleted
+     rows into the cursor c1.
+  */
+  char c1[] = "(SELECT ID, NAME, DEPARTMENT, JOB, YEARS, SALARY FROM OLD TABLE (DELETE FROM company_a ))";
+
+  EXEC SQL PREPARE S4 FROM :c1;
+  EMB_SQL_CHECK("Prepare 'SELECT FROM DELETE' c1")
+
+  EXEC SQL DECLARE emp_cursor CURSOR FOR S4;
+  EMB_SQL_CHECK("Declare 'SELECT FROM DELETE' emp_cursor");
+
+  EXEC SQL OPEN emp_cursor;
+  EMB_SQL_CHECK("Open 'SELECT FROM DELETE' emp_cursor");
+
+  EXEC SQL FETCH emp_cursor INTO :id, :name, :department, :job, :years, :salary;
+  EMB_SQL_CHECK("Fetch from 'SELECT FROM DELETE' emp_cursor");
+
+  /* The following while loop iterates through each employee of table
+     company_a. */
+  while (sqlca.sqlcode != 100)
+  {
+    /* The following if statement sets the new employee's benefits based on
+       their years of experience.
+    */
+    if(years > 14)
+      strcpy(benefits, "Advanced Health Coverage and Pension Plan");
+    else if(years > 9)
+      strcpy(benefits, "Advanced Health Coverage");
+    else if(years > 4)
+      strcpy(benefits, "Basic Health Coverage");
+    else
+      strcpy(benefits, "No Benefits");
+
+    /* The following SELECT statement references an INSERT statement in its
+       FROM clause.  It inserts an employee record from host variables into
+       table company_b.  The current employee ID from the cursor is selected
+       into the host variable new_id.  The keywords FROM FINAL TABLE
+       determine that the value in new_id is the value of ID after the
+       INSERT statement is complete.
+
+       Note that the ID column in table company_b is generated and without
+       the SELECT statement an additional query would have to be made in
+       order to retrieve the employee's ID number.
+    */
+    EXEC SQL SELECT ID INTO :new_id
+             FROM FINAL TABLE(INSERT INTO company_b
+             VALUES(default, :name, :department, :job, :years, :salary, :benefits, :id));
+    EMB_SQL_CHECK("SELECT FROM INSERT");
+
+    /* The following SELECT statement references an UPDATE statement in its
+       FROM clause.  It updates an employee's salary by giving them a 5%
+       raise.  The employee's id, old salary and current salary are all read
+       into host varibles for later use in this function.
+
+       The INCLUDE statement works by creating a temporary column to keep
+       track of the old salary.  This temporary column is only available
+       for this statement and is gone once the statement completes.  The
+       only way to keep this data after the statement completes is to
+       read it into a host variable.
+    */
+    EXEC SQL SELECT ID, OLD_SALARY, SALARY INTO :id, :old_salary, :salary
+             FROM FINAL TABLE (UPDATE company_b INCLUDE
+                              (OLD_SALARY DECIMAL(7,2))
+                              SET OLD_SALARY = SALARY,
+                                  SALARY = SALARY * 1.05
+                              WHERE ID = :new_id);
+    EMB_SQL_CHECK("SELECT FROM UPDATE");
+
+    /* This INSERT statement inserts an employee's id, old salary and current
+       salary into the salary_change table.
+    */
+    EXEC SQL INSERT INTO salary_change VALUES(:id, :old_salary, :salary);
+    EMB_SQL_CHECK("Insert into salary_change");
+
+    EXEC SQL FETCH emp_cursor INTO :id, :name, :department, :job, :years, :salary;
+    EMB_SQL_CHECK("FETCH FROM emp_cursor")
+  }
+
+  EXEC SQL CLOSE emp_cursor;
+  EMB_SQL_CHECK("Close emp_cursor");
+
+  /* The following DELETE statement references a SELECT statement in its FROM
+     clause.  It lays off the highest paid manager.  This DELETE statement
+     removes the manager from the table company_b.
+  */
+  EXEC SQL DELETE FROM (SELECT * FROM company_b ORDER BY SALARY DESC FETCH FIRST ROW ONLY);
+  EMB_SQL_CHECK("DELETE FROM SELECT")
+
+  /* The following UPDATE statement references a SELECT statement in its FROM
+     clause.  It gives the most senior employee a $10000 bonus.  This UPDATE
+     statement raises the employee's salary in the table company_b.
+  */
+  EXEC SQL UPDATE (SELECT MAX(YEARS) OVER() AS max_years,
+                          YEARS,
+                          SALARY
+                   FROM company_b)
+                  SET SALARY = SALARY + 10000
+                  WHERE max_years = YEARS;
+  EMB_SQL_CHECK("UPDATE FROM SELECT")
+
+  return rc;
+} /* Buy_company */
+
+/* The Print function outputs the data in the tables: company_a, company_b
+   and salary_change.  For each table, a while loop and cursor are used to
+   fetch and display row data.
+*/
+int Print(void)
+{
+  int rc = 0;
+
+  char c1[] = "(SELECT ID, NAME, DEPARTMENT, JOB, YEARS, SALARY FROM company_a)";
+  char c2[] = "(SELECT ID, NAME, DEPARTMENT, JOB, YEARS, SALARY, BENEFITS, OLD_ID FROM company_b)";
+  char c3[] = "(SELECT ID, OLD_SALARY, SALARY FROM salary_change)";
+
+  EXEC SQL PREPARE S1 FROM :c1;
+  EMB_SQL_CHECK("Prepare first SELECT cursor");
+
+  EXEC SQL PREPARE S2 FROM :c2;
+  EMB_SQL_CHECK("Prepare second SELECT cursor");
+
+  EXEC SQL PREPARE S3 FROM :c3;
+  EMB_SQL_CHECK("Prepare third SELECT cursor");
+
+  EXEC SQL DECLARE company_a CURSOR FOR S1;
+  EMB_SQL_CHECK("Declare company_a cursor");
+
+  EXEC SQL DECLARE company_b CURSOR FOR S2;
+  EMB_SQL_CHECK("Declare company_b cursor");
+
+  EXEC SQL DECLARE salary_change CURSOR FOR S3;
+  EMB_SQL_CHECK("Declare salary_change cursor");
+
+  EXEC SQL OPEN company_a;
+  EMB_SQL_CHECK("Open company_a cursor");
+
+  EXEC SQL OPEN company_b;
+  EMB_SQL_CHECK("Open company_b cursor");
+
+  EXEC SQL OPEN salary_change;
+  EMB_SQL_CHECK("Open salary_change cursor");
+
+  EXEC SQL FETCH company_a INTO :id, :name, :department, :job, :years, :salary;
+  EMB_SQL_CHECK("Fetch from company_a");
+  printf("\nSELECT * FROM company_a\n\n");
+  printf("ID     NAME      DEPARTMENT JOB   YEARS  SALARY\n");
+  printf("------ --------- ---------- ----- ------ ---------\n");
+  while (sqlca.sqlcode != 100)
+  {
+    printf("%-6d %-9s %-10d %-5s %-7d %-9.2f\n", id, name, department, job, years, salary);
+    EXEC SQL FETCH company_a INTO :id, :name, :department, :job, :years, :salary;
+    EMB_SQL_CHECK("Fetch from company_a");
+  }
+
+  EXEC SQL FETCH company_b INTO :new_id, :name, :department, :job, :years, :salary, :benefits, :id;
+  EMB_SQL_CHECK("Fetch from company_b");
+  printf("\nSELECT * FROM company_b\n\n");
+  printf("ID     NAME      DEPARTMENT JOB   YEARS  SALARY    BENEFITS                                           OLD_ID\n");
+  printf("------ --------- ---------- ----- ------ --------- -------------------------------------------------- ------\n");
+  while (sqlca.sqlcode != 100)
+  {
+    printf("%-6d %-9s %-10d %-5s %-7d %-8.2f %-50s %-6d\n\n", new_id, name, department, job, years, salary, benefits, id);
+    EXEC SQL FETCH company_b INTO :new_id, :name, :department, :job, :years, :salary, :benefits, :id;
+    EMB_SQL_CHECK("Fetch from company_b");
+  }
+
+  EXEC SQL FETCH salary_change INTO :id, :old_salary, :salary;
+  EMB_SQL_CHECK("Fetch from salary_change");
+  printf("\nSELECT * FROM salary_change\n\n");
+  printf("ID     OLD_SALARY SALARY\n");
+  printf("------ ---------- ---------\n");
+  while (sqlca.sqlcode != 100)
+  {
+    printf("%-8d %-9.2f %-8.2f\n", id, old_salary, salary);
+    EXEC SQL FETCH salary_change INTO :id, :old_salary, :salary;
+    EMB_SQL_CHECK("Fetch from salary_change");
+  }
+
+  EXEC SQL CLOSE company_a;
+  EMB_SQL_CHECK("Close company_a cursor");
+
+  EXEC SQL CLOSE company_b;
+  EMB_SQL_CHECK("Close company_b cursor");
+
+  EXEC SQL CLOSE salary_change;
+  EMB_SQL_CHECK("Close salary_change cursor");
+
+  return rc;
+} /* Print */
+
+/* The Drop function drops the tables used by this sample. */
+int Drop(void)
+{
+  int rc = 0;
+
+  printf("\nDROP TABLE company_a\n\n");
+  EXEC SQL DROP TABLE company_a;
+  EMB_SQL_CHECK("company_a -- Drop");
+
+  printf("DROP TABLE company_b\n\n");
+  EXEC SQL DROP TABLE company_b;
+  EMB_SQL_CHECK("company_b -- Drop");
+
+  printf("DROP TABLE salary_change\n");
+  EXEC SQL DROP TABLE salary_change;
+  EMB_SQL_CHECK("salary_change -- Drop");
+
+  /* Commit */
+  EXEC SQL COMMIT;
+  EMB_SQL_CHECK("commit");
+
+  return rc;
+} /* Drop */
+

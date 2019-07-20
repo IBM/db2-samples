@@ -1,0 +1,26 @@
+<!-- global annotation-->
+<xs:schema xmlns:xs="http://www.w3.org/2001/XMLSchema" xmlns:db2-xdb="http://www.ibm.com/xmlns/prod/db2/xdb1" elementFormDefault="qualified" attributeFormDefault="unqualified">
+
+<xs:annotation>
+        <xs:appinfo>
+                <db2-xdb:defaultSQLSchema>xdb</db2-xdb:defaultSQLSchema>
+        </xs:appinfo>
+</xs:annotation>
+
+<xs:element name="Employees" type="EmpType"/>
+
+<xs:complexType name="EmpType">
+  <xs:sequence minOccurs="0" maxOccurs="unbounded">
+    <xs:sequence minOccurs="0" maxOccurs="1">
+       <xs:element name="EmpID" type="xs:string" minOccurs="1" maxOccurs="1"
+                   db2-xdb:rowSet="poemployee" db2-xdb:column="empid"/>
+       <xs:element name="DeptID" type="xs:string" minOccurs="1" maxOccurs="1" 
+                   db2-xdb:rowSet="poemployee" db2-xdb:column="deptid"/>
+    </xs:sequence>
+    <xs:element name="Employee" type="EmpType" minOccurs="0" maxOccurs="1"
+                db2-xdb:rowSet="poemployee" db2-xdb:column="members"
+                db2-xdb:contentHandling="serializeSubtree"/>
+  </xs:sequence>
+</xs:complexType>
+
+</xs:schema>

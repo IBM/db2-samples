@@ -1,0 +1,435 @@
+/****************************************************************************
+** (c) Copyright IBM Corp. 2007 All rights reserved.
+** 
+** The following sample of source code ("Sample") is owned by International 
+** Business Machines Corporation or one of its subsidiaries ("IBM") and is 
+** copyrighted and licensed, not sold. You may use, copy, modify, and 
+** distribute the Sample in any form without payment to IBM, for the purpose of 
+** assisting you in the development of your applications.
+** 
+** The Sample code is provided to you on an "AS IS" basis, without warranty of 
+** any kind. IBM HEREBY EXPRESSLY DISCLAIMS ALL WARRANTIES, EITHER EXPRESS OR 
+** IMPLIED, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED WARRANTIES OF 
+** MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE. Some jurisdictions do 
+** not allow for the exclusion or limitation of implied warranties, so the above 
+** limitations or exclusions may not apply to you. IBM shall not be liable for 
+** any damages you suffer as a result of using, copying, modifying or 
+** distributing the Sample, even if IBM has been advised of the possibility of 
+** such damages.
+*****************************************************************************
+**
+** SOURCE FILE NAME: tbmerge.sqC 
+**    
+** SAMPLE: How to use the MERGE statement
+**           
+** SQL STATEMENTS USED:
+**         DELETE 
+**         DECLARE CURSOR 
+**         OPEN
+**         FETCH
+**         CLOSE
+**         INSERT
+**         UPDATE
+**         MERGE
+**
+** OUTPUT FILE: tbmerge.out (available in the online documentation)
+**
+*****************************************************************************
+**
+** For more information on the sample programs, see the README file.
+**
+** For information on developing C++ applications, see the Application
+** Development Guide.
+**
+** For information on using SQL statements, see the SQL Reference.
+**
+** For the latest information on programming, building, and running DB2 
+** applications, visit the DB2 application development website: 
+**     http://www.software.ibm.com/data/db2/udb/ad
+****************************************************************************/
+
+#include <sqlenv.h>
+#include <string.h>
+#include <sqlutil.h>
+#include "utilemb.h"
+#if ((__cplusplus >= 199711L) && !defined DB2HP && !defined DB2AIX) || \
+    (DB2LINUX && (__LP64__ || (__GNUC__ >= 3)) )
+   #include <iomanip>
+   #include <iostream>
+   using namespace std; 
+#else
+   #include <iomanip.h>
+   #include <iostream.h>
+#endif
+
+EXEC SQL BEGIN DECLARE SECTION;
+  short id;
+  char name[10];
+  short dept;
+  char job[10];
+  short jobInd;
+  short years;
+  short yearsInd;
+  double salary;
+  double comm;
+  short commInd;
+  char empno[7];
+  char workdept[8];
+  char strStmt[512];
+EXEC SQL END DECLARE SECTION;
+
+class TbMerge
+{
+  public:
+    int CreateTable();
+    int ChangeTable();
+    int MergeTables();
+
+  private:
+    int StaffTbContentDisplay();
+    int EmpsampTbContentDisplay();
+};
+
+// This function creates a table 'empsamp' and inserts some values into it
+int TbMerge::CreateTable()
+{
+  int rc;
+  struct sqlca sqlca;
+
+  cout << "\n  -----------------------------------------------------------";
+  cout << "\n  USE THE SQL STATEMENT:\n";
+  cout << "    CREATE TABLE\n";
+  cout << "  TO CREATE A TABLE IN THE SAMPLE DATABASE.\n";
+
+  // create the table 'empsamp'
+  cout << "\n  Create a table 'EMPSAMP' with attributes:";
+  cout << "\n    ID SMALLINT NOT NULL,";
+  cout << "\n    NAME VARCHAR(9),";
+  cout << "\n    DEPT SMALLINT,";
+  cout << "\n    JOB CHAR(5),";
+  cout << "\n    YEARS SMALLINT,";
+  cout << "\n    SALARY DEC(7,2),";
+  cout << "\n    COMM DEC(7,2),";
+  cout << "\n    PRIMARY KEY(ID)\n";  
+
+  EXEC SQL CREATE TABLE empsamp( 
+             ID SMALLINT NOT NULL,
+             NAME VARCHAR(9),
+             DEPT SMALLINT,
+             JOB CHAR(5),
+             YEARS SMALLINT,
+             SALARY DEC(7,2),
+             COMM DEC(7,2),    
+             PRIMARY KEY(ID));  
+
+  // insert values into 'empsamp'
+  cout << "\n  Insert values into EMPSAMP";
+  cout << "\n  Invoke the statement:" << endl;
+  cout << "\n    INSERT INTO empsamp SELECT * FROM staff WHERE ID >= 310\n";
+  strcpy(strStmt,
+         "INSERT INTO empsamp SELECT * FROM staff WHERE ID >= 310");
+  EXEC SQL EXECUTE IMMEDIATE :strStmt;
+  EMB_SQL_CHECK("table -- insert using values");
+
+  // display content of 'empsamp' after inserting values
+  rc = EmpsampTbContentDisplay();
+
+  // commit the transaction
+  EXEC SQL COMMIT;
+  return 0;
+} // TbMerge::CreateTable
+
+// This function makes changes to the 'empsamp' table
+int TbMerge::ChangeTable()
+{
+  int rc;
+  struct sqlca sqlca;
+
+  cout << "\n  -----------------------------------------------------------";
+  cout << "\n  USE THE SQL STATEMENTS:" << endl;
+  cout << "    UPDATE" << endl;
+  cout << "    INSERT" << endl;
+  cout << "  TO MAKE CHANGES TO THE 'empsamp' TABLE." << endl;
+
+  // display the initial content of the 'empsamp' table
+  rc = EmpsampTbContentDisplay();
+
+  // insert values and make changes to the 'empsamp' table
+  cout << "\n  Invoke the statement:" << endl;
+  cout << "    INSERT INTO empsamp(id, name, dept, job, salary)" << endl;
+  cout << "      VALUES(380, 'Pearce', 38, 'Clerk', 13217.50)," << endl;
+  cout << "            (390, 'Hachey', 38, 'Mgr', 21270.00)," << endl;
+  cout << "            (400, 'Wagland', 38, 'Clerk', 14575.00)" << endl;
+
+  cout << "\n  Invoke the statements:" << endl;
+  cout << "\n    UPDATE empsamp SET job = 'Mgr' WHERE id = 310";
+  cout << "\n    UPDATE empsamp SET job = 'Sales', salary = 15000.00 "; 
+  cout << "WHERE id = 350";
+  cout << "\n    UPDATE empsamp SET name = '-' WHERE id = 320" << endl;
+
+  strcpy(strStmt,
+         "INSERT INTO empsamp(id, name, dept, job, salary)"
+         "  VALUES(380, 'Pearce', 38, 'Clerk', 13217.50),"
+         "        (390, 'Hachey', 38, 'Mgr', 21270.00),"
+         "        (400, 'Wagland', 38, 'Clerk', 14575.00)");
+  EXEC SQL EXECUTE IMMEDIATE :strStmt;
+  EMB_SQL_CHECK("table -- insert using values");
+
+  strcpy(strStmt, "UPDATE empsamp SET job = 'Mgr' WHERE id = 310");
+  EXEC SQL EXECUTE IMMEDIATE :strStmt;
+
+  strcpy(strStmt, 
+         "UPDATE empsamp "
+         "  SET job = 'Sales', salary = 15000.00 "
+         "  WHERE id = 350");
+  EXEC SQL EXECUTE IMMEDIATE :strStmt;
+
+  strcpy(strStmt, "UPDATE empsamp SET name = '-' WHERE id = 320");
+  EXEC SQL EXECUTE IMMEDIATE :strStmt;
+  EMB_SQL_CHECK("table -- update");
+
+  // display final content of the 'empsamp' table
+  rc = EmpsampTbContentDisplay();
+
+  // commit the transaction
+  EXEC SQL COMMIT;
+  return 0;
+} // TbMerge::ChangeTable
+
+// This function applies changes from table 'empsamp' to the 'staff' table
+int TbMerge::MergeTables()
+{
+  int rc;
+  struct sqlca sqlca;
+
+  cout << "\n  -----------------------------------------------------------";
+  cout << "\n  USE THE SQL STATEMENT:" << endl;
+  cout << "    MERGE" << endl;
+  cout << "  TO APPLY CHANGES FROM TABLE 'empsamp' TO TABLE 'staff'" << endl;
+
+  // display initial content of the 'staff' table
+  rc = StaffTbContentDisplay();
+
+  // use the MERGE statement to reflect changes from table 'empsamp', to the 
+  // 'staff' table
+  cout << "\n  Merge tables";
+  cout << "\n  Invoke the statement:" << endl;
+  cout << "\n    MERGE INTO staff S";
+  cout << "\n      USING (SELECT * FROM empsamp) E";
+  cout << "\n        ON (S.id = E.id)";
+  cout << "\n          WHEN MATCHED AND E.name != '-' THEN";
+  cout << "\n            UPDATE SET (name, dept, job, years, salary, comm)=";
+  cout << "\n                       (E.name, E.dept, E.job, E.years,"; 
+  cout << " E.salary, E.comm)";
+  cout << "\n          WHEN NOT MATCHED THEN";
+  cout << "\n            INSERT (id, name, dept, job, years, salary, comm)";
+  cout << "\n              VALUES (E.id, E.name, E.dept, E.job, E.years,";
+  cout << " E.salary, E.comm)";
+  cout << "\n          ELSE";
+  cout << "\n            IGNORE" << endl;
+
+  strcpy(strStmt,
+         "MERGE INTO staff S"
+         "    USING (SELECT * FROM empsamp) E"
+         "    ON (S.id = E.id)"
+         "    WHEN MATCHED AND E.name != '-' THEN"
+         "      UPDATE SET (name, dept, job, years, salary, comm) ="
+         "                 (E.name, E.dept, E.job, E.years, E.salary,E.comm)"
+         "    WHEN NOT MATCHED THEN"
+         "      INSERT (id, name, dept, job, years, salary, comm)"
+         "        VALUES (E.id, E.name, E.dept, E.job, E.years,"
+         "                E.salary, E.comm)"
+         "    ELSE"
+         "      IGNORE");
+
+  EXEC SQL EXECUTE IMMEDIATE :strStmt;
+  EMB_SQL_CHECK("tables -- merge");
+
+  // display final content of the 'staff' table
+  rc = StaffTbContentDisplay();
+
+  // rollback the transaction
+  DbEmb::TransRollback();
+  return 0;
+} // TbMerge::MergeTables
+
+/* helper function: displays the contents of the 'staff' table */
+int TbMerge::StaffTbContentDisplay()
+{
+  struct sqlca sqlca;
+
+  cout << "\n  Contents of the 'staff' table:\n";
+  cout << "\n  SELECT * FROM staff WHERE id >= 310\n";
+  cout << "    ID  NAME     DEPT JOB   YEARS SALARY   COMM\n";
+  cout << "    --- -------- ---- ----- ----- -------- -------\n";
+
+  EXEC SQL DECLARE posCur0 CURSOR FOR SELECT * FROM staff WHERE id >= 310;
+
+  EXEC SQL OPEN posCur0;
+  EMB_SQL_CHECK("cursor -- open");
+
+  EXEC SQL FETCH posCur0 INTO :id, :name, :dept, :job:jobInd,
+                              :years:yearsInd, :salary, :comm:commInd;
+  EMB_SQL_CHECK("cursor -- fetch");
+
+  while (sqlca.sqlcode != 100)
+  {
+    cout << "    " << setw(3) << id;
+    cout.setf(ios::left, ios::adjustfield);
+    cout << " " << setw(8) << name;
+    cout.setf(ios::right, ios::adjustfield);
+    cout << " " << setw(4) << dept;
+
+    if (jobInd >= 0)
+    {
+      cout << " " << setw(5) << job;
+    }
+    else
+    {
+      cout << "     -";
+    }
+
+    if (yearsInd >= 0)
+    {
+      cout << " " << setw(5) << years;
+    }
+    else
+    {
+      cout << "     -";
+    }
+    cout << " " << setw(7) << setprecision(2) << salary;
+
+    if (commInd >= 0)
+    {
+      cout << " " << setw(7) << comm;
+    }
+    else
+    {
+      cout << "       -";
+    }
+    cout << endl;
+
+    EXEC SQL FETCH posCur0 INTO :id, :name, :dept, :job:jobInd,
+                                :years:yearsInd, :salary, :comm:commInd;
+    EMB_SQL_CHECK("cursor -- fetch");
+  }
+
+  EXEC SQL CLOSE posCur0;
+  EMB_SQL_CHECK("cursor -- close");
+
+  return 0;
+} /* StaffTbContentDisplay */
+
+/* helper function: displays the contents of the 'empsamp' table */
+int TbMerge::EmpsampTbContentDisplay()
+{
+  struct sqlca sqlca;
+
+  cout << "\n  Contents of the 'empsamp' table:\n";
+  cout << "\n  SELECT * FROM empsamp WHERE id >= 310\n";
+  cout << "    ID  NAME     DEPT JOB   YEARS SALARY   COMM\n";
+  cout << "    --- -------- ---- ----- ----- -------- -------\n";
+
+  strcpy(strStmt, "SELECT * FROM empsamp WHERE id >= 310");
+  EXEC SQL PREPARE S1 FROM :strStmt;
+  EMB_SQL_CHECK("after prepare");
+
+  EXEC SQL DECLARE posCur1 CURSOR FOR s1;
+  EMB_SQL_CHECK("declare cursor");
+
+  EXEC SQL OPEN posCur1;
+  EMB_SQL_CHECK("open cursor");
+
+  EXEC SQL FETCH posCur1 INTO :id, :name, :dept, :job:jobInd,
+                              :years:yearsInd, :salary, :comm:commInd;
+  EMB_SQL_CHECK("cursor -- fetch");
+
+  while (sqlca.sqlcode != 100)
+  {
+    cout << "    " << setw(3) << id;
+    cout.setf(ios::left, ios::adjustfield);
+    cout << " " << setw(8) << name;
+    cout.setf(ios::right, ios::adjustfield);
+    cout << " " << setw(4) << dept;
+
+    if (jobInd >= 0)
+    {
+      cout << " " << setw(5) << job;
+    }
+    else
+    {
+      cout << "     -";
+    }
+
+    if (yearsInd >= 0)
+    {
+      cout << " " << setw(5) << years;
+    }
+    else
+    {
+      cout << "     -";
+    }
+    cout << " " << setw(7) << setprecision(2) << salary;
+
+    if (commInd >= 0)
+    {
+      cout << " " << setw(7) << comm;
+    }
+    else
+    {
+      cout << "       -";
+    }
+    cout << endl;
+
+
+    EXEC SQL FETCH posCur1 INTO :id, :name, :dept, :job:jobInd,
+                                :years:yearsInd, :salary, :comm:commInd;
+    EMB_SQL_CHECK("cursor -- fetch");
+  }
+
+  EXEC SQL CLOSE posCur1;
+  EMB_SQL_CHECK("cursor -- close");
+
+  return 0;
+} /* EmpsampTbContentDisplay */
+
+int main(int argc, char *argv[])
+{
+  int rc = 0;
+  struct sqlca sqlca;
+  CmdLineArgs check;
+  DbEmb db;
+  TbMerge merge;
+
+  cout << "\n  This sample shows how to use the MERGE statement" << endl;
+
+  // check the command line arguments
+  rc = check.CmdLineArgsCheck1(argc, argv, db);
+  if (rc != 0)
+  {
+    return rc;
+  }
+
+  /* connect to database */
+  rc = db.Connect();
+  if (rc != 0)
+  {
+    return rc;
+  }
+
+  rc = merge.CreateTable();
+  rc = merge.ChangeTable();
+  rc = merge.MergeTables();
+
+  // drop the 'empsamp' table
+  EXEC SQL DROP TABLE empsamp;
+
+  // disconnect from the 'sample' database
+  rc = db.Disconnect();
+  if (rc != 0)
+  {
+    return rc;
+  }
+
+  return 0;
+} // main

@@ -1,0 +1,213 @@
+/*************************************************************************
+** (c) Copyright IBM Corp. 2007 All rights reserved.
+** 
+** The following sample of source code ("Sample") is owned by International 
+** Business Machines Corporation or one of its subsidiaries ("IBM") and is 
+** copyrighted and licensed, not sold. You may use, copy, modify, and 
+** distribute the Sample in any form without payment to IBM, for the purpose of 
+** assisting you in the development of your applications.
+** 
+** The Sample code is provided to you on an "AS IS" basis, without warranty of 
+** any kind. IBM HEREBY EXPRESSLY DISCLAIMS ALL WARRANTIES, EITHER EXPRESS OR 
+** IMPLIED, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED WARRANTIES OF 
+** MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE. Some jurisdictions do 
+** not allow for the exclusion or limitation of implied warranties, so the above 
+** limitations or exclusions may not apply to you. IBM shall not be liable for 
+** any damages you suffer as a result of using, copying, modifying or 
+** distributing the Sample, even if IBM has been advised of the possibility of 
+** such damages.
+***************************************************************************
+**
+** SOURCE FILE NAME: simple_xmlproc.sqc
+**
+** SAMPLE: Code implementation of a stored procedure Simple_XML_Proc_C
+**
+**         The stored procedures defined in this program is called by the
+**         client application simple_xmlproc_client.db2. Before running
+**         simple_xmlproc_client.db2, build the shared library by completing
+**         the following steps:
+**
+** BUILDING THE SHARED LIBRARY:
+** 1. Ensure the Database Manager Configuration file has the keyword
+**    KEEPFENCED set to "no". This allows shared libraries to be unloaded
+**    while you are developing stored procedures. You can view the file's
+**    settings by issuing the command: "db2 get dbm cfg". You can set
+**    KEEPFENCED to "no" with this command: "db2 update dbm cfg using
+**    KEEPFENCED no". NOTE: Setting KEEPFENCED to "no" reduces performance
+**    the performance of accessing stored procedures, because they have
+**    to be reloaded into memory each time they are called. If this is a
+**    concern, set KEEPFENCED to "yes", stop and then restart DB2 before
+**    building the shared library, by entering "db2stop" followed by
+**    "db2start". This forces DB2 to unload shared libraries and enables
+**    the build file or the makefile to delete a previous version of the
+**    shared library from the "sqllib/function" directory.
+** 2. To build the shared library, enter "bldrtn simple_xmlproc", or use the
+**    makefile: "make simple_xmlproc"(UNIX) or "nmake simple_xmlproc"(Windows)
+**
+** CATALOGING THE STORED PROCEDURES
+** 1. The stored procedures are cataloged or recataloged using "spcat_xml".
+**    The spcat_xml script (UNIX) or spcat_xml.bat batch file (Windows)
+**    connects to the database, runs simple_xmlproc_drop.db2 to uncatalog 
+**    the stored procedures if they were previously cataloged, then runs 
+**    simple_xmlproc_create.db2 which catalogs the stored procedures, then
+**    disconnects from the database.
+**
+** CALLING THE STORED PROCEDURES IN THE SHARED LIBRARY:
+** 1. Run simple_xmlproc_client.db2: "db2 -td@ -vf simple_xmlproc_client.db2" 
+**
+** DESCRIPTION OF FUNCTION SIMPLE_PROC:
+**           This function will take Customer Information ( of type XML)  as input ,
+**           finds whether the customer with cid in Customer Information exists in the 
+**           customer table , if not this will insert the customer info with that cid 
+**           into the customer table, and find out all the customers from the same city 
+**           of this customer and returns the result in XML format.
+**
+** SQL STATEMENTS USED:
+**         CLOSE
+**         DECLARE
+**         FETCH
+**         OPEN
+**         SELECT
+**         SELECT INTO
+**         CREATE
+**
+** STRUCTURES USED:
+**         sqlca
+**         sqlda
+**
+** EXTERNAL DEPENDENCIES:
+**        This program must be built on a DB2 server.
+**        Ensure existence of the sample database.
+**        Precompile with the SQL precompiler (PREP in DB2)
+**        Bind to a database (BIND in DB2)
+**        Compile and link loop with the compiler supported on your
+**        platform.
+**
+** OUTPUT FILE: simple_xmlproc_client.out (available in the online documentation)
+***************************************************************************
+**
+** For more information on the sample programs, see the README file.
+**
+** For information on developing C applications, see the Application
+** Development Guide.
+**
+** For information on using SQL statements, see the SQL Reference.
+**
+** For the latest information on programming, building, and running DB2
+** applications, visit the DB2 application development website:
+**     http://www.software.ibm.com/data/db2/udb/ad
+***************************************************************************/
+
+#include <stdio.h>
+#include <string.h>
+#include <stdlib.h>
+#include <sqlda.h>
+#include <sqlca.h>
+#include <sqludf.h>
+#include <sql.h>
+#include <memory.h>
+
+SQL_API_RC SQL_API_FN simple_proc ( SQLUDF_CLOB* inXML,
+                                    SQLUDF_CLOB* outXML,
+                                    sqlint32 *outReturnCode,
+                                    SQLUDF_NULLIND *inXML_ind,
+                                    SQLUDF_NULLIND *outXML_ind,
+                                    SQLUDF_NULLIND *outReturnCode_ind,
+                                    SQLUDF_TRAIL_ARGS)
+{
+
+  EXEC SQL INCLUDE SQLCA;
+
+  EXEC SQL BEGIN DECLARE SECTION;
+       sqlint64 count,custid;
+       SQL TYPE IS XML AS CLOB(5000) ipdata,tempXML;
+       char city[100];
+       char insstmt1[1024],stmt1[1024],stmt2[1024],stmt3[1024],stmt4[1024],stmt5[200];
+  EXEC SQL END DECLARE SECTION;
+
+  /* Initialize the input data */
+  ipdata.length = 0;
+  strcpy(ipdata.data," ");
+  tempXML.length = 0;
+  strcpy(tempXML.data," ");
+
+  /* Initialize output parameters .. */
+  outXML->length = 0;
+  strcpy(outXML->data," ");
+  *outXML_ind = -1;
+  *outReturnCode = -1;
+  *outReturnCode_ind = 0;
+
+  /* Copy input parameters to host variables */
+  ipdata.length = inXML->length;
+  strncpy(ipdata.data, inXML->data, inXML->length);
+
+  /* find whether the customer with that Info exists in the customer table */  
+  sprintf(stmt1, "SELECT COUNT(*) FROM customer WHERE "
+                 "XMLEXISTS('$info/customerinfo[@Cid=$id]' "
+                 "PASSING by ref cast(? as XML)  AS \"info\", cid as \"id\")");
+  EXEC SQL PREPARE s1 FROM :stmt1 ;
+  EXEC SQL DECLARE cur1 CURSOR FOR s1;
+  EXEC SQL OPEN cur1 using :ipdata;
+  EXEC SQL FETCH cur1 INTO :count;
+  EXEC SQL CLOSE cur1;
+
+  /* if customer doesn't exist ...... insert into the table */
+  if( count < 1 )
+  {
+    /* get the custid from the customer information */
+    sprintf(stmt2,"SELECT XMLCAST( XMLQUERY('$info/customerinfo/@Cid' passing by "
+                  "ref cast(? as XML) as \"info\") as BIGINT) FROM SYSIBM.SYSDUMMY1");
+    EXEC SQL PREPARE s2 FROM :stmt2;
+    EXEC SQL DECLARE cur2 CURSOR FOR s2;
+    EXEC SQL OPEN cur2 USING :ipdata;
+    EXEC SQL FETCH cur2 INTO :custid;
+    EXEC SQL CLOSE cur2;
+  
+    /* insert into customer table with that custid */
+    sprintf(insstmt1,"INSERT INTO customer(Cid, Info) VALUES(?,?)");
+    EXEC SQL PREPARE insertStmt FROM :insstmt1;
+    EXEC SQL EXECUTE insertStmt using :custid, :ipdata;
+  }
+
+  /* find the city of the customer and assign it to an application variable */
+  sprintf( stmt3, "SELECT XMLCAST( XMLQUERY('$info/customerinfo//city' "
+                  "passing by ref cast(? as XML) as \"info\") as "
+                  "VARCHAR(100)) FROM SYSIBM.SYSDUMMY1");
+  EXEC SQL PREPARE s3 FROM :stmt3;
+  EXEC SQL DECLARE cur3 CURSOR FOR s3;
+  EXEC SQL OPEN cur3 using :ipdata;
+  EXEC SQL FETCH cur3 INTO :city;
+  EXEC SQL CLOSE cur3;
+
+  /* findout the location of customer and return as an XML document */
+  sprintf(stmt4, "SELECT XMLQUERY('let $city:=$info/customerinfo//city "
+                 "let $prov:=$info/customerinfo//prov-state return <Location> "
+                 "{$city}{$prov} </Location>' passing by ref cast(? as XML) as "
+                 "\"info\") FROM SYSIBM.SYSDUMMY1");
+  EXEC SQL PREPARE s4 FROM :stmt4;
+  EXEC SQL DECLARE cur4 CURSOR FOR s4;
+  EXEC SQL OPEN cur4 using :ipdata;
+  EXEC SQL FETCH cur4  INTO :tempXML;
+  EXEC SQL CLOSE cur4;
+
+  /* assign the values to output parameters */
+  outXML->length = tempXML.length;
+  strncpy(outXML->data, tempXML.data, tempXML.length);
+  *outXML_ind = 0;
+
+  /* findout all the customers from that city and return as an XML document to caller */
+  strcpy(stmt5, "XQUERY for $cust in db2-fn:xmlcolumn(\"CUSTOMER.INFO\") "
+                "/customerinfo/addr[city=\"");
+  strcat(stmt5, city);
+  strcat(stmt5, "\"] order by $cust/../@Cid return <Customer>{$cust/../@Cid}{$cust/../name}</Customer>");
+
+  EXEC SQL PREPARE s5 FROM :stmt5;
+  EXEC SQL DECLARE cur5 CURSOR FOR s5;
+  EXEC SQL OPEN cur5;
+
+  *outReturnCode = sqlca.sqlcode;
+  *outReturnCode_ind = 0;
+
+  return 0;
+}

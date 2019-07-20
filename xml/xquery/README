@@ -1,0 +1,206 @@
+******************************************************************************
+* (c) Copyright IBM Corp. 2007 All rights reserved.
+* 
+* The following sample of source code ("Sample") is owned by International 
+* Business Machines Corporation or one of its subsidiaries ("IBM") and is 
+* copyrighted and licensed, not sold. You may use, copy, modify, and 
+* distribute the Sample in any form without payment to IBM, for the purpose of 
+* assisting you in the development of your applications.
+* 
+* The Sample code is provided to you on an "AS IS" basis, without warranty of 
+* any kind. IBM HEREBY EXPRESSLY DISCLAIMS ALL WARRANTIES, EITHER EXPRESS OR 
+* IMPLIED, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED WARRANTIES OF 
+* MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE. Some jurisdictions do 
+* not allow for the exclusion or limitation of implied warranties, so the above 
+* limitations or exclusions may not apply to you. IBM shall not be liable for 
+* any damages you suffer as a result of using, copying, modifying or 
+* distributing the Sample, even if IBM has been advised of the possibility of 
+* such damages.
+*
+******************************************************************************
+*
+*                    README for XML XQUERY Samples
+*
+* The <install_path>/sqllib/samples/xml/xquery directory on UNIX and
+* <install_path>\sqllib\samples\xml\xquery directory on Windows contain this
+* README file.
+*     <install_path> is the location of DB2 9.7 on your hard drive.
+* The default location for <install_path> is $HOME for UNIX
+* and C:\Program Files\IBM for windows.
+*
+* The DB2 9.7 sample code for XQUERY is located in the following directory :
+* <install_path>/sqllib/samples/xml/xquery directory on Unix and
+* <install_path>\sqllib\samples\xml\xquery directory on Windows.
+*
+* This README is organized into DIRECTORY ROADMAP, GETTING XML SAMPLES UP
+* AND RUNNING, XML SAMPLES DESIGN OVERVIEW and DETAILS OF SAMPLES sections.
+*
+******************************************************************************
+*
+*                        DIRECTORY ROADMAP
+*
+* xquery/ : This directory contains samples for demonstrating the XQuery
+*           features.
+* 1. xquery/clp    : This directory contains the files for CLP samples
+* 2. xquery/c      : This directory contains the files for ebbedded SQL
+*                    samples
+* 3. xquery/cli    : This directory contains the files for CLI samples
+* 4. xquery/clp    : This directory contains the files for CLP scripts
+* 5. xquery/java   : This directory contains the files for JAVA samples
+*                    java/jdbc directory contains files for jdbc samples
+*                    java/sqlj directory contains files for sqlj samples
+*
+* For more details on the content of these directories, please refer to the
+* the README file in the respective directories.
+*
+******************************************************************************
+*
+*               GETTING XQUERY SAMPLES UP AND RUNNING
+*
+* WARNINGS
+*  1. These steps gives an overview of building and running the samples.
+*     Please refer to the README in corresponding directory for any specific
+*     considerations.
+*
+* SETUP:
+*
+*   1) Copy the files from corresponding directory to a working
+*      directory and ensure that directory has write permission.
+*
+*   2) On Windows platform, all samples should be run and built in DB2
+*      Command Window.
+*      The DB2 command window is needed to execute the db2 specific commands.
+*      You can follow the step below to open DB2 command window.
+*      From the Start Menu click Start --> Programs --> IBM DB2 -->
+*      <DB2  copy name> --> Command Line Tools --> Command Window.
+*
+*   3) Start the database manager with the following command:
+*      db2start
+*
+*   4) Create the sample database with the following command:
+*      db2sampl -xml
+*
+*   5) Connect to the sample database with the following command:
+*      db2 connect to sample
+*
+*   6) To build stored procedures and User defined functions,
+*      ensure that you have write permission on the
+*      <install_path>/sqllib/function directory on UNIX and
+*      <install_path>\sqlib\function directory on WINDOWS.
+*
+*   7) Change directory (CD) to the directory containing the files
+*      copied in step 1.
+*
+* BUILD AND RUN:
+*    1. Some of the samples might need one or more of the data files at
+*       runtime. The data files can be found in the xquery/data directory.
+*       Please copy the data files to your working directory before running
+*       the particular sample. For more details on the data files required
+*       for a particular sample, please refer the header section of the
+*       sample.
+*
+*  To compile these samples, build scripts are provided.
+*  The README file in each directory containing the actual samples provides
+*  the details about how to compile the samples using the build script.
+*
+*  Here is the brief overview :
+*
+* BUILD AND RUN :
+*
+*  To compile these samples, build scripts are provided.
+*
+*  C and CLI:
+*
+*  To create the executable for the sample:
+*
+*    bldapp <sample name>
+*
+*  where <sample name> is the name of the sample without any extension.
+*
+*  e.g. bldapp xpath
+*
+*  To run the sample:
+*
+*    xpath
+*
+*  SQLJ:
+*
+*  To create the class file:
+*
+*    bldsqlj <sample name> userid password [server name] [port name]
+*
+*  where <sample name> is the name of the sample without any extension.
+*
+*  To run the sample:
+*
+*    java <sample name>.class
+*
+*  where <sample name> is the name of the sample without any extension.
+*
+*  JDBC:
+*
+*  To create the class file:
+*
+*    javac <sample name>.java
+*
+*  where <sample name> is the name of the sample without any extension.
+*
+*  To run the sample file:
+*
+*    java <sample name>.class
+*
+*  where <sample name> is the name of the sample without any extension.
+*
+******************************************************************************
+*
+*         XQUERY SAMPLES: DEMONSTRATED FEATURES AND USAGE SCENARIOS
+*
+* To help provide valid, usable and comprehensive XML XQuery samples, the
+* samples have been created to be based on specific usage scenarios or to
+* demonstrate a particular feature or API.
+*
+* 1. Usage Scenarios
+*
+*        1. Some of the suppliers have extended the promotional price.
+*           Find all the purchaseorder for these products and find out the
+*           excess amount given by the customer. The financial department
+*           needs the details of the customers so that amount can be returned
+*           to customer. The result can be returned as an XML document.
+*
+*              Sample Name: xquery_xmlproc.*
+*
+* 2. Features
+*
+*       1. Path expressions - These samples demonstrate the path expression
+*          with different kind of axis.
+*
+*	       Sample Name: xpath.*
+*
+*       2. Flwor exoression - These samples demonstrate XQuery FLWOR
+*          expression.
+*
+*              Sample Name: flwor.*
+*
+*       3. SQL/XML function - These samples demonstrate how XQuery interacts
+*          with SQL using SQL/XML functions.
+*
+*              Sample Name: sqlxquery.*
+*              Sample Name: xqueryparam.* -- Shows how to pass parameters to
+*                                            db2-fn:sqlquery function.
+*              Sample Name: xupdate.* -- Demonstrates how to insert, delete, 
+*                                        update, replace, and rename
+*                                        one or more XML documents or document 
+*                                        fragments using transform expressions.
+*
+*       4. Nested XQueries - These samples demonstrate the nesting of FLWOR
+*          expression to restructure the XML data stored in the relation
+*          table with XML columns.
+*
+*              Sample Name: xquery.*
+*
+*       5. XQuery Explain Support - This sample demonstrates the explain
+*          supoort for SQL/XML and XQuery statements.
+*
+*              Sample Name: xquery_explain.db2
+*
+******************************************************************************

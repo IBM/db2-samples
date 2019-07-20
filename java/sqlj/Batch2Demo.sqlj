@@ -1,0 +1,282 @@
+//***************************************************************************
+// (c) Copyright IBM Corp. 2007 All rights reserved.
+// 
+// The following sample of source code ("Sample") is owned by International 
+// Business Machines Corporation or one of its subsidiaries ("IBM") and is 
+// copyrighted and licensed, not sold. You may use, copy, modify, and 
+// distribute the Sample in any form without payment to IBM, for the purpose of 
+// assisting you in the development of your applications.
+// 
+// The Sample code is provided to you on an "AS IS" basis, without warranty of 
+// any kind. IBM HEREBY EXPRESSLY DISCLAIMS ALL WARRANTIES, EITHER EXPRESS OR 
+// IMPLIED, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED WARRANTIES OF 
+// MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE. Some jurisdictions do 
+// not allow for the exclusion or limitation of implied warranties, so the above 
+// limitations or exclusions may not apply to you. IBM shall not be liable for 
+// any damages you suffer as a result of using, copying, modifying or 
+// distributing the Sample, even if IBM has been advised of the possibility of 
+// such damages.
+//***************************************************************************
+//
+// SOURCE FILE NAME: Batch2Demo.sqlj
+//
+// SAMPLE: SQLJ batching - Association of ExecutionContext with BatchContext
+//
+//         This sample program shows how batching works and the use of 
+//         ExecutionContext with BatchContext. 
+//
+//         This sample program uses the DataSource jdbc/DB2SimpleDataSource_ds1 
+//         from JNDI. The DataSource is registered using createRegisterDS.java 
+//         and DS1.prop. Refer to the README file for details on how to run
+//         this sample. 
+//
+// SQL Statements USED:
+//         SELECT
+//
+// Classes used from Util.sqlj are:
+//         Data
+//
+// OUTPUT FILE: Batch2Demo.out (available in the online documentation)
+// Output will vary depending on the JDBC driver connectivity used.
+//***************************************************************************
+//
+// For more information on the sample programs, see the README file.
+//
+// For information on developing JDBC applications, see the Application
+// Development Guide.
+//
+// For information on using SQL statements, see the SQL Reference.
+//
+// For the latest information on programming, compiling, and running DB2
+// applications, visit the DB2 application development website at
+//     http://www.software.ibm.com/data/db2/udb/ad
+//**************************************************************************/
+
+import java.sql.*;
+import sqlj.runtime.*;
+import sqlj.runtime.ref.*;
+
+#sql iterator bd2_simpleNameIter(int c1, String c2);
+#sql context Batch2_Ctx with (dataSource="jdbc/DB2SimpleDataSource_ds1");
+
+class Batch2Demo 
+{
+
+  static Batch2_Ctx ctx1 = null;
+  
+  public static void main(String argv[]) throws SQLException
+  {
+    System.out.println();
+    System.out.println(
+      "THIS SAMPLE SHOWS HOW BATCHING WORKS WHILE USING \n" +
+      "ExecutionContext WITH BatchContext. \n");
+
+    // Obtain Connection Context from DataSource  jdbc/DB2SimpleDataSource_ds1
+    ctx1 = new Batch2_Ctx();
+
+    try
+    {
+      Statement stmt = null;
+      ResultSet rs = null;
+      Connection conn = null;
+
+      // Create one Connection Context 
+      conn = ctx1.getConnection();
+      stmt = conn.createStatement();
+
+      conn = ctx1.getConnection();
+      // Create two Execution Context
+      ExecutionContext exCtx1 = ctx1.getExecutionContext();
+      ExecutionContext exCtx2 = ctx1.getExecutionContext();
+      System.out.println("");
+      System.out.println(
+        "  Execution Context exCtx1 and exCtx2 are created.\n");
+
+      exCtx1.setBatching(true);
+      exCtx1.setBatchLimit(4);
+
+      System.out.println("  SetBatching() is set to true.\n");
+
+      System.out.println("  Value returned from isBatching(): " +
+                         exCtx1.isBatching() + "\n");
+
+      System.out.println(
+        " *******************************\n" +
+        " **  Batch Limit is set to 4  **\n" +
+        " *******************************\n");
+
+      bd2_simpleNameIter nameIter1 = null;
+
+      // Insert some data into the testing table Batch_Test2
+      System.out.println(
+        "  Insert some data into the table Batch_test2 using host \n" +
+        "  variables by performing the following SQL statement: \n\n" + 
+        "    INSERT INTO Batch_Test2 \n" +
+        "      VALUES(:i, :col2, :col3)\n");
+
+      String col2 = "";
+      String col3 = "";
+      String s1 = "someVal";
+      String s2 = "col3Val";
+      int ret = 0;
+
+      for (int i=1; i<=3; ++i)
+      {
+        col2=s1+i;
+        col3=s2+i;
+        #sql [ctx1, exCtx1] { INSERT INTO Batch_Test2 VALUES(:i, :col2, :col3) };
+        System.out.println("    INSERT INTO Batch_Test2 VALUES(" + i + ", "
+                           + col2 + ", " + col3 + ")");
+      }
+      System.out.println("");
+
+      // Retrieve and display the data in the table Batch_Test1
+      System.out.println(
+        "  Display the content of the table Batch_Test1 by performing\n" +
+        "  the following SQL statement in 'JDBC':\n\n" +
+        "    SELECT * from Batch_Test2\n");
+
+      rs = stmt.executeQuery("SELECT * FROM Batch_Test2");
+      
+      System.out.println(
+        "  Results:\n\n" +
+        "    INDEX  COLUMN 2  COLUMN 3\n" +
+        "    ------ --------- --------- ");
+
+      int row=1;	
+      while (rs.next())
+      {
+        System.out.println("    "+Data.format(rs.getInt(1),6) +
+                           " "+Data.format(rs.getString(2),8) +
+                           " "+Data.format(rs.getString(2),8));
+        System.out.println("");
+        row++;
+      }
+      if (row == 1)
+      { 
+        System.out.println("");      
+        System.out.println("  The table Batch_Test2 is empty with 0 rows.\n");
+      }
+  
+      System.out.println(
+        "  NOTE: \n" +
+        "    Table Batch_Test2 should return no rows because no\n" +
+        "    implicitly executed batch is obtained.\n");	
+
+      // Reset Batch limit to 1
+      exCtx1.setBatchLimit(1);
+
+      System.out.println(
+        "----------------------------------------------------------\n\n" +
+        " *******************************\n" +
+        " **  Batch Limit is set to 1  **\n" +
+        " *******************************\n");
+	
+
+      System.out.println("  Perform the following SQL statement in SQLJ:\n");
+
+      int j = 1;
+      col2 = "newVal";
+      #sql [ctx1, exCtx2] { INSERT INTO Batch_Test1 VALUES(:j, :col2) };
+      System.out.println("    INSERT INTO Batch_Test1 VALUES(" + j + ", " + 
+                         col2 + ")\n");
+
+      // Display the content of the table Batch_Test1
+      System.out.println(
+        "  Display the content of the table Batch_Test1 by performing\n" +
+        "  the following SQL statement in 'SQLJ':\n\n" +
+        "    SELECT * FROM Batch_Test1\n");
+
+      #sql[ctx1, exCtx2] nameIter1 =  { SELECT * FROM Batch_Test1 };
+
+      System.out.println(
+        "  Results:\n\n" +
+        "    INDEX  COLUMN 2  \n" +
+        "    ------ --------- ");
+
+      while (nameIter1.next())
+      {
+        System.out.println("    "+Data.format(nameIter1.c1(),6) +
+                           " "+Data.format(nameIter1.c2(),8));
+      }
+        System.out.println("");
+
+      System.out.println(
+        "  NOTE: \n" +
+        "    The above SELECT statement in SQLJ has created a new\n" + 
+        "    batch. The previous batch is then implicitly executed. \n");
+	
+      // Get update counts
+      getCounts(exCtx1);
+      
+      // Retrieve and display table Batch_Test2 using JDBC to verify that 
+      // it has 3 rows now
+      System.out.println(
+        "----------------------------------------------------------\n" +
+        "  Display the content of the table Batch_Test2 by performing\n" +
+        "  the following SQL statement in 'JDBC':\n\n" +
+        "    SELECT * FROM Batch_Test2\n");
+
+      rs = stmt.executeQuery("SELECT * from Batch_Test2");
+
+      System.out.println(
+        "  Results:\n\n" +
+        "    INDEX  COLUMN 2  COLUMN 3\n" +
+        "    ------ --------- --------- ");
+
+      row = 1;
+      while (rs.next())
+      {
+        System.out.println("    "+Data.format(rs.getInt(1),6) +
+                           " "+Data.format(rs.getString(2),8) +
+                           " "+Data.format(rs.getString(2),8));
+        System.out.println("");
+        row++;
+      }
+
+      System.out.println(
+        "  NOTE: \n" +
+        "    3 rows should be returned from the above SELECT statement\n" +
+        "    as an implicitly executed batch was obtained after the \n" +
+        "    SELECT statement made in SQLJ.\n");
+
+      cleanup();
+    }
+    catch(Exception ex)
+    {
+      if (ex instanceof java.sql.SQLException)
+      {
+        System.out.println("error code: " +
+                 ((java.sql.SQLException)(ex)).getErrorCode());
+        System.out.println("error message: " + ex.getMessage());
+      }
+      ex.printStackTrace();
+    }
+  }
+
+  static void getCounts( ExecutionContext exeContext )
+  {
+      int[] batchUpdateCount = exeContext.getBatchUpdateCounts();
+      System.out.println("  Update Count Length: " + batchUpdateCount.length);
+      System.out.println("");
+
+      for (int i=0; i< batchUpdateCount.length; ++i)
+      {
+        System.out.println("  Update Count Value batchUpdateCount[" + i + "]: "
+                           + batchUpdateCount[i] + "\n");
+      }
+
+      int ret = exeContext.getUpdateCount();
+      if (ret == ExecutionContext.EXEC_BATCH_COUNT)
+      {
+        System.out.println("  BatchConstant returned : " +
+                           "ExecutionContext.EXEC_BATCH_COUNT\n" );
+      }
+  }
+  
+  private static void  cleanup() throws SQLException
+  {
+    #sql [ctx1] { DELETE  FROM Batch_Test1 WHERE 1=1 };
+    #sql [ctx1] { DELETE  FROM Batch_Test2 WHERE 1=1 };
+  }
+}

@@ -1,0 +1,797 @@
+/***************************************************************************
+** (c) Copyright IBM Corp. 2007 All rights reserved.
+** 
+** The following sample of source code ("Sample") is owned by International 
+** Business Machines Corporation or one of its subsidiaries ("IBM") and is 
+** copyrighted and licensed, not sold. You may use, copy, modify, and 
+** distribute the Sample in any form without payment to IBM, for the purpose of 
+** assisting you in the development of your applications.
+** 
+** The Sample code is provided to you on an "AS IS" basis, without warranty of 
+** any kind. IBM HEREBY EXPRESSLY DISCLAIMS ALL WARRANTIES, EITHER EXPRESS OR 
+** IMPLIED, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED WARRANTIES OF 
+** MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE. Some jurisdictions do 
+** not allow for the exclusion or limitation of implied warranties, so the above 
+** limitations or exclusions may not apply to you. IBM shall not be liable for 
+** any damages you suffer as a result of using, copying, modifying or 
+** distributing the Sample, even if IBM has been advised of the possibility of 
+** such damages.
+*****************************************************************************
+**
+** SAMPLE FILE NAME: xmlcheckconstraint.sqc
+**
+** PURPOSE: The purpose of this sample is to show how to create check 
+**          constraints on XML column.
+**
+** USAGE SCENARIO: Super market maintains different stores for different
+**     products like music players, boots, headphones. Each store sells one
+**     type of product, as they would want to have separate accounting or
+**     billing for their products. Super market application maintains a
+**     separate table data for each product to make his work easy.Whenever
+**     a customer purchases some product an entry is made in the corresponding
+**     table restricting the table to a particular product entry.
+**     Because there are multiple tables and if the manager wants to frequently
+**     view data from multiple tables, he creates a view on top of these product
+**     tables with required columns. Also, when a customer purchases 2 or
+**     more products, inserting data from view has made his job easy.
+**     Some times when he wants to get the customer address details, he uses
+**     "customer" table from sample database to get only valid data using
+**     IS VALIDATED predicate. In XML case, users can insert data into tables
+**     through views. But if the user wants to select data, as indexes are
+**     created on XML documents on base tables and not on views, it would be
+**     best to make use of indexes on base tables rather than using
+**     select on views.
+**
+** PREREQUISITE:
+**    On Unix:    copy boots.xsd file from <install_path>/sqllib
+**                /samples/xml/data directory to current directory.
+**                copy musicplayer.xsd file from <install_path>/sqllib
+**                /samples/xml/data directory to current directory.
+**    On Windows: copy boots.xsd file from <install_path>\sqllib\samples\
+**                xml\data directory to current directory
+**                copy musicplayer.xsd file from <install_path>\sqllib\
+**                samples\xml\data directory to current directory
+**
+** EXECUTION: bldapp xmlcheckconstraint
+**            xmlcheckconstraint
+**
+** INPUTS: NONE
+**
+** OUTPUTS: One of the insert statements will fail because of check constraint
+**          violation. All other statements will succeed.
+**         
+** OUTPUT FILE: xmlcheckconstraint.out (available in online documentation)
+**
+** SQL STATEMENTS USED:
+**           CREATE TABLE
+**           INSERT
+**           DROP
+**           SELECT
+**           SYSPROC.XSR_REGISTER
+**           SYSPROC.XSR_COMPLETE
+**
+** SQL/XML FUNCTIONS USED:
+**           XMLVALIDDATE
+**           XMLPARSE
+**           XMLDOCUMENT
+**
+*****************************************************************************
+**
+** For more information about the command line processor (CLP) scripts,
+** see the README file.
+**
+** For information on using SQL statements, see the SQL Reference.
+**
+** For the latest information on programming, building, and running DB2
+** applications, visit the DB2 application development website:
+**     http://www.software.ibm.com/data/db2/udb/ad
+*****************************************************************************
+**
+**  SAMPLE DESCRIPTION
+**
+*****************************************************************************
+**
+** 1. Register XML schemas
+**
+** 2. Create tables with check constraint on XML column and insert data into
+**    tables.
+**
+** 3. Show partitioning of tables by schema.
+**
+** 4. Show usage of IS VALIDATED and IS NOT VALIDATED predicates.
+**
+** 5. Shows insert statement failure when check constraint is violated.
+**
+** 6. Show check constraint and view dependency on schema.
+**
+****************************************************************************
+**
+**  INCLUDE ALL HEADER FILES
+**
+****************************************************************************/
+
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+#include <sqlenv.h>
+#include <sqlutil.h>
+#include <sqlcodes.h>
+#include "utilemb.h"
+
+EXEC SQL INCLUDE SQLCA;
+
+/****************************************************************************
+**
+**       DECLARE HOST VARIABLES
+**
+*****************************************************************************/
+
+EXEC SQL BEGIN DECLARE SECTION; /* Start of declare section */
+  char dbAlias[700];
+  char user[700];
+  char pswd[700];
+  sqlint32 cid;
+  short custid;
+  SQL TYPE IS XML AS CLOB( 10K ) history;
+  short null_ind = -1;
+  char RelSchema[1024];
+  char SchemaName[1024];
+  char SchemaLocation[1024];
+  char PrimaryDocument[1024];
+  short isshred=0;
+  SQL TYPE IS BLOB_FILE xsdfile;
+  SQL TYPE is BLOB(1M) *xsdobjp;
+  char stmt[16384];
+  SQL TYPE IS XML AS BLOB( 10K ) info;
+EXEC SQL END DECLARE SECTION; /* End of declare section */
+
+
+int main(int argc, char *argv[])
+{
+  int rc = 0;
+  struct sqlca sqlca;
+
+  /* check the command line arguments */
+  rc = CmdLineArgsCheck1(argc, argv, dbAlias, user, pswd);
+  if (rc != 0)
+  {
+    return rc;
+  }
+
+  /* connect to database */
+  rc = DbConn(dbAlias, user, pswd);
+  if (rc != 0)
+  {
+    return rc;
+  }
+ 
+  /* Register boots XML schema */ 
+  rc = registerbootsxmlschema();
+  if (rc != 0)
+  {
+    return rc;
+  }
+
+  /* Register musicplayer XML schema */
+  rc = registermusicplayerschema();
+  if (rc != 0)
+  {
+    return rc;
+  }
+  
+  /* Create tables with check constraints on XML column */
+  checkconstraintonxmlcolumn();
+
+  /* Partitioning of tables by schemas */
+  partitiontablesbyschema();
+
+  /* Shows usage of IS VALIDATED and IS NOT VALIDATED predicates */
+  usageofvalidatedpredicate();
+
+  /* Shows insert statement failure because of schema violation */
+  schemavoilation();
+
+  /* Shows check constraint and view dependency on schema */
+  dependencyonschema();
+
+  /* Drop all the tables and views created */
+  cleanup();
+}
+
+/********************************************************************
+** 1. Register XML schemas
+********************************************************************/
+
+int registerbootsxmlschema()
+{
+  struct sqlca sqlca;
+  FILE *testfile;
+
+  /* Initialize host variables for schema registration */
+  sprintf((char *)RelSchema,"POSAMPLE1");
+  sprintf((char *)SchemaName,"boots");
+  sprintf((char *)SchemaLocation, "http://posample1.org");
+  sprintf((char *)PrimaryDocument,"boots.xsd");
+  sprintf(xsdfile.name, PrimaryDocument);
+
+  xsdfile.name_length = strlen(xsdfile.name);
+  xsdfile.file_options = SQL_FILE_READ;
+
+
+  /* read the BLOB file into a BLOB variable */
+  if (xsdfile.name_length > 0)
+    {
+      testfile = fopen( xsdfile.name, "r" );
+      if ( testfile != NULL )
+        {
+          fclose( testfile );
+          if ((xsdobjp = (struct xsdobjp_t *)
+                                     malloc (sizeof (*xsdobjp))) != NULL )
+            {
+               memset(xsdobjp, 0, sizeof(*xsdobjp));
+               EXEC SQL VALUES (:xsdfile) INTO :*xsdobjp;
+            }
+        }
+      else
+        {
+           printf("fopen() error.\n");
+           printf("Error accessing file: %s \n", xsdfile.name);
+           exit(0);
+        }
+    }
+
+
+  printf("----------------------------------------------------------------\n");
+  printf("\nFilename : %s\n",xsdfile.name);
+  printf("XSD Data : %s\n",xsdobjp->data);
+  printf("CALLING SYSPROC.XSR_REGISTER TO REGISTER THE SCHEMA %s......\n\n",SchemaName);
+
+  /* call SYSPROC.XSR_REGISTER to register the primary schema */
+  EXEC SQL CALL SYSPROC.XSR_REGISTER(:RelSchema,
+                                     :SchemaName,
+                                     :SchemaLocation,
+                                     :*xsdobjp,
+                                     :*xsdobjp:null_ind );
+  EMB_SQL_CHECK("CALLING SYSPROC.XSR_REGISTER");
+
+  /* call SYSPROC.XSR_COMPLETE the complete the registeration of the schema */
+  printf("----------------------------------------------------------------\n");
+  printf("CALLING  SYSPROC.XSR_COMPLETE TO COMPLETE THE SCHEMA REGISTERATION.....\n\n");
+  EXEC SQL CALL SYSPROC.XSR_COMPLETE(:RelSchema,
+                                     :SchemaName,
+                                     :*xsdobjp:null_ind,
+                                     :isshred);
+  EMB_SQL_CHECK("CALLING SYSPROC.XSR_COMPLETE");
+  EXEC SQL COMMIT;
+  EMB_SQL_CHECK("COMMIT");
+  
+  printf("\nSCHEMA REGISTRATION COMPLETED SUCCESSFULLY\n");
+
+  free(xsdobjp);
+  return 0;
+} /* registerxmlschema */
+
+int registermusicplayerschema()
+{
+  struct sqlca sqlca;
+  FILE *testfile;
+
+  /* Initialize host variables for schema registration */
+  sprintf((char *)RelSchema,"POSAMPLE1");
+  sprintf((char *)SchemaName,"musicplayer");
+  sprintf((char *)SchemaLocation, "http://posample1.org");
+  sprintf((char *)PrimaryDocument,"musicplayer.xsd");
+  sprintf(xsdfile.name, PrimaryDocument);
+
+  xsdfile.name_length = strlen(xsdfile.name);
+  xsdfile.file_options = SQL_FILE_READ;
+
+
+  /* read the BLOB file into a BLOB variable */
+  if (xsdfile.name_length > 0)
+    {
+      testfile = fopen( xsdfile.name, "r" );
+      if ( testfile != NULL )
+        {
+          fclose( testfile );
+          if ((xsdobjp = (struct xsdobjp_t *)
+                                     malloc (sizeof (*xsdobjp))) != NULL )
+            {
+               memset(xsdobjp, 0, sizeof(*xsdobjp));
+               EXEC SQL VALUES (:xsdfile) INTO :*xsdobjp;
+            }
+        }
+      else
+        {
+           printf("fopen() error.\n");
+           printf("Error accessing file: %s \n", xsdfile.name);
+           exit(0);
+        }
+    }
+  printf("----------------------------------------------------------------\n");
+  printf("\nFilename : %s\n",xsdfile.name);
+  printf("XSD Data : %s\n",xsdobjp->data);
+  printf("CALLING SYSPROC.XSR_REGISTER TO REGISTER THE SCHEMA %s......\n\n",SchemaName);
+
+  /* call SYSPROC.XSR_REGISTER to register the primary schema */
+  EXEC SQL CALL SYSPROC.XSR_REGISTER(:RelSchema,
+                                     :SchemaName,
+                                     :SchemaLocation,
+                                     :*xsdobjp,
+                                     :*xsdobjp:null_ind );
+  EMB_SQL_CHECK("CALLING SYSPROC.XSR_REGISTER");
+
+  /* call SYSPROC.XSR_COMPLETE the complete the registeration of the schema */
+  printf("----------------------------------------------------------------\n");
+  printf("CALLING  SYSPROC.XSR_COMPLETE TO COMPLETE THE SCHEMA REGISTERATION.....\n\n");
+  EXEC SQL CALL SYSPROC.XSR_COMPLETE(:RelSchema,
+                                     :SchemaName,
+                                     :*xsdobjp:null_ind,
+                                     :isshred);
+  EMB_SQL_CHECK("CALLING SYSPROC.XSR_COMPLETE");
+  EXEC SQL COMMIT;
+  EMB_SQL_CHECK("COMMIT");
+
+  printf("\nSCHEMA REGISTRATION COMPLETED SUCCESSFULLY\n");
+  free(xsdobjp);
+  return 0;
+} /* registerxmlschema */
+
+/***************************************************************************
+** 2. Create table with check constraints on XML column and insert data
+**    into tables
+****************************************************************************/
+
+int checkconstraintonxmlcolumn()
+{
+  struct sqlca sqlca;
+
+  printf("\nCreate table with check constraints on XML column and ");
+  printf(" insert data into tables\n");
+  printf("\n-------------------------------------------------------\n");
+
+  sprintf(stmt," CREATE TABLE item (custid int, "
+               "xmldoc XML constraint valid_check1 "
+               "CHECK(xmldoc IS VALIDATED ACCORDING TO XMLSCHEMA "
+               "IN (ID POSAMPLE1.MUSICPLAYER, ID POSAMPLE1.BOOTS)))");
+  printf("\n%s\n", stmt);
+
+  EXEC SQL EXECUTE IMMEDIATE :stmt;
+  EMB_SQL_CHECK("CREATE TABLE item");
+
+  sprintf(stmt, "INSERT INTO item "
+               "VALUES(100, xmlvalidate(xmlparse(document "
+               "'<Product xmlns=\"http://posample1.org\"  PoNum=\"5001\" "
+                 "PurchaseDate=\"2006-03-01\">"
+                    "<musicplayer>"
+                       "<name>samsung</name>"
+                       "<power> 100 watts</power> "
+                       "<NoOfSpeakers>5</NoOfSpeakers>"
+                       "<NoiseRatio>7</NoiseRatio>"
+                       "<NoOfDiskChangers>4</NoOfDiskChangers>"
+                       "<price>300.00</price>"
+                     "</musicplayer>"
+                "</Product>') ACCORDING TO XMLSCHEMA ID posample1.musicplayer))");
+  printf("\n%s\n", stmt);
+
+  EXEC SQL EXECUTE IMMEDIATE :stmt;
+  EMB_SQL_CHECK("INSERT INTO item");
+
+  sprintf(stmt, "INSERT INTO item "
+                "VALUES (100, XMLVALIDATE(XMLPARSE(document "
+                "'<Product xmlns=\"http://posample1.org\" PoNum=\"5002\" "
+                "PurchaseDate=\"2006-04-02\">"
+                  "<boots>"
+                    "<name>adidas</name>"
+                    "<size>7</size>"
+                    "<quantity>10</quantity>"
+                    "<price>499.9</price>"
+                  "</boots>"
+                "</Product>') ACCORDING TO XMLSCHEMA ID posample1.boots))");
+  printf("\n%s\n", stmt);
+
+  EXEC SQL EXECUTE IMMEDIATE :stmt;
+  EMB_SQL_CHECK("INSERT INTO item");
+
+  sprintf(stmt, "CREATE TABLE musicplayer (custid int, "
+               "xmldoc XML constraint valid_check1 "
+               "CHECK(xmldoc IS VALIDATED ACCORDING TO XMLSCHEMA "
+               "ID POSAMPLE1.MUSICPLAYER))");
+  printf("\n%s\n", stmt);
+
+  EXEC SQL EXECUTE IMMEDIATE :stmt;
+  EMB_SQL_CHECK("CREATE TABLE musicplayer");
+
+
+  sprintf(stmt, "INSERT INTO musicplayer "
+               "VALUES(100, xmlvalidate(xmlparse(document "
+               "'<Product xmlns=\"http://posample1.org\"  PoNum=\"1001\" "
+                 "PurchaseDate=\"2006-03-01\">"
+                    "<musicplayer>"
+                       "<name>sony</name>"
+                       "<power> 100 watts</power> "
+                       "<NoOfSpeakers>5</NoOfSpeakers>"
+                       "<NoiseRatio>3</NoiseRatio>"
+                       "<NoOfDiskChangers>4</NoOfDiskChangers>"
+                       "<price>200.00</price>"
+                     "</musicplayer>"
+                "</Product>') ACCORDING TO XMLSCHEMA ID posample1.musicplayer))");
+  printf("\n%s\n", stmt);
+
+  EXEC SQL EXECUTE IMMEDIATE :stmt;
+  EMB_SQL_CHECK("INSERT INTO musicplayer");
+
+  sprintf(stmt, "CREATE TABLE boots (custid int,"
+               "xmldoc XML constraint valid_check2 "
+               "CHECK(xmldoc IS VALIDATED ACCORDING TO XMLSCHEMA "
+               " ID posample1.boots))");
+  printf("\n%s\n", stmt);
+
+  EXEC SQL EXECUTE IMMEDIATE :stmt;
+  EMB_SQL_CHECK("CREATE TABLE boots");
+
+  sprintf(stmt, "INSERT INTO boots "
+               "VALUES (100, XMLVALIDATE(XMLPARSE(document "
+               "'<Product xmlns=\"http://posample1.org\" PoNum=\"1002\" "
+                  "PurchaseDate=\"2006-04-02\">"
+                     "<boots>"
+                       "<name>nike</name>"
+                       "<size>7</size>"
+                       "<quantity>10</quantity>"
+                       "<price>99.9</price>"
+                     "</boots>"
+               "</Product>') ACCORDING TO XMLSCHEMA ID posample1.boots))");
+  printf("\n%s\n", stmt);
+
+  EXEC SQL EXECUTE IMMEDIATE :stmt;
+  EMB_SQL_CHECK("INSERT INTO boots");
+  printf("\n-------------------------------------------------------\n");
+
+ return 0;
+} /* checkconstraintonxmlcolumn */
+
+/*****************************************************************************
+** 3. Shows partitioning of tables by schema.
+*****************************************************************************/
+
+int partitiontablesbyschema()
+{
+  printf("\n Shows partitioning of tables by schema.\n");
+  printf("\n-------------------------------------------------------\n");
+
+  sprintf(stmt, "CREATE VIEW view_purchases(custid, xmldoc)" 
+               "AS (SELECT  * FROM musicplayer "
+               "UNION ALL "
+               "SELECT * FROM boots)");
+  printf("\n%s\n", stmt);
+
+  EXEC SQL EXECUTE IMMEDIATE :stmt;
+  EMB_SQL_CHECK("CREATE VIEW view_purchases");
+
+  sprintf(stmt, "INSERT INTO view_purchases "
+               "VALUES (1001,xmlvalidate(xmlparse(document "
+               "'<Product xmlns=\"http://posample1.org\"  PoNum=\"1007\" "
+                  "PurchaseDate=\"2006-03-10\">"
+                    "<musicplayer>"
+                      "<name>philips</name>"
+                      "<power> 1000 watts</power>"
+                      "<NoOfSpeakers>2</NoOfSpeakers>"
+                      "<NoiseRatio>5</NoiseRatio>"
+                      "<NoOfDiskChangers>4</NoOfDiskChangers>"
+                      "<price>1200.00</price>"
+                    "</musicplayer>"
+                "</Product>') ACCORDING TO XMLSCHEMA ID posample1.musicplayer))");
+  printf("\n%s\n", stmt);
+
+  EXEC SQL EXECUTE IMMEDIATE  :stmt;
+  EMB_SQL_CHECK("INSERT INTO view_purchases");
+
+  sprintf(stmt, "INSERT INTO view_purchases "
+               "VALUES (1002, XMLVALIDATE(XMLPARSE(document "
+               "'<Product xmlns=\"http://posample1.org\" PoNum=\"1008\" "
+                  "PurchaseDate=\"2006-04-12\">"
+                    "<boots>"
+                      "<name>adidas</name>"
+                      "<size>10</size>"
+                      "<quantity>2</quantity>"
+                      "<price>199.9</price>"
+                    "</boots>"
+               "</Product>') ACCORDING TO XMLSCHEMA ID posample1.boots))");
+  printf("\n%s\n", stmt);
+
+  EXEC SQL EXECUTE IMMEDIATE :stmt;
+  EMB_SQL_CHECK("INSERT INTO view_purchases");
+  
+  sprintf(stmt, "SELECT * FROM musicplayer");
+  printf("\n%s\n", stmt);
+
+  EXEC SQL PREPARE s1 FROM :stmt;
+  EMB_SQL_CHECK("PREPARE s1");
+
+  EXEC SQL DECLARE c1 CURSOR FOR s1;
+  EMB_SQL_CHECK("DECLARE c1");
+
+  EXEC SQL OPEN c1;
+  EMB_SQL_CHECK("OPEN c1");
+
+  EXEC SQL FETCH c1 INTO :cid, :info;
+  EMB_SQL_CHECK("FETCH c1");
+  
+  printf("\n------------------------------------------------------\n");
+  printf("  cid        info");
+  printf("\n%d", cid);
+  printf("      %s\n", info.data);
+  printf("\n------------------------------------------------------\n");
+
+  EXEC SQL CLOSE c1;
+  EMB_SQL_CHECK("CLOSE c1");
+
+  sprintf(stmt, "SELECT * FROM boots");
+  printf("\nSELECT * FROM boots\n");
+
+  EXEC SQL PREPARE s2 FROM :stmt;
+  EMB_SQL_CHECK("PREPARE s2");
+  
+  EXEC SQL DECLARE c2 CURSOR FOR s2;
+  EMB_SQL_CHECK("DECLARE c2 ");
+
+  EXEC SQL OPEN c2;
+  EMB_SQL_CHECK("OPEN c2");
+
+  EXEC SQL FETCH c2 INTO :cid, :info;
+  EMB_SQL_CHECK("FETCH c2");
+
+  printf("\n------------------------------------------------------\n"); 
+  printf("  cid        info");
+  printf("\n%d", cid);
+  printf("      %s\n", info.data);
+  printf("\n------------------------------------------------------\n");
+
+  EXEC SQL CLOSE c2;
+  EMB_SQL_CHECK("CLOSE c2");
+
+ return 0;
+
+} /* partitiontablesbyschema */
+
+/******************************************************************
+** 4. Show usage of IS VALIDATED and IS NOT VALIDATED predicates.
+******************************************************************/
+
+int usageofvalidatedpredicate()
+{
+  struct sqlca sqlca;
+
+  printf("\nShow usage of IS VALIDATED and IS NOT VALIDATED predicates.\n");
+  printf("\n-------------------------------------------------------\n");
+
+  printf("\n Get customer addressess from customer table for the");
+  printf(" customers who purchased boots or music players\n");
+ 
+  sprintf(stmt, "SELECT V.custid, C.info "
+               "FROM customer C, view_purchases V "
+               "WHERE V.custid = C.Cid AND C.info IS VALIDATED");
+  printf("\n%s\n", stmt);
+
+  EXEC SQL PREPARE s3 FROM :stmt;
+  EMB_SQL_CHECK("PREPARE s1");
+
+  EXEC SQL DECLARE c3 CURSOR FOR s3;
+  EMB_SQL_CHECK("DECLARE c1");
+  
+  EXEC SQL OPEN c3;
+  EMB_SQL_CHECK("OPEN c3");
+
+  printf("\n--------------------------------------------------\n");
+  while (sqlca.sqlcode == SQL_RC_OK)
+  {
+    memset (info.data, '\0', sizeof(info.data)+1);
+    
+    EXEC SQL FETCH c3 INTO :cid, :info;
+    EMB_SQL_CHECK("FETCH c1");
+ 
+    printf("cid      info");
+    printf("\n%d         %s\n", cid, info.data);
+  } 
+  printf("\n--------------------------------------------------\n");
+ 
+  EXEC SQL CLOSE c3;
+  EMB_SQL_CHECK("CLOSE c3");
+
+  printf("\n Shows usage of IS NOT VALIDATED predicate\n");
+  printf("\n--------------------------------------------------\n");
+
+  EXEC SQL CREATE TABLE temp_table (custid int, xmldoc XML);
+  EMB_SQL_CHECK("CREATE TABLE");
+  printf("\nCREATE TABLE temp_table (custid int, xmldoc XML)\n");
+
+  sprintf(stmt, "INSERT INTO temp_table "
+               "VALUES(1003,  "
+               "'<Product xmlns=\"http://posample1.org\" PoNum=\"1009\" "
+                  "PurchaseDate=\"2006-04-17\">"
+                     "<boots>"
+                        "<name>Red Tape</name>"
+                        "<size>6</size>"
+                        "<quantity>2</quantity>"
+                        "<price>1199.9</price>"
+                     "</boots>"
+               "</Product>')");
+  printf("\n%s\n", stmt);
+
+  EXEC SQL EXECUTE IMMEDIATE :stmt;
+  EMB_SQL_CHECK("INSERT INTO temp_table");
+
+  sprintf(stmt, "INSERT INTO temp_table "
+               "VALUES(1004, XMLVALIDATE(XMLPARSE(document "
+               "'<Product xmlns=\"http://posample1.org\" PoNum=\"1010\" "
+                  "PurchaseDate=\"2006-04-19\">"
+                    "<boots>"
+                       "<name>Liberty</name>"
+                       "<size>6</size>"
+                       "<quantity>2</quantity>"
+                       "<price>900.90</price>"
+                    "</boots>"
+               "</Product>') ACCORDING TO XMLSCHEMA ID posample1.boots))");
+  printf("\n%s\n", stmt);
+
+  EXEC SQL EXECUTE IMMEDIATE :stmt;
+  EMB_SQL_CHECK("INSERT INTO temp_table");
+
+  sprintf(stmt, "CREATE VIEW temp_table_details AS "
+         "(SELECT * FROM temp_table WHERE xmldoc IS NOT VALIDATED)");
+  EXEC SQL EXECUTE IMMEDIATE :stmt;
+  EMB_SQL_CHECK("CREATE VIEW");
+
+  sprintf(stmt, "SELECT * FROM temp_table_details");
+  EXEC SQL PREPARE s4 FROM :stmt;
+  EMB_SQL_CHECK("PREPARE s4");
+
+  EXEC SQL DECLARE c4 CURSOR FOR s4;
+  EMB_SQL_CHECK("DECLARE c4");
+
+  EXEC SQL OPEN c4;
+  EMB_SQL_CHECK("OPEN c4");
+
+  printf("\n Display all XML documents which doesn't have a schema \n");
+  printf("\n-------------------------------------------------------\n");
+  while (sqlca.sqlcode == SQL_RC_OK)
+  {
+    EXEC SQL FETCH c4 INTO :cid, :info;
+    EMB_SQL_CHECK("FETCH c4");
+
+    printf("cid         info");
+    printf("\n%d           %s\n", cid, info.data);
+  }
+  printf("\n-------------------------------------------------------\n");
+
+  EXEC SQL CLOSE c4;
+  EMB_SQL_CHECK("CLOSE c4");
+
+return 0;
+} /* usageofvalidatedpredicate */
+
+/************************************************************************
+** 5. Shows insert statement failure when check constraint is violated.
+*************************************************************************/
+  
+int schemavoilation()
+{
+  int rc = 0;
+
+  printf("\nShows insert statement failure when check constraint is violated.");
+  printf("\n-------------------------------------------------------\n");
+  sprintf(stmt, "INSERT INTO musicplayer "
+               "VALUES (1005, XMLVALIDATE(XMLPARSE(document "
+               "'<Product xmlns=\"http://posample1.org\" PoNum=\"1011\" "
+                  "PurchaseDate=\"2006-04-17\">"
+                  "<boots>"
+                      "<name>Red Tape</name>"
+                      "<size>6</size>"
+                      "<quantity>2</quantity>"
+                      "<price>1199.9</price>"
+                   "</boots>"
+               "</Product>') ACCORDING TO XMLSCHEMA ID posample1.boots))");
+  printf("\n%s\n", stmt);
+
+  EXEC SQL EXECUTE IMMEDIATE :stmt;
+
+  printf("\n-----------------------------------------\n");
+  printf("\n Insert will fail \n");
+  printf("ERROR: SQL Code = %d\n", sqlca.sqlcode);
+  rc = sqlaintp(stmt, sizeof(stmt), 16384, &sqlca);
+  printf("%s", stmt);
+  printf("\n-----------------------------------------\n");
+
+return 0;
+} /* schemavoilation */
+
+/**************************************************************************
+** 6. Show check constraint and view dependency on schema.
+***************************************************************************/
+int dependencyonschema()
+{
+
+  struct sqlca sqlca;
+
+  printf("\nShow check constraint and view dependency on schema.\n");
+  printf("\n----------------------------------------------------\n");
+ 
+  EXEC SQL DROP XSROBJECT POSAMPLE1.BOOTS;
+  EMB_SQL_CHECK("DROP XSROBJECT boots");
+
+  EXEC SQL COMMIT;
+  EMB_SQL_CHECK("COMMIT ");
+  
+  sprintf(stmt, "INSERT INTO boots "
+               "VALUES (1006, "
+               "'<Product xmlns=\"http://posample1.org\" PoNum=\"1011\" "
+               "PurchaseDate=\"2006-04-17\">"
+                 "<boots>"
+                   "<name>Red Tape</name>"
+                   "<size>6</size>"
+                   "<quantity>2</quantity>"
+                   "<price>1199.9</price>"
+                 "</boots>"
+               "</Product>')");
+  printf("\n%s\n", stmt);
+  printf("\n Insert statement will succeed without any validation\n");
+
+  EXEC SQL EXECUTE IMMEDIATE :stmt;
+  EMB_SQL_CHECK("INSERT INTO boots");
+
+  sprintf(stmt, "INSERT INTO view_purchases "
+               "VALUES (1007, "
+               "'<musicplayer xmlns=\"http://posample1.org\" PoNum=\"1006\" "
+                 "PurchaseDate=\"2006-03-10\">"
+                   "<name>philips</name>"
+                   "<power> 1000 watts</power>"
+                   "<NoOfSpeakers>2</NoOfSpeakers>"
+                   "<NoiseRatio>5</NoiseRatio>"
+                   "<NoOfDiskChangers>4</NoOfDiskChangers>"
+                   "<price>1200.00</price>"
+               "</musicplayer>')");
+  printf("\n%s\n", stmt);
+  printf("\n Insert statement will succeed without any validation\n");
+
+  EXEC SQL EXECUTE IMMEDIATE :stmt;
+  EMB_SQL_CHECK("INSERT INTO view_purchases");
+
+  printf("\n----------------------------------------------------\n");
+
+return 0;
+} /* dependencyonschema */
+
+/***********************************************************************
+**    CLEANUP
+***********************************************************************/
+
+int cleanup()
+{
+  printf("\nDrop all tables and views\n");
+ 
+  EXEC SQL DROP TABLE item;
+  EMB_SQL_CHECK("DROP TABLE item");
+
+  EXEC SQL DROP TABLE musicplayer;
+  EMB_SQL_CHECK("DROP TABLE musicplayer");
+
+  EXEC SQL DROP TABLE boots;
+  EMB_SQL_CHECK("DROP TABLE boots");
+
+  EXEC SQL DROP XSROBJECT POSAMPLE1.MUSICPLAYER;
+  EMB_SQL_CHECK("DROP XSROBJECT MUSICPLAYER");
+
+  EXEC SQL DROP TABLE temp_table;
+  EMB_SQL_CHECK("DROP TABLE temp_table");
+
+  EXEC SQL DROP VIEW view_purchases;
+  EMB_SQL_CHECK("DROP VIEW view_purchases");
+
+  EXEC SQL DROP VIEW temp_table_details;
+  EMB_SQL_CHECK("DROP VIEW temp_table_details");
+
+  EXEC SQL COMMIT;
+  EMB_SQL_CHECK("COMMIT ");
+
+ return 0;
+} /* cleanup */

@@ -1,0 +1,253 @@
+/****************************************************************************
+** (c) Copyright IBM Corp. 2007 All rights reserved.
+** 
+** The following sample of source code ("Sample") is owned by International 
+** Business Machines Corporation or one of its subsidiaries ("IBM") and is 
+** copyrighted and licensed, not sold. You may use, copy, modify, and 
+** distribute the Sample in any form without payment to IBM, for the purpose of 
+** assisting you in the development of your applications.
+** 
+** The Sample code is provided to you on an "AS IS" basis, without warranty of 
+** any kind. IBM HEREBY EXPRESSLY DISCLAIMS ALL WARRANTIES, EITHER EXPRESS OR 
+** IMPLIED, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED WARRANTIES OF 
+** MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE. Some jurisdictions do 
+** not allow for the exclusion or limitation of implied warranties, so the above 
+** limitations or exclusions may not apply to you. IBM shall not be liable for 
+** any damages you suffer as a result of using, copying, modifying or 
+** distributing the Sample, even if IBM has been advised of the possibility of 
+** such damages.
+*****************************************************************************
+**
+** SOURCE FILE NAME: dbrestore.sqC
+**
+** SAMPLE: How to recover a database
+**
+**         Note:
+**           You must be disconnected from the sample database to run
+**           this program. To ensure you are disconnected, enter 
+**                         'db2 connect reset'
+**           on the command line prior to running dbrestore. 
+**
+** DB2 API USED:
+**         db2CfgSet -- Set Configuration
+**         db2Restore -- Restore Database
+**
+** OUTPUT FILE: dbrestore.out (available in the online documentation)
+*****************************************************************************
+**
+** For detailed information about database backup and database recovery, see
+** the Data Recovery and High Availability Guide and Reference. This manual
+** will help you to determine which database and table space recovery methods
+** are best suited to your business environment.
+**
+** For more information on the sample programs, see the README file.
+**
+** For information on developing C++ applications, see the Application
+** Development Guide.
+**
+** For information on using SQL statements, see the SQL Reference.
+**
+** For information on DB2 APIs, see the Administrative API Reference.
+**
+** For the latest information on programming, building, and running DB2
+** applications, visit the DB2 application development website:
+**     http://www.software.ibm.com/data/db2/udb/ad
+****************************************************************************/
+#ifdef DB2NT
+#include "utilrecov.cxx"
+#else
+#include "utilrecov.C"
+#endif
+
+class DbRestore: public UtilRecov
+{
+  public:
+    int DbBackupAndRestore(DbEmb *, DbEmb *, char *);
+};
+
+int DbRestore::DbBackupAndRestore(DbEmb *db, DbEmb *restoredDb,
+                                  char serverWorkingPath[])
+{
+  int rc = 0;
+  struct sqlca sqlca = { 0 };
+  char logarchmeth1[]= "OFF";
+  db2CfgParam cfgParameters[1] = { 0 };
+  db2Cfg cfgStruct = { 0 };
+
+  char restoreTimestamp[SQLU_TIME_STAMP_LEN + 1] = { 0 };
+
+  db2BackupStruct backupStruct = { 0 };
+  db2TablespaceStruct tablespaceStruct = { 0 };
+  db2MediaListStruct mediaListStruct = { 0 };
+  db2Uint32 backupImageSize = 0;
+  db2RestoreStruct restoreStruct = { 0 };
+  db2TablespaceStruct rtablespaceStruct = { 0 };
+  db2MediaListStruct rmediaListStruct = { 0 };
+
+  cout << "\n**************************************\n";
+  cout << "*** BACK UP AND RESTORE A DATABASE ***\n";
+  cout << "**************************************\n";
+
+  cout << "\n-----------------------------------------------------------";
+  cout << "\nUSE THE DB2 APIs:" << endl;
+  cout << "  db2CfgSet -- SET CONFIGURATION" << endl;
+  cout << "  db2Backup -- BACKUP DATABASE" << endl;
+  cout << "  db2Restore -- RESTORE DATABASE" << endl;
+  cout << "TO BACKUP AND RESTORE A DATABASE." << endl;
+
+  // Update db config: set logarchmeth1 = off 
+  cout << "\n  Update \'" << db->getAlias() << "\' database configuration:\n";
+  cout << "    - Disable the database configuration parameter LOGARCHMETH1 \n";
+  cout << "        i.e., set LOGARCHMETH1 = OFF/NO\n";
+  
+  cfgParameters[0].flags = 0;
+  cfgParameters[0].token = SQLF_DBTN_LOGARCHMETH1;
+  cfgParameters[0].ptrvalue = (char *)&logarchmeth1;
+
+
+  // Initialize cfgStruct
+  cfgStruct.numItems = 1;
+  cfgStruct.paramArray = cfgParameters;
+  cfgStruct.flags = db2CfgDatabase | db2CfgDelayed;
+  cfgStruct.dbname = db->getAlias();
+
+  // Set database configuration
+  db2CfgSet(db2Version1010, (void *)&cfgStruct, &sqlca);
+  DB2_API_CHECK("Db Log Arch Meth1 -- Disable");
+  rc = sqle_deactivate_db (db->getAlias(),
+                           NULL,
+                           NULL,
+                           NULL,
+                           &sqlca);
+  //******************************
+  //    BACKUP THE DATABASE    
+  //******************************
+
+  // Calling the routine for database backup  
+  rc = DbBackup(db, serverWorkingPath, &backupStruct);
+  CHECKRC(rc, "DbBackup");
+  
+  // Start the restore process
+
+  strcpy(restoreTimestamp, backupStruct.oTimestamp);
+
+  rtablespaceStruct.tablespaces = NULL;
+  rtablespaceStruct.numTablespaces = 0;
+
+  rmediaListStruct.locations = &serverWorkingPath;
+  rmediaListStruct.numLocations = 1;
+  rmediaListStruct.locationType = SQLU_LOCAL_MEDIA;
+
+  restoreStruct.piSourceDBAlias = db->getAlias();
+  restoreStruct.piTargetDBAlias = restoredDb->getAlias();
+
+  restoreStruct.piTimestamp = restoreTimestamp;
+  restoreStruct.piTargetDBPath = NULL;
+  restoreStruct.piReportFile = NULL;
+  restoreStruct.piTablespaceList = &rtablespaceStruct;
+  restoreStruct.piMediaList = &rmediaListStruct;
+  restoreStruct.piUsername = db->getUser();
+  restoreStruct.piPassword = db->getPswd();
+  restoreStruct.piNewLogPath = NULL;
+  restoreStruct.piVendorOptions = NULL;
+  restoreStruct.iVendorOptionsSize = 0;
+  restoreStruct.iParallelism = 1;
+  restoreStruct.iBufferSize = 1024;     /*  1024 x 4KB */
+  restoreStruct.iNumBuffers = 2;
+  restoreStruct.iCallerAction = DB2RESTORE_RESTORE;
+  restoreStruct.iOptions =
+    DB2RESTORE_OFFLINE | DB2RESTORE_DB | DB2RESTORE_NODATALINK |
+    DB2RESTORE_NOROLLFWD;
+
+  cout << "\n  Restoring a database ..." << endl;
+  cout << "    - source image alias      : " << db->getAlias() << endl;
+  cout << "    - source image timestamp  : " << restoreTimestamp << endl;
+  cout << "    - target restored database: " << restoredDb->getAlias()
+    << endl;
+
+  // Restore database
+  db2Restore(db2Version1010, &restoreStruct, &sqlca);
+  
+  cout << "\n-- The following warning report is expected! -";
+  DB2_API_CHECK("database restore -- start");
+
+  while (sqlca.sqlcode != 0)
+  {
+    // Continue the restore process
+    cout << "\n  Continuing the restore operation..." << endl;
+
+    // Depending on the sqlca.sqlcode value,
+    // some user actions might be required like
+    // mounting a new tape, for example.
+    restoreStruct.iCallerAction = DB2RESTORE_CONTINUE;
+
+    // Restore the database 
+    db2Restore(db2Version1010, &restoreStruct, &sqlca);
+
+    DB2_API_CHECK("database restore -- continue");
+  }
+
+  cout << "\n  Restore finished." << endl;
+
+  return 0;
+} // DbRestore::DbBackupAndRestore
+
+int main(int argc, char *argv[])
+{
+  int rc = 0;
+  CmdLineArgs check;
+  char serverWorkingPath[SQL_PATH_SZ + 1] = { 0 };
+  char savedLogArchMeth1Value[252] = "\0";
+  Instance inst;
+  DbEmb db;
+  DbEmb restoredDb;
+  DbRestore restore;
+
+  // Check the command line arguments
+  rc = check.CmdLineArgsCheck3(argc, argv, db, inst);
+  CHECKRC(rc, "check.CmdLineArgsCheck3");
+
+  restoredDb.setDb(db.getAlias(), db.getUser(), db.getPswd());
+  
+  cout << "\nTHIS SAMPLE SHOWS HOW TO RESTORE A DATABASE FROM A" << endl;
+  cout << "BACKUP." << endl;
+
+  // Attach to a local or remote instance
+  rc = inst.Attach();
+  CHECKRC(rc, "inst.Attach");
+
+  // Get a server working path
+  rc = restore.ServerWorkingPathGet(&db, serverWorkingPath);
+  CHECKRC(rc, "restore.ServerWorkingPathGet");
+
+  cout << "\nNOTE: Backup images will be created on the server" << endl;
+  cout << "      in the directory " << serverWorkingPath << "." << endl;
+  cout << "      They will not be deleted by this program." << endl;
+
+  cout << "\n-----------------------------------------------------------";
+  cout << "\nUSE THE DB2 APIs:" << endl;
+  cout << "  db2CfgGet -- GET CONFIGURATION" << endl;
+  cout << "TO GET THE CONFIGURATION OF A DATABASE." << endl;
+
+  // Save log archmeth1 value
+  rc = restore.DbLogArchMeth1ValueSave(&db, savedLogArchMeth1Value);
+  CHECKRC(rc, "restore.DbLogArchMeth1ValueSave");
+
+  // Call the sample functions
+  rc = restore.DbRecoveryHistoryFilePrune(&db);
+  CHECKRC(rc, "restore.DbRecoveryHistoryFilePrune");
+
+  // Call the function to backup and restore the database  
+  rc = restore.DbBackupAndRestore(&db, &restoredDb, serverWorkingPath);
+  CHECKRC(rc, "restore.DbBackupAndRestore");
+  
+  // Restore logarchmeth1 value
+  rc = restore.DbLogArchMeth1ValueRestore(&db, savedLogArchMeth1Value);
+  CHECKRC(rc, "restore.DbLogArchMeth1ValueRestore");
+
+  // Detach from the local or remote instance
+  rc = inst.Detach();
+  CHECKRC(rc, "inst.Detach");
+
+  return 0;
+} // main

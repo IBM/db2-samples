@@ -1,0 +1,690 @@
+/****************************************************************************
+** (c) Copyright IBM Corp. 2008 All rights reserved.
+** 
+** The following sample of source code ("Sample") is owned by International 
+** Business Machines Corporation or one of its subsidiaries ("IBM") and is 
+** copyrighted and licensed, not sold. You may use, copy, modify, and 
+** distribute the Sample in any form without payment to IBM, for the purpose of 
+** assisting you in the development of your applications.
+** 
+** The Sample code is provided to you on an "AS IS" basis, without warranty of 
+** any kind. IBM HEREBY EXPRESSLY DISCLAIMS ALL WARRANTIES, EITHER EXPRESS OR 
+** IMPLIED, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED WARRANTIES OF 
+** MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE. Some jurisdictions do 
+** not allow for the exclusion or limitation of implied warranties, so the above 
+** limitations or exclusions may not apply to you. IBM shall not be liable for 
+** any damages you suffer as a result of using, copying, modifying or 
+** distributing the Sample, even if IBM has been advised of the possibility of 
+** such damages.
+*****************************************************************************
+**
+** SOURCE FILE NAME: implicitcasting.sqc 
+**    
+** PURPOSE: To demonstrate use of implicit casting. 
+**                01. STRING to NUMERIC assignment
+**                02. NUMERIC to STRING assignment
+**                03. STRING to NUMERIC comparison
+**                04. NUMERIC to STRING comparison
+**                05. Untyped null
+**                06. Untyped expression
+**
+** SQL STATEMENTS USED:
+**                CREATE TABLE
+**                DESCRIBE TABLE      
+**                INSERT 
+**                SELECT
+**                DROP TABLE
+**                UPDATE TABLE
+**
+** OUTPUT FILE: implicitcasting.out (available in the online documentation)
+*****************************************************************************
+**
+** For more information on the sample programs, see the README file.
+**
+** For information on developing C applications, see the Application
+** Development Guide.
+**
+** For information on using SQL statements, see the SQL Reference.
+**
+** For the latest information on programming, building, and running DB2 
+** applications, visit the DB2 application development website: 
+**
+** http://www.ibm.com/software/data/db2/ad/
+**
+*****************************************************************************
+**
+** SAMPLE DESCRIPTION                                                      
+**
+** *************************************************************************
+**  1. Implicit casting between string and numeric data on assignments.
+**
+**  2. Implicit casting between string and numeric data on comparisons.
+**
+**  3. Untyped null
+**
+**  4. Untyped Expression
+** *************************************************************************/
+
+
+
+/* Include header files */
+
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+#include <sqlenv.h>
+#include <sqlcodes.h>
+#include <sqlutil.h>
+#include <db2ApiDf.h>
+#include "utilemb.h"
+
+/* Include Communication Area */
+
+EXEC SQL INCLUDE SQLCA;
+
+/* Declare host variables */
+EXEC SQL BEGIN DECLARE SECTION;
+sqlint32 empid;
+sqlint32 phoneno;
+double comm;
+double empsalary;
+short comm_ind;
+short empsalary_ind;
+char firstname[13];
+char lastname[16];
+char employeeid[6];
+char stmt[16384];
+char colname[12];
+char typename[12];
+char department[3];
+EXEC SQL END DECLARE SECTION;
+/* End declare section */
+
+
+/* Function prototypes */
+
+int CreateTable();
+int ImplicitCasting();
+int DropTable();
+
+/* Body of main function */
+
+int main(int argc, char *argv[])
+ {
+  int rc = 0;
+  char dbAlias[SQL_ALIAS_SZ + 1];
+  char user[USERID_SZ + 1];
+  char pswd[PSWD_SZ + 1];
+
+  /* check the command line arguments */
+  rc = CmdLineArgsCheck1(argc, argv, dbAlias, user, pswd);
+  if (rc != 0)
+  {
+    return rc;
+  }
+
+  /* connect to database */
+  rc = DbConn(dbAlias, user, pswd);
+  if (rc != 0)
+  {
+    return rc;
+  }
+   
+  printf("\n##############################################################");
+  printf("\n# THIS SAMPLE DEMONSTRATES FEATURES OF IMPLICIT CASTING      #");
+  printf("\n##############################################################\n");
+   
+  /* Call function ImplicitCasting to perform implicit casting */
+  rc = ImplicitCasting();
+  if (rc != 0)
+   {
+     printf("\n\n Error while performing implicit casting ");
+     exit(1);
+   }
+  return 0;
+
+  /* disconnect from database */
+  rc = DbDisconn(dbAlias);
+  if (rc != 0)
+  {
+    return rc;
+  }
+
+  return 0;
+ }
+
+
+/* Create body of CreateTable function to create tables */
+
+int CreateTable()
+ {
+  int rc = 0;
+
+  /* Create table temp_employee */
+  printf("\n--- Create table temp_employoee \n\n");
+  printf("CREATE TABLE temp_employee(empno INT NOT NULL, \n");
+  printf("firstname CHAR(12) NOT NULL, midinit CHAR(1), \n");
+  printf("lastname CHAR(15) NOT NULL ,workdept VARCHAR(3), \n");
+  printf("phoneno CHAR(4), hiredate DATE, job CHAR(8), \n");
+  printf("edlevel SMALLINT NOT NULL, sex CHAR(1), \n");
+  printf("birthdate DATE, salary DECIMAL(9,2), bonus INT, comm INT) \n");
+      
+  strcpy(stmt, "CREATE TABLE temp_employee (empno INT NOT NULL, \n");
+  strcat(stmt, "firstname CHAR(12) NOT NULL, midinit CHAR(1), "); 
+  strcat(stmt, "lastname CHAR(15) NOT NULL ,workdept VARCHAR(3), ");
+  strcat(stmt, "phoneno CHAR(4), hiredate DATE, job CHAR(8), ");
+  strcat(stmt, "edlevel SMALLINT NOT NULL, sex CHAR(1), ");
+  strcat(stmt, "birthdate DATE, salary DECIMAL(9,2), bonus INT, ");
+  strcat(stmt, "comm INT)");
+  
+  /* EXECUTE statement */
+  EXEC SQL EXECUTE IMMEDIATE :stmt;
+  EMB_SQL_CHECK("create--table");
+   
+  /* Error Checking */
+  if (sqlca.sqlcode < 0)                                 
+   {                                                      
+     TransRollback();
+     printf("\n Error while creating table date_time \n"); 
+     rc = 1;
+     exit(1);                                           
+   }
+  return rc;
+ }
+ 
+ 
+ 
+/* Create body of ImplicitCasting function to perform implicit casting */
+
+int ImplicitCasting()
+ {
+  int rc = 0;
+   
+  /* Call CreateTable function to create tables */
+  rc = CreateTable();
+   if (rc != 0)
+    {
+      printf("\n Error in CreateTable function\n");
+      return rc;
+      exit(1);
+    }
+    
+    
+  /*****************************************************************/
+  /* Implicit Casting between string and numeric data on           */
+  /* assignments.                                                  */
+  /*****************************************************************/
+
+  /********************************/
+  /* STRING TO NUMERIC ASSIGNMENT */
+  /********************************/
+
+  printf("\n***************************************************************");
+  printf("\nImplicit Casting between string and numeric data on assignments");
+  printf("\n***************************************************************\n");
+ 
+  printf("\n********************************");
+  printf("\nSTRING TO NUMERIC ASSIGNMENT   *");
+  printf("\n********************************\n");
+  
+  /*Describe table temp_employee */
+
+  printf("\n--- Describe table temp_employee \n");
+  printf("\nSELECT colname, typename FROM syscat.columns");
+  printf("\nWHERE tabname ='TEMP_EMPLOYEE'\n");
+     
+  /* declare cursor */
+  EXEC SQL DECLARE c0 CURSOR FOR
+  SELECT colname, typename FROM syscat.columns WHERE tabname ='TEMP_EMPLOYEE';
+  EMB_SQL_CHECK("Declare cursor c0");
+  
+  /* open cursor */
+  EXEC SQL OPEN c0;
+  EMB_SQL_CHECK("Open cursor c0");
+
+  /* fetch cursor */
+  EXEC SQL FETCH c0 INTO :colname, :typename;
+  EMB_SQL_CHECK("Fetch Cursor c0");
+
+  printf("\nCOLNAME		COLTYPE \n");
+  
+  printf("------------- --------------\n");
+  while (sqlca.sqlcode != 100)
+   {
+    printf("%10s %14s\n", colname, typename);
+    EXEC SQL FETCH c0 INTO :colname, :typename;
+    EMB_SQL_CHECK("cursor -- fetch");
+   }
+
+  /* close cursor */
+  EXEC SQL CLOSE c0;
+  EMB_SQL_CHECK("cursor -- close");
+   
+  /*Describe table employee */
+
+  printf("\n\n--- Describe table employee \n");
+  printf("\nSELECT colname, typename FROM syscat.columns");
+  printf("\nWHERE tabname ='EMPLOYEE'\n");
+     
+  /* declare cursor */
+  EXEC SQL DECLARE c1 CURSOR FOR
+  SELECT colname, typename FROM syscat.columns WHERE tabname ='EMPLOYEE';
+  EMB_SQL_CHECK("Declare -- cursor"); 
+
+  /* open cursor */
+  EXEC SQL OPEN c1;
+  EMB_SQL_CHECK("cursor -- open");
+ 
+  /* fetch cursor */
+  EXEC SQL FETCH c1 INTO :colname, :typename;
+  EMB_SQL_CHECK("cursor -- fetch");
+
+  printf("\nCOLNAME 	COLTYPE \n");
+  printf("----------------------------------\n");
+  while (sqlca.sqlcode != 100)
+   {
+    printf("%10s %14s\n", colname, typename);
+
+    EXEC SQL FETCH c1 INTO :colname, :typename;
+    EMB_SQL_CHECK("cursor -- fetch");
+   }
+
+  /* close cursor */
+  EXEC SQL CLOSE c1;
+  EMB_SQL_CHECK("cursor -- close");
+  
+  /*Fetch data from employee table */
+  
+  printf("\n\n--- Fetch data from employee table");
+  printf("\n\nSELECT empno, firstnme, lastname,salary");
+  printf("\nFROM employee WHERE empno < '000100'");
+  
+  /* Declare Cursor */
+  EXEC SQL DECLARE c2 CURSOR FOR 
+  SELECT empno, firstnme, lastname, salary 
+  FROM employee 
+  WHERE empno < '000100';
+  EMB_SQL_CHECK("Declare -- close");
+  
+  /* open cursor */
+  EXEC SQL OPEN c2;
+  EMB_SQL_CHECK("close -- cursor");
+
+  /* fetch cursor */
+  EXEC SQL FETCH c2
+  INTO :empid, :firstname, :lastname, :empsalary;
+  EMB_SQL_CHECK("cursor -- fetch");
+    
+  printf("\n\nEMPNO	FIRSTNAME   LASTNAME    EMPSALARY");
+  printf("\n------------------------------------------------\n");
+  while (sqlca.sqlcode != 100)
+   {
+    printf("%d %14s %10s   %14f \n", empid, firstname, lastname, empsalary);
+
+    EXEC SQL FETCH c2 
+    INTO :empid, :firstname, :lastname, :empsalary;
+    EMB_SQL_CHECK("cursor -- fetch");
+   }
+
+  /* close cursor */
+  EXEC SQL CLOSE c2;
+  EMB_SQL_CHECK("cursor -- close");
+  
+  /* In employee table empno is of STRING type and in temp_employee table */
+  /*empno is of NUMERIC type. */
+  printf("\n\n--- In employee table empno is of STRING type and in temp_employee");
+  printf("\n--- table empno is of NUMERIC type.");
+
+  /* Copy data from one table to another table of different data types */ 
+  /* without changing the table structure. */
+  printf("\n\n--- Copy data from one table to another table of different data types");
+  printf("\n--- without changing the table structure.");
+
+  printf("\n\nINSERT INTO temp_employee SELECT * FROM employee"); 
+  
+  strcpy(stmt, "INSERT INTO temp_employee SELECT * FROM employee");
+  EXEC SQL EXECUTE IMMEDIATE :stmt;  
+  EMB_SQL_CHECK("Execute -- stmt");
+
+  /*Fetch data from temp_employee table */
+  
+  printf("\n\n--- Fetch data from temp_employee table");
+  printf("\n\nSELECT empno, firstname, lastname, salary");
+  printf("\nFROM temp_employee WHERE empno < '000100'");
+
+  strcpy(stmt, "SELECT empno, firstname, lastname, salary ");
+  strcat(stmt, "FROM temp_employee WHERE empno < '000100'");   
+  EXEC SQL PREPARE s1 FROM :stmt;
+  EMB_SQL_CHECK("PREPARE s1");
+
+  /* Declare Cursor */
+  EXEC SQL DECLARE c3 CURSOR FOR s1;
+  EMB_SQL_CHECK("Declare -- cursor c3");
+
+  /* open cursor */
+  EXEC SQL OPEN c3;
+  EMB_SQL_CHECK("Open -- Cursor c3");
+  
+  /* fetch cursor */
+  EXEC SQL FETCH c3
+  INTO :empid, :firstname, :lastname, :empsalary;
+  EMB_SQL_CHECK("cursor -- fetch");
+  
+  printf("\n\nEMPID   FIRSTNAME    LASTNAME        EMPSALARY\n");
+  printf("--------------------------------------------------\n");
+  while (sqlca.sqlcode != 100)
+   {
+    printf("%d %17s %s %12f \n", empid, firstname, lastname, empsalary);
+
+    EXEC SQL FETCH c3 
+    INTO :empid, :firstname, :lastname, :empsalary;
+    EMB_SQL_CHECK("cursor -- fetch");
+   }
+    
+  /* close cursor */
+   EXEC SQL CLOSE c3;
+   EMB_SQL_CHECK("cursor -- close");
+
+  
+  /********************************/
+  /* NUMERIC TO STRING ASSIGNMENT */
+  /********************************/
+
+  printf("\n\n********************************");
+  printf("\nNUMERIC to STRING assignment   *");
+  printf("\n********************************\n");
+
+  /* In temp_table data type of column phoneno is STRING. */
+  /* Update phoneno column by passing NUMERIC phone number.*/
+
+  printf("\n\n--- In temp_table, column phoneno is of data type STRING.");
+  printf("\n--- Update phoneno column by passing NUMERIC phone number.");
+
+  printf("\n\nUPDATE temp_employee SET phoneno = 5678 "); 
+  printf("\nWHERE empno = '000110'");
+
+  strcpy(stmt, "UPDATE temp_employee SET phoneno = 5678 ");
+  strcat(stmt, "WHERE empno = '000110'");
+  EXEC SQL EXECUTE IMMEDIATE :stmt;
+  EMB_SQL_CHECK("Execute -- stmt");
+
+  /*Fetch data from temp_employee table */
+  
+  printf("\n\n--- Fetch data from temp_employee table \n");
+  printf("\nSELECT empno, firstname, lastname, phoneno ");
+  printf("\nFROM temp_employee ");
+  printf("\nWHERE phoneno = '5678' \n");
+  
+  strcpy(stmt, "SELECT empno, firstname, lastname, phoneno ");
+  strcat(stmt, "FROM temp_employee WHERE phoneno = '5678'");
+
+  EXEC SQL PREPARE s2 FROM :stmt;
+  EMB_SQL_CHECK("Prepare s2");
+
+  EXEC SQL DECLARE c4 CURSOR FOR s2;
+  EMB_SQL_CHECK("Declare cursor c4");
+
+  /* Open Cursor for c4 */
+  EXEC SQL OPEN c4;
+  EMB_SQL_CHECK("Open -- cursor c4");
+
+  /* Fetch Cursor */
+  EXEC SQL FETCH c4
+  INTO :empid, :firstname, :lastname, :phoneno;
+  EMB_SQL_CHECK("Fetch -- cursor");
+
+
+  printf("\nEMPID	FIRSTNAME    LASTNAME        phoneno \n");
+  printf("\n-------------------------------------------- ");
+ 
+  printf("\n%d %16s %s %d \n", empid, firstname, lastname, phoneno);
+
+
+
+  /*******************************************************************/
+  /* Implicit Casting between string and numeric data on comparisons */
+  /*******************************************************************/
+ 
+  printf("\n\n***************************************************************");
+  printf("\nImplicit Casting between string and numeric data on comparisons");
+  printf("\n***************************************************************");
+
+  /* Retrieve rows from temp_employee table where empno is 000330. */
+  /* In temp_employee table empno is of NUMERIC TYPE. */
+  /* Pass empno as STRING while fetching the data from table. */
+
+  printf("\n\n-- Retrieve rows from temp_employee table where empno is 000330.");
+  printf("\n-- In temp_employee table empno is of NUMERIC type.");
+  printf("\n-- Pass empno as STRING while fetching the data from table.");
+  
+  printf("\n\nSELECT firstname, lastname, salary, workdept");
+  printf("\nFROM temp_employee");
+  printf("\nWHERE empno = '000330'");
+  
+  strcpy(stmt, "SELECT firstname, lastname, salary, workdept ");
+  strcat(stmt, "FROM temp_employee WHERE empno = '000330'");
+
+  EXEC SQL PREPARE s3 FROM :stmt;
+  EMB_SQL_CHECK("PREPARE s3");
+   
+  EXEC SQL DECLARE c5 CURSOR FOR s3;
+  EMB_SQL_CHECK("Decalre -- corsor c5");
+
+  /* Open Cursor */
+  EXEC SQL OPEN c5;
+  EMB_SQL_CHECK("Open -- cursor c5");
+
+  /* Fetch Cursor */
+  EXEC SQL FETCH c5
+  INTO :firstname, :lastname, :empsalary, :department;
+  EMB_SQL_CHECK("cursor -- fetch");
+
+  printf("\n\nFIRSTNAME    LASTNAME        EMPSALARY      DEPARTMENT ");
+  printf("\n------------------------------------------------------");
+  printf("\n%s %s %f %5s", firstname, lastname, empsalary, department);
+
+
+  /*****************************************************************/
+  /* Untyped null in implicit casting                              */
+  /*****************************************************************/
+
+   printf("\n\n\n********************************************************");
+   printf("\n Untyped null in implicit casting                           ");
+   printf("\n********************************************************");
+   
+
+   /* Null can be used anywhere in the expression. */
+
+   printf("\n\n--- Null can be used anywhere in the expression");
+   printf("\n\nUPDATE temp_employee");
+   printf("\nSET comm = NULL ");
+   printf("\n WHERE empno = 000330");
+
+   strcpy(stmt, "UPDATE temp_employee SET comm = NULL ");
+   strcat(stmt, "WHERE empno = 000330");
+   
+   EXEC SQL EXECUTE IMMEDIATE :stmt;
+   EMB_SQL_CHECK("Execute -- stmt");
+   
+  
+  /* Select comm where empno is 000330 */
+  printf("\n\n-- Select comm where empno is 000330");
+
+  printf("\n\nSELECT comm");
+  printf("\nFROM temp_employee");
+  printf("\nWHERE empno = 000330");
+   
+  strcpy(stmt, "SELECT comm FROM temp_employee ");
+  strcat(stmt, "WHERE empno = 000330");
+
+  EXEC SQL PREPARE s4 FROM :stmt;
+  EMB_SQL_CHECK("PREPARE s4");
+
+  EXEC SQL DECLARE c6 CURSOR FOR s4;
+  EMB_SQL_CHECK("Declare -- cursor c6");
+
+  /* Open Cursor */
+  EXEC SQL OPEN c6;
+  EMB_SQL_CHECK("Open -- cursor c6");   
+
+  /* Fetch Cursor */
+  EXEC SQL FETCH c6
+  INTO :comm INDICATOR :comm_ind;
+  EMB_SQL_CHECK("Fetch -- cursor");
+
+  printf("\n\nCOMM");
+  printf("\n-----------");
+  printf("\n%d", comm);
+	
+  /* If either operand is null, the result will be null */
+
+  printf("\n\n--- If either operand is null, the result will be null");
+
+  printf("\n\nUPDATE temp_employee");
+  printf("\nSET salary = salary + NULL + 1000 ");
+  printf("\nWHERE empno = 000330");
+
+  strcpy(stmt, "UPDATE temp_employee SET salary = salary + NULL + 1000 ");
+  strcat(stmt, "WHERE empno = 000330");
+
+  EXEC SQL EXECUTE IMMEDIATE :stmt;
+  EMB_SQL_CHECK("Execute stmt");
+
+  /* Select salary where empno is 000330 */
+    
+  printf("\n\n\n--- Select salary where empno = 000330");
+   
+  strcpy(stmt, "SELECT salary FROM temp_employee ");
+  strcat(stmt, "WHERE empno = 000330");
+
+  EXEC SQL PREPARE s5 FROM :stmt;
+  EMB_SQL_CHECK("Prepare s5");
+
+  EXEC SQL DECLARE c7 CURSOR FOR s5;
+  EMB_SQL_CHECK("Declare -- cursor c7");
+
+  /* Open Cursor */
+  EXEC SQL OPEN c7;
+
+  /* Fetch Cursor */
+  EXEC SQL FETCH c7
+  INTO :empsalary INDICATOR :empsalary_ind;
+  EMB_SQL_CHECK("cursor -- fetch");
+
+  printf("\n\nEMPSALARY ");
+  printf("\n-------------");
+  printf("\n%d",          empsalary);
+   
+
+  /*****************************************************************/
+  /* Untyped Expression                                           */
+  /*****************************************************************/
+ 
+  printf("\n\n\n*****************************************************");
+  printf("\n Use of Untyped Expression" );
+  printf("\n*****************************************************");
+
+  /* Pass empid as numeric and string in parameter marker */
+
+  printf("\n\n--- Pass empid as numeric and string in parameter marker.");
+  printf("\n\n--- Pass empid as NUMERIC"); 
+  
+  /* prepare the statement */
+  strcpy(stmt, "SELECT firstname, lastname FROM temp_employee WHERE empno = ?");
+  EXEC SQL PREPARE s6 FROM :stmt;
+  EMB_SQL_CHECK("stmt -- Prepare");
+
+  EXEC SQL DECLARE c8 CURSOR FOR s6;
+  EMB_SQL_CHECK("DECLARE CURSOR c8");
+
+  /* Open Cursor */
+  empid = 110;
+  printf("\nempid = %d", empid);
+
+  EXEC SQL OPEN c8 USING :empid;
+  EMB_SQL_CHECK("Open c8");
+
+  /* fetch cursor */
+  EXEC SQL FETCH c8
+  INTO :firstname, :lastname;
+  EMB_SQL_CHECK("Fetch -- cursor");
+  
+  printf("\n\nFIRSTNAME         LASTNAME\n");
+  printf("-----------------------------------\n");
+  while (sqlca.sqlcode != 100)
+   {
+    printf("%s %20s \n",firstname, lastname);
+
+    EXEC SQL FETCH c8 
+    INTO :firstname, :lastname;
+    EMB_SQL_CHECK("Fetch -- cursor");
+   }
+
+  /* close cursor */
+  EXEC SQL CLOSE c8;
+  EMB_SQL_CHECK("Close -- cursor c8"); 
+
+  printf("\n\n-- Pass empid as STRING"); 
+  strcpy(employeeid, "000110");
+
+  /* Open cursor */
+  printf("\nempid = %s", employeeid);
+  EXEC SQL OPEN c8 USING :employeeid;
+  EMB_SQL_CHECK("Open -- cursor c8");
+
+  EXEC SQL FETCH c8
+  INTO :firstname, :lastname;
+  EMB_SQL_CHECK("Fetch -- cursor");
+  
+  printf("\n\nFIRSTNAME         LASTNAME\n");
+  printf("-----------------------------------\n");
+  while (sqlca.sqlcode != 100)
+   {
+    printf("%s %20s \n",firstname, lastname);
+
+    EXEC SQL FETCH c8 
+    INTO :firstname, :lastname;
+    EMB_SQL_CHECK("Fetch -- cursor");
+   }
+
+  /* close cursor */
+  EXEC SQL CLOSE c8;
+  EMB_SQL_CHECK("cursor -- close"); 
+
+  EXEC SQL COMMIT;
+
+  rc = DropTable();
+   if (rc != 0)
+    {
+      printf("\n\nError while droping the table");
+    }     
+
+  return rc;
+ }
+
+int DropTable()
+ {
+  int rc = 0;
+  
+  /* Drop table temp_employee */
+  
+  printf("\n\n DROP TABLE temp_employee\n\n");
+  
+  strcpy(stmt, "DROP TABLE temp_employee");
+  EXEC SQL EXECUTE IMMEDIATE :stmt;
+  EMB_SQL_CHECK("Execute -- stmt");
+ 
+  /* Error Checking */
+   
+  if (sqlca.sqlcode < 0)                                 
+   {                                                      
+    TransRollback();
+    printf("\n Error while droping table temp_employee \n"); 
+    rc = 1;
+    exit(1);
+   }
+
+  EXEC SQL COMMIT;
+    
+  return rc;
+ }

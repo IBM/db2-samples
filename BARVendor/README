@@ -1,0 +1,128 @@
+*****************************************************************************
+*
+*  README for Backup/Restore Vendor API Samples
+*
+*  Last update : May 2002
+*
+* These sample files are for the C++ programming language, and can be found
+* in the "sqllib/samples/BARVendor" directory.  Copy these files to your
+* working directory prior to building the sample programs.
+*
+*****************************************************************************
+*
+*    During the operation of backup/restore, DB2 will issue calls to the
+*    following functions which are implemented in the vendor.C file:
+*    sqluvint -  Initialization media vendor session
+*    sqluvget -  Retrieve data from media vendor
+*    sqluvput -  Sends data to media vendor
+*    sqluvend -  End of media vendor session
+*    sqluvdel -  Delete media vendor session data
+*
+*    Details on how to use these vendor functions can be found in the
+*    Administrative API Reference Appendix D. "Backup and Restore APIs for
+*    Vendor Products"
+*
+*    Some descriptions and guidelines are also provided in the function
+*     header descriptions of the vendor.C sample file.
+*
+*   *** NOTE ***
+*      The shared library or DLL code will be run as part of the database
+*      engine. Therefore, it must be reentrant and thoroughly debugged.
+*      DB2 takes steps to protect itself from most signals or exceptions
+*      in the code which means most programming errors should not crash the
+*      DB2 instance. However, an overwrite of DB2 memory blocks can not be
+*      detected at this time and will cause memory corruption that might
+*      bring down the instance. As well, a programming error in functions
+*      handling data buffers may compromise data integrity of the database. 
+*      Because of this, you are advised to run this sample against a test 
+*      database in a separate instance from your production instance. As  
+*      well, any vendor code you create should be tested against a test 
+*      database and test instance for the same reasons.
+*
+*****************************************************************************
+*
+*     QUICK START
+*
+*  1) Copy sqllib/samples/BARVendor/* to a working directory
+*  2) Compile vendor.C as a shared library, linking in a library
+*     implementation  of XBSA (XOpen Backup Services API).
+*     Compile and link libvend.a and vendor.C with the appropriate command(s)
+*     depending on your operating system, where:
+*       DB2PATH is set to your instance path,
+*       XBSA_LIB_PATH is set to the path of the XBSA library, and 
+*       XBSA_LIB is set to the name of the XBSA library
+*
+*    AIX:
+*     cc_r  -I$DB2PATH/include -G -o libvend.a vendor.C -L$XBSA_LIB_PATH\
+*           -l$XBSA_LIB
+*     If you have the source to  your own XBSA implementation, you may 
+*     compile the source and link the objects in directly:
+*     cc_r -I$DB2PATH/include -G -o libvend.a  vendor.C xbsasource.C
+*
+*    HP-UX:
+*       A) Compile:
+*          aCC +DAportable +u1 +z -ext -mt -I$DB2PATH/include -c vendor.C
+*              (use +DA2.0W  for 64 bit)
+*       B) Link:
+*          aCC +DAportable -mt -b -o libvend.sl vendor.o -L$XBSA_LIB_PATH\
+*               -l$XBSA_LIB   (use +DA2.0W  for 64 bit library)
+*
+*    Linux:
+*       A) Compile:
+*          g++ -fpic -I$DB2PATH/include -c $vendor.C -D_REENTRANT
+*       B) Link:
+*          g++  -shared -o libvend vendor.o -Wl,-rpath,$DB2PATH/lib\
+*               -L$XBSA_LIB_PATH  -l$XBSA_LIB -lpthread
+*
+*    Solaris:
+*       A) Compile:
+*          CC -xarch=v8plusa -mt -DUSE_UI_THREADS -Kpic -I$DB2PATH/include\
+*              -c vendor.C
+*              (For SPARC v9 64-bit use -xarch=v9)
+*              (For Solaris x86 64-bit use -xarch=amd64 and -xarch=sse2)
+*       B) Link:
+*          CC -xarch=v8plusa -mt -G -o libvend.so vendor.o -L$XBSA_LIB_PATH\
+*             -R"$DB2PATH/lib" -l$XBSA_LIB
+*             (For SPARC v9 64-bit use -xarch=v9)
+*             (For Solaris x86 64-bit use -xarch=amd64 and -xarch=sse2)
+*
+*    Windows:
+*       A) Compile: (eg with  Microsoft C/C++ Compiler)
+*          cl -Zi -Od -c -W2 -DWIN32 vendor.C
+*       B) Link:
+*          link -debug -out libvend.dll -dll vendor.obj $XBSA_LIB\
+*             -def:vendor.def
+*
+*
+* 3) DB2 loads your vendor library during a backup or restore operation when
+*    you specify the LOAD library name on the command line.
+*    eg. db2 backup database sample load /fullyqualifiedpath/libvend.a
+*
+*    Note: A fully qualified path MUST be given.
+*    
+*****************************************************************************
+* Documentation:
+*
+* For information on developing C++ applications, see the Application
+* Development Guide.
+*
+* For more information on Backup & Restore APIs for Vendor Products, refer
+* to Appendix D in the Administrative API Reference.
+*
+* For the latest information on programming, compiling, and running DB2
+* applications, visit the DB2 application development web site:
+*     http://www.software.ibm.com/data/db2/udb/ad
+*****************************************************************************
+*
+*  File Descriptions:
+*
+*****************************************************************************
+* README     - this file!
+*****************************************************************************
+* custom.h - XBSA header file
+* policy.h - XBSA header file (not used but included for your information as
+*            part of the XBSA API set)
+* vendor.C - Implements DB2 Backup/Restore Vendor API with XBSA Draft 0.8
+*            level API
+* xbsa.h   - XBSA header file
+*****************************************************************************

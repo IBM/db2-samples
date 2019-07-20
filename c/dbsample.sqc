@@ -1,0 +1,2484 @@
+/****************************************************************************
+** (c) Copyright IBM Corp. 2007 All rights reserved.
+** 
+** The following sample of source code ("Sample") is owned by International 
+** Business Machines Corporation or one of its subsidiaries ("IBM") and is 
+** copyrighted and licensed, not sold. You may use, copy, modify, and 
+** distribute the Sample in any form without payment to IBM, for the purpose of 
+** assisting you in the development of your applications.
+** 
+** The Sample code is provided to you on an "AS IS" basis, without warranty of 
+** any kind. IBM HEREBY EXPRESSLY DISCLAIMS ALL WARRANTIES, EITHER EXPRESS OR 
+** IMPLIED, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED WARRANTIES OF 
+** MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE. Some jurisdictions do 
+** not allow for the exclusion or limitation of implied warranties, so the above 
+** limitations or exclusions may not apply to you. IBM shall not be liable for 
+** any damages you suffer as a result of using, copying, modifying or 
+** distributing the Sample, even if IBM has been advised of the possibility of 
+** such damages.
+*****************************************************************************
+**
+** SOURCE FILE NAME: dbsample.sqc
+**    
+** SAMPLE: Creates a sample database
+** 
+**         This program creates a sample database with both DB2 workstation 
+**         and host system (OS/390 and AS/400) sample tables and views.
+**         The sample database consists of eleven tables. The database
+**         name is  DBSAMPLE, and the table names are ORG, STAFF,  
+**         DEPARTMENT, EMPLOYEE, EMP_ACT, PROJECT, EMP_PHOTO and EMP_RESUME,
+**         SALES, CL_SCHED, and IN_TRAY. 
+**                                                                         
+**         If the DBSAMPLE database already exists, the program does not 
+**         recreate it and continues.  DBSAMPLE's access plan is then bound 
+**         to the database, and the tables are created and populated.
+**         When the program completes, database connection is reset.
+**                                                                  
+** DB2 APIs USED:                                                     
+**         db2DatabaseRestart -- RESTART DATABASE                     
+**         sqlecrea -- CREATE DATABASE                                   
+**         sqlefrce -- FORCE APPLICATION                               
+**         sqlabndx -- BIND PACKAGE  
+**                                                                         
+** SQL STATEMENTS USED:                                             
+**         INCLUDE                                              
+**         CONNECT                                                
+**         BEGIN                                                
+**         END                                                     
+**         GRANT                                                   
+**         CONNECT                                              
+**         EXECUTE                                              
+**         COMMIT                                                      
+**                 
+** STRUCTURES USED:    
+**         sqlca     
+**         sqlopt 
+**         sqloptions 
+**         VARCHAR 
+**
+** OUTPUT FILE: dbsample.out (available in the online documentation)
+*****************************************************************************
+**
+** For more information on the sample programs, see the README file.
+**
+** For information on developing C applications, see the Application
+** Development Guide.
+**
+** For information on using SQL statements, see the SQL Reference.
+**
+** For information on DB2 APIs, see the Administrative API Reference.
+**
+** For the latest information on programming, building, and running DB2 
+** applications, visit the DB2 application development website: 
+**     http://www.software.ibm.com/data/db2/udb/ad
+****************************************************************************/
+
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+#include <sqlenv.h>
+#include <sqlutil.h>
+#include <db2ApiDf.h>
+#include <sqle819a.h>
+#include "utilemb.h"
+
+
+EXEC SQL INCLUDE SQLCA;
+
+int execi(char s[1000]);
+
+EXEC SQL BEGIN DECLARE SECTION;
+struct VARCHAR {
+  short len;
+  char  stmt[1000];
+  } sqlstmt = {14,"create schema "};/* Varchar for statement text    */
+EXEC SQL END DECLARE SECTION;
+
+int DbConnect(char *, char *, char *);
+int DbConnectCheck(char *, char *, char *);
+int DbRestart(char *, char *, char *);
+int DbDisconnect(void);
+int AllApplicationsConnectedToAllDatabasesForceOff(void);
+int BndFileCreate(char *);
+int PackageCreate(char *);
+
+
+int main(int argc, char *argv[])
+{
+  int rc = 0;
+  char nodeName[SQL_INSTNAME_SZ + 1];
+  char sourceFileBaseName[50 + 1];
+
+  EXEC SQL BEGIN DECLARE SECTION;
+    char dbAlias[15];
+    char user[128 + 1];
+    char pswd[15];
+  EXEC SQL END DECLARE SECTION;
+
+  /* check the command line arguments */
+  rc = CmdLineArgsCheck3(argc, argv, dbAlias, nodeName, user, pswd);
+  if (rc != 0)
+  {
+    return rc;
+  }
+  
+  printf("\nTHIS SAMPLE CREATES A SAMPLE DATABASE.");
+  printf("\n");
+
+  strcpy(dbAlias, "dbsample");   
+  printf("Database name is %s", dbAlias);
+  printf("\n"); 
+
+  rc = DbConnectCheck(dbAlias, user, pswd);
+  if(rc == 0)
+  {
+    printf("\nDBSAMPLE ALREADY EXISTS!\n");
+    printf("\n");
+    return rc;
+  }
+  if(rc == 1)
+  {
+    printf("\nCreate Database DBSAMPLE\n");
+    printf("\n");
+  }
+  
+  sqlecrea(dbAlias, NULL, NULL, NULL, NULL, 0, NULL, &sqlca);
+ 
+  printf("\nConnect DBSAMPLE");
+  
+  rc = DbConnect(dbAlias, user, pswd);
+  
+  EMB_SQL_CHECK("Check Connection");
+
+  strcpy(sourceFileBaseName, "./dbsample");
+
+  rc = PackageCreate(sourceFileBaseName);
+
+  rc = DbRestart(dbAlias, user, pswd);
+
+  EXEC SQL GRANT CONNECT ON DATABASE TO PUBLIC;
+ 
+  EMB_SQL_CHECK("Grant Connection");
+ 
+  EXEC SQL GRANT BINDADD ON DATABASE TO PUBLIC;
+
+  EMB_SQL_CHECK("Grant BindAdd");
+
+  EXEC SQL GRANT CREATETAB ON DATABASE TO PUBLIC;
+
+  EMB_SQL_CHECK("Grant createtab");
+
+  EXEC SQL GRANT EXECUTE ON PROGRAM DBSAMPLE TO PUBLIC;
+
+  EMB_SQL_CHECK("Grant execute"); 
+
+
+  printf("\ncreate table");
+/*********************************************************************/
+/*                                                                   */
+/* ORG                                                               */
+/*                                                                   */
+/*********************************************************************/
+/*
+execi(
+"CREATE TABLE ORG (DEPTNUMB SMALLINT NOT NULL,  DEPTNAME VARCHAR(14),MANAGER SMALLINT,  DIVISION VARCHAR(10),  LOCATION
+VARCHAR(13))"    );
+*/
+execi(
+"CREATE TABLE ORG "
+"             (DEPTNUMB SMALLINT NOT NULL, "
+"              DEPTNAME VARCHAR(14),MANAGER SMALLINT, "
+"              DIVISION VARCHAR(10), "
+"              LOCATION VARCHAR(13))"    );
+
+/*********************************************************************/
+/*                                                                   */
+/* ORG                                                               */
+/*                                                                   */
+/*********************************************************************/
+
+execi(
+"INSERT INTO ORG VALUES( "
+" 10,'Head Office', 160,'Corporate','New York')"   );
+
+execi(
+"INSERT INTO ORG VALUES( "
+" 15,'New England', 50, 'Eastern','Boston')"   );
+
+execi(
+"INSERT INTO ORG VALUES( "
+" 20, 'Mid Atlantic', 10, 'Eastern', 'Washington')"   );
+
+execi(
+"INSERT INTO ORG VALUES( "
+" 38, 'South Atlantic', 30, 'Eastern', 'Atlanta')"   );
+
+execi(
+"INSERT INTO ORG VALUES( "
+" 42, 'Great Lakes', 100, 'Midwest', 'Chicago')"   );
+
+execi(
+"INSERT INTO ORG VALUES( "
+" 51, 'Plains', 140, 'Midwest', 'Dallas')"   );
+
+execi(
+"INSERT INTO ORG VALUES( "
+" 66, 'Pacific', 270, 'Western', 'San Francisco')"   );
+
+execi(
+"INSERT INTO ORG VALUES( "
+" 84, 'Mountain', 290, 'Western', 'Denver')"   ); 
+
+/*********************************************************************/
+/*                                                                   */
+/* STAFF                                                             */
+/*                                                                   */
+/*********************************************************************/
+execi(
+"CREATE TABLE STAFF \
+             (ID  SMALLINT NOT NULL, \
+              NAME VARCHAR(9), \
+              DEPT SMALLINT, \
+              JOB CHAR(5), \
+              YEARS SMALLINT, \
+              SALARY DECIMAL(7,2), \
+              COMM DECIMAL(7,2))"       );
+
+/*********************************************************************/
+/*                                                                   */
+/* STAFF                                                             */
+/*                                                                   */
+/*********************************************************************/
+
+execi(
+"INSERT INTO STAFF VALUES( \
+10, 'Sanders', 20, 'Mgr', 7, 18357.50, NULL)"   );
+
+execi(
+"INSERT INTO STAFF VALUES( \
+20, 'Pernal', 20, 'Sales', 8, 18171.25, 612.45)"   );
+
+execi(
+"INSERT INTO STAFF VALUES( \
+30, 'Marenghi', 38, 'Mgr', 5, 17506.75, NULL)"   );
+
+execi(
+"INSERT INTO STAFF VALUES( \
+40, 'O''Brien', 38, 'Sales', 6, 18006.00, 846.55)"   );
+
+execi(
+"INSERT INTO STAFF VALUES( \
+50, 'Hanes', 15, 'Mgr', 10, 20659.80, NULL)"   );
+
+execi(
+"INSERT INTO STAFF VALUES( \
+60, 'Quigley', 38, 'Sales', NULL, 16808.30, 650.25)"   );
+
+execi(
+"INSERT INTO STAFF VALUES( \
+70, 'Rothman', 15, 'Sales', 7, 16502.83, 1152.00)"   );
+
+execi(
+"INSERT INTO STAFF VALUES( \
+80, 'James', 20, 'Clerk', NULL, 13504.60, 128.20)"   );
+
+execi(
+"INSERT INTO STAFF VALUES( \
+90, 'Koonitz', 42, 'Sales', 6, 18001.75, 1386.70)"   );
+
+execi(
+"INSERT INTO STAFF VALUES( \
+100, 'Plotz', 42, 'Mgr', 7, 18352.80, NULL)"   );
+
+execi(
+"INSERT INTO STAFF VALUES( \
+110, 'Ngan', 15, 'Clerk', 5, 12508.20, 206.60)"   );
+
+execi(
+"INSERT INTO STAFF VALUES( \
+120, 'Naughton', 38, 'Clerk', NULL, 12954.75, 180.00)"   );
+
+execi(
+"INSERT INTO STAFF VALUES( \
+130, 'Yamaguchi', 42, 'Clerk', 6, 10505.90, 75.60)"   );
+
+execi(
+"INSERT INTO STAFF VALUES( \
+140, 'Fraye', 51, 'Mgr', 6, 21150.00, NULL)"   );
+
+execi(
+"INSERT INTO STAFF VALUES( \
+150, 'Williams', 51, 'Sales', 6, 19456.50, 637.65)"   );
+
+execi(
+"INSERT INTO STAFF VALUES( \
+160, 'Molinare', 10, 'Mgr', 7, 22959.20, NULL)"   );
+
+execi(
+"INSERT INTO STAFF VALUES( \
+170, 'Kermisch', 15, 'Clerk', 4, 12258.50, 110.10)"   );
+
+execi(
+"INSERT INTO STAFF VALUES( \
+180, 'Abrahams', 38, 'Clerk', 3, 12009.75,236.50)"   );
+
+execi(
+"INSERT INTO STAFF VALUES( \
+190, 'Sneider', 20, 'Clerk', 8, 14252.75, 126.50)"   );
+
+execi(
+"INSERT INTO STAFF VALUES( \
+200, 'Scoutten', 42, 'Clerk', NULL, 11508.60, 84.20)"   );
+
+execi(
+"INSERT INTO STAFF VALUES( \
+210, 'Lu', 10, 'Mgr', 10, 20010.00, NULL)"   );
+
+execi(
+"INSERT INTO STAFF VALUES( \
+220, 'Smith', 51, 'Sales', 7, 17654.50, 992.80)"   );
+
+execi(
+"INSERT INTO STAFF VALUES( \
+230, 'Lundquist', 51, 'Clerk', 3, 13369.80, 189.65)"   );
+
+execi(
+"INSERT INTO STAFF VALUES( \
+240, 'Daniels', 10, 'Mgr', 5, 19260.25, NULL)"   );
+
+execi(
+"INSERT INTO STAFF VALUES( \
+250, 'Wheeler', 51, 'Clerk', 6, 14460.00, 513.30)"   );
+
+execi(
+"INSERT INTO STAFF VALUES( \
+260, 'Jones', 10, 'Mgr', 12, 21234.00, NULL)"   );
+
+execi(
+"INSERT INTO STAFF VALUES( \
+270, 'Lea', 66, 'Mgr', 9, 18555.50, NULL)"   );
+
+execi(
+"INSERT INTO STAFF VALUES( \
+280, 'Wilson', 66, 'Sales', 9, 18674.50, 811.50)"   );
+
+execi(
+"INSERT INTO STAFF VALUES( \
+290, 'Quill', 84, 'Mgr', 10, 19818.00, NULL)"   );
+
+execi(
+"INSERT INTO STAFF VALUES( \
+300, 'Davis', 84, 'Sales', 5, 15454.50, 806.10)"   );
+
+execi(
+"INSERT INTO STAFF VALUES( \
+310, 'Graham', 66, 'Sales', 13, 21000.00, 200.30)"   );
+
+execi(
+"INSERT INTO STAFF VALUES( \
+320, 'Gonzales', 66, 'Sales', 4, 16858.20, 844.00)"   );
+
+execi(
+"INSERT INTO STAFF VALUES( \
+330, 'Burke', 66, 'Clerk', 1, 10988.00, 55.50)"   );
+
+execi(
+"INSERT INTO STAFF VALUES( \
+340, 'Edwards', 84, 'Sales', 7, 17844.00, 1285.00)"   );
+
+execi(
+"INSERT INTO STAFF VALUES( \
+350, 'Gafney', 84, 'Clerk', 5, 13030.50, 188.00)"   );
+
+/*********************************************************************/
+/*                                                                   */
+/* DEPARTMENT                                                        */
+/*                                                                   */
+/*********************************************************************/
+execi(
+"CREATE TABLE DEPARTMENT ( \
+              DEPTNO CHAR(3) NOT NULL, \
+              DEPTNAME VARCHAR(36) NOT NULL, \
+              MGRNO CHAR(6), \
+              ADMRDEPT CHAR(3) NOT NULL, \
+              LOCATION CHAR(16), \
+              PRIMARY KEY (DEPTNO))"    );
+
+execi(
+"ALTER  TABLE DEPARTMENT \
+              ADD FOREIGN KEY  ROD (ADMRDEPT) \
+              REFERENCES DEPARTMENT \
+              ON DELETE CASCADE"        );
+
+execi(
+"CREATE INDEX XDEPT2 \
+              ON DEPARTMENT (MGRNO)"    );
+
+execi(
+"CREATE INDEX XDEPT3 \
+              ON DEPARTMENT (ADMRDEPT)" );
+
+execi(
+"CREATE ALIAS DEPT FOR DEPARTMENT"      );
+
+/*********************************************************************/
+/*                                                                   */
+/* DEPARTMENT                                                        */
+/*                                                                   */
+/*********************************************************************/
+
+execi(
+"INSERT INTO  DEPARTMENT VALUES( \
+'A00' ,'SPIFFY COMPUTER SERVICE DIV.' ,      '000010', 'A00', NULL)"   );
+
+execi(
+"INSERT INTO  DEPARTMENT VALUES( \
+'B01', 'PLANNING',                           '000020', 'A00', NULL)"   );
+execi(
+"INSERT INTO  DEPARTMENT VALUES( \
+'C01', 'INFORMATION CENTER',                 '000030', 'A00', NULL)"   );
+
+execi(
+"INSERT INTO  DEPARTMENT VALUES( \
+'D01', 'DEVELOPMENT CENTER',                 NULL,     'A00',NULL)"   );
+
+execi(
+"INSERT INTO  DEPARTMENT VALUES( \
+'D11', 'MANUFACTURING SYSTEMS',              '000060', 'D01', NULL)"   );
+
+execi(
+"INSERT INTO  DEPARTMENT VALUES( \
+'D21', 'ADMINISTRATION SYSTEMS',             '000070', 'D01', NULL)"   );
+
+execi(
+"INSERT INTO  DEPARTMENT VALUES( \
+'E01', 'SUPPORT SERVICES',                   '000050', 'A00', NULL)"   );
+
+execi(
+"INSERT INTO  DEPARTMENT VALUES( \
+'E11', 'OPERATIONS',                         '000090', 'E01', NULL)"   );
+
+execi(
+"INSERT INTO  DEPARTMENT VALUES( \
+'E21', 'SOFTWARE SUPPORT','000100', 'E01', NULL)"   );
+
+execi(
+"INSERT INTO  DEPARTMENT VALUES( \
+'F22', 'BRANCH OFFICE F2',NULL, 'E01', NULL)"   );
+
+execi(
+"INSERT INTO  DEPARTMENT VALUES( \
+'G22', 'BRANCH OFFICE G2',NULL, 'E01', NULL)"   );
+
+execi(
+"INSERT INTO  DEPARTMENT VALUES( \
+'H22', 'BRANCH OFFICE H2',NULL, 'E01', NULL)"   );
+
+execi(
+"INSERT INTO  DEPARTMENT VALUES( \
+'I22', 'BRANCH OFFICE I2',NULL, 'E01', NULL)"   );
+
+execi(
+"INSERT INTO  DEPARTMENT VALUES( \
+'J22', 'BRANCH OFFICE J2',NULL, 'E01', NULL)"   );
+
+/*********************************************************************/
+/*                                                                   */
+/* EMPLOYEE                                                          */
+/*                                                                   */
+/*********************************************************************/
+execi(
+"CREATE TABLE EMPLOYEE ( \
+              EMPNO CHAR(6) NOT NULL, \
+              FIRSTNME VARCHAR(12) NOT NULL, \
+              MIDINIT CHAR(1) NOT NULL, \
+              LASTNAME VARCHAR(15) NOT NULL, \
+              WORKDEPT CHAR(3), \
+              PHONENO CHAR(4), \
+              HIREDATE DATE, \
+              JOB CHAR(8), \
+              EDLEVEL SMALLINT NOT NULL, \
+              SEX CHAR(1), \
+              BIRTHDATE DATE, \
+              SALARY DECIMAL(9,2), \
+              BONUS DECIMAL(9,2),COMM DECIMAL(9,2), \
+              PRIMARY KEY (EMPNO))"     );
+
+execi(
+"ALTER TABLE EMPLOYEE \
+              ADD FOREIGN KEY  RED (WORKDEPT) \
+              REFERENCES DEPARTMENT \
+              ON DELETE SET NULL"       );
+
+execi(
+"ALTER TABLE EMPLOYEE \
+             ADD CONSTRAINT NUMBER \
+             CHECK (PHONENO >= '0000' AND PHONENO <= '9999')" );
+
+execi(
+"CREATE INDEX XEMP2 \
+             ON EMPLOYEE (WORKDEPT)"    );
+
+execi(
+"CREATE ALIAS EMP FOR EMPLOYEE"         );
+
+/*********************************************************************/
+/*                                                                   */
+/* EMPLOYEE                                                          */
+/*                                                                   */
+/*********************************************************************/
+
+execi(
+"INSERT INTO EMPLOYEE VALUES( \
+'000010','CHRISTINE',     'I',  'HAAS',           'A00',  '3978', \
+ '1965-01-01','PRES' ,       18 , 'F', '1933-08-24',  52750.00,   \
+1000,4220)"   );
+
+execi(
+"INSERT INTO EMPLOYEE VALUES( \
+'000020','MICHAEL',       'L',  'THOMPSON',       'B01',  '3476', \
+'1973-10-10','MANAGER',    18 , 'M', '1948-02-02',  41250.00,     \
+800,3300)"   );
+
+execi(
+"INSERT INTO EMPLOYEE VALUES( \
+'000030','SALLY',         'A',  'KWAN',           'C01',  '4738', \
+'1975-04-05', 'MANAGER',   20, 'F', '1941-05-11',  38250.00,      \
+800,3060)"   );
+
+execi(
+"INSERT INTO EMPLOYEE VALUES( \
+'000050','JOHN',          'B','GEYER',          'E01',  '6789',   \
+ '1949-08-17','MANAGER',      16,  'M', '1925-09-15',  40175.00,  \
+800,3214)"   );
+
+execi(
+"INSERT INTO EMPLOYEE VALUES( \
+'000060','IRVING',        'F',  'STERN',          'D11',  '6423', \
+ '1973-09-14','MANAGER',     16,  'M', '1945-07-07',  32250.00,   \
+500,2580)"   );
+
+execi(
+"INSERT INTO EMPLOYEE VALUES( \
+'000070','EVA',           'D',  'PULASKI',        'D21',  '7831', \
+ '1980-09-30','MANAGER',     16,  'F', '1953-05-26',  36170.00,   \
+700,2893)"   );
+
+execi(
+"INSERT INTO EMPLOYEE VALUES( \
+'000090','EILEEN',        'W',  'HENDERSON',      'E11',  '5498', \
+ '1970-08-15','MANAGER',   16,  'F', '1941-05-15',  29750.00,     \
+600,2380)"   );
+
+execi(
+"INSERT INTO EMPLOYEE VALUES( \
+'000100','THEODORE',      'Q',  'SPENSER',        'E21',  '0972', \
+ '1980-06-19','MANAGER',     14 , 'M', '1956-12-18',  26150.00,   \
+500,2092)"   );
+
+execi(
+"INSERT INTO EMPLOYEE VALUES( \
+'000110','VICENZO',       'G',  'LUCCHESSI',      'A00',  '3490', \
+ '1958-05-16','SALESREP',    19,  'M', '1929-11-05',  46500.00,   \
+900,3720)"   );
+
+execi(
+"INSERT INTO EMPLOYEE VALUES( \
+'000120','SEAN',        ' ',    'O''CONNELL',      'A00',  '2167',\
+ '1963-12-05','CLERK',       14,  'M', '1942-10-18',  29250.00,   \
+600,2340)"   );
+
+execi(
+"INSERT INTO EMPLOYEE VALUES( \
+'000130','DELORES',       'M',  'QUINTANA',       'C01',  '4578', \
+ '1971-07-28','ANALYST',     16,  'F', '1925-09-15',  23800.00,   \
+500,1904)"   );
+
+execi(
+"INSERT INTO EMPLOYEE VALUES( \
+'000140','HEATHER',       'A',  'NICHOLLS',       'C01',  '1793', \
+ '1976-12-15','ANALYST',     18,  'F', '1946-01-19',  28420.00,   \
+600,2274)"   );
+
+execi(
+"INSERT INTO EMPLOYEE VALUES( \
+'000150','BRUCE',        ' ',   'ADAMSON',        'D11',  '4510', \
+ '1972-02-12','DESIGNER',    16,  'M', '1947-05-17',  25280.00,   \
+500,2022)"   );
+
+execi(
+"INSERT INTO EMPLOYEE VALUES( \
+'000160','ELIZABETH',     'R',  'PIANKA',         'D11',  '3782', \
+ '1977-10-11','DESIGNER',    17,  'F', '1955-04-12',  22250.00,   \
+400,1780)"   );
+
+execi(
+"INSERT INTO EMPLOYEE VALUES( \
+'000170','MASATOSHI',     'J',  'YOSHIMURA',      'D11',  '2890', \
+ '1978-09-15','DESIGNER',    16,  'M', '1951-01-05',  24680.00,   \
+500,1974)"   );
+
+execi(
+"INSERT INTO EMPLOYEE VALUES( \
+'000180','MARILYN',       'S',  'SCOUTTEN',       'D11',  '1682', \
+'1973-07-07','DESIGNER',    17,  'F', '1949-02-21',  21340.00,    \
+500,1707)"   );
+
+execi(
+"INSERT INTO EMPLOYEE VALUES( \
+'000190','JAMES',         'H',  'WALKER',         'D11',  '2986', \
+'1974-07-26','DESIGNER',    16,  'M', '1952-06-25',  20450.00,    \
+400,1636)"   );
+
+execi(
+"INSERT INTO EMPLOYEE VALUES( \
+'000200','DAVID',        ' ',   'BROWN',          'D11',  '4501', \
+'1966-03-03','DESIGNER',    16,  'M', '1941-05-29',  27740.00,    \
+600,2217)"   );
+
+execi(
+"INSERT INTO EMPLOYEE VALUES( \
+'000210','WILLIAM',       'T',  'JONES',          'D11',  '0942', \
+'1979-04-11','DESIGNER',    17,  'M', '1953-02-23',  18270.00,    \
+400,1462)"   );
+
+execi(
+"INSERT INTO EMPLOYEE VALUES( \
+'000220','JENNIFER',      'K',  'LUTZ',           'D11',  '0672', \
+'1968-08-29','DESIGNER',    18,  'F', '1948-03-19',  29840.00,    \
+600,2387)"   );
+
+execi(
+"INSERT INTO EMPLOYEE VALUES( \
+'000230','JAMES',         'J',  'JEFFERSON',      'D21',  '2094', \
+'1966-11-21','CLERK',       14,  'M', '1935-05-30',  22180.00,    \
+400,1774)"   );
+
+execi(
+"INSERT INTO EMPLOYEE VALUES( \
+'000240', 'SALVATORE',     'M',  'MARINO',         'D21',  '3780',\
+'1979-12-05','CLERK',       17,  'M', '1954-03-31',  28760.00,    \
+600,2301)"   );
+
+execi(
+"INSERT INTO EMPLOYEE VALUES( \
+'000250', 'DANIEL',        'S',  'SMITH',          'D21',  '0961',\
+'1969-10-30','CLERK',       15,  'M', '1939-11-12',  19180.00,    \
+400,1534)"   );
+
+execi(
+"INSERT INTO EMPLOYEE VALUES( \
+'000260', 'SYBIL',         'P',  'JOHNSON',        'D21',  '8953',\
+'1975-09-11','CLERK',       16,  'F', '1936-10-05',  17250.00,    \
+300,1380)"   );
+
+execi(
+"INSERT INTO EMPLOYEE VALUES( \
+'000270', 'MARIA',         'L',  'PEREZ',          'D21',  '9001',\
+'1980-09-30','CLERK',       15,  'F', '1953-05-26',  27380.00,    \
+500,2190)"   );
+
+execi(
+"INSERT INTO EMPLOYEE VALUES( \
+'000280', 'ETHEL',         'R',  'SCHNEIDER',      'E11',  '8997',\
+'1967-03-24','OPERATOR',    17,  'F', '1936-03-28',  26250.00,    \
+500,2100)"   );
+
+execi(
+"INSERT INTO EMPLOYEE VALUES( \
+'000290', 'JOHN',          'R',  'PARKER',         'E11',  '4502',\
+'1980-05-30','OPERATOR',    12,  'M', '1946-07-09',  15340.00,    \
+300,1227)"   );
+
+execi(
+"INSERT INTO EMPLOYEE VALUES( \
+'000300', 'PHILIP',        'X',  'SMITH',          'E11',  '2095',\
+'1972-06-19','OPERATOR',    14,  'M', '1936-10-27',  17750.00,    \
+400,1420)"   );
+
+execi(
+"INSERT INTO EMPLOYEE VALUES( \
+'000310', 'MAUDE',         'F',  'SETRIGHT',       'E11',  '3332',\
+'1964-09-12','OPERATOR',    12,  'F', '1931-04-21',  15900.00,    \
+300,1272)"   );
+
+execi(
+"INSERT INTO EMPLOYEE VALUES( \
+'000320', 'RAMLAL',        'V',  'MEHTA',          'E21',  '9990',\
+'1965-07-07','FILEREP',     16,  'M', '1932-08-11',  19950.00,    \
+400,1596)"   );
+
+execi(
+"INSERT INTO EMPLOYEE VALUES( \
+'000330', 'WING',          ' ',  'LEE',            'E21',  '2103',\
+'1976-02-23','FILEREP',     14,  'M', '1941-07-18',  25370.00,    \
+500,2030)"   );
+
+execi(
+"INSERT INTO EMPLOYEE VALUES( \
+'000340', 'JASON',         'R',  'GOUNOT',      'E21',  '5698',   \
+'1947-05-05','FILEREP',    16,  'M', '1926-05-17',  23840.00,     \
+500,1907)"   );
+
+execi(
+"INSERT INTO EMPLOYEE VALUES( \
+'200010', 'DIAN',         'J',  'HEMMINGER',      'A00',  '3978', \
+'1965-01-01','SALESREP',    18,  'F', '1933-08-14',  46500.00,    \
+1000,4220)"   );
+
+execi(
+"INSERT INTO EMPLOYEE VALUES( \
+'200120', 'GREG',         '',  'ORLANDO',      'A00',  '2167',    \
+'1972-05-05','CLERK',    14,  'M', '1942-10-18',  29250.00,       \
+600,2340)"   );
+
+execi(
+"INSERT INTO EMPLOYEE VALUES( \
+'200140', 'KIM','N',  'NATZ',      'C01',  '1793',                \
+'1976-12-15','ANALYST',    18,  'F', '1946-01-19',  28420.00,     \
+600,2274)"   );
+
+execi(
+"INSERT INTO EMPLOYEE VALUES( \
+'200170', 'KIYOSHI',         '',  'YAMAMOTO',      'D11',  '2890',\
+'1978-09-15','DESIGNER',    16,  'M', '1951-01-05',  24680.00,    \
+500,1974)"   );
+
+execi(
+"INSERT INTO EMPLOYEE VALUES( \
+'200220', 'REBA',         'K',  'JOHN',      'D11',  '0672',      \
+'1968-08-29','DESIGNER',    18,  'F', '1948-03-19',  29840.00,    \
+600,2387)"   );
+
+execi(
+"INSERT INTO EMPLOYEE VALUES( \
+'200240', 'ROBERT',         'M',  'MONTEVERDE',      'D21',  '3780', \
+'1979-12-05','CLERK',    17,  'M', '1954-03-31',  28760.00,          \
+600,2301)"   );
+
+execi(
+"INSERT INTO EMPLOYEE VALUES( \
+'200280', 'EILEEN',         'R',  'SCHWARTZ',      'E11',  '8997',\
+'1967-03-24','OPERATOR',    17,  'F', '1936-03-28',  26250.00,    \
+500,2100)"   );
+
+execi(
+"INSERT INTO EMPLOYEE VALUES( \
+'200310', 'MICHELLE',         'F',  'SPRINGER',      'E11',  '3332', \
+'1964-09-12','OPERATOR',    12,  'F', '1931-04-21',  15900.00,       \
+300,1272)"   );
+
+execi(
+"INSERT INTO EMPLOYEE VALUES( \
+'200330', 'HELENA',         '',  'WONG',      'E21',  '2103',     \
+'1976-02-23','FIELDREP',    14,  'F', '1941-07-18',  25370.00,    \
+500,2030)"   );
+
+execi(
+"INSERT INTO EMPLOYEE VALUES( \
+'200340', 'ROY',         'R',  'ALONZO',      'E21',  '5698',     \
+'1947-05-05','FIELDREP',    16,  'M', '1926-05-17',  23840.00,    \
+500,1907)"   );
+
+execi(
+"ALTER  TABLE DEPARTMENT \
+              ADD FOREIGN KEY  RDE (MGRNO) \
+              REFERENCES EMPLOYEE \
+              ON DELETE SET NULL"       );
+
+/*********************************************************************/
+/*                                                                   */
+/* PROJECT                                                           */
+/*                                                                   */
+/*********************************************************************/
+execi(
+"CREATE TABLE PROJECT \
+             (PROJNO CHAR(6) NOT NULL, \
+              PROJNAME VARCHAR(24) NOT NULL DEFAULT '', \
+              DEPTNO CHAR(3) NOT NULL, \
+             RESPEMP CHAR(6) NOT NULL, \
+              PRSTAFF DECIMAL(5,2), \
+              PRSTDATE DATE, \
+              PRENDATE DATE, \
+              MAJPROJ CHAR(6), \
+              PRIMARY KEY (PROJNO))"    );
+
+execi(
+"ALTER TABLE PROJECT \
+              ADD FOREIGN KEY (DEPTNO) \
+              REFERENCES DEPARTMENT \
+              ON DELETE RESTRICT"       );
+
+execi(
+"ALTER TABLE PROJECT \
+              ADD FOREIGN KEY (RESPEMP) \
+              REFERENCES EMPLOYEE \
+              ON DELETE RESTRICT"       );
+
+execi(
+"ALTER  TABLE PROJECT \
+              ADD FOREIGN KEY  RPP (MAJPROJ) \
+              REFERENCES PROJECT \
+              ON DELETE CASCADE"        );
+
+execi(
+"CREATE INDEX XPROJ2 \
+              ON PROJECT (RESPEMP)"     );
+
+execi(
+"CREATE ALIAS PROJ FOR PROJECT"         );
+
+/*********************************************************************/
+/*                                                                   */
+/* PROJECT                                                           */
+/*                                                                   */
+/*********************************************************************/
+
+execi(
+"INSERT INTO PROJECT VALUES( \
+'AD3100', 'ADMIN SERVICES',             'D01', '000010', \
+  6.50,  '1982-01-01', '1983-02-01',NULL)"   );
+
+execi(
+"INSERT INTO PROJECT VALUES( \
+'AD3110', 'GENERAL ADMIN SYSTEMS',               'D21', '000070', \
+  6.00,  '1982-01-01', '1983-02-01','AD3100')"   );
+
+execi(
+"INSERT INTO PROJECT VALUES( \
+'AD3111', 'PAYROLL PROGRAMMING',                 'D21', '000230', \
+  2.00,  '1982-01-01', '1983-02-01','AD3110')"   );
+
+execi(
+"INSERT INTO PROJECT VALUES( \
+'AD3112', 'PERSONNEL PROGRAMMING',               'D21', '000250', \
+  1.00,  '1982-01-01', '1983-02-01','AD3110')"   );
+
+execi(
+"INSERT INTO PROJECT VALUES( \
+'AD3113', 'ACCOUNT PROGRAMMING',                 'D21', '000270', \
+  2.00,  '1982-01-01', '1983-02-01','AD3110')"   );
+
+execi(
+"INSERT INTO PROJECT VALUES( \
+'IF1000', 'QUERY SERVICES',                      'C01', '000030', \
+  2.00,  '1982-01-01', '1983-02-01',NULL)"   );
+
+execi(
+"INSERT INTO PROJECT VALUES( \
+'IF2000', 'USER EDUCATION',                      'C01', '000030', \
+  1.00,  '1982-01-01', '1983-02-01',NULL    )"   );
+
+execi(
+"INSERT INTO PROJECT VALUES( \
+'MA2100', 'WELD LINE AUTOMATION',                'D01', '000010', \
+ 12.00,  '1982-01-01', '1983-02-01',NULL    )"   );
+
+execi(
+"INSERT INTO PROJECT VALUES( \
+'MA2110', 'W L PROGRAMMING',                     'D11', '000060', \
+  9.00,  '1982-01-01', '1983-02-01','MA2100')"   );
+
+execi(
+"INSERT INTO PROJECT VALUES( \
+'MA2111', 'W L PROGRAM DESIGN',                  'D11', '000220', \
+  2.00,  '1982-01-01', '1982-12-01','MA2110')"   );
+
+execi(
+"INSERT INTO PROJECT VALUES( \
+'MA2112', 'W L ROBOT DESIGN',                    'D11', '000150', \
+  3.00,  '1982-01-01', '1982-12-01','MA2110')"   );
+
+execi(
+"INSERT INTO PROJECT VALUES( \
+'MA2113', 'W L PROD CONT PROGS',                 'D11', '000160', \
+  3.00,  '1982-02-15', '1982-12-01','MA2110')"   );
+
+execi(
+"INSERT INTO PROJECT VALUES( \
+'OP1000', 'OPERATION SUPPORT',                 'E01', '000050', \
+  6.00,  '1982-01-01', '1983-02-01',NULL    )"   );
+
+execi(
+"INSERT INTO PROJECT VALUES( \
+'OP1010', 'OPERATION',                         'E11', '000090', \
+  5.00,  '1982-01-01', '1983-02-01','OP1000')"   );
+
+execi(
+"INSERT INTO PROJECT VALUES( \
+'OP2000', 'GEN SYSTEMS SERVICES',              'E01', '000050', \
+  5.00,  '1982-01-01', '1983-02-01',NULL    )"   );
+
+execi(
+"INSERT INTO PROJECT VALUES( \
+'OP2010', 'SYSTEMS SUPPORT',                   'E21', '000100', \
+  4.00,  '1982-01-01', '1983-02-01','OP2000')"   );
+
+execi(
+"INSERT INTO PROJECT VALUES( \
+'OP2011', 'SCP SYSTEMS SUPPORT',               'E21', '000320', \
+  1.00,  '1982-01-01', '1983-02-01','OP2010')"   );
+
+execi(
+"INSERT INTO PROJECT VALUES( \
+'OP2012', 'APPLICATIONS SUPPORT',              'E21', '000330', \
+  1.00,  '1982-01-01', '1983-02-01','OP2010')"   );
+
+execi(
+"INSERT INTO PROJECT VALUES( \
+'OP2013', 'DB/DC SUPPORT',                     'E21', '000340', \
+  1.00,  '1982-01-01', '1983-02-01','OP2010')"   );
+
+execi(
+"INSERT INTO PROJECT VALUES( \
+'PL2100', 'WELD LINE PLANNING',                'B01', '000020', \
+  1.00,  '1982-01-01', '1982-09-15','MA2100')"   );
+
+/*********************************************************************/
+/*                                                                   */
+/* PROJACT                                                           */
+/*                                                                   */
+/*********************************************************************/
+execi(
+"CREATE TABLE PROJACT \
+             (PROJNO CHAR(6) NOT NULL, \
+              ACTNO SMALLINT NOT NULL, \
+              ACSTAFF DECIMAL(5,2), \
+              ACSTDATE DATE NOT NULL, \
+              ACENDATE DATE , \
+              PRIMARY KEY (PROJNO, ACTNO, ACSTDATE))"  );
+
+execi(
+"ALTER TABLE PROJACT \
+              ADD FOREIGN KEY RPAP (PROJNO) \
+              REFERENCES PROJECT \
+              ON DELETE RESTRICT"       );
+
+
+/*********************************************************************/
+/*                                                                   */
+/* PROJACT                                                           */
+/*                                                                   */
+/*********************************************************************/
+
+execi(
+ "INSERT INTO PROJACT(PROJNO, ACTNO, ACSTDATE) VALUES( \
+'AD3100',    10, '1982-01-01')"   );
+
+execi(
+"INSERT INTO PROJACT(PROJNO, ACTNO, ACSTDATE) VALUES( \
+'AD3110',    10,'1982-01-01')"   );
+
+execi(
+"INSERT INTO PROJACT(PROJNO, ACTNO, ACSTDATE) VALUES( \
+'AD3111',    60,'1982-01-01')"   );
+
+execi(
+"INSERT INTO PROJACT(PROJNO, ACTNO, ACSTDATE) VALUES( \
+'AD3111',    60,'1982-03-15')"   );
+
+execi(
+"INSERT INTO PROJACT(PROJNO, ACTNO, ACSTDATE) VALUES( \
+'AD3111',    70,'1982-03-15')"   );
+
+execi(
+"INSERT INTO PROJACT(PROJNO, ACTNO, ACSTDATE) VALUES( \
+'AD3111',    80,'1982-04-15')"   );
+
+execi(
+"INSERT INTO PROJACT(PROJNO, ACTNO, ACSTDATE) VALUES( \
+'AD3111',   180,'1982-10-15')"   );
+
+execi(
+"INSERT INTO PROJACT(PROJNO, ACTNO, ACSTDATE) VALUES( \
+'AD3111',    70,'1982-02-15')"   );
+
+execi(
+"INSERT INTO PROJACT(PROJNO, ACTNO, ACSTDATE) VALUES( \
+'AD3111',    80,'1982-09-15')"   );
+
+execi(
+"INSERT INTO PROJACT(PROJNO, ACTNO, ACSTDATE) VALUES( \
+'AD3112',    60,'1982-01-01')"   );
+
+execi(
+"INSERT INTO PROJACT(PROJNO, ACTNO, ACSTDATE) VALUES( \
+'AD3112',    60,'1982-02-01')"   );
+
+execi(
+"INSERT INTO PROJACT(PROJNO, ACTNO, ACSTDATE) VALUES( \
+'AD3112',    60,'1983-01-01')"   );
+
+execi(
+"INSERT INTO PROJACT(PROJNO, ACTNO, ACSTDATE) VALUES( \
+'AD3112',    70,'1982-02-01')"   );
+
+execi(
+"INSERT INTO PROJACT(PROJNO, ACTNO, ACSTDATE) VALUES( \
+'AD3112',    70,'1982-03-15')"   );
+
+execi(
+"INSERT INTO PROJACT(PROJNO, ACTNO, ACSTDATE) VALUES( \
+'AD3112',    70,'1982-08-15')"   );
+
+execi(
+"INSERT INTO PROJACT(PROJNO, ACTNO, ACSTDATE) VALUES( \
+'AD3112',    80,'1982-08-15')"   );
+
+execi(
+"INSERT INTO PROJACT(PROJNO, ACTNO, ACSTDATE) VALUES( \
+ 'AD3112',    80,'1982-10-15')"   );
+
+execi(
+"INSERT INTO PROJACT(PROJNO, ACTNO, ACSTDATE) VALUES( \
+ 'AD3112',   180,'1982-08-15')"   );
+
+execi(
+"INSERT INTO PROJACT(PROJNO, ACTNO, ACSTDATE) VALUES( \
+ 'AD3113',    70,'1982-06-15')"   );
+
+execi(
+"INSERT INTO PROJACT(PROJNO, ACTNO, ACSTDATE) VALUES( \
+ 'AD3113',    70,'1982-07-01')"   );
+
+execi(
+"INSERT INTO PROJACT(PROJNO, ACTNO, ACSTDATE) VALUES( \
+'AD3113',    80,'1982-01-01')"   );
+
+execi(
+"INSERT INTO PROJACT(PROJNO, ACTNO, ACSTDATE) VALUES( \
+ 'AD3113',    80,'1982-03-01')"   );
+
+execi(
+"INSERT INTO PROJACT(PROJNO, ACTNO, ACSTDATE) VALUES( \
+'AD3113',   180,'1982-03-01')"   );
+
+execi(
+"INSERT INTO PROJACT(PROJNO, ACTNO, ACSTDATE) VALUES( \
+'AD3113',   180,'1982-04-15')"   );
+
+execi(
+"INSERT INTO PROJACT(PROJNO, ACTNO, ACSTDATE) VALUES( \
+'AD3113',   180,'1982-06-01')"   );
+
+execi(
+"INSERT INTO PROJACT(PROJNO, ACTNO, ACSTDATE) VALUES( \
+'AD3113',    60,'1982-03-01')"   );
+
+execi(
+"INSERT INTO PROJACT(PROJNO, ACTNO, ACSTDATE) VALUES( \
+'AD3113',    60,'1982-04-01')"   );
+
+execi(
+"INSERT INTO PROJACT(PROJNO, ACTNO, ACSTDATE) VALUES( \
+'AD3113',    60,'1982-09-01')"   );
+
+execi(
+"INSERT INTO PROJACT(PROJNO, ACTNO, ACSTDATE) VALUES( \
+'AD3113',    70,'1982-09-01')"   );
+
+execi(
+"INSERT INTO PROJACT(PROJNO, ACTNO, ACSTDATE) VALUES( \
+'AD3113',    70,'1982-10-15')"   );
+
+execi(
+"INSERT INTO PROJACT(PROJNO, ACTNO, ACSTDATE) VALUES( \
+'IF1000',    10,'1982-06-01')"   );
+
+execi(
+"INSERT INTO PROJACT(PROJNO, ACTNO, ACSTDATE) VALUES( \
+'IF1000',   90,'1982-10-01')"   );
+
+execi(
+"INSERT INTO PROJACT(PROJNO, ACTNO, ACSTDATE) VALUES( \
+'IF1000',   100,'1982-10-01')"   );
+
+execi(
+"INSERT INTO PROJACT(PROJNO, ACTNO, ACSTDATE) VALUES( \
+'IF2000',    10,'1982-01-01')"   );
+
+execi(
+"INSERT INTO PROJACT(PROJNO, ACTNO, ACSTDATE) VALUES( \
+'IF2000',   100,'1982-01-01')"   );
+
+execi(
+"INSERT INTO PROJACT(PROJNO, ACTNO, ACSTDATE) VALUES( \
+'IF2000',   100,'1982-03-01')"   );
+
+execi(
+"INSERT INTO PROJACT(PROJNO, ACTNO, ACSTDATE) VALUES( \
+'IF2000',   110,'1982-03-01')"   );
+
+execi(
+"INSERT INTO PROJACT(PROJNO, ACTNO, ACSTDATE) VALUES( \
+'IF2000',  110,'1982-10-01')"   );
+
+execi(
+"INSERT INTO PROJACT(PROJNO, ACTNO, ACSTDATE) VALUES( \
+'MA2100',    10,'1982-01-01')"   );
+
+execi(
+"INSERT INTO PROJACT(PROJNO, ACTNO, ACSTDATE) VALUES( \
+'MA2100',    20,'1982-01-01')"   );
+
+execi(
+"INSERT INTO PROJACT(PROJNO, ACTNO, ACSTDATE) VALUES( \
+'MA2110',    10,'1982-01-01')"   );
+
+execi(
+"INSERT INTO PROJACT(PROJNO, ACTNO, ACSTDATE) VALUES( \
+'MA2111',    50,'1982-01-01')"   );
+
+execi(
+"INSERT INTO PROJACT(PROJNO, ACTNO, ACSTDATE) VALUES( \
+'MA2111',    60,'1982-06-15')"   );
+
+execi(
+"INSERT INTO PROJACT(PROJNO, ACTNO, ACSTDATE) VALUES( \
+'MA2111',    40,'1982-01-01')"   );
+
+execi(
+"INSERT INTO PROJACT(PROJNO, ACTNO, ACSTDATE) VALUES( \
+'MA2112',    60,'1982-01-01')"   );
+
+execi(
+"INSERT INTO PROJACT(PROJNO, ACTNO, ACSTDATE) VALUES( \
+'MA2112',   180,'1982-07-15')"   );
+
+execi(
+"INSERT INTO PROJACT(PROJNO, ACTNO, ACSTDATE) VALUES( \
+'MA2112',    70,'1982-06-01')"   );
+
+execi(
+"INSERT INTO PROJACT(PROJNO, ACTNO, ACSTDATE) VALUES( \
+'MA2112',    70,'1982-01-01')"   );
+
+execi(
+"INSERT INTO PROJACT(PROJNO, ACTNO, ACSTDATE) VALUES( \
+'MA2112',    80,'1982-10-01')"   );
+
+execi(
+"INSERT INTO PROJACT(PROJNO, ACTNO, ACSTDATE) VALUES( \
+'MA2113',    60,'1982-07-15')"   );
+
+execi(
+"INSERT INTO PROJACT(PROJNO, ACTNO, ACSTDATE) VALUES( \
+'MA2113',    80,'1982-01-01')"   );
+
+execi(
+"INSERT INTO PROJACT(PROJNO, ACTNO, ACSTDATE) VALUES( \
+'MA2113',    70,'1982-04-01')"   );
+
+execi(
+"INSERT INTO PROJACT(PROJNO, ACTNO, ACSTDATE) VALUES( \
+'MA2113',    80,'1982-10-01')"   );
+
+execi(
+"INSERT INTO PROJACT(PROJNO, ACTNO, ACSTDATE) VALUES( \
+'MA2113',   180,'1982-10-01')"   );
+
+execi(
+"INSERT INTO PROJACT(PROJNO, ACTNO, ACSTDATE) VALUES( \
+'OP1000',    10,'1982-01-01')"   );
+
+execi(
+"INSERT INTO PROJACT(PROJNO, ACTNO, ACSTDATE) VALUES( \
+'OP1010',    10,'1982-01-01')"   );
+
+execi(
+"INSERT INTO PROJACT(PROJNO, ACTNO, ACSTDATE) VALUES( \
+'OP1010',   130,'1982-01-01')"   );
+
+execi(
+"INSERT INTO PROJACT(PROJNO, ACTNO, ACSTDATE) VALUES( \
+'OP2010',    10,'1982-01-01')"   );
+
+execi(
+"INSERT INTO PROJACT(PROJNO, ACTNO, ACSTDATE) VALUES( \
+'OP2011',   140,'1982-01-01')"   );
+
+execi(
+"INSERT INTO PROJACT(PROJNO, ACTNO, ACSTDATE) VALUES( \
+'OP2011',150,'1982-01-01')"   );
+
+execi(
+"INSERT INTO PROJACT(PROJNO, ACTNO, ACSTDATE) VALUES( \
+'OP2012',   140,'1982-01-01')"   );
+
+execi(
+"INSERT INTO PROJACT(PROJNO, ACTNO, ACSTDATE) VALUES( \
+'OP2012',   160,'1982-01-01')"   );
+
+execi(
+"INSERT INTO PROJACT(PROJNO, ACTNO, ACSTDATE) VALUES( \
+'OP2013',   140,'1982-01-01')"   );
+
+execi(
+"INSERT INTO PROJACT(PROJNO, ACTNO, ACSTDATE) VALUES( \
+ 'OP2013',   170,'1982-01-01')"   );
+
+execi(
+"INSERT INTO PROJACT(PROJNO, ACTNO, ACSTDATE) VALUES( \
+'PL2100',    30,'1982-01-01')"   );
+
+/*********************************************************************/
+/*                                                                   */
+/* EMPPROJACT (EMP_ACT is an ALIAS)                                  */
+/*                                                                   */
+/*********************************************************************/
+execi(
+"CREATE TABLE EMPPROJACT \
+             (EMPNO CHAR(6) NOT NULL, \
+              PROJNO CHAR(6) NOT NULL, \
+              ACTNO SMALLINT NOT NULL, \
+              EMPTIME DEC(5,2), \
+              EMSTDATE DATE, \
+              EMENDATE DATE)"           );
+
+execi(
+"ALTER TABLE EMPPROJACT \
+              ADD FOREIGN KEY REPAPA (PROJNO, ACTNO, EMSTDATE) \
+              REFERENCES PROJACT \
+              ON DELETE RESTRICT"       );
+
+execi(
+"CREATE ALIAS EMPACT FOR EMPPROJACT"    );
+
+execi(
+"CREATE ALIAS EMP_ACT FOR EMPPROJACT"   );
+
+/*********************************************************************/
+/*                                                                   */
+/* EMP_ACT                                                           */
+/*                                                                   */
+/*********************************************************************/
+
+execi(
+"INSERT INTO EMP_ACT VALUES( \
+'000010', 'AD3100',    10, 0.5,'1982-01-01', '1982-07-01')"   );
+
+execi(
+"INSERT INTO EMP_ACT VALUES( \
+'000070', 'AD3110',    10, 1.0,'1982-01-01', '1983-02-01')"   );
+
+execi(
+"INSERT INTO EMP_ACT VALUES( \
+'000230', 'AD3111',    60, 1.0,'1982-01-01', '1982-03-15')"   );
+
+execi(
+"INSERT INTO EMP_ACT VALUES( \
+'000230', 'AD3111',    60, 0.5,'1982-03-15', '1982-04-15')"   );
+
+execi(
+"INSERT INTO EMP_ACT VALUES( \
+'000230', 'AD3111',    70, 0.5,'1982-03-15', '1982-10-15')"   );
+
+execi(
+"INSERT INTO EMP_ACT VALUES( \
+'000230', 'AD3111',    80, 0.5,'1982-04-15', '1982-10-15')"   );
+
+execi(
+"INSERT INTO EMP_ACT VALUES( \
+'000230', 'AD3111',   180, 0.5,'1982-10-15', '1983-01-01')"   );
+
+execi(
+"INSERT INTO EMP_ACT VALUES( \
+'000240', 'AD3111',    70, 1.0,'1982-02-15', '1982-09-15')"   );
+
+execi(
+"INSERT INTO EMP_ACT VALUES( \
+'000240', 'AD3111',    80, 1.0,'1982-09-15', '1983-01-01')"   );
+
+execi(
+"INSERT INTO EMP_ACT VALUES( \
+'000250', 'AD3112',    60, 1.0,'1982-01-01', '1982-02-01')"   );
+
+execi(
+"INSERT INTO EMP_ACT VALUES( \
+'000250', 'AD3112',    60, 0.5,'1982-02-01', '1982-03-15')"   );
+
+execi(
+"INSERT INTO EMP_ACT VALUES( \
+'000250', 'AD3112',    60, 1.0,'1983-01-01', '1983-02-01')"   );
+
+execi(
+"INSERT INTO EMP_ACT VALUES( \
+'000250', 'AD3112',    70, 0.5,'1982-02-01', '1982-03-15')"   );
+
+execi(
+"INSERT INTO EMP_ACT VALUES( \
+'000250', 'AD3112',    70, 1.0,'1982-03-15', '1982-08-15')"   );
+
+execi(
+"INSERT INTO EMP_ACT VALUES( \
+'000250', 'AD3112',    70,0.25,'1982-08-15', '1982-10-15')"   );
+
+execi(
+"INSERT INTO EMP_ACT VALUES( \
+'000250', 'AD3112',    80,0.25,'1982-08-15', '1982-10-15')"   );
+
+execi(
+"INSERT INTO EMP_ACT VALUES( \
+'000250', 'AD3112',    80,0.50,'1982-10-15', '1982-12-01')"   );
+
+execi(
+"INSERT INTO EMP_ACT VALUES( \
+'000250', 'AD3112',   180,0.50,'1982-08-15', '1983-01-01')"   );
+
+execi(
+"INSERT INTO EMP_ACT VALUES( \
+'000260', 'AD3113',    70,0.50,'1982-06-15', '1982-07-01')"   );
+
+execi(
+"INSERT INTO EMP_ACT VALUES( \
+'000260', 'AD3113',    70,1.00,'1982-07-01', '1983-02-01')"   );
+
+execi(
+"INSERT INTO EMP_ACT VALUES( \
+'000260', 'AD3113',    80,1.00,'1982-01-01', '1982-03-01')"   );
+
+execi(
+"INSERT INTO EMP_ACT VALUES( \
+'000260', 'AD3113',    80,0.50,'1982-03-01', '1982-04-15')"   );
+
+execi(
+"INSERT INTO EMP_ACT VALUES( \
+'000260', 'AD3113',   180,0.50,'1982-03-01', '1982-04-15')"   );
+
+execi(
+"INSERT INTO EMP_ACT VALUES( \
+'000260', 'AD3113',   180,1.00,'1982-04-15', '1982-06-01')"   );
+
+execi(
+"INSERT INTO EMP_ACT VALUES( \
+'000260', 'AD3113',   180,1.00,'1982-06-01', '1982-07-01')"   );
+
+execi(
+"INSERT INTO EMP_ACT VALUES( \
+'000270', 'AD3113',    60,0.50,'1982-03-01', '1982-04-01')"   );
+
+execi(
+"INSERT INTO EMP_ACT VALUES( \
+'000270', 'AD3113',    60,1.00,'1982-04-01', '1982-09-01')"   );
+
+execi(
+"INSERT INTO EMP_ACT VALUES( \
+'000270', 'AD3113',    60,0.25,'1982-09-01', '1982-10-15')"   );
+
+execi(
+"INSERT INTO EMP_ACT VALUES( \
+'000270', 'AD3113',    70,0.75,'1982-09-01', '1982-10-15')"   );
+
+execi(
+"INSERT INTO EMP_ACT VALUES( \
+'000270', 'AD3113',    70,1.00,'1982-10-15', '1983-02-01')"   );
+
+execi(
+"INSERT INTO EMP_ACT VALUES( \
+'000270', 'AD3113',    80,1.00,'1982-01-01', '1982-03-01')"   );
+
+execi(
+"INSERT INTO EMP_ACT VALUES( \
+'000270', 'AD3113',    80,0.50,'1982-03-01', '1982-04-01')"   );
+
+execi(
+"INSERT INTO EMP_ACT VALUES( \
+'000030', 'IF1000',    10,0.50,'1982-06-01', '1983-01-01')"   );
+
+execi(
+"INSERT INTO EMP_ACT VALUES( \
+'000130', 'IF1000',    90,1.00,'1982-10-01', '1983-01-01')"   );
+
+execi(
+"INSERT INTO EMP_ACT VALUES( \
+'000130', 'IF1000',   100,0.50,'1982-10-01', '1983-01-01')"   );
+
+execi(
+"INSERT INTO EMP_ACT VALUES( \
+'000140', 'IF1000',    90,0.50,'1982-10-01', '1983-01-01')"   );
+
+execi(
+"INSERT INTO EMP_ACT VALUES( \
+'000030', 'IF2000',10,0.50,'1982-01-01', '1983-01-01')"   );
+
+execi(
+"INSERT INTO EMP_ACT VALUES( \
+'000140', 'IF2000',   100,1.00,'1982-01-01', '1982-03-01')"   );
+
+execi(
+"INSERT INTO EMP_ACT VALUES( \
+'000140', 'IF2000',   100,0.50,'1982-03-01', '1982-07-01')"   );
+
+execi(
+"INSERT INTO EMP_ACT VALUES( \
+'000140', 'IF2000',   110,0.50,'1982-03-01', '1982-07-01')"   );
+
+execi(
+"INSERT INTO EMP_ACT VALUES( \
+'000140', 'IF2000',   110,0.50,'1982-10-01', '1983-01-01')"   );
+
+execi(
+"INSERT INTO EMP_ACT VALUES( \
+'000010', 'MA2100',    10,0.50,'1982-01-01', '1982-11-01')"   );
+
+execi(
+"INSERT INTO EMP_ACT VALUES( \
+'000110', 'MA2100',    20,1.00,'1982-01-01', '1983-03-01')"   );
+
+execi(
+"INSERT INTO EMP_ACT VALUES( \
+'000010', 'MA2110',    10,1.00,'1982-01-01', '1983-02-01')"   );
+
+execi(
+"INSERT INTO EMP_ACT VALUES( \
+'000200', 'MA2111',    50,1.00,'1982-01-01', '1982-06-15')"   );
+
+execi(
+"INSERT INTO EMP_ACT VALUES( \
+'000200', 'MA2111',    60,1.00,'1982-06-15', '1983-02-01')"   );
+
+execi(
+"INSERT INTO EMP_ACT VALUES( \
+'000220', 'MA2111',    40,1.00,'1982-01-01', '1983-02-01')"   );
+
+execi(
+"INSERT INTO EMP_ACT VALUES( \
+'000150', 'MA2112',    60,1.00,'1982-01-01', '1982-07-15')"   );
+
+execi(
+"INSERT INTO EMP_ACT VALUES( \
+'000150', 'MA2112',   180,1.00,'1982-07-15', '1983-02-01')"   );
+
+execi(
+"INSERT INTO EMP_ACT VALUES( \
+'000170', 'MA2112',    60,1.00,'1982-01-01', '1983-06-01')"   );
+
+execi(
+"INSERT INTO EMP_ACT VALUES( \
+'000170', 'MA2112',    70,1.00,'1982-06-01', '1983-02-01')"   );
+
+execi(
+"INSERT INTO EMP_ACT VALUES( \
+'000190', 'MA2112',    70,1.00,'1982-01-01', '1982-10-01')"   );
+
+execi(
+"INSERT INTO EMP_ACT VALUES( \
+'000190', 'MA2112',    80,1.00,'1982-10-01', '1983-10-01')"   );
+
+execi(
+"INSERT INTO EMP_ACT VALUES( \
+'000160', 'MA2113',    60,1.00,'1982-07-15', '1983-02-01')"   );
+
+execi(
+"INSERT INTO EMP_ACT VALUES( \
+'000170', 'MA2113',    80,1.00,'1982-01-01', '1983-02-01')"   );
+
+execi(
+"INSERT INTO EMP_ACT VALUES( \
+'000180', 'MA2113',    70,1.00,'1982-04-01', '1982-06-15')"   );
+
+execi(
+"INSERT INTO EMP_ACT VALUES( \
+'000210', 'MA2113',    80,0.50,'1982-10-01', '1983-02-01')"   );
+
+execi(
+"INSERT INTO EMP_ACT VALUES( \
+'000210', 'MA2113',   180,0.50,'1982-10-01', '1983-02-01')"   );
+
+execi(
+"INSERT INTO EMP_ACT VALUES( \
+'000050', 'OP1000',    10,0.25,'1982-01-01', '1983-02-01')"   );
+
+execi(
+"INSERT INTO EMP_ACT VALUES( \
+'000090', 'OP1010',    10,1.00,'1982-01-01', '1983-02-01')"   );
+
+execi(
+"INSERT INTO EMP_ACT VALUES( \
+'000280', 'OP1010',   130,1.00,'1982-01-01', '1983-02-01')"   );
+
+execi(
+"INSERT INTO EMP_ACT VALUES( \
+'000290', 'OP1010',   130,1.00,'1982-01-01', '1983-02-01')"   );
+
+execi(
+"INSERT INTO EMP_ACT VALUES( \
+'000300', 'OP1010',   130,1.00,'1982-01-01', '1983-02-01')"   );
+
+execi(
+"INSERT INTO EMP_ACT VALUES( \
+'000310', 'OP1010',   130,1.00,'1982-01-01', '1983-02-01')"   );
+
+execi(
+"INSERT INTO EMP_ACT VALUES( \
+'000050', 'OP2010',    10,0.75,'1982-01-01', '1983-02-01')"   );
+
+execi(
+"INSERT INTO EMP_ACT VALUES( \
+'000100', 'OP2010',    10,1.00,'1982-01-01', '1983-02-01')"   );
+
+execi(
+"INSERT INTO EMP_ACT VALUES( \
+'000320', 'OP2011',   140,0.75,'1982-01-01', '1983-02-01')"   );
+
+execi(
+"INSERT INTO EMP_ACT VALUES( \
+'000320', 'OP2011',   150,0.25,'1982-01-01', '1983-02-01')"   );
+
+execi(
+"INSERT INTO EMP_ACT VALUES( \
+'000330', 'OP2012',   140,0.25,'1982-01-01', '1983-02-01')"   );
+
+execi(
+"INSERT INTO EMP_ACT VALUES( \
+'000330', 'OP2012',   160,0.75,'1982-01-01', '1983-02-01')"   );
+
+execi(
+"INSERT INTO EMP_ACT VALUES( \
+'000340', 'OP2013',   140,0.50,'1982-01-01', '1983-02-01')"   );
+
+execi(
+"INSERT INTO EMP_ACT VALUES( \
+'000340', 'OP2013',   170,0.50,'1982-01-01', '1983-02-01')"   );
+
+execi(
+"INSERT INTO EMP_ACT VALUES( \
+'000020', 'PL2100',30,1.00,'1982-01-01', '1982-09-15')"   );
+
+/*********************************************************************/
+/*                                                                   */
+/* ACT                                                               */
+/*                                                                   */
+/*********************************************************************/
+execi(
+"CREATE TABLE ACT ( \
+              ACTNO SMALLINT NOT NULL, \
+              ACTKWD CHAR(6) NOT NULL, \
+              ACTDESC VARCHAR(20) NOT NULL, \
+              PRIMARY KEY (ACTNO) )"    );
+
+execi(
+"CREATE UNIQUE INDEX XACT2 \
+              ON ACT (ACTKWD)"          );
+
+/*********************************************************************/
+/*                                                                   */
+/* ACT                                                               */
+/*                                                                   */
+/*********************************************************************/
+execi(
+"INSERT INTO ACT VALUES( \
+10,'MANAGE','MANAGE/ADVISE')"   );
+
+execi(
+"INSERT INTO ACT VALUES( \
+20,'ECOST','ESTIMATE COST')"   );
+
+execi(
+"INSERT INTO ACT VALUES( \
+30,'DEFINE','DEFINE SPECS')"   );
+
+execi(
+"INSERT INTO ACT VALUES( \
+40,'LEADPR','LEAD PROGRAM/DESIGN')"   );
+
+execi(
+"INSERT INTO ACT VALUES( \
+50,'SPECS','WRITE SPECS')"   );
+
+execi(
+"INSERT INTO ACT VALUES( \
+60,'LOGIC','DESCRIBE LOGIC')"   );
+
+execi(
+"INSERT INTO ACT VALUES( \
+70,'CODE','CODE PROGRAMS')"   );
+
+execi(
+"INSERT INTO ACT VALUES( \
+80,'TEST','TEST PROGRAMS')"   );
+
+execi(
+"INSERT INTO ACT VALUES( \
+90,'ADMQS','ADM QUERY SYSTEM')"   );
+
+execi(
+"INSERT INTO ACT VALUES( \
+100,'TEACH','TEACH CLASSES')"   );
+
+execi(
+"INSERT INTO ACT VALUES( \
+110,'COURSE','DEVELOP COURSES')"   );
+
+execi(
+"INSERT INTO ACT VALUES( \
+120,'STAFF','PERS AND STAFFING')"   );
+
+execi(
+"INSERT INTO ACT VALUES( \
+130,'OPERAT','OPER COMPUTER SYS')"   );
+
+execi(
+"INSERT INTO ACT VALUES( \
+140,'MAINT','MAINT SOFTWARE SYS')"   );
+
+execi(
+"INSERT INTO ACT VALUES( \
+150,'ADMSYS','ADM OPERATING SYS')"   );
+
+execi(
+"INSERT INTO ACT VALUES( \
+160,'ADMDB','ADM DATA BASES')"   );
+
+execi(
+"INSERT INTO ACT VALUES( \
+170,'ADMDC','ADM DATA COMM')"   );
+
+execi(
+"INSERT INTO ACT VALUES( \
+180,'DOC','DOCUMENT')"   );
+
+execi(
+"ALTER TABLE PROJACT \
+              ADD FOREIGN KEY RPAA (ACTNO) \
+              REFERENCES ACT \
+              ON DELETE RESTRICT"       );
+
+/*********************************************************************/
+/*                                                                   */
+/* EMP_PHOTO                                                         */
+/*                                                                   */
+/*********************************************************************/
+execi(
+"CREATE TABLE EMP_PHOTO ( \
+              EMPNO CHAR(6) NOT NULL, \
+              PHOTO_FORMAT VARCHAR(10) NOT NULL, \
+              PICTURE BLOB(100K), \
+              PRIMARY KEY (EMPNO,PHOTO_FORMAT))"  );
+
+execi(
+"ALTER TABLE EMP_PHOTO \
+              ADD FOREIGN KEY (EMPNO) \
+             REFERENCES EMPLOYEE \
+              ON DELETE RESTRICT"       );
+
+/*********************************************************************/
+/*                                                                   */
+/* EMP_PHOTO                                                         */
+/*                                                                   */
+/*********************************************************************/
+execi(
+"INSERT INTO EMP_PHOTO VALUES( \
+'000130', 'bitmap', null)"   );
+
+execi(
+"INSERT INTO EMP_PHOTO VALUES( \
+'000130','gif', null)"   );
+
+execi(
+"INSERT INTO EMP_PHOTO VALUES( \
+'000140','bitmap', null)"   );
+
+execi(
+"INSERT INTO EMP_PHOTO VALUES( \
+'000140','gif', null)"   );
+
+execi(
+"INSERT INTO EMP_PHOTO VALUES( \
+'000150','bitmap', null)"   );
+
+execi(
+"INSERT INTO EMP_PHOTO VALUES( \
+'000150','gif', null)"   );
+
+execi(
+"INSERT INTO EMP_PHOTO VALUES( \
+'000190','bitmap', null)"   );
+
+execi(
+"INSERT INTO EMP_PHOTO VALUES( \
+'000190','gif', null)"   );
+
+/*********************************************************************/
+/*                                                                   */
+/* EMP_RESUME                                                        */
+/*                                                                   */
+/*********************************************************************/
+execi(
+"CREATE TABLE EMP_RESUME ( \
+              EMPNO CHAR(6) NOT NULL, \
+              RESUME_FORMAT VARCHAR(10) NOT NULL, \
+              RESUME CLOB(5K), \
+              PRIMARY KEY (EMPNO,RESUME_FORMAT))"  );
+
+execi(
+"ALTER TABLE EMP_RESUME \
+              ADD FOREIGN KEY (EMPNO) \
+              REFERENCES EMPLOYEE \
+              ON DELETE RESTRICT"       );
+
+/*********************************************************************/
+/*                                                                   */
+/* EMP_RESUME                                                        */
+/*                                                                   */
+/*********************************************************************/
+
+execi(
+"INSERT INTO EMP_RESUME VALUES( \
+'000130','ascii', null)"   );
+
+execi(
+"INSERT INTO EMP_RESUME VALUES( \
+'000130','html', null)"   );
+
+execi(
+"INSERT INTO EMP_RESUME VALUES( \
+'000140','ascii', null)"   );
+
+execi(
+"INSERT INTO EMP_RESUME VALUES( \
+'000140','html', null)"   );
+
+execi(
+"INSERT INTO EMP_RESUME VALUES( \
+'000150','ascii', null)"   );
+
+execi(
+"INSERT INTO EMP_RESUME VALUES( \
+'000150','html', null)"   );
+
+execi(
+"INSERT INTO EMP_RESUME VALUES( \
+'000190','ascii', null)"   );
+
+execi(
+"INSERT INTO EMP_RESUME VALUES( \
+'000190','html', null)"   );
+/*********************************************************************/
+/*                                                                   */
+/* SALES                                                             */
+/*                                                                   */
+/*********************************************************************/
+execi(
+"CREATE TABLE SALES \
+             (SALES_DATE DATE, \
+              SALES_PERSON VARCHAR(15), \
+              REGION VARCHAR(15), \
+              SALES INTEGER)"           );
+
+/*********************************************************************/
+/*                                                                   */
+/* SALES                                                             */
+/*                                                                   */
+/*********************************************************************/
+
+execi(
+"INSERT INTO SALES VALUES( \
+'12/31/1995', 'LUCCHESSI','Ontario-South', 1)"   );
+
+execi(
+"INSERT INTO SALES VALUES( \
+'12/31/1995', 'LEE','Ontario-South', 3)"   );
+
+execi(
+"INSERT INTO SALES VALUES( \
+'12/31/1995', 'LEE','Quebec', 1)"   );
+
+execi(
+"INSERT INTO SALES VALUES( \
+'12/31/1995', 'LEE','Manitoba', 2)"   );
+
+execi(
+"INSERT INTO SALES VALUES( \
+'12/31/1995', 'GOUNOT','Quebec', 1)"   );
+
+execi(
+"INSERT INTO SALES VALUES( \
+'03/29/1996', 'LUCCHESSI','Ontario-South', 3)"   );
+
+execi(
+"INSERT INTO SALES VALUES( \
+'03/29/1996', 'LUCCHESSI','Quebec', 1)"   );
+
+execi(
+"INSERT INTO SALES VALUES( \
+'03/29/1996', 'LEE','Ontario-South', 2)"   );
+
+execi(
+"INSERT INTO SALES VALUES( \
+'03/29/1996', 'LEE','Ontario-North', 2)"   );
+
+execi(
+"INSERT INTO SALES VALUES( \
+'03/29/1996', 'LEE','Quebec', 3)"   );
+
+execi(
+"INSERT INTO SALES VALUES( \
+'03/29/1996', 'LEE','Manitoba', 5)"   );
+
+execi(
+"INSERT INTO SALES VALUES( \
+'03/29/1996', 'GOUNOT','Ontario-South', 3)"   );
+
+execi(
+"INSERT INTO SALES VALUES( \
+'03/29/1996', 'GOUNOT','Quebec', 1)"   );
+
+execi(
+"INSERT INTO SALES VALUES( \
+'03/29/1996', 'GOUNOT','Manitoba', 7)"   );
+
+execi(
+"INSERT INTO SALES VALUES( \
+'03/30/1996', 'LUCCHESSI','Ontario-South', 1)"   );
+
+execi(
+"INSERT INTO SALES VALUES( \
+'03/30/1996', 'LUCCHESSI','Quebec', 2)"   );
+
+execi(
+"INSERT INTO SALES VALUES( \
+'03/30/1996', 'LUCCHESSI','Manitoba', 1)"   );
+
+execi(
+"INSERT INTO SALES VALUES( \
+'03/30/1996', 'LEE','Ontario-South', 7)"   );
+
+execi(
+"INSERT INTO SALES VALUES( \
+'03/30/1996', 'LEE','Ontario-North', 3)"   );
+
+execi(
+"INSERT INTO SALES VALUES( \
+'03/30/1996', 'LEE','Quebec', 7)"   );
+
+execi(
+"INSERT INTO SALES VALUES( \
+'03/30/1996', 'LEE','Manitoba', 4)"   );
+
+execi(
+"INSERT INTO SALES VALUES( \
+'03/30/1996', 'GOUNOT','Ontario-South', 2)"   );
+execi(
+"INSERT INTO SALES VALUES( \
+'03/30/1996', 'GOUNOT','Quebec', 18)"   );
+
+execi(
+"INSERT INTO SALES VALUES( \
+'03/30/1996', 'GOUNOT','Manitoba', 1)"   );
+
+execi(
+"INSERT INTO SALES VALUES( \
+'03/31/1996', 'LUCCHESSI','Manitoba', 1)"   );
+
+execi(
+"INSERT INTO SALES VALUES( \
+'03/31/1996', 'LEE','Ontario-South', 14)"   );
+
+execi(
+"INSERT INTO SALES VALUES( \
+'03/31/1996', 'LEE','Ontario-North', 3)"   );
+
+execi(
+"INSERT INTO SALES VALUES( \
+'03/31/1996', 'LEE','Quebec', 7)"   );
+
+execi(
+"INSERT INTO SALES VALUES( \
+'03/31/1996', 'LEE','Manitoba', 3)"   );
+
+execi(
+"INSERT INTO SALES VALUES( \
+'03/31/1996', 'GOUNOT','Ontario-South', 2)"   );
+
+execi(
+"INSERT INTO SALES VALUES( \
+'03/31/1996', 'GOUNOT','Quebec', 1)"   );
+
+execi(
+"INSERT INTO SALES VALUES( \
+'04/01/1996', 'LUCCHESSI','Ontario-South', 3)"   );
+
+execi(
+"INSERT INTO SALES VALUES( \
+'04/01/1996', 'LUCCHESSI','Manitoba', 1)"   );
+
+execi(
+"INSERT INTO SALES VALUES( \
+'04/01/1996', 'LEE','Ontario-South', 8)"   );
+
+execi(
+"INSERT INTO SALES VALUES( \
+'04/01/1996', 'LEE','Ontario-North',NULL)"   );
+execi(
+"INSERT INTO SALES VALUES( \
+'04/01/1996', 'LEE','Quebec', 8)"   );
+
+execi(
+"INSERT INTO SALES VALUES( \
+'04/01/1996', 'LEE','Manitoba', 9)"   );
+
+execi(
+"INSERT INTO SALES VALUES( \
+'04/01/1996', 'GOUNOT','Ontario-South', 3)"   );
+
+execi(
+"INSERT INTO SALES VALUES( \
+'04/01/1996', 'GOUNOT','Ontario-North', 1)"   );
+
+execi(
+"INSERT INTO SALES VALUES( \
+'04/01/1996', 'GOUNOT','Quebec', 3)"   );
+
+execi(
+"INSERT INTO SALES VALUES( \
+'04/01/1996', 'GOUNOT','Manitoba', 7)"   );
+
+/*********************************************************************/
+/*                                                                   */
+/* CL_SCHED                                                          */
+/*                                                                   */
+/*********************************************************************/
+execi(
+"CREATE TABLE CL_SCHED ( \
+              CLASS_CODE CHAR(7), \
+              ""DAY"" SMALLINT, \
+              STARTING TIME, \
+              ENDING TIME)"             );
+
+/*********************************************************************/
+/*                                                                   */
+/* CL_SCHED                                                          */
+/*                                                                   */
+/*********************************************************************/
+
+execi(
+"INSERT INTO  CL_SCHED VALUES( \
+'042:BF' ,4,'12:10:00', '14:00:00')"    );
+
+execi(
+"INSERT INTO  CL_SCHED VALUES( \
+'553:MJA' ,1,'10:30:00', '11:00:00')"   );
+
+execi(
+"INSERT INTO  CL_SCHED VALUES( \
+'543:CWM' ,3,'09:10:00', '10:30:00')"   );
+
+execi(
+"INSERT INTO  CL_SCHED VALUES( \
+'778:RES' ,2,'12:10:00', '14:00:00')"   );
+
+execi(
+"INSERT INTO  CL_SCHED VALUES( \
+'044:HD'  ,3,'17:12:30', '18:00:00')"   );
+
+/*********************************************************************/
+/*                                                                   */
+/* IN_TRAY                                                           */
+/*                                                                   */
+/*********************************************************************/
+execi(
+"CREATE TABLE IN_TRAY \
+             (RECEIVED TIMESTAMP, \
+              SOURCE CHAR(8), \
+              SUBJECT CHAR(64), \
+              NOTE_TEXT VARCHAR(3000))" );
+
+/*********************************************************************/
+/*                                                                   */
+/* IN_TRAY                                                           */
+/*                                                                   */
+/*********************************************************************/
+
+execi(
+"INSERT INTO  IN_TRAY VALUES( \
+'1988-12-25-17.12.30.000000' ,'BADAMSON', \
+'FWD: Fantastic year! 4th Quarter Bonus.', \
+'To: JWALKER  \
+Cc: QUINTANA, NICHOLLS  \
+  \
+Jim,  \
+Looks like our hard work has paid off. I have some good beer in the \
+fridge if you want to come over to celebrate a bit. Delores and \
+Heather, are you interested as well?  \
+  \
+Bruce \
+  \
+<Forwarding from ISTERN>  \
+Subject: FWD: Fantastic year! 4th Quarter Bonus.  \
+To: Dept_D11 \
+  \
+Congratulations on a job well done. Enjoy this year''s bonus. \
+  \
+Irv  \
+  \
+<Forwarding from CHAAS>  \
+Subject: Fantastic year! 4th Quarter Bonus.  \
+To: All_Managers  \
+  \
+Our 4th quarter results are in. We pulled together as a team and \
+exceeded our plan! I am pleased to announce a bonus this year of \
+18%. Enjoy the holidays.  \
+  \
+Christine Haas')"   );
+
+execi(
+"INSERT INTO  IN_TRAY VALUES( \
+'1988-12-23-08.53.58.000000' ,'ISTERN', \
+'FWD: Fantastic year! 4th Quarter Bonus.', \
+'To: Dept_D11  \
+  \
+Congratulations on a job well done. Enjoy this year''s bonus.  \
+  \
+Irv  \
+  \
+<Forwarding from CHAAS>  \
+Subject: Fantastic year! 4th Quarter Bonus.  \
+To: All_Managers  \
+  \
+Our 4th quarter results are in. We pulled together as a team and \
+exceeded our plan! I am pleased to announce a bonus this year of \
+18%. Enjoy the holidays.  \
+  \
+Christine Haas')"   );
+
+execi(
+"INSERT INTO  IN_TRAY VALUES( \
+'1988-12-22-14.07.21.136421' ,'CHAAS', \
+'Fantastic year! 4th Quarter Bonus.', \
+'To: All_Managers  \
+  \
+Our 4th quarter results are in. We pulled together as a team and \
+exceeded our plan! I am pleased to announce a bonus this year of \
+18%. Enjoy the holidays.  \
+  \
+Christine Haas')"   );
+
+/*********************************************************************/
+/*********************************************************************/
+/*                                                                   */
+/* Create views on the sample tables                                 */
+/*                                                                   */
+/*********************************************************************/
+/*********************************************************************/
+
+execi(
+"CREATE VIEW VDEPT \
+     AS SELECT ALL DEPTNO, \
+  DEPTNAME, \
+  MGRNO, \
+  ADMRDEPT \
+FROM DEPT"                            );
+
+execi(
+"CREATE VIEW VHDEPT \
+   AS SELECT ALL DEPTNO , \
+  DEPTNAME, \
+  MGRNO , \
+  ADMRDEPT, \
+  LOCATION \
+  FROM DEPT"                            );
+
+execi(
+"CREATE VIEW VEMP \
+   AS SELECT ALL EMPNO , \
+  FIRSTNME, \
+  MIDINIT , \
+  LASTNAME, \
+  WORKDEPT \
+  FROM EMP"                             );
+
+execi(
+"CREATE VIEW VPROJ \
+   AS SELECT ALL \
+PROJNO, PROJNAME, DEPTNO, RESPEMP, PRSTAFF, \
+PRSTDATE, PRENDATE, MAJPROJ \
+FROM PROJ"                              );
+
+execi(
+"CREATE VIEW VACT \
+AS SELECT ALL ACTNO , \
+  ACTKWD , \
+  ACTDESC \
+FROM ACT"                               );
+
+execi(
+"CREATE VIEW VPROJACT \
+   AS SELECT ALL \
+PROJNO,ACTNO, ACSTAFF, ACSTDATE, ACENDATE \
+FROM PROJACT"                           );
+
+execi(
+"CREATE VIEW VEMPPROJACT \
+AS SELECT ALL \
+EMPNO, PROJNO, ACTNO, EMPTIME, EMSTDATE, EMENDATE \
+FROM EMPPROJACT"                        );
+
+execi(
+"CREATE VIEW VDEPMG1 \
+(DEPTNO, DEPTNAME, MGRNO, FIRSTNME, MIDINIT, \
+  LASTNAME, ADMRDEPT) \
+AS SELECT ALL \
+DEPTNO, DEPTNAME, EMPNO, FIRSTNME, MIDINIT, \
+  LASTNAME, ADMRDEPT \
+FROM DEPT LEFT OUTER  JOIN EMP \
+ON MGRNO = EMPNO"                       );
+
+execi(
+"CREATE VIEW VEMPDPT1 \
+(DEPTNO, DEPTNAME, EMPNO, FRSTINIT, MIDINIT, \
+  LASTNAME, WORKDEPT) \
+AS SELECT ALL \
+DEPTNO, DEPTNAME, EMPNO, SUBSTR(FIRSTNME, 1, 1), MIDINIT, \
+  LASTNAME, WORKDEPT \
+FROM DEPT  RIGHT OUTER JOIN EMP \
+ON WORKDEPT = DEPTNO"                   );
+
+execi(
+"CREATE VIEW VASTRDE1 \
+  (DEPT1NO,DEPT1NAM,EMP1NO,EMP1FN,EMP1MI,EMP1LN,TYPE2, \
+  DEPT2NO,DEPT2NAM,EMP2NO,EMP2FN,EMP2MI,EMP2LN) \
+AS SELECT ALL \
+  D1.DEPTNO,D1.DEPTNAME,D1.MGRNO,D1.FIRSTNME,D1.MIDINIT, \
+  D1.LASTNAME, '1', \
+  D2.DEPTNO,D2.DEPTNAME,D2.MGRNO,D2.FIRSTNME,D2.MIDINIT, \
+  D2.LASTNAME \
+FROM VDEPMG1 D1, VDEPMG1 D2 \
+WHERE D1.DEPTNO = D2.ADMRDEPT"          );
+
+execi(
+"CREATE VIEW VASTRDE2 \
+  (DEPT1NO,DEPT1NAM,EMP1NO,EMP1FN,EMP1MI,EMP1LN,TYPE2, \
+  DEPT2NO,DEPT2NAM,EMP2NO,EMP2FN,EMP2MI,EMP2LN) \
+AS SELECT ALL \
+  D1.DEPTNO,D1.DEPTNAME,D1.MGRNO,D1.FIRSTNME,D1.MIDINIT, \
+  D1.LASTNAME,'2', \
+  D1.DEPTNO,D1.DEPTNAME,E2.EMPNO,E2.FIRSTNME,E2.MIDINIT, \
+  E2.LASTNAME \
+FROM VDEPMG1 D1, EMP E2 \
+WHERE D1.DEPTNO = E2.WORKDEPT"          );
+
+execi(
+"CREATE VIEW VPROJRE1 \
+  (PROJNO,PROJNAME,PROJDEP,RESPEMP,FIRSTNME,MIDINIT, \
+  LASTNAME,MAJPROJ) \
+AS SELECT ALL \
+  PROJNO,PROJNAME,DEPTNO,EMPNO,FIRSTNME,MIDINIT, \
+  LASTNAME,MAJPROJ \
+FROM PROJ, EMP \
+WHERE RESPEMP = EMPNO"                  );
+
+execi(
+"CREATE VIEW VPSTRDE1 \
+  (PROJ1NO,PROJ1NAME,RESP1NO,RESP1FN,RESP1MI,RESP1LN, \
+  PROJ2NO,PROJ2NAME,RESP2NO,RESP2FN,RESP2MI,RESP2LN) \
+AS SELECT ALL \
+  P1.PROJNO,P1.PROJNAME,P1.RESPEMP,P1.FIRSTNME,P1.MIDINIT, \
+  P1.LASTNAME, \
+  P2.PROJNO,P2.PROJNAME,P2.RESPEMP,P2.FIRSTNME,P2.MIDINIT, \
+  P2.LASTNAME \
+FROM VPROJRE1 P1, \
+  VPROJRE1 P2 \
+WHERE P1.PROJNO = P2.MAJPROJ"           );
+
+execi(
+"CREATE VIEW VPSTRDE2 \
+  (PROJ1NO,PROJ1NAME,RESP1NO,RESP1FN,RESP1MI,RESP1LN, \
+  PROJ2NO,PROJ2NAME,RESP2NO,RESP2FN,RESP2MI,RESP2LN) \
+AS SELECT ALL \
+  P1.PROJNO,P1.PROJNAME,P1.RESPEMP,P1.FIRSTNME,P1.MIDINIT, \
+  P1.LASTNAME, \
+  P1.PROJNO,P1.PROJNAME,P1.RESPEMP,P1.FIRSTNME,P1.MIDINIT, \
+  P1.LASTNAME \
+FROM VPROJRE1 P1 \
+WHERE NOT EXISTS \
+(SELECT * FROM VPROJRE1 P2 \
+WHERE P1.PROJNO = P2.MAJPROJ)"          );
+
+execi(
+"CREATE VIEW VFORPLA \
+  (PROJNO,PROJNAME,RESPEMP,PROJDEP,FRSTINIT,MIDINIT,LASTNAME) \
+AS SELECT ALL \
+F1.PROJNO,PROJNAME,RESPEMP,PROJDEP, SUBSTR(FIRSTNME, 1, 1), \
+  MIDINIT, LASTNAME \
+FROM VPROJRE1 F1 LEFT OUTER JOIN EMPPROJACT F2 \
+ON F1.PROJNO = F2.PROJNO"               );
+
+execi(
+"CREATE VIEW VSTAFAC1(PROJNO, ACTNO, ACTDESC, EMPNO, FIRSTNME, MIDINIT, \
+     LASTNAME, EMPTIME,STDATE,ENDATE, TYPE) \
+AS SELECT ALL \
+PA.PROJNO, PA.ACTNO, AC.ACTDESC,' ', ' ', ' ', ' ', \
+  PA.ACSTAFF, PA.ACSTDATE, \
+  PA.ACENDATE,'1' \
+FROM PROJACT PA, ACT AC  \
+WHERE PA.ACTNO = AC.ACTNO"              );
+
+execi(
+"CREATE VIEW VSTAFAC2 \
+(PROJNO, ACTNO, ACTDESC, EMPNO, FIRSTNME, MIDINIT, LASTNAME, \
+EMPTIME,STDATE, ENDATE, TYPE) \
+AS SELECT ALL \
+EP.PROJNO, EP.ACTNO, AC.ACTDESC, EP.EMPNO,EM.FIRSTNME, \
+EM.MIDINIT, EM.LASTNAME, EP.EMPTIME, EP.EMSTDATE, \
+  EP.EMENDATE,'2' \
+FROM EMPPROJACT EP, ACT AC, EMP EM \
+WHERE EP.ACTNO = AC.ACTNO AND EP.EMPNO = EM.EMPNO"  );
+
+execi(
+"CREATE VIEW VPHONE \
+  (LASTNAME, \
+  FIRSTNAME, \
+  MIDDLEINITIAL, \
+  PHONENUMBER, \
+  EMPLOYEENUMBER, \
+  DEPTNUMBER, \
+  DEPTNAME) \
+AS SELECT ALL LASTNAME, \
+  FIRSTNME, \
+  MIDINIT , \
+  VALUE(PHONENO,' '), \
+  EMPNO, \
+  DEPTNO, \
+  DEPTNAME \
+FROM EMP, DEPT \
+WHERE WORKDEPT = DEPTNO"                );
+
+execi(
+"CREATE VIEW VEMPLP \
+  (EMPLOYEENUMBER, \
+  PHONENUMBER) \
+AS SELECT ALL EMPNO , \
+  PHONENO \
+FROM EMP"                               );
+
+  /* Disconnect Database */
+  rc = DbDisconnect();  
+
+  /* attach to a local or remote instance */
+  rc = InstanceAttach(nodeName, user, pswd);
+  if (rc != 0)
+  {
+    return rc;
+  }
+
+  /* The next function will disconnect all the applications from all */
+  /* the databases located in the instance you are attached to. */
+  /* Uncomment the next function if this is acceptable. */
+
+  /* rc = AllApplicationsConnectedToAllDatabasesForceOff(); */
+
+  /* detach from the local or remote instance */
+  rc = InstanceDetach(nodeName);
+  if (rc != 0)
+  {
+    return rc;
+  }
+
+  return rc;
+} /* end main */
+
+int DbConnect(char dbAlias[], char user[], char pswd[])
+{
+  struct sqlca sqlca;
+
+  printf("\n-----------------------------------------------------------");
+  printf("\nUSE THE SQL STATEMENTS:\n");
+  printf("  CONNECT TO\n");
+  printf("TO CONNECT TO A DATABASE.\n");
+
+  /* connect to a database */
+  printf("\n  Execute the statement\n");
+  printf("    CONNECT TO %s\n", dbAlias);
+  if (strlen(user) > 0)
+  {
+    EXEC SQL CONNECT TO :dbAlias USER :user USING :pswd;
+    EMB_SQL_CHECK("database -- connect with userid and password");
+  }
+  else
+  {
+
+    EXEC SQL CONNECT TO :dbAlias;
+    EMB_SQL_CHECK("Database -- Connect");
+  }
+
+  return 0;
+} /* DbConnect */
+
+int DbRestart(char dbAlias[], char user[], char pswd[])
+{
+  struct sqlca sqlca;
+  struct db2RestartDbStruct dbRestartParam;
+
+ printf("\n-----------------------------------------------------------");
+  printf("\nUSE THE DB2 APIs:\n");
+  printf("  db2DatabaseRestart -- RESTART DATABASE\n");
+  printf("TO RESTART A DATABASE.\n");
+
+  /* restart a database */
+  dbRestartParam.piDatabaseName = dbAlias;
+  dbRestartParam.piUserId = user;
+  dbRestartParam.piPassword = pswd;
+  dbRestartParam.piTablespaceNames = NULL;
+  printf("\n  Restart a database.\n");
+  printf("    database alias: %s\n", dbAlias);
+
+  /* restart database */
+  db2DatabaseRestart(db2Version710, &dbRestartParam, &sqlca);
+  DB2_API_CHECK("Database -- Restart");
+
+  return 0;
+} /* DbRestart */
+
+int DbDisconnect(void)
+{
+  struct sqlca sqlca;
+
+  printf("\n-----------------------------------------------------------");
+  printf("\nUSE THE SQL STATEMENTS:\n");
+  printf("  CONNECT RESET");
+  printf("\nTO DISCONNECT FROM THE CURRENT DATABASE.\n");
+
+  /* disconnect from the database */
+  printf("\n  Execute the statement\n");
+  printf("    CONNECT RESET\n");
+
+  EXEC SQL CONNECT RESET;
+  EMB_SQL_CHECK("Database -- Disconnect");
+
+  return 0;
+} /* DbDisconnect */
+
+int AllApplicationsConnectedToAllDatabasesForceOff(void)
+{
+  struct sqlca sqlca;
+
+  printf("\n-----------------------------------------------------------");
+  printf("\nUSE THE DB2 APIs:\n");
+  printf("  sqlefrce -- FORCE APPLICATION\n");
+  printf("TO FORCE OFF ALL THE APPLICATIONS CONNECTED TO ALL DATABASES.\n");
+
+  /* force off all the appl. connected to all databases */
+  printf("\n  Force off all applications connected to all databases.\n");
+
+  /* force application */
+  sqlefrce(SQL_ALL_USERS, NULL, SQL_ASYNCH, &sqlca);
+  DB2_API_CHECK("DBM Config. -- Set");
+
+  return 0;
+} /* AllApplicationsConnectedToAllDatabasesForceOff */
+
+/*********************************************************************/
+/* Function:     execi                                               */
+/* Description:  Execute an SQL statement                            */
+/*********************************************************************/
+int execi (char s[1000]) {
+
+strcpy(sqlstmt.stmt, s);            /* Copy the string to the        */
+                                    /* varying length structure      */
+sqlstmt.len = strlen(sqlstmt.stmt);
+                                    /* Copy the length to the        */
+                                    /* varying length structure      */
+                                    /* Note that this assumes        */
+                                    /* that we will not need a       */
+                                    /* hex 00 in the string in       */
+                                    /* this program                  */
+EXEC SQL
+   EXECUTE IMMEDIATE :sqlstmt;
+                                    /* Execute the statement         */
+EMB_SQL_CHECK("SQL Check");
+
+EXEC SQL COMMIT;
+
+EMB_SQL_CHECK("COMMIT");
+
+printf("\nRunning execi: %s", s);
+
+return 0;                             /* Return to the mainline        */
+
+}
+
+
+int PackageCreate(char *sourceFileBaseName)
+{
+  struct sqlca sqlca;
+
+  char bndFileName[50 + 1 + 3 + 1];
+  char msgFileName[20 + 1 + 3 + 1];
+
+  struct sqlopt *pBindOptions;
+  struct sqloptions *optionsArray;
+
+  printf("\n-----------------------------------------------------------");
+  printf("\nUSE THE DB2 API:\n");
+  printf("  sqlabndx -- BIND\n");
+  printf("TO CREATE A PACKAGE.\n");
+
+  /* create the package */
+  strcpy(bndFileName, sourceFileBaseName);
+  strcat(bndFileName, ".bnd");
+ /* strcpy(msgFileName, sourceFileBaseName);*/
+ 
+  strcpy(msgFileName, "dbsample");
+ 
+
+ /*  msgFileName[6] = '\0';*/ /* truncate to 6 characters */
+  strcat(msgFileName, "_b.msg"); /* _b = bind */
+
+  printf("\n  Create the package.\n");
+  printf("    bnd file name    : %s\n", bndFileName);
+  printf("    package name     : %s\n", sourceFileBaseName);
+  printf("    message file name: %s\n", msgFileName);
+
+  pBindOptions = (struct sqlopt *)malloc(sizeof(struct sqlopt) +
+                 (2 - 1) * sizeof(struct sqloptions));
+  /* for 2 options one more struct sqloptions is needed because */
+  /* struct sqlopt already contains one */
+
+  pBindOptions->header.allocated = 2; /* number of options */
+  pBindOptions->header.used = 2;
+
+  optionsArray = pBindOptions->option;
+  optionsArray[0].type = SQL_BLOCK_OPT;
+  optionsArray[0].val = SQL_BL_ALL; /* cursor blocking = block all */
+  optionsArray[1].type = SQL_ISO_OPT;
+  optionsArray[1].val = SQL_CURSOR_STAB; /* isol. level = cursor stab. */
+
+  /* invoke the bind utility */
+  sqlabndx(bndFileName, msgFileName,NULL, &sqlca);
+ /*sqlabndx(bndFileName, msgFileName, pBindOptions, &sqlca);*/
+
+ DB2_API_CHECK("Package -- Create");
+
+
+  /* free the memory allocated */
+  free(pBindOptions);
+ return 0;
+} /* PackageCreate */
+
+int DbConnectCheck(char dbAlias[], char user[], char pswd[])
+{
+  struct sqlca sqlca;
+
+  /*Check if the database exist*/
+
+  /* connect to a database */
+  if (strlen(user) > 0)
+  {
+    EXEC SQL CONNECT TO :dbAlias USER :user USING :pswd;
+  }
+  else
+  {
+
+    EXEC SQL CONNECT TO :dbAlias;
+    if(sqlca.sqlcode < 0)
+    {
+      return 1;
+    } 
+  }
+
+  return 0;
+}
+
+
+

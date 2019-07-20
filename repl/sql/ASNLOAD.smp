@@ -1,0 +1,6288 @@
+/*********************************************************************/
+/*                                                                   */
+/*     IBM DataPropagator Apply for UNIX AND WINDOWS                 */
+/*                                                                   */
+/*     Sample ASNLOAD program                                        */
+/*                                                                   */
+/*     Licensed Materials - Property of IBM                          */
+/*                                                                   */
+/*     (C) Copyright IBM Corp. 1994, 2002. All Rights Reserved       */
+/*                                                                   */
+/*     US Government Users Restricted Rights - Use, duplication      */
+/*     or disclosure restricted by GSA ADP Schedule Contract         */
+/*     with IBM Corp.                                                */
+/*                                                                   */
+/*********************************************************************/
+/*     !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!                */
+/*     PLEASE READ THE FOLLOWING BEFORE PROCEEDING...                */
+/*     !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!                */
+/*********************************************************************/
+/*                                                                   */
+/*     The ASNLOAD package for DataPropagator consists of 5 files:   */
+/*                                                                   */
+/*     - the sample program (ASNLOAD.SMP)                            */
+/*                                                                   */
+/*       This program contains 4 major code paths:                   */
+/*                                                                   */
+/*           - one using DB2 EXPORT/IMPORT utilities                 */
+/*             (EXPORT/sqluexpt and IMPORT/sqluimpt utilities).      */
+/*                                                                   */
+/*           - one using DB2 EXPORT/LOAD utilities                   */
+/*             (EXPORT/sqluexpr and LOAD/db2load utilities).         */
+/*                                                                   */
+/*           - one using DB2 CROSSLOADER utility                     */
+/*             (CROSSLOADER/db2load utility).                        */
+/*                                                                   */
+/*           - one returning an error return code for an ALTERNATE   */
+/*             FULL REFRESH to Apply (Return Code 1) if a use of the */
+/*             utilities is not applicable.                          */
+/*                                                                   */
+/*       Which one is used depends on your replication environment   */
+/*       and also on the loadx_type you may have specified.          */
+/*                                                                   */
+/* IMPORTANT!! -> Please read the DB2 Administration Guide for       */
+/*                restrictions concerning the DB2 LOAD API.          */
+/*                In particular, you may want to backup your         */
+/*                database before attempting the LOAD, in case you   */
+/*                need to restore it.                                */
+/*             -> If the table being loaded is a parent table        */
+/*                containing a primary key referenced by a foreign   */
+/*                key in a dependent table, replacing data in the    */
+/*                parent table places the dependent table in check   */
+/*                pending state.  The SET CONSTRAINTS statement must */
+/*                then be used to validate the referential and check */
+/*                constraints.                                       */
+/*             -> If forward log recovery is enabled, that is, either*/
+/*                LOGRETAIN or USEREXIT or BOTH are set ON then a    */
+/*                copy of the data loaded will be created on the     */
+/*                applypath directory by default.  However, user MAY */
+/*                use the inifile to set the copy option and the path*/
+/*                where the copyimage will be stored                 */    
+/*             -> If forward log recovery is disabled, that is, both */
+/*                are set OFF for that database then no copy of the  */
+/*                data loaded will be created.                       */
+/*             -> If the subscription set contains DATALINK column,  */
+/*                the sample program will invoke another user exit   */
+/*                program, ASNDLCOPY, to replicate DATALINK files.   */
+/*                Please refer to the prolog section of the          */
+/*                ASNDLCOPY.SMP sample file for how to setup         */
+/*                the ASNDLCOPY program.                             */
+/*                                                                   */
+/*       As is, the sample program is not ready for compilation.     */
+/*       The user first needs to prepare the code as explained       */
+/*       in 'Modifying the sample ASNLOAD program' below.            */
+/*                                                                   */
+/*     - the asnload.h                                               */
+/*                                                                   */
+/*       This file contains all common define clause declarations    */
+/*       and macro definitions used in the ASNLOAD.SMP and           */
+/*       asnparseini.C . It declares common variables and defines    */
+/*       types that are used in the whole package.                   */
+/*                                                                   */
+/*     - the asnparseini.C                                           */
+/*                                                                   */
+/*       This file contains the logic for parsing the inifile        */
+/*       asnload.ini                                                 */
+/*                                                                   */
+/*       You can also modify this logic to your needs. So you can    */
+/*       add new keywords and use their values when setting up your  */
+/*       own API parameters. See 'Modifying the sample ASNLOAD       */
+/*       program' below for details                                  */
+/*                                                                   */       
+/*     - the executable file (ASNLOAD.EXE)                           */
+/*                                                                   */
+/*********************************************************************/
+/*                                                                   */
+/*     Modifying the ASNLOAD sample program:                         */
+/*     -------------------------------------                         */
+/*     - Copy the sample ASNLOAD.smp to ASNLOAD.sqc in a working     */
+/*       directory. Do also copy the other files of the              */
+/*       asnload package to this directory.                          */
+/*                                                                   */
+/*     - make your updates to the sample program (ASNLOAD.SMP)       */
+/*                                                                   */
+/*     - To use your own API utility parameters, modify the          */
+/*       sample program as best fits your needs.                     */
+/*                                                                   */
+/*       IMPORTANT NOTES when updating:                              */
+/*          -> There are several code sections that can be          */
+/*             dependent on your code changes and might be need to   */
+/*             be changed.                                           */
+/*             Search the source code for the modifier flag          */
+/*             *checkasnlogic* to find all these code                */
+/*             sections and check this code until the next           */
+/*             *endchecklogic* is  reached.                          */
+/*                                                                   */
+/*          -> It is recommended that you use your own logic with    */
+/*             setting loadx_type to 2 before you call Apply.        */
+/*             So you can easily insert your code into the paths     */
+/*             that will be taken, when Apply passes a 2 to asnload. */
+/*                                                                   */
+/*          -> If you do so, you have the following options:         */
+/*                                                                   */
+/*             - The first is you ONLY insert your logic in the      */
+/*               function 'runapplychecks' where loadx_type 2 will   */
+/*               be checked (checkasnlogic 3). In this case you      */
+/*               simply define then a loadx_type from 3 to 5 as the  */
+/*               output for 'runapplychecks' and use the             */
+/*               preprogrammed invokation of the utilities. Thus you */
+/*               can avoid a verification of your replication        */
+/*               environment and FORCE asnload to use a particular   */
+/*               utility. Remember that this is at your own risk!    */
+/*                                                                   */
+/*             - The second is you change the logic in the way you   */
+/*               first decide what output 'runapplychecks' should    */
+/*               have. If you want to use loadx_type 2 (no standard  */
+/*               code path) you need to change the logic through the */
+/*               code for your needs. First you should change the    */
+/*               'main' function to set what kind of utility         */
+/*               combination should be taken.                        */
+/*               See *checkasnlogic* in the whole code for this.     */
+/*                                                                   */
+/*          -> If you provide your own code, delete the codelines    */
+/*             that follow *checkasnlogic* 3, otherwise your         */
+/*             compiled code will result in an error message         */
+/*             when invoked with loadx_type 2.                       */
+/*                                                                   */
+/*          -> If your export file size exceeds the 2 GB limit       */
+/*             you might want to split the export - import/load.     */
+/*             For this you need to split the select statement for   */
+/*             the source table. See function split_tbl              */
+/*             and set the correct num_stmt (number of statements).  */
+/*             The utilities will be then called as often as your    */
+/*             num_stmt indicates.                                   */
+/*             See *checkasnlogic* 1, 4 and 5                        */
+/*                                                                   */
+/*          -> Finally you can also modify the call of each Data     */
+/*             Movement Utility itself. So you can for example       */
+/*             set the paramter list for the invokation of a         */
+/*             utility to your own needs. Do this in the             */
+/*             corresponding function calls:                         */
+/*             invoke_EXPORT, invoke_LOAD, invoke_IMPORT.            */
+/*                                                                   */
+/*     - if desired make your changes also to the ASNPARSEINI.C      */
+/*                                                                   */
+/*       IMPORTANT NOTES when updating:                              */
+/*          -> If you wish to add a new keyword modify the           */
+/*             following:                                            */
+/*                                                                   */
+/*             asnload.h - "typedef struct infile_values"            */
+/*             Declare in this structure the name and type of        */
+/*             the new value                                         */
+/*                                                                   */
+/*             asnparseini.C - "structure double_commands"           */
+/*             Insert into this structure a bool indicator for       */
+/*             your new keyword to handle double specified keywords  */
+/*             later.                                                */
+/*                                                                   */
+/*             asnparseini.C - function "check_keyword"              */
+/*             Insert here a  function call for the new keyword that */
+/*             will read the value. Compare how the other keywords   */
+/*             are checked.                                          */
+/*             The new function should then be built like            */
+/*             this:                                                 */
+/*                - return, if this keyword is already checked       */
+/*                - you can use the functions read_num_value,        */
+/*                  read_character_value and read_bool_value         */
+/*                  to extract the value depending on what type it   */
+/*                  is                                               */
+/*                - don't forget to set the bool flag for the just   */
+/*                  read value in the double_command variable        */
+/*                  As an example see the function check_uid_value.  */
+/*                - If you need to build a list with multiple values */
+/*                  for one keyword see check_lobfile_value how it   */
+/*                  can be done                                      */
+/*                                                                   */
+/*             asnparseini.C - function "set_defaults"               */
+/*             Insert here the logic for setting a default           */
+/*             value for the new keyword.                            */
+/*                                                                   */
+/*             asnparseini.C - function "reset_double_commands"      */
+/*             Insert here a command to reset the double command     */
+/*             indicator for the new keyword. Compare with the       */
+/*             other keywords for details.                           */
+/*                                                                   */
+/*             asnparseini.C - function "create_new_section"         */
+/*             Insert here the logic for copying the value (default  */
+/*             or common) into the new created memory block for a    */
+/*             new section. See other keywords as examples.          */
+/*                                                                   */
+/*             asnparseini.C - function "trace_inifileparams"        */
+/*             Insert here a trace command to show the value for     */
+/*             the new keyword if needed. Compare with other         */
+/*             keywords for details.                                 */
+/*                                                                   */
+/*     - Also, define the correct OS #define in the asnload.h        */
+/*         if WINDOWS,   => #define onNT 1                           */
+/*         if UNIX,LINUX => #define onUNIX 1                         */
+/*                                                                   */
+/*     - prep, compile and link the sample program after the         */
+/*       desired changes are made. Please refer to                   */
+/*       DB2 Programming Guide for details.                          */
+/*                                                                   */
+/*     - place ASNLOAD.EXE in a directory which is in the search     */
+/*       path for programs and commands specified by the PATH        */
+/*       environment variable.                                       */
+/*                                                                   */
+/*     - bind the executable to the database using the bindfile      */
+/*       generated in prep or copy the bnd file into the /bnd        */
+/*       directory                                                   */
+/*                                                                   */
+/*     - if the subscription set contains DATALINKs, also place      */
+/*       ASNDLCOPY.EXE in a directory that is in the search path.    */
+/*                                                                   */
+/*********************************************************************/
+/*                                                                   */
+/*     The parameters passed to ASNLOAD are as follows:              */
+/*     ------------------------------------------------              */
+/*     - target server                                               */
+/*     - target owner                                                */
+/*     - target table                                                */
+/*     - trace option                                                */
+/*     - source server                                               */
+/*     - source owner                                                */
+/*     - source table                                                */
+/*     - control server                                              */
+/*     - apply qualifier                                             */
+/*     - subscription set name                                       */
+/*     - apply path                                                  */
+/*     - loadx_type                                                  */
+/*     - password file parameter (not needed in the sample exit)     */
+/*     - datalink flag                                               */
+/*     - sql statement                                               */
+/*                                                                   */
+/*********************************************************************/
+/*                                                                   */
+/*           NOTICE TO USERS OF THE SOURCE CODE EXAMPLE              */
+/*                                                                   */
+/* INTERNATIONAL BUSINESS MACHINES CORPORATION PROVIDES THE SOURCE   */
+/* CODE EXAMPLE "AS IS" WITHOUT WARRANTY OF ANY KIND, EITHER         */
+/* EXPRESSED OR IMPLIED, INCLUDING, BUT NOT LIMITED TO THE IMPLIED   */
+/* WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR        */
+/* PURPOSE. THE ENTIRE RISK AS TO THE QUALITY AND PERFORMANCE OF THE */
+/* SOURCE CODE EXAMPLE IS WITH YOU. SHOULD ANY PART OF THE SOURCE    */
+/* CODE EXAMPLE PROVES DEFECTIVE, YOU (AND NOT IBM) ASSUME THE       */
+/* ENTIRE COST OF ALL NECESSARY SERVICING, REPAIR OR CORRECTION.     */
+/*                                                                   */
+/*********************************************************************/
+
+/******************************************************************************/
+/*  include files                                                             */
+/******************************************************************************/
+
+/* ASNLOAD Package includes:*/
+#include "asnload.h"
+#include "asnparseini.C"
+
+/* C function includes: */
+#include <ctype.h>
+#include <memory.h>
+#include <stdio.h>
+#include <stdarg.h>
+#include <string.h>
+#if onUNIX
+  #include <strings.h>
+#endif
+#include <stdlib.h>
+#include <malloc.h>
+#include <sys/types.h>
+#include <signal.h>
+#include <errno.h>
+#include <time.h>
+
+/* db2 includes: */
+#include <sqlcli.h> 
+#include <sqlcli1.h>
+#include <sqlenv.h>
+#include <sqluv.h>
+#include <sqlutil.h>
+
+#include <db2ApiDf.h>
+
+EXEC SQL INCLUDE SQLCA;
+EXEC SQL INCLUDE SQLDA;
+
+/*****************************************************************************/
+/* declare common variables used in all functions and APIs                   */
+/*****************************************************************************/
+SQL_API_RC  rc = 0;
+
+/*****************************************************************************/
+/* declare parameters used in EXPORT (sqluexpt) and IMPORT                   */
+/* (sqluimpt) APIs.                                                          */
+/*****************************************************************************/
+unsigned char  *datafile    = NULL;
+
+/*****************************************************************************/
+/*  Variables                                                                */
+/*****************************************************************************/
+
+// variables that store the parameters passed from APPLY:
+char trg_srvr[MAX_LENGTH_DBALIAS+1];
+//char trg_owner[SCHEMA_LENGTH+1];
+//char trg_tbl[TABLE_NAME_LENGTH+1];
+short trc;
+char src_srvr[MAX_LENGTH_DBALIAS+1];
+//char src_owner[SCHEMA_LENGTH+1];
+//char src_table[TABLE_NAME_LENGTH+1];
+char cntl_srvr[MAX_LENGTH_DBALIAS+1];
+//char app_qual[APPQUAL_LENGTH+1];
+//char set_name[SETNAME_LENGTH+1];
+
+//this structure holds the select stmnt from the sourcetable:
+struct 
+{
+  short len;
+  char s[ASN_SQL_STMNT_LENGTH+1];
+} sql;
+
+//this structure holds the replace/insert stmnt into the trgttable:
+struct
+{
+  short len;
+  char s[ASN_REPL_STMNT_LENGHT+1];
+} sql_repl;
+
+char* apply_path;
+short strlen_applypath;
+
+char loadx_type[7];
+
+char* pwdfile;
+short strlen_pwdfile;
+
+bool dl_flag;
+
+/*************************************************************************/
+ 
+/************ message and tracefile declarations *************************/
+FILE *ftrc;
+FILE *floadxmsg;
+char* trcname;
+short strlen_trcname;
+
+char* DATAFILE;
+char* DATAFILE2;
+char* IMSGFILE;
+char* EMSGFILE;
+char* gLMSGFILE;
+char* sLMSGFILE;
+char* DLINFILE;
+char* DLOUTFILE;
+
+
+/****** declarations taken and still used from the old ansload routine ****/
+
+short iii;
+db2int32 totalRowsExported;
+char msg_buffer[BUF_SIZE]; //used to print erromessages
+char FileTyp2[] = SQL_IXF; //used in export, immport, load
+int  numDatalinkCol = 0;   //datalink handling
+
+//this structure will be needed to handle datalinks in output_DATALINK:
+typedef struct dlColInfo 
+{
+  int  id;
+  int  pos;
+  char null;
+};
+
+bool fnd_pwd;
+
+/***************** structures needed for running the applychecks **************/
+
+// this structure is needed for interfunctional communication and part of the
+// structure repl_srvr_config
+struct ctrl_flags
+{
+  short server; /* indiactes functions which server is meant (src, trgt ...)  */
+  bool  need_ctrl_values; /* flag to prevent multiple connects when connecting*
+                           * to the control server e.g. ctrl == trgt server   */
+  short getnick_result;   /* for the source server, indicates the result      *
+                           * of the select nickname from stmnt to be analysed *
+                           * later                                            */
+}ctrl_flags;
+
+// this structure holds all information about a given database:
+struct repl_srvr_config
+{
+  bool db2LUW;  //DB2 UDB for Linux, UNIX, Windows
+  char db2typeANDvers[10];//holds the db and db2_version -> passed to ASNDLCOPY
+  char db[4];   //DB2 type can be SQL (UNIX/WINDOWS), QSQ (OS/400), DSN (z/OS and OS/390)
+                //extracted from db2typeANDvers
+  short db2_version;//db2 version extracted from db2typeANDvers
+  bool server_local;    
+  bool table_nickname;
+  char table_nickname_type[31]; //e.g oracle
+  bool target_multinode;
+  char loadx_src_n_owner[SCHEMA_LENGTH+1];
+  char loadx_src_n_table[TABLE_NAME_LENGTH+1];
+  struct ctrl_flags cflags;
+}repl_srvr_config;
+
+//declare the structure
+struct repl_srvr_config sConfig; //concerning source server
+struct repl_srvr_config tConfig; //concerning target server
+
+//declare the pointers to this structures
+struct repl_srvr_config* psrcConfig; //concerning source server
+struct repl_srvr_config* ptrgtConfig;//concerning target server
+
+/***************** Declarations needed for alterstmnt ************************/
+
+enum tokType {
+  tokSELECT = 0x0000,
+  tokFROM,
+  tokREST,
+  tokExpr,
+  tokAsterisk,
+  tokComma,
+  tokDot,
+  tokSN,
+  tokTN
+};
+
+enum lexerStates {
+  stateSTART = 0x0000,
+  stateSELECT,
+  stateFROM,
+  stateREST,
+  stateExpr,
+  stateAsterisk,
+  stateComma,
+  stateDot,
+  stateSN,
+  stateTN
+};
+
+struct token 
+{
+  enum tokType type;
+  char *loc;
+  int length;
+  int insertSpaceOnStringify;
+  int relMemory;
+};
+
+struct tokStream
+{
+  int items;
+  int allocatedItems;
+  struct token tokens[1];
+};
+
+/*****************************************************************************/
+char timestmpstr[TIMESTRING_LENGTH+1];// the format is YYYY/MM/DD HH:MM:SS
+
+/* indicates the invoke_LOAD function that for a remote targettable */
+/* a push load is necessary                                         */
+bool push_load = FALSE;
+
+/* stores the Lobfile/pathsinfos ... needed as global to  */
+/* enable the deletion of  the lobfiles later             */
+//Note! these values are only set after the export operation
+struct sqlu_media_list LobPathList;
+struct sqlu_media_list LobFileList;
+
+/********** handle export/import/load of splitted source tables **************/
+short curr_stmt;
+
+/*checkasnlogic*//*1*/
+short num_stmt = 1; /* default value: no split sql - see fct split_tbl if */
+                    /* you need to split your source table select stmnt   */
+/* if using the function split_tbl the following variable becomes relvant */
+/* ... see also function split_tbl for further use of split_stmts         */
+/*
+  unsigned char split_stmts[][84] = 
+  {
+  "SELECT * FROM EMP WHERE EMPNO <= '200000'",
+  "SELECT * FROM EMP WHERE EMPNO > '200000' AND EMPNO < '500000'",
+  "SELECT * FROM EMP WHERE EMPNO > '500000'"
+  };  
+*/
+/*endchecklogic*/
+
+/*****************************************************************************/
+
+/* source col name list           */
+char sbcolnames[32700 + 1];      /* before-image */
+char scolnames[32700 + 1];       /* source col list passing to utility */
+
+/* target col name list           */
+char tbcolnames[32700 + 1];      /* before-image */
+char tcolnames[32700 + 1];       /* target col list passing to utility */
+
+/* const */
+const char DQ[]         = "\"";
+const char CMMA[]       = ", ";
+const char COMMITSEQ_DEFAULT[] = "X'00000000000000000001'";
+const char INTENTSEQ_DEFAULT[] = "X'00000000000000000000'";
+const char OPERATION_DEFAULT[] = "'I'";
+const char LOGMARKER_DEFAULT[] = "CURRENT TIMESTAMP";
+
+EXEC SQL BEGIN DECLARE SECTION;
+  char cUsrid[19];                      /* userid passed to CONNECT    */
+  char cPwd[19];                        /* userid password for CONNECT */
+  char cServer[9];                      /* dbalias */
+  char schemaname[129];                 //TABLE_NAME_LENGTH+1
+  char tablename[129];                  //TABLE_NAME_LENGTH+1
+  char r_srvr[129];                     //servername from crt server stmnt
+  char s_type[31];                      //servertype from crt server stmnt
+  char t_type[2];                       //table type e.g. 'N' or 'T'
+  char arch_lvl[5];                     //holds the version of the ctrlsrvr
+  char part_mode[2];                    //info of the partitionmode
+short lobcount;                         //function checkiflobs to set push_load
+  struct{
+    short len;
+    char s[32001];                      //length of ASN_SQL_STMNT_LENGTH+1
+  } temp_stmt;
+char stmnt_4_applychecks[501];          //holds stmnts for several queries
+  short indic1;                         //indicator variables for NULL values
+  short indic2;                         //indicator variables for NULL values
+
+/* subs_membr info */
+ char   app_qual[19];
+ char   set_name[19];
+ char   src_owner[129];
+ char   src_table[129];
+ char   trg_owner[129];
+ char   trg_tbl[129];
+ short  trg_struct;
+
+/* subs_cols info */
+ char   CCOLTYPE[2];
+ char   CTRGNAME[129];
+ short  CCOLNO;
+ struct {
+   short len;
+   char s[1024];
+   }    CEXPRESSION;
+
+ struct  {
+     short len;
+     char s[1500];
+   }      predicates;
+
+short pred_ind; 
+
+EXEC SQL END DECLARE SECTION;
+
+
+/********************** Needed Function decalarations  ************************/
+
+int connect_db(char *srvrName);
+
+/******************************************************************************/
+/******************************************************************************/
+/****                Begin of Code Section                                *****/
+/******************************************************************************/
+/******************************************************************************/
+
+/******************************************************************************
+ *
+ *  Function Name  = trace
+ *
+ *  Descriptive Name = trace
+ *
+ *  Function = prints out information either into a tracefile or to the screen
+ *
+ *  Input params:
+ *    format: string to be traced out
+ *    trc  (global) : indicates if tracing is enabled
+ *    ftrc (global) : file pointer to the trace file      
+ *  Output params:
+ *
+ *  Output params for DB2SQL param style:
+ *
+ *  Dependencies:
+ *
+ *  Normal Return = void
+ *
+ *  Error Return = void
+ *
+******************************************************************************/
+void trace(char *format, ...)
+{
+  va_list  arg_ptr;
+  short    length;
+  char     line[LINELENGTH + 1];
+  char    *position;
+  static char tracestring[ASN_SQL_STMNT_LENGTH*2];
+  short    aLineLength;
+  short    trcfile;
+
+  tracestring[0] = '\0';
+  
+  if (!trc)
+  {
+    return;
+  }
+  if (ftrc == NULL)
+  {
+    trcfile = no;
+  } else
+  {
+    trcfile = yes;
+  }
+
+  //print formatted into tracestring
+  va_start(arg_ptr, format);
+  vsprintf(tracestring, format, arg_ptr);
+  va_end(arg_ptr);
+  
+  line[LINELENGTH] = 0;
+  position = tracestring;
+  length = strlen(tracestring);
+  aLineLength = LINELENGTH;
+    
+  while (length > 0)
+  {
+    if (length > aLineLength)
+    {
+      memcpy(line, position, aLineLength);
+    } else
+    {
+      strcpy(line, position);
+    }
+    line[aLineLength] = '\0';
+    if (trcfile) 
+    {
+      fprintf(ftrc,"%s\n", line);
+    } else
+    {
+      printf("%s\n", line);
+    }
+    length = length - aLineLength;
+    position = position + aLineLength;
+    
+  } /* endwhile */
+  
+  if (trcfile)
+  {   
+    fflush(ftrc);
+  }
+  
+} /* end of routine trace */
+
+/******************************************************************************
+ *
+ *  Function Name  = printasnloadmsg
+ *
+ *  Descriptive Name = print asnload message
+ *
+ *  Function = prints out information into the general asnload messagefile
+ *
+ *  Input params:
+ *    format: string to be processed
+ *    floadxmsg (global): file pointer to the general asnload message file
+ *    ftrc (global): file pointer to the trace file
+ *
+ *  Output params:
+ *
+ *  Output params for DB2SQL param style:
+ *
+ *  Dependencies:
+ *
+ *  Normal Return = void
+ *
+ *  Error Return = void
+ *
+******************************************************************************/
+void printasnloadmsg(char *format, ... )
+{
+  va_list  arg_ptr;
+  short    length;
+  char     line[LINELENGTH + 1];
+  char    *position;
+  static char messagestring[ASN_SQL_STMNT_LENGTH*2];
+  short    aLineLength;
+ 
+  messagestring[0] = '\0';
+  va_start(arg_ptr, format);
+  vsprintf(messagestring, format, arg_ptr);
+  va_end(arg_ptr);
+  
+  line[LINELENGTH] = 0;
+  position = messagestring;
+  length = strlen(messagestring);
+  aLineLength = LINELENGTH;
+    
+  while (length > 0)
+  {
+    if (length > aLineLength)
+    {
+      memcpy(line, position, aLineLength);
+    } else
+    {
+      strcpy(line, position);
+    }
+    line[aLineLength] = '\0';
+    fprintf(floadxmsg,"%s\n", line);
+    length = length - aLineLength;
+    position = position + aLineLength;
+  } /* endwhile */
+    
+  fflush(floadxmsg);
+  
+}
+
+/******************************************************************************
+ *
+ *  Function Name  = prt_err
+ *
+ *  Descriptive Name = print errormessage
+ *
+ *  Function = invokes the sqlaintp API and traces out an sqlerror if there is
+ *             when calling trace
+ *
+ *  Input params:
+ *    msg_buffer (global)
+ *
+ *  Output params:
+ *
+ *  Output params for DB2SQL param style:
+ *
+ *  Dependencies: 
+ *
+ *  Normal Return = void
+ *
+ *  Error Return = void
+ *
+******************************************************************************/
+void prt_err()
+{
+  SQL_API_RC rc;
+
+  /* get the message and send it to stderr */
+  rc = sqlaintp(msg_buffer, BUF_SIZE, 80, &sqlca);
+  if (rc >= 0)
+  {
+    if (sqlca.sqlcode > 0)
+    {
+      if (trc)
+      {
+        trace ("\n  *** ASNLOAD WARNING ***:  %s", msg_buffer);
+      }
+      printasnloadmsg("\n  *** ASNLOAD WARNING ***:  %s", msg_buffer);
+    }
+    else
+    {
+      if (trc)
+      {
+        trace ("\n  *** ASNLOAD ERROR ***:  %s", msg_buffer);
+      }
+      printasnloadmsg("\n  *** ASNLOAD ERROR ***:  %s", msg_buffer);
+    }
+  } 
+}
+
+/******************************************************************************
+ *
+ *  Function Name  = gettimestamp
+ *
+ *  Descriptive Name = get time stamp
+ *
+ *  Function = get the current system time
+ *             
+ *  Input params:
+ *
+ *  Output params:
+ *    deststring: string where the time will be writen to 
+ *    strlendestring: length of deststring
+ *  Output params for DB2SQL param style:
+ *
+ *  Dependencies: 
+ *
+ *  Normal Return = void
+ *
+ *  Error Return = void
+ *
+******************************************************************************/
+void gettimestamp ( char* deststring, int strlendestring)
+{
+  // the format is YYYY/MM/DD HH:MM:SS
+  time_t lcltime;
+  struct tm *timeptr;
+  time(&lcltime);
+  timeptr = localtime(&lcltime);
+  strftime(deststring, strlendestring, "%Y/%m/%d %H:%M:%S", timeptr);
+}
+
+/******************************************************************************
+ *
+ *  Function Name  = checkiflobs
+ *
+ *  Descriptive Name = check if lobs
+ *
+ *  Function = Runs a sql statement against a table if it contains lobs.
+ *             This is needed to decide if a push load is possible.
+ *             If there are lobs the push_load variable will be set.
+ *
+ *  Input params:
+ *     trc(global)
+ *  Output params:
+ *     push_load (global)
+ *
+ *  Output params for DB2SQL param style:
+ *
+ *  Dependencies:
+ *
+ *  Normal Return = 0 
+ *
+ *  Error Return = ASNLOAD_ERROR
+ *
+******************************************************************************/
+int checkiflobs()
+{
+  rc=0;
+  if (trc)
+  {
+    trace("\n Check the Control Server if Sourcetable contains LOBs (checkiflobs)");
+  }
+  
+  rc=connect_db(cntl_srvr);
+  if (rc!=0)
+  {
+    goto exit;
+  }
+
+  sprintf(stmnt_4_applychecks,"SELECT COUNT(*) FROM ASN.IBMSNAP_SUBS_COLS WHERE "
+          "APPLY_QUAL = '%s' AND SET_NAME = '%s' AND WHOS_ON_FIRST = 'S' AND "
+          "TARGET_OWNER='%s' AND TARGET_TABLE = '%s' AND COL_TYPE = 'L' ",
+          app_qual,set_name,trg_owner,trg_tbl);
+  
+  EXEC SQL PREPARE qiflob1 FROM :stmnt_4_applychecks;
+  if ((SQLCODE == -818) || (SQLCODE == -805)) 
+  {
+    if (trc)
+    {
+      trace("  ERR: ASNLOAD might not have been correctly bound");
+    }
+    prt_err();                
+    rc=ASNLOAD_ERROR;
+    goto exit;
+  }
+
+  EXEC SQL DECLARE ciflob1 CURSOR FOR qiflob1;
+  EXEC SQL OPEN ciflob1;
+  EXEC SQL FETCH ciflob1 INTO :lobcount;
+  
+  if ( SQLCODE != 0 ) 
+  {
+    if (trc)
+    {
+      trace("  FETCH from Cursor sqlcode is %d," 
+            "sqlstate is %s",
+            SQLCODE, sqlca.sqlstate);
+      trace("  Statement: %s",stmnt_4_applychecks);
+    }
+    prt_err();
+    rc=ASNLOAD_ERROR;
+    goto exit;
+  } else
+  {
+    if (trc)
+    {
+      trace("  INF: The sourcetable has '%d' lob column(s)",lobcount);
+    }
+    if (lobcount==0)
+    {
+      push_load=TRUE;
+    }
+  }
+  
+  EXEC SQL CLOSE ciflob1;
+  
+ exit:
+  
+  if (trc)
+  {
+    trace(" Exiting checkiflobs with return code %d\n",rc); 
+  }
+
+  return rc;
+  
+}
+
+
+/******************************************************************************
+ *
+ *  Function Name  = get_ctrlsrvr_values
+ *
+ *  Descriptive Name = get control server values
+ *
+ *  Function = runs a queries against apply control tables
+ *             to find out the archlvl, loadx_src_n_owner
+ *             or loadx_src_n_table
+ *             
+ *  Input params:
+ *    trc (global)
+ *
+ *  Output params:
+ *    psrcConfig (global)
+ *    archlvl (global)
+ *
+ *  Output params for DB2SQL param style:
+ *
+ *  Dependencies:
+ *
+ *  Normal Return = 0
+ *
+ *  Error Return = ASNLOAD_ERROR
+ *
+******************************************************************************/
+int get_ctrlsrvr_values()
+{
+  rc=0;
+
+  if (trc)
+  {
+    trace("\n Getting Control Server Values (get_ctrlsrvr_values)");
+  }
+
+  // first get the  control server version (archlvl)
+  sprintf(stmnt_4_applychecks,
+          "SELECT ARCH_LEVEL FROM ASN.IBMSNAP_SUBS_SET "
+          "WHERE APPLY_QUAL='%s' AND SET_NAME='%s' AND WHOS_ON_FIRST='S'",
+          app_qual,set_name);
+  
+  EXEC SQL PREPARE qarch1 FROM :stmnt_4_applychecks;
+  if ((SQLCODE == -818) || (SQLCODE == -805)) 
+  {
+    if (trc)
+    {
+      trace("  ERR: ASNLOAD might not have been correctly bound");
+    }
+    prt_err();
+    rc=ASNLOAD_ERROR;
+    goto exit;
+  }
+
+
+  EXEC SQL DECLARE carch1 CURSOR FOR qarch1;
+  EXEC SQL OPEN carch1;
+  EXEC SQL FETCH carch1 INTO :arch_lvl :indic1;
+  
+  if ( SQLCODE != 0 ) 
+  {
+    if (trc)
+    {
+      trace("  FETCH from Cursor sqlcode is %d," 
+            "sqlstate is %s",
+            SQLCODE, sqlca.sqlstate);
+      trace("  Statement: %s",stmnt_4_applychecks);
+    }
+    prt_err();
+    rc=ASNLOAD_ERROR;
+    goto exit;
+  } else
+  {
+    if (trc)
+    {
+      trace("  INF: Control server is version '%s'",arch_lvl);
+    }
+  }
+  
+  EXEC SQL CLOSE carch1;
+
+  //get nickname values from ASN.IBMSNAP_SUBS_MEMBR and store the result in psrcConfig
+  //because this information belongs to the source server
+  if ( strcmp(arch_lvl,"0801")<0 )
+  {
+    psrcConfig -> cflags.getnick_result = OLD_ARCHLVL;
+  } else
+  {
+    //sourceview qual 0 or 1 -> both possible
+    sprintf(stmnt_4_applychecks,"SELECT LOADX_SRC_N_OWNER, LOADX_SRC_N_TABLE "
+            "FROM ASN.IBMSNAP_SUBS_MEMBR "
+            "WHERE APPLY_QUAL='%s' AND SET_NAME ='%s' AND "
+            "TARGET_OWNER='%s' AND TARGET_TABLE='%s' AND WHOS_ON_FIRST='S' "
+            "AND ( (SOURCE_VIEW_QUAL=0) OR (SOURCE_VIEW_QUAL=1) )",
+            app_qual, set_name, trg_owner, trg_tbl);
+    if (trc)
+    {
+      trace("  Selecting loadx_src_n_owner and loadx_src_n_table "
+            "from ASN.IBMSNAP_SUBS_MEMBR");
+    }
+      
+    EXEC SQL PREPARE qnick FROM :stmnt_4_applychecks;
+    
+    if ((SQLCODE == -818) || (SQLCODE == -805)) 
+    {
+      if (trc)
+      {
+        trace("  ERR: ASNLOAD might not have been correctly bound");
+      }
+      prt_err();
+      rc=ASNLOAD_ERROR;
+      goto exit;
+    }
+    EXEC SQL DECLARE cnick CURSOR FOR qnick;
+    EXEC SQL OPEN cnick;
+    EXEC SQL FETCH cnick INTO :schemaname :indic1, :tablename :indic2;
+
+    //if column is not found (only if the unlikely case of newer versions)
+    //set as not found
+    if (SQLCODE == -207)
+    {
+      psrcConfig -> cflags.getnick_result = NICKS_NOTFOUND_NOTABLE;
+    } else if (SQLCODE !=0)
+    {
+      if (trc)
+      {
+        trace("  FETCH from Cursor sqlcode is %d, " 
+              "sqlstate is %s",
+              SQLCODE, sqlca.sqlstate);
+        trace("  Statement: %s",stmnt_4_applychecks);
+      }
+      prt_err();
+      rc=ASNLOAD_ERROR;
+      goto exit;
+    }
+      
+    if ( indic1==-1 && indic2==-1 )
+    {
+      psrcConfig -> cflags.getnick_result = NICKS_NOT_SET;
+      goto exit;
+    } else if ( indic1==-1 || indic2==-1 )
+    {
+      psrcConfig -> cflags.getnick_result = NICKS_INCOMPLETED_SET;
+      goto exit;
+    } else
+    {
+      psrcConfig -> cflags.getnick_result = NICKS_ARE_SET;
+      strcpy(psrcConfig -> loadx_src_n_owner,schemaname);
+      strcpy(psrcConfig -> loadx_src_n_table,tablename);
+    }
+      
+    EXEC SQL CLOSE cnick;
+
+  } // end of else path 
+  
+  
+ exit:
+  
+  if (trc)
+  {
+    trace(" Exiting get_ctrlsrvr_values with return code %d\n",rc); 
+  }
+  
+  return rc;
+  
+}//end of get_ctrlsrvr_values
+
+/******************************************************************************
+ *
+ *  Function Name  = get_cfg_values
+ *
+ *  Descriptive Name = get configuration values
+ *
+ *  Function = this function will run several checks against a database to
+ *             find out what type, version it is or if the table is a nickname
+ *             it populates almost every member of the struct repl_srvr_config
+ *             
+ *  Input params:
+ *    trc (global):traceindicator
+ *
+ *  Output params:
+ *    srvrConfig: is a pointer to a struct repl_srvr_config - either to sConfig
+ *                or tConfig, what means it receives those values from the
+ *                source or target server
+ *
+ *  Output params for DB2SQL param style:
+ *
+ *  Dependencies:
+ *
+ *  Normal Return = 0
+ *
+ *  Error Return = ASNLOAD_ERROR,
+ *                 ASNLOAD_ALTERNATE_FULL_REFRESH
+ *
+******************************************************************************/
+int get_cfg_values(struct repl_srvr_config* srvrConfig)
+{
+  rc=0;
+  
+  char tempstring[3];//holds the first 2 numbers of the db2 version
+  char schemaname[SCHEMA_LENGTH+1];
+  char tablename[TABLE_NAME_LENGTH+1];
+  char server[MAX_LENGTH_DBALIAS+1];
+
+  if ( srvrConfig->cflags.server == ASN_SRC_SRVR )
+  {
+    strcpy(schemaname,src_owner);
+    strcpy(tablename,src_table);
+    strcpy(server,src_srvr);
+  } else if ( srvrConfig->cflags.server == ASN_TRGT_SRVR )
+  {
+    strcpy(schemaname,trg_owner);
+    strcpy(tablename,trg_tbl);
+    strcpy(server,trg_srvr);
+  }
+
+  if (trc)
+  {
+    trace("\n Getting the configuration for the %s (get_cfg_values): %s",
+          asnConst2String(srvrConfig -> cflags.server), server );
+  }
+  
+  //connect to server if necessary
+  if ( (srvrConfig ->cflags.server == ASN_SRC_SRVR) && 
+       (srvrConfig -> server_local == TRUE) //means SRC==TRGT
+     )
+  {
+    //don't make an extra connection, because src_srvr is local to the target what
+    //the actual connection is (because target was checked before) and save some time
+    strncpy(srvrConfig -> db2typeANDvers, ptrgtConfig -> db2typeANDvers, 8);
+    strcpy(srvrConfig -> db, ptrgtConfig -> db);
+    srvrConfig -> db2_version = ptrgtConfig -> db2_version;
+  } else
+  {
+    rc=connect_db(server);
+    if (rc!=0)
+    {
+      goto exit;
+    }
+
+    /* get db2_type and version from the connect-sqlca */
+    //the following string contains both information
+    //and will be passed to ASNDLCOPY
+    strncpy(srvrConfig -> db2typeANDvers, sqlca.sqlerrp, 8);
+    //seperate those information for further processing
+    strncpy(srvrConfig -> db, srvrConfig ->db2typeANDvers, 3);
+    srvrConfig -> db[3]='\0';
+    
+    strncpy(tempstring, &((srvrConfig -> db2typeANDvers)[3]),2);
+    tempstring[2]='\0';
+    srvrConfig -> db2_version=atoi(tempstring);
+  }
+
+  // QSQ == AS/400
+  if(strcmp(srvrConfig -> db,"QSQ")==0)
+  {
+    srvrConfig -> db2LUW = FALSE;
+    srvrConfig -> table_nickname=FALSE;
+    srvrConfig -> table_nickname_type[0]='\0';
+    if (srvrConfig -> cflags.server == ASN_TRGT_SRVR)
+    {
+      srvrConfig -> target_multinode = FALSE;
+    }
+  }
+  // DSN == OS/390
+  else if (strcmp(srvrConfig -> db,"DSN")==0 )
+  {
+    srvrConfig -> db2LUW = FALSE;
+    srvrConfig -> table_nickname=FALSE;
+    srvrConfig -> table_nickname_type[0]='\0';
+    if (srvrConfig -> cflags.server == ASN_TRGT_SRVR)
+    {
+      srvrConfig -> target_multinode = FALSE;
+    }
+  }
+  else if ( strcmp(srvrConfig ->db, "SQL")!=0 )
+  {
+    if(trc)
+    {
+      trace("  WRN: Unknown Server type: %s",srvrConfig -> db);
+    }
+      printasnloadmsg("  WRN: Unknown Server type: %s",srvrConfig -> db );
+    rc=ASNLOAD_ALTERNATE_FULL_REFRESH;
+    goto exit;
+  }
+  // SQL = DB2LUW (LINUX/UNIX/WINDOWS)
+  else
+  {
+    if ( (srvrConfig -> db2_version  >= 02 )&&
+         ( srvrConfig -> db2_version <=07 ) )
+    {
+      srvrConfig -> db2LUW=TRUE;
+      srvrConfig -> table_nickname=FALSE;
+      srvrConfig -> table_nickname_type[0]='\0';
+    }
+    //if (db2_version == 2) DJ or Version 2 table
+    /*
+      Note: The check for DataJoiner nickname was deleted,
+      because DB2 V81 can not connect to a DJ database
+    */
+    // if V8 catalog tables -> check if table nickname
+    else if ( srvrConfig -> db2_version >= 8 )
+    {
+      srvrConfig -> db2LUW=TRUE;
+
+      //find out if table is nickname or not
+      sprintf(stmnt_4_applychecks,"SELECT TYPE FROM SYSCAT.TABLES "
+              "WHERE TABSCHEMA='%s' AND TABNAME='%s'",schemaname, tablename );
+          
+      EXEC SQL PREPARE qcfg3 FROM :stmnt_4_applychecks;
+          
+      if ((SQLCODE == -818) || (SQLCODE == -805)) 
+      {
+        if (trc)
+        {
+          trace("  ERR: ASNLOAD might not have been correctly bound");
+        }
+        prt_err();
+        rc=ASNLOAD_ERROR;
+        goto exit;
+      }
+          
+      EXEC SQL DECLARE ccfg3 CURSOR FOR qcfg3;
+      EXEC SQL OPEN ccfg3;
+      EXEC SQL FETCH ccfg3 INTO :t_type :indic1;
+          
+      if ( SQLCODE != 0 ) 
+      {
+        if (trc)
+        {
+          trace("  FETCH from Cursor sqlcode is %d," 
+                "sqlstate is %s",
+                SQLCODE, sqlca.sqlstate);
+          trace("  Statement: %s", stmnt_4_applychecks);
+        }
+        prt_err();
+        rc=ASNLOAD_ERROR;
+        goto exit;
+      }
+      EXEC SQL CLOSE ccfg3;
+          
+      //if table is no nick
+      if (t_type[0]!='N')
+      {
+        srvrConfig -> table_nickname=FALSE;
+        srvrConfig -> table_nickname_type[0]='\0';
+      }
+      //if table is nickname
+      else
+      {
+        srvrConfig -> table_nickname=TRUE;
+
+        if (srvrConfig -> cflags.server == ASN_TRGT_SRVR)
+        {
+          /* find out what tabletype (needed only for the target) */
+          sprintf(stmnt_4_applychecks,"SELECT a.TABSCHEMA, a.TABNAME, b.SERVERNAME, "
+                  "b.SERVERTYPE FROM SYSCAT.TABOPTIONS a, SYSCAT.SERVERS b "
+                  "WHERE a.OPTION='SERVER' AND VARCHAR(a.SETTING) = b.SERVERNAME");
+                  
+          EXEC SQL PREPARE qcfg4 FROM :stmnt_4_applychecks;
+          if ((SQLCODE == -818) || (SQLCODE == -805)) 
+          {
+            if (trc)
+            {
+              trace("  ERR: ASNLOAD might not have been correctly bound");
+            }
+            prt_err();
+            rc=ASNLOAD_ERROR;
+            goto exit;
+          }
+          
+          EXEC SQL DECLARE ccfg4 CURSOR FOR qcfg4;
+          EXEC SQL OPEN ccfg4;
+          EXEC SQL FETCH ccfg4 INTO :schemaname, :tablename, :r_srvr, :s_type;
+                  
+          if ( SQLCODE != 0 ) 
+          {
+            if (trc)
+            {
+              trace("  FETCH from Cursor sqlcode is %d, sqlstate is %s",
+                    SQLCODE, sqlca.sqlstate);
+              trace("  Statement: %s", stmnt_4_applychecks);
+            }
+            prt_err();
+            rc=ASNLOAD_ERROR;
+            goto exit;
+          }
+                  
+          EXEC SQL CLOSE ccfg4;
+          strcpy(srvrConfig -> table_nickname_type,s_type);
+        }//end if server target server
+      } //end else path if  table nickname true
+    }//end if v8
+    else
+    {
+      if (trc) 
+      {
+        trace("  WRN: Unknown DB2 Version"); 
+      }
+      printasnloadmsg("  WRN: Unknown DB2 Version");
+      rc = ASNLOAD_ALTERNATE_FULL_REFRESH;
+      goto exit;
+    }
+    
+      if (srvrConfig -> cflags.server == ASN_TRGT_SRVR)
+      {
+        /* determine if targetserver multinode */
+        sprintf(stmnt_4_applychecks,"SELECT PARTITION_MODE FROM SYSCAT.TABLES "
+                "WHERE TABSCHEMA='%s' AND TABNAME='%s'",
+                schemaname, 
+                tablename );
+        
+        EXEC SQL PREPARE qcfg5 FROM :stmnt_4_applychecks;
+        if ((SQLCODE == -818) || (SQLCODE == -805)) 
+        {
+          if (trc)
+          {
+            trace("  ERR: ASNLOAD might not have been correctly bound");
+          }
+          prt_err();
+          rc=ASNLOAD_ERROR;
+          goto exit;
+        }
+        
+        EXEC SQL DECLARE ccfg5 CURSOR FOR qcfg5;
+        EXEC SQL OPEN ccfg5;
+        EXEC SQL FETCH ccfg5 INTO :part_mode :indic1;
+          
+        if ( SQLCODE != 0 ) 
+        {
+          if (trc)
+          {
+            trace("  FETCH from Cursor sqlcode is %d, sqlstate is %s",
+                  SQLCODE, sqlca.sqlstate);
+            trace("  Statement: %s", stmnt_4_applychecks);
+          }
+          prt_err();
+          rc=ASNLOAD_ERROR;
+          goto exit;
+        }
+        
+        if (indic1==-1 || part_mode[0]==' ')
+        {
+          srvrConfig -> target_multinode = FALSE;
+        } else if (part_mode[0]=='H')
+        {
+          srvrConfig -> target_multinode = TRUE;
+        } else
+        {
+          if (trc)
+          {
+            trace("  WRN: Unknown partitionmode");
+          }
+          printasnloadmsg("  WRN: Unknown partitionmode");
+          rc = ASNLOAD_ALTERNATE_FULL_REFRESH;
+          goto exit;
+        }
+        
+        EXEC SQL CLOSE ccfg5;      
+        
+      } //end of if target server 
+  }//end else db2LUW
+
+  //if ctrlsrvr==actualserver use this connection to select the arch_lvl and
+  //the nicknames
+  if (srvrConfig -> cflags.need_ctrl_values == TRUE)
+  {
+    if (trc)
+    {
+      trace("  INF: %s '%s' is also Controlserver, "
+            "using actual connection to get ctrlsrvr values.",
+            asnConst2String(srvrConfig -> cflags.server), server);
+    }
+    rc=get_ctrlsrvr_values();
+    if (rc!=0)
+    {
+      goto exit;
+    }
+  }
+    
+      
+  if (trc)
+  {
+    trace("  Configuration for %s '%s':",asnConst2String
+                                           (srvrConfig -> cflags.server),server);
+    trace("  DB2 Type       : %s",srvrConfig -> db);
+    trace("  DB2 LUW        : %s",BOOL2STRINGALPHA(srvrConfig -> db2LUW) );
+    trace("  Version        : %d",srvrConfig -> db2_version);
+    trace("  Local          : %s",BOOL2STRINGALPHA(srvrConfig -> server_local) );  
+    trace("  Table is nick  : %s",BOOL2STRINGALPHA(srvrConfig -> table_nickname));
+    trace("  Nicknametype   : %s",srvrConfig -> table_nickname_type);
+    if (srvrConfig -> cflags.server == ASN_SRC_SRVR)
+    {
+      trace("  Loadx_src_n_owner: %s",srvrConfig -> loadx_src_n_owner);
+      trace("  Loadx_src_n_table: %s",srvrConfig -> loadx_src_n_table);
+    } else
+    {
+      trace("  Target is multinode: %s", BOOL2STRINGALPHA(srvrConfig -> target_multinode));
+    }
+  }
+  
+ exit:
+    if (trc)
+    {
+      trace(" Exiting get_cfg_values with return code %d\n",rc);
+    }
+    
+    return(rc);
+  
+} //end get_cfg_values
+
+/******************************************************************************
+ * NOTE: The header below is valid for several functions which are
+ *       defined following that header
+ ******************************************************************************/
+/******************************************************************************
+ *
+ *  Function Name  = allocate, release, newToken
+ *
+ *  Descriptive Name = ...
+ *
+ *  Function = The following functions are subfunctions of alterstmnt
+ *             They allocate memory, split the original select statement
+ *             check the syntax and rebuild the statement
+ *
+ *  Input params:
+ *    trc (global)
+ *    
+ *  Output params:
+ *    inOutTokStream: Dynamic structure -> holds the splitted statement
+ *
+ *  Output params for DB2SQL param style:
+ *
+ *  Dependencies:
+ *
+ *  Normal Return = RC_TOKREC
+ *                  RC_NOTFOUND
+ *
+ *  Error Return = -1
+ *
+******************************************************************************/
+//allocate memory for the inOutTokStream  -> See also header above
+int allocate(struct tokStream *&inOutTokStream)
+{
+  int               rc = 0;
+  int               size;
+  struct tokStream *locTokStream;
+  
+  if(inOutTokStream == NULL)
+  {
+    /*
+     * Allocate new chunk of memory
+     */
+    
+    size = sizeof(struct tokStream) +
+      (CHUNK_SIZE - 1)* sizeof(struct token);
+    
+    locTokStream = (struct tokStream *)malloc(size);
+    
+    if(locTokStream == NULL)
+    {
+      rc = -1;
+      goto exit;
+    }
+
+    memset((void *)locTokStream, 0, size);
+
+    locTokStream->allocatedItems = CHUNK_SIZE;
+  }
+  else
+  {
+    /*
+     * Reallocate
+     */
+    size = sizeof(struct tokStream) +
+      (inOutTokStream->allocatedItems + CHUNK_SIZE - 1) * sizeof(struct token);
+
+    locTokStream = (struct tokStream *)malloc(size);
+    
+    if(locTokStream == NULL)
+    {
+      rc = -1;
+      goto exit;
+    }
+
+    memset((void *)locTokStream, 0, size);
+    memcpy((void *)locTokStream, (void *)inOutTokStream,
+	   sizeof(struct tokStream) +
+	   (inOutTokStream->allocatedItems - 1) * sizeof(struct token));
+
+    locTokStream->allocatedItems += CHUNK_SIZE;
+
+    free(inOutTokStream);
+  }
+
+  inOutTokStream = locTokStream;
+
+ exit:
+
+  return(rc);
+}
+
+//free dynamic allocated memory -> See also next header above for more details
+int release(struct tokStream *&inOutTokStream)
+{
+  int           rc = 0;
+  int           i;
+  struct token *tok;
+  
+  for(i = 0; i < inOutTokStream->items; i ++)
+  {
+    tok = &(inOutTokStream->tokens[i]);
+
+    if(tok->relMemory)
+    {
+      free(tok->loc);
+    }
+  }
+
+  free(inOutTokStream);
+  
+ exit:
+
+  return(rc);
+}
+
+//-> See also next header above for more details
+int newToken(struct tokStream *&inOutTokStream,
+	     enum tokType type, //Info what kind of syntax component is used
+	     char *loc,          
+	     int length,        
+	     int insertSpaceOnStringify)
+{
+  int               rc = 0;
+  struct tokStream *locTokStream = inOutTokStream;
+  
+  if((inOutTokStream == NULL) ||
+     (inOutTokStream->items >= inOutTokStream->allocatedItems))
+  {
+    rc = allocate(locTokStream);
+    if(rc < 0)
+    {
+      goto exit;
+    }
+  }
+
+  locTokStream->tokens[locTokStream->items].type = type;
+  locTokStream->tokens[locTokStream->items].loc = loc;
+  locTokStream->tokens[locTokStream->items].length = length;
+  locTokStream->tokens[locTokStream->items].insertSpaceOnStringify =
+    insertSpaceOnStringify;
+  locTokStream->tokens[locTokStream->items].relMemory = FALSE;
+  
+  locTokStream->items ++;
+
+  inOutTokStream = locTokStream;
+
+ exit:
+  return(rc);
+}
+
+//recognize Keyword -> See also next header above for more details
+int recKeyword(char *&input, char *keyword)
+{
+  int   rc = RC_NOTFOUND;
+  char *cur = input;
+  
+  while(*cur == ' ') cur++;
+  if(*cur == 0)
+  {
+    goto exit;
+  }
+
+  if(strnicmp(cur, keyword, strlen(keyword)))
+  {
+    goto exit;
+  }
+
+  cur += strlen(keyword);
+  
+  rc = RC_TOKREC;
+  input = cur;
+		 
+ exit:
+  return(rc);
+}
+
+//recognize Expression -> See also next header above for more details
+int recExpr(char *&input)
+{
+  int   rc = RC_NOTFOUND;
+  int   brackets = 0;
+  int   inQuotes = FALSE;
+  char *cur = input;
+  char *lookAhead;
+  int   readSomething = FALSE;
+
+  while(*cur == ' ') cur++;
+  if(*cur == 0)
+  {
+    goto exit;
+  }
+
+  rc = recKeyword(cur, ",");
+  if(rc == RC_TOKREC)
+  {
+    rc = -1;
+    goto exit;
+  }
+  if(rc < 0)
+  {
+    goto exit;
+  }
+
+  rc = 0;
+
+  while(1)
+  {
+    if(*cur == 0)
+    {
+      break;
+    }
+
+    /*
+     * Look ahead one token
+     */
+    if((brackets == 0) && !inQuotes && readSomething)
+    {
+      if(*cur == ',')
+      {
+	break;
+      }
+
+      lookAhead = cur;
+
+      rc = recKeyword(lookAhead, "FROM");
+      if(rc < 0)
+      {
+	goto exit;
+      }
+
+      if(rc == RC_TOKREC)
+      {
+	rc = 0;
+	break;
+      }
+    }
+
+    readSomething = TRUE;
+    
+    if(!inQuotes)
+    {
+      if((*cur == '(') ||
+	 (*cur == '[') ||
+	 (*cur == '{'))
+      {
+	brackets ++;
+      }
+
+      if((*cur == ')') ||
+	 (*cur == ']') ||
+	 (*cur == '}'))
+      {
+	brackets --;
+      }
+    }
+
+    if(*cur == '"')
+    {
+      inQuotes = !inQuotes;
+    }
+
+    cur ++;
+  }
+  
+  rc = RC_TOKREC;
+  input = cur;
+		 
+ exit:
+  return(rc);
+}
+
+//recognize Identifier -> See also next header above for more details
+int recIdentifier(char *&input)
+{
+  int   rc = RC_NOTFOUND;
+  int   inQuotes = FALSE;
+  char *cur = input;
+
+  while(*cur == ' ') cur++;
+  if(*cur == 0)
+  {
+    goto exit;
+  }
+
+  while(!(((*cur == '.') || (*cur == ' ')) &&
+	  !inQuotes))
+  {
+    if(*cur == 0)
+    {
+      break;
+    }
+    
+    if(*cur == '"')
+    {
+      inQuotes = !inQuotes;
+    }
+
+    cur ++;
+  }
+  
+  rc = RC_TOKREC;
+  input = cur;
+		 
+ exit:
+  return(rc);
+}
+
+/******************************************************************************
+ *  This function is a state machine that parses the select statement
+ *  and splits it up while calling the functions above
+ ******************************************************************************/
+int lexer(char *input, struct tokStream *&inOutTokStream)
+{
+  int               rc = 0;
+  char             *cur = input;
+  char             *last = input;
+  enum lexerStates  state = stateSTART;
+  struct tokStream *locTokStream = NULL;
+  struct token     *tok;
+  int               i;
+
+  while(state != stateREST) //stateREST means the schema & table name was parsed
+  {
+    switch(state)
+    {
+      case stateSTART: //stateSTART  -> we areexpecting a "SELECT"
+      {
+	last = cur;
+	
+	rc = recKeyword(cur, "SELECT");
+	if(rc < 0)
+	{
+	  goto exit;
+	}
+
+	/*
+	 * Not found
+	 */
+	if(rc == RC_NOTFOUND)
+	{
+	  rc = -1;
+	  goto exit;
+	}
+
+	/*
+	 * Reset Error Code
+	 */
+	rc = 0;
+
+	rc = newToken(locTokStream,
+		      tokSELECT,
+		      last,
+		      (char *)cur - (char *)last,
+		      TRUE);
+	if(rc < 0)
+	{
+	  goto exit;
+	}
+
+	state = stateSELECT;
+	
+	break;
+      }
+      case stateSELECT: //we found a SELECT and are expecting n expressions
+      {
+	last = cur;
+	
+	rc = recExpr(cur);
+	if(rc < 0)
+	{
+	  goto exit;
+	}
+
+	/*
+	 * Not found
+	 */
+	if(rc == RC_NOTFOUND)
+	{
+	  rc = -1;
+	  goto exit;
+	}
+
+	/*
+	 * Reset Error Code
+	 */
+	rc = 0;
+
+	rc = newToken(locTokStream,
+		      tokExpr,
+		      last,
+		      (char *)cur - (char *)last,
+		      TRUE);
+	if(rc < 0)
+	{
+	  goto exit;
+	}
+
+	state = stateExpr;
+	
+	break;
+      }
+      case stateExpr: //found an expression and need either a ',' or the 'FROM'
+      {
+	
+	last = cur;
+	
+	rc = recKeyword(cur, "FROM");
+	if(rc < 0)
+	{
+	  goto exit;
+	}
+
+	if(rc == RC_TOKREC)
+	{
+	  /*
+	   * Reset Error Code
+	   */
+	  rc = 0;
+
+	  rc = newToken(locTokStream,
+			tokFROM,
+			last,
+			(char *)cur - (char *)last,
+			TRUE);
+	  if(rc < 0)
+	  {
+	    goto exit;
+	  }
+
+	  state = stateFROM;
+	
+	  break;
+	}
+
+	rc = recKeyword(cur, ",");
+	if(rc < 0)
+	{
+	  goto exit;
+	}
+
+	if(rc == RC_TOKREC)
+	{
+	  /*
+	   * Reset Error Code
+	   */
+	  rc = 0;
+
+	  rc = newToken(locTokStream,
+			tokComma,
+			last,
+			(char *)cur - (char *)last,
+			FALSE);
+	  if(rc < 0)
+	  {
+	    goto exit;
+	  }
+
+	  state = stateComma;
+	
+	  break;
+	}
+	
+	if(rc == RC_NOTFOUND)
+	{
+	  rc = -1;
+	  goto exit;
+	}
+      }
+      case stateComma: //we found a Comma and are expecting the next expression
+      {
+	last = cur;
+	
+	rc = recExpr(cur);
+	if(rc < 0)
+	{
+	  goto exit;
+	}
+
+	/*
+	 * Not found
+	 */
+	if(rc == RC_NOTFOUND)
+	{
+	  rc = -1;
+	  goto exit;
+	}
+
+	/*
+	 * Reset Error Code
+	 */
+	rc = 0;
+
+	rc = newToken(locTokStream,
+		      tokExpr,
+		      last,
+		      (char *)cur - (char *)last,
+		      TRUE);
+	if(rc < 0)
+	{
+	  goto exit;
+	}
+
+	state = stateExpr;
+	
+	break;
+      }
+      
+      case stateFROM: //we found the FROM clause and expect a schema name
+                      //to switch into stateSN
+      {
+	last = cur;
+	
+	rc = recIdentifier(cur);
+	if(rc < 0)
+	{
+	  goto exit;
+	}
+
+	/*
+	 * Not found
+	 */
+	if(rc == RC_NOTFOUND)
+	{
+	  rc = -1;
+	  goto exit;
+	}
+
+	/*
+	 * Reset Error Code
+	 */
+	rc = 0;
+
+	rc = newToken(locTokStream,
+		      tokSN,
+		      last,
+		      (char *)cur - (char *)last,
+		      TRUE);
+	if(rc < 0)
+	{
+	  goto exit;
+	}
+
+	state = stateSN;
+	
+	break;
+      }
+
+      case stateSN: //we are expecting the schemaname
+      {
+	last = cur;
+	
+	rc = recKeyword(cur, ".");
+	if(rc < 0)
+	{
+	  goto exit;
+	}
+
+	/*
+	 * Not found
+	 */
+	if(rc == RC_NOTFOUND)
+	{
+	  rc = -1;
+	  goto exit;
+	}
+
+	/*
+	 * Reset Error Code
+	 */
+	rc = 0;
+
+	rc = newToken(locTokStream,
+		      tokDot,
+		      last,
+		      (char *)cur - (char *)last,
+		      FALSE);
+	if(rc < 0)
+	{
+	  goto exit;
+	}
+
+	state = stateDot;
+	
+	break;
+      }
+
+      case stateDot: //we need the dot before checking the tablename
+      {
+	last = cur;
+	
+	rc = recIdentifier(cur);
+	if(rc < 0)
+	{
+	  goto exit;
+	}
+
+	/*
+	 * Not found
+	 */
+	if(rc == RC_NOTFOUND)
+	{
+	  rc = -1;
+	  goto exit;
+	}
+
+	/*
+	 * Reset Error Code
+	 */
+	rc = 0;
+
+	rc = newToken(locTokStream,
+		      tokTN,
+		      last,
+		      (char *)cur - (char *)last,
+		      TRUE);
+	if(rc < 0)
+	{
+	  goto exit;
+	}
+
+	state = stateTN;
+	
+	break;
+      }
+      case stateTN: //we are in the state to expect the tablename
+      {
+	rc = newToken(locTokStream,
+		      tokREST,
+		      cur,
+		      strlen(cur),
+		      TRUE);
+	if(rc < 0)
+	{
+	  goto exit;
+	}
+	
+	state = stateREST; //the rest of the original stmnt will be only
+                           //appended, indicated by this state
+                           //that will stop the loop
+	break;
+      }
+      
+      default:
+      {
+	rc = -1;
+	goto exit;
+      }
+    }
+  }
+
+  /*
+   * Now trim the tokens - that means delete not neede blanks
+   */
+  for(i = 0; i < locTokStream->items; i ++)
+  {
+    tok = &(locTokStream->tokens[i]);
+
+    cur = tok->loc;
+    
+    while((cur < (tok->loc + tok->length)) && (*cur == ' '))
+    {
+      cur++;
+    }
+
+    last = tok->loc + tok->length - 1;
+
+    while((last >= tok->loc) && (*last == ' '))
+    {
+      last--;
+    }
+    
+    tok->loc = cur;
+    tok->length = (char *)last - (char *)cur + 1;
+  }
+
+  inOutTokStream = locTokStream;
+  
+ exit:
+  
+  return(rc);
+}
+
+//rebuild the statement to a single string from a list of tokens
+int stringify(struct tokStream *&inOutTokStream,
+	      char *outputString,
+	      int maxLength)
+{
+  int           rc = 0;
+  int           i;
+  struct token *tok;
+
+  *outputString = 0;
+  
+  for(i = 0; i < inOutTokStream->items; i ++)
+  {
+    tok = &(inOutTokStream->tokens[i]);
+
+    if((strlen(outputString) + tok->length + 1) >= maxLength)
+    {
+      break;
+    }
+    
+    strncat(outputString, tok->loc, tok->length);
+
+    /*
+     * Last Token?
+     */
+    if(i + 1 < inOutTokStream->items)
+    {
+      /*
+       * This is not the last token.
+       */
+      if(tok->insertSpaceOnStringify &&
+	 (tok + 1)->insertSpaceOnStringify)
+      {
+	strcat(outputString, " ");
+      }
+    }
+  }
+
+ exit:
+
+  return(rc);
+}
+
+/******************************************************************************
+ *
+ *  Function Name  = alterstmnt
+ *
+ *  Descriptive Name = alter sql statement
+ *
+ *  Function = If asnload has figured out that there was for a remote db2
+ *             target table a local nickname created (nickname is in the
+ *             target database) the select statement in  sql.s will be
+ *             modified to point to that nickname.
+ *
+ *  Input params:
+ *    trc (global)
+ *
+ *  Output params:
+ *    sql (global): holds the select statement for the source table 
+ *
+ *  Output params for DB2SQL param style:
+ *
+ *  Dependencies:
+ *
+ *  Normal Return = 0
+ *
+ *  Error Return = ASNLOAD_ERROR
+ *
+******************************************************************************/
+int alterstmnt()
+{
+  
+  struct tokStream *locTokStream = NULL;
+  int               i;
+  struct token     *tok;
+  char schemaName[SCHEMA_LENGTH+3]; //owner name length + quotation mark space
+  char tableName [TABLE_NAME_LENGTH+3];//nickname length + quotation mark space
+  char             *localBuffer = NULL;
+
+  rc = 0;
+
+  if (trc)
+  {
+    trace("\n Modifying the select stmnt to use loadx_src_n_owner ");
+    trace(" and loadx_src_n_table (alterstmnt)");
+    trace(" loadx_src_n_owner: \"%s\"",psrcConfig->loadx_src_n_owner);
+    trace(" loadx_src_n_table: \"%s\"",psrcConfig -> loadx_src_n_table);
+  }
+
+  sprintf(schemaName,"\"%s\"", psrcConfig -> loadx_src_n_owner);
+  sprintf(tableName, "\"%s\"", psrcConfig -> loadx_src_n_table);
+
+  //Explanations: 
+  //- SQL stmnts passed by Apply looks like this:
+  //  SELECT "A", "B", "C" FROM "SCHEMA"."TABLENAME" A WHERE etc
+  // OR
+  //  SELECT A, B, C FROM SCHEMA.TABLENAME A WHERE etc
+  //- The syntax needs a blank sign between keywords, but
+  //  Schema.table names can be processed (in severeal ways):
+  //  'xxx.ttt' and  'xxx . ttt' 'xxx. ttt' 'xxx .ttt'
+  //- Schemanames and Tablenames  can have the names of SQL terminal symbols
+  //  like 'where' and 'from'
+  //- The following logic is considering these facts
+
+  localBuffer = (char *)malloc(sql.len + strlen(schemaName) + strlen(tableName) + 1);
+  strcpy(localBuffer, sql.s);
+
+  rc = lexer(localBuffer, locTokStream);
+
+  if(rc < 0)
+  {
+    if (trc)
+    {
+      trace("  ERR: Lexing failed. rc: %d \n",rc);
+      goto exit;
+    }
+  }
+
+  //replace the old schema and tablenames
+  for(i = 0; i < locTokStream->items; i ++)
+  {
+    tok = &(locTokStream->tokens[i]);
+
+    if(tok->type == tokSN)
+    {
+      tok->loc = schemaName;
+      tok->length = strlen(schemaName);
+    }
+    
+    if(tok->type == tokTN)
+    {
+      tok->loc = tableName;
+      tok->length = strlen(tableName);
+    }
+  }
+
+  //rebuild the select statement from all token 
+  rc = stringify(locTokStream, sql.s , 32767);
+  if(rc < 0)
+  {
+    if (trc)
+    {
+      trace("Stringify failed.\n rc: %d",rc);
+      goto exit;
+    }
+  }
+
+  //free allocated memory
+  rc = release(locTokStream);
+  if(rc < 0)
+  {
+    if (trc)
+    {
+      trace("  ERR: Release failed.\n");
+    }
+    goto exit;
+  }
+
+  sql.len = strlen(sql.s);
+  
+exit:
+
+  if(localBuffer != NULL)
+  {
+    free(localBuffer);
+  }
+
+  if (rc < 0)
+  {
+    printasnloadmsg("  ERR: Could not modify the select statement to use a nickname");
+    if (trc)
+    {
+      trace("  ERR: alterstmnt failed");
+    }
+    rc = ASNLOAD_ERROR;
+  } else
+  {
+    rc = 0; //reset rc from internal codes
+  }
+  
+  if (trc)
+  {
+    trace("  INF: Modified Statement is: %s",sql.s);
+    trace(" Exiting alterstmnt with return code %d \n",rc); 
+  }
+
+  return(rc);
+  
+} //end alterstmnt
+
+
+/******************************************************************************
+ *
+ *  Function Name  = traceselnickresult
+ *
+ *  Descriptive Name = trace select nickname result
+ *
+ *  Function = This function will be called when running the applychecks or
+ *             set_default_loadxtype in the case when asnload has figured out
+ *             that for a remote db2 sourcetable or a remote registered nickname 
+ *             a local nickname (in the targetdb) has not been created. So the
+ *             user will get a warning or errormessage depending on the
+ *             passed loadx_type.
+ *
+ *  Input params:
+ *    trc (global): traceindicator
+ *    psrcConfig (global): pointer to sConfig where the source server
+ *                         configuration resides
+ *    loadx_type (global): passed from apply - shows which load option
+ *                         should be used.
+ *
+ *  Output params:
+ *
+ *  Output params for DB2SQL param style:
+ *
+ *  Dependencies: - called from set_default_loadxtype and must be called
+ *                  before setting the final loadx_type
+ *                - called also from runapplychecks
+ *                - uses the values of the struct sConfig filled by
+ *                  get_cfg_values and 
+ *
+ *  Normal Return = void
+ *
+ *  Error Return = void
+ *
+******************************************************************************/
+void traceselnickresult()
+{
+
+  if (loadx_type[0] == 'N')
+  {       
+    if (trc)
+    {
+      switch  ( psrcConfig -> cflags.getnick_result )
+      {
+        case NICKS_INCOMPLETED_SET :
+          trace("  INF: Cannot use Crossloader because both,"
+                "loadx_src_n_owner and loadx_src_n_table "
+                "need to be set (incomplete nickname)");
+          break;
+        case NICKS_NOT_SET :  
+          trace("  INF: Cannot use Crossloader because "
+                "loadx_src_n_owner and loadx_src_n_table "
+                "are not set");
+          break;
+        case OLD_ARCHLVL :
+          trace("  INF: Cannot use Crossloader because "
+                "control table version is earlier than version 8.1 and");
+          trace("       loadx_src_n_owner and loadx_src_n_table don't exist there.");
+          trace("       Use the Migration Utility to add these columns");
+          break;
+        case NICKS_NOTFOUND_NOTABLE :
+          trace("  INF: Cannot use Crossloader because columns loadx_src_n_owner ");
+          trace("       and loadx_src_n_table not found in ASN.IBMSNAP_SUBS_MEMBR "
+                "(unexpected)");
+          break;
+      }//end switch
+    }//end if trc
+
+    switch (  psrcConfig -> cflags.getnick_result )
+    {
+      case OLD_ARCHLVL :
+        printasnloadmsg("  WRN: Crossloader could be appropriate for this "
+                        "environment, but");
+        printasnloadmsg("       will not be used, because control table version is "
+                        "earlier than version 0801  and");
+        printasnloadmsg("       loadx_src_n_owner and loadx_src_n_table don't exist "
+                        "in ASN.IBMSNAP_SUBS_MEMBR");
+        printasnloadmsg("       Use the Migration Utility to add these columns.");
+        break;
+      case NICKS_NOTFOUND_NOTABLE :
+        printasnloadmsg("  WRN: Crossloader could be appropriate for this "
+                        "environment, but no columns loadx_src_n_owner and");
+        printasnloadmsg("       loadx_src_n_table found in ASN.IBMSNAP_SUBS_MEMBR");
+        break;
+      default:
+        printasnloadmsg("  WRN: Crossloader could be appropriate for this "
+                        "environment, but");
+        printasnloadmsg("       will not be used, because of a non existing or "
+                        "incorrect nickname in the control");
+        printasnloadmsg("       table ASN.IBMSNAP_SUBS_MEMBR");
+        printasnloadmsg("       Create a nickname for the source table in the "
+                        "target database");
+        printasnloadmsg("       and insert this name (loadx_src_n_owner and "
+                        "loadx_src_n_table) in the ASN.IBMSNAP_SUBS_MEMBR");
+    }
+  }//end if loadx_type == null
+
+/*checkasnlogic*//*2*/
+/* this should be traced, when using the crossloader - so if you want to use */
+/* the crossloader with a final loadx_type of 2 add it here                  */    
+  if (loadx_type[0] == '3' )
+  {
+    if (trc)
+    {
+      switch ( psrcConfig -> cflags.getnick_result )
+      {
+        case NICKS_NOT_SET :
+            trace("  ERR: Cannot use crossloader because "
+                  "loadx_src_n_owner and loadx_src_n_table "
+                  "are not set in ASN.IBMSNAP_SUBS_MEMBR");
+            break;
+        case NICKS_INCOMPLETED_SET :
+            trace("  ERR: Cannot use crossloader because either loadx_src_n_owner "
+                  "or loadx_src_n_table is not set (incomplete nickname)");
+            break;
+        case OLD_ARCHLVL :
+            trace("  ERR: Cannot use Crossloader because "
+                  "control table version is earlier than 0801 and");
+            trace("       loadx_src_n_owner and loadx_src_n_table can not "
+                  "exist in ASN.IBMSNAP_SUBS_MEMBR");
+            trace("       Use the Migration Utility to add these columns");
+            break;
+        case NICKS_NOTFOUND_NOTABLE :
+          trace("  ERR: Cannot use Crossloader because columns loadx_src_n_owner ");
+          trace("       and loadx_src_n_table not found in ASN.IBMSNAP_SUBS_MEMBR "
+                "(unexpected error)");
+          break;  
+      }//end switch
+    }//end if trc
+
+    switch ( psrcConfig->cflags.getnick_result )
+    {
+      case OLD_ARCHLVL :
+        printasnloadmsg("  ERR: Cannot use the crossloader because control tables "
+                        "are earlier than version '0801' - no nickname selection possible");
+        break;
+      case NICKS_NOTFOUND_NOTABLE :
+          printasnloadmsg("  ERR: Cannot use Crossloader because columns "
+                          "loadx_src_n_owner ");
+          printasnloadmsg("       and loadx_src_n_table not found in "
+                          "ASN.IBMSNAP_SUBS_MEMBR (unexpected error)");
+          break;  
+      default:
+        printasnloadmsg("  ERR: Cannot use crossloader because of incorrect or not set");
+        printasnloadmsg("       loadx_src_n_owner and loadx_src_n_table in control table "
+                        "ASN.IBMSNAP_SUBS_MEMBR");
+        printasnloadmsg("       Create a nickname for the source table in the "
+                        "target database");
+        printasnloadmsg("       and insert this name in the ASN.IBMSNAP_SUBS_MEMBR");
+
+    }//end switch      
+  } // end if loadx_type == 3
+/*endchecklogic*/  
+  
+}//end traceselnickresult
+
+/******************************************************************************
+ *
+ *  Function Name  = set_default_loadxtype
+ *
+ *  Descriptive Name = set default loadx_type
+ *
+ *  Function = This function determines the best utility option if the user has
+ *             not predefined a loadx_type. This is the case when apply passes
+ *             null to asnload and so set_default_loadxtype will be called from
+ *             runapplychecks.
+ *             
+ *  Input params:
+ *    psrcConfig:  pointer to sConfig, where all infos concerning the source
+ *                 server and table reside.
+ *    ptrgtConfig: pointer to tConfig, where all infos concerning the target
+ *                 server and table reside.
+ *    trc (global): traceindicator
+ *    push_load (global): indicates if a push load is allowed
+ *
+ *  Output params:
+ *    loadx_type (global): will be set  3,4 or 5 depending on the replication
+ *                         environment
+ *
+ *  Output params for DB2SQL param style:
+ *
+ *  Dependencies:
+ *
+ *  Normal Return = 0
+ *
+ *  Error Return = ASNLOAD_ALTERNATE_FULL_REFRESH,
+ *                 ASNLOAD_ERROR
+ *
+******************************************************************************/
+int set_default_loadxtype(struct repl_srvr_config* psrcConfig, 
+                          struct repl_srvr_config* ptrgtConfig)
+{
+  rc=0;
+  
+  if (trc)
+  {
+    trace("\n Setting the default loadxtype (set_default_loadxtype)");
+  }
+
+  /*
+    Note:
+    The following logic first runs a check against the target server configuration. So it will
+    figure out which utilities could be used for a certain target configuration.
+    In the next step a check will be done against the source server configuration. Here it will
+    be tested if a utility still can be used (e.g crossloader). Otherwise alternatives are taken 
+    or if no utility can be used a return code for an alternate full refresh will be passed to 
+    Apply.
+  */
+
+  //1st trgt condition
+  //if trgt: nickname, remote or local, single or multinode [causes also: db2LUW, v8, v8federated,
+  //not < v8, noDSN, noQSQ, noDJ]
+  //-- for nickname targets only alternate full refresh possible
+  if ( (ptrgtConfig -> table_nickname == TRUE ) )
+  {
+    if (trc)
+    {
+      trace("  WRN: No utility support for federated target tables");
+    }
+    rc=ASNLOAD_ALTERNATE_FULL_REFRESH;
+    goto exit;
+  }
+  // 2nd trgt condition
+  // if trgt: local, nonick (check not necessary because already done in 1st trgt condition),
+  // nomultinode [causes also: db2LUW, v8, no <v8, no DSN, no QSQ, no DJ]
+  // -- check if xload or export/load possible
+  else if ( (ptrgtConfig -> server_local == TRUE ) && 
+            (ptrgtConfig -> target_multinode == FALSE ) )
+  {
+    //src: local, nick||no nick -> 3 (remain sql stmt as it is)
+    if ( (psrcConfig -> server_local == TRUE) ) 
+    {
+      loadx_type[0]='3';loadx_type[1]='\0';
+    }
+    //src: remote, no nick (causes remote db2 table: SQL, DSN, QSQ)
+    else if ( (psrcConfig->table_nickname==FALSE) )
+    {
+      //if nickname set -> alter stmnt
+      if ( psrcConfig -> cflags.getnick_result == NICKS_ARE_SET )
+      {
+        rc = alterstmnt();
+        if (rc){ goto exit;}
+        loadx_type[0]='3';loadx_type[1]='\0';
+      }
+      //else if >=v8 or  QSQ or  DSN-> use export/load
+      else if ( ((psrcConfig -> db2LUW == TRUE)&&
+                 (psrcConfig -> db2_version >= 8))
+                ||
+                (psrcConfig -> db2LUW == FALSE)//DSN, QSQ
+              )
+      {
+        traceselnickresult();
+        //note no push load needs to be set to false, because false by default
+        loadx_type[0]='4';loadx_type[1]='\0';
+      }
+      //else if db2LUW, <v8, noQSQ, noDSN  
+      else
+      {
+        traceselnickresult();
+        rc=ASNLOAD_ALTERNATE_FULL_REFRESH;
+        goto exit;
+      }
+    } // end if src sever remote db2 table
+    //src: causes remote db2 v8 federated(nick), no DSN, noQSQ)
+    else 
+    {
+      //if nickname set -> alter stmnt
+      if ( psrcConfig -> cflags.getnick_result == NICKS_ARE_SET )
+      {
+        rc = alterstmnt();
+        if (rc){ goto exit;}
+        loadx_type[0]='3';loadx_type[1]='\0';
+      } else
+      {
+        traceselnickresult();
+        rc=ASNLOAD_ALTERNATE_FULL_REFRESH;
+        goto exit;
+      }
+    }
+  }
+  //3rd trgt condition
+  //if trgt: local, multinode,[causes also: nonick, v8
+  //db2LUW, noQSQ, noDSN, noDJ, no federated(nick already exluded)]
+  //-- check if xload or export/import possible
+  else if ( (ptrgtConfig -> server_local == TRUE) &&
+            (ptrgtConfig -> target_multinode == TRUE) )
+  {
+    //src: local, nick||no nick -> 3 (remain sql stmt as it is)
+    if ( (psrcConfig -> server_local == TRUE) ) 
+    {
+      loadx_type[0]='3';loadx_type[1]='\0';
+    }
+    //src: no nick (causes remote db2 table: SQL, DSN, QSQ)
+    else if ( 
+             (psrcConfig->table_nickname==FALSE)//means the table is a db2 table
+            )
+    {
+      //if nickname set -> alter stmnt
+      if ( psrcConfig -> cflags.getnick_result == NICKS_ARE_SET )
+      {
+        rc = alterstmnt();
+        if (rc){ goto exit;}
+        loadx_type[0]='3';loadx_type[1]='\0';
+      }
+      //else -> use export/import if src db2LUW (remote), >=v8 or QSQ, DSN
+      else if ( 
+                ((psrcConfig -> db2LUW == TRUE)&& (psrcConfig -> db2_version >= 8))
+                ||
+                (psrcConfig -> db2LUW == FALSE) //DSN, QSQ
+               )
+      {
+        traceselnickresult();
+        loadx_type[0]='5';loadx_type[1]='\0';
+      }
+      //else cause  db2LUW, <v8, noQSQ, noDSN        
+      else
+      {
+        traceselnickresult();
+        rc=ASNLOAD_ALTERNATE_FULL_REFRESH;
+        goto exit;
+      }
+    }
+    //src: causes remote db2 v8 federated(nick), no DSN, noQSQ)
+    else 
+    {
+      //if nickname set -> alter stmnt
+      if ( psrcConfig -> cflags.getnick_result == NICKS_ARE_SET )
+      {
+        rc = alterstmnt();
+        if (rc){ goto exit;}
+        loadx_type[0]='3';loadx_type[1]='\0';
+      } else
+      {
+        traceselnickresult();
+        rc=ASNLOAD_ALTERNATE_FULL_REFRESH;
+        goto exit;
+      }
+    }
+  }
+  //4th or 5th trgt condition 
+  //-- checks if import for target tables possible
+  else if (
+           //4th
+           //if trgt: remote, multinode, nonick(already checked), db2LUW
+           //>= v8, (causes:  noDJ, noQSQ, noDSN, no federated)
+            ( (ptrgtConfig -> server_local == FALSE) &&
+              (ptrgtConfig -> target_multinode == TRUE) &&
+              (ptrgtConfig -> db2LUW == TRUE) &&
+              (ptrgtConfig -> db2_version >= 8) )
+            ||
+            //5th
+            //if trgt: noLUW,  
+            //(causes: single node, remote, QSQ||DSN, no nick, no DJ, noDJ)
+            ( (ptrgtConfig -> server_local == FALSE) &&
+              (ptrgtConfig -> db2LUW == FALSE) )
+         )
+  {
+    //++check source if export possible
+    if ( 
+         //src: local or remote, LUW, >=v8, nickname, 
+         //(causes: federated, noQSQ, noDSN, noDJ)
+         (
+           (psrcConfig -> db2LUW == TRUE) &&
+           (psrcConfig -> db2_version >= 8) &&
+           (psrcConfig -> table_nickname == TRUE)
+         )
+         ||
+         //src: local or remote, LUW, <v8 
+         //(causes: no federated, noDJ, nonick, noQSQ, noDJ)
+         (psrcConfig -> db2LUW == TRUE) && (psrcConfig -> db2_version < 8)
+      )
+    {
+      rc=ASNLOAD_ALTERNATE_FULL_REFRESH;
+      goto exit;
+    } else
+    {
+      //causes src: LUW && >=v8 or QSQ||DSN, no nick, noDJ, no federated 
+      loadx_type[0]='5';loadx_type[1]='\0';
+    }
+  }
+  //6th trgt condition
+  //if trgt: remote, multinode or singlenode , LUW, < v8,
+  //no nick (already checked), (causes: noDJ)
+  //--for not v8 LUW target tables only alternate full refresh possible
+  else if ( (ptrgtConfig -> server_local == FALSE) &&
+            (ptrgtConfig -> db2LUW == TRUE) &&
+            (ptrgtConfig -> db2_version < 8) )
+  {
+    rc=ASNLOAD_ALTERNATE_FULL_REFRESH;
+    goto exit;
+  }
+  //7th trgt condition
+  //if trgt: remote, no multinode, LUW, v8, (causes: no nick, noDJ, noQSQ, noDSN)
+  //--check if push load possible
+  else if ( (ptrgtConfig -> server_local == FALSE) &&
+            (ptrgtConfig -> target_multinode == FALSE) &&
+            (ptrgtConfig -> db2LUW == TRUE) &&
+            (ptrgtConfig -> db2_version >= 8) )
+  {
+    //src: LUW, >=v8, no nick, (causes: no federated, no DJ, no QSQ, no DSN, local ||remote)
+    //OR
+    //src: noLUW, (causes: no nick, no federated, no DJ, QSQ||DSN, remote)
+    if ( ((psrcConfig -> db2LUW == TRUE) &&
+          (psrcConfig -> table_nickname == FALSE) &&
+          (psrcConfig -> db2_version >= 8)) ||
+         ((psrcConfig -> db2LUW == FALSE)) )//QSQ, DSN
+    {
+      rc=checkiflobs();
+      if (rc!=0)
+      {
+        goto exit;
+      }
+      if (push_load==TRUE)
+      {
+        loadx_type[0]='4';loadx_type[1]='\0';
+      } else 
+      {
+        loadx_type[0]='5';loadx_type[1]='\0';
+      }
+    }
+    //src: nick, (causes: LUW, >=v8, federated, noDJ, no QSQ, no DSN, local||remote)
+    //||
+    //src: LUW, <v8, (causes: no nick, no DJ, noQSQ, noDSN, remote )
+    else 
+    {
+      rc=ASNLOAD_ALTERNATE_FULL_REFRESH;
+      goto exit;
+    }
+  }//end 7th trgt condition
+  //all other target cases -> warning message for alternate full refresh
+  else
+  {
+    if (trc)
+    {
+      trace("  WRN: Unknown Replication Environment - using Alternate Full Refresh");
+    }
+    rc=ASNLOAD_ALTERNATE_FULL_REFRESH;
+    goto exit;
+  }
+  
+ exit:
+  
+  if (rc==0)
+  {
+    if (loadx_type[0]=='N')
+    {
+     printasnloadmsg("  WRN: ASNLOAD was unable to determine the environment");
+     rc=ASNLOAD_ALTERNATE_FULL_REFRESH;
+    }
+    else if (loadx_type[0]=='3')
+    {
+      printasnloadmsg("  INF: ASNLOAD has set loadx_type to 3 (crossload)");
+    }
+    else if (loadx_type[0]=='4')
+    {
+      printasnloadmsg("  INF: ASNLOAD has set loadx_type to 4 (export/load)");
+    }
+    else if (loadx_type[0]=='5')
+    {
+      printasnloadmsg("  INF: ASNLOAD has set loadx_type to 5 (export/import)");
+    }
+      
+    if ( (trc) && (loadx_type[0]!='N') ) //means no alternate full refresh
+    {
+      trace(" Exiting set_default_loadxtype, loadx_type was set to: %s\n", loadx_type);
+    }
+  } 
+  
+  if (rc==ASNLOAD_ALTERNATE_FULL_REFRESH)
+  {
+    printasnloadmsg("  WRN: ASNLOAD is passing return code 1 for an alternate full "
+                    "refresh to Apply");
+    if (trc)
+    {
+      trace(" Exiting set_default_loadxtype with return code 1 for an alternate full "
+            "refresh to Apply\n");
+    }
+  }
+
+  return(rc);
+  
+}//end set_default_loadxtype
+
+/******************************************************************************
+ *
+ *  Function Name  = serverlocations
+ *
+ *  Descriptive Name = is server local or remote
+ *
+ *  Function = This function finds out if the source or target server is remote
+ *             or local and saves it in the corresponding structure. Notice
+ *             that for the source server remote means that the source table
+ *             is not local to the target database. In other words source server
+ *             and target server are not the same.
+ *             
+ *  Input params:
+ *    trc (global): traceindicator
+ *    trg_srvr (global): target server name
+ *    src_srvr (global): source server name
+ *
+ *  Output params:
+ *    psrcConfig:  pointer to sConfig, where all infos concerning the source
+ *                 server and table reside.
+ *    ptrgtConfig: pointer to tConfig, where all infos concerning the target
+ *                 server and table reside. 
+ *
+ *  Output params for DB2SQL param style:
+ *
+ *  Dependencies:
+ *
+ *  Normal Return = 0
+ *
+ *  Error Return = ASNLOAD_ERROR
+ *
+******************************************************************************/
+int serverlocations(struct repl_srvr_config* psrcConfig, 
+                    struct repl_srvr_config* ptrgtConfig)
+{
+  int i;
+  int run;
+  char Alias[SQL_ALIAS_SZ+1];
+  char Nodename[SQL_NNAME_SZ+1];
+  unsigned short handle;
+  unsigned short NumEntries;
+  struct sqledinfo * pDbDirEntry;
+  _SQLOLDCHAR *pPath = NULL;
+
+  rc=0;
+  
+  if (trc)
+  {
+    trace("\n Determine if Source/Target server is local or remote "
+          "(serverlocations)");
+  }   
+  
+  //invoke directoryscan
+  if (trc)
+  {
+    trace("  Invoking OpenDBDirectoryScanAPI (sqledosd)");
+  }
+  
+  rc = sqledosd (pPath,        
+                 &handle,     
+                 &NumEntries, 
+                 &sqlca);
+  
+  if (rc != 0 || sqlca.sqlcode != 0)
+  {
+    if (trc)
+    {
+      trace("  ERR: DatabaseDirectoryScan failed rc is %d, sqlcode is %d,"
+            "sqlstate is %s.", rc, SQLCODE, sqlca.sqlstate);
+    }
+    prt_err();
+    rc = ASNLOAD_ERROR;
+    goto exit;
+  }
+  
+  //get dbDirectory entries and compare
+  if (trc)
+  {
+    trace("  Getting DBDirectoryEntries (sqlgdgne)");
+  }
+  for (i=0;i<NumEntries;i++)
+  {
+    rc= sqlgdgne(handle, 
+                 &pDbDirEntry, //struct sqledinfo ** ppDbDirEntry,
+                 &sqlca); //struct sqlca * pSqlca
+    
+    if (rc != 0 || sqlca.sqlcode != 0)
+    {
+      if (trc)
+      {
+        trace("  ERR: Couldn't get DBDirectory Entry  rc is %d, "
+              "sqlcode is %d, sqlstate is %s.",
+              rc, SQLCODE, sqlca.sqlstate);
+      }
+      prt_err();
+      rc = ASNLOAD_ERROR;
+      goto exit;
+    }
+      
+    strncpy(Alias, (const char*) &(pDbDirEntry->alias),SQL_ALIAS_SZ);
+    for (run=0; isspace(Alias[run])==0 && run<SQL_ALIAS_SZ; run++);
+    Alias[run]='\0';
+    strncpy(Nodename, (const char*) &(pDbDirEntry -> nodename),
+            SQL_NNAME_SZ );
+    
+    for (run=0; isspace(Nodename[run])==0 && run<SQL_NNAME_SZ; run++);
+    Nodename[run]='\0';
+
+    if ( strcmp(trg_srvr,Alias)==0 )
+    {
+      if ( (strlen(Nodename)==0) || (Nodename == NULL) )
+      {
+        ptrgtConfig -> server_local = TRUE;
+      } else
+      {
+        ptrgtConfig -> server_local = FALSE;
+      }
+      if (trc)
+      {
+        trace("  INF: Targetserver '%s' is local: %s",
+              trg_srvr,
+              BOOL2STRINGALPHA(ptrgtConfig -> server_local));
+      }
+      break;
+    }
+  } // end for i=0 ...
+  
+  //close directory scan
+  if (trc)
+  {
+    trace("  Closing the DBDirectoryScan API called (sqledcls)");
+  }
+  
+  rc= sqledcls ( handle, //unsigned short Handle,
+                 &sqlca );
+  if (rc != 0 || sqlca.sqlcode != 0)
+  {
+    if (trc)
+    {
+      trace("  WRN: Couldn't close  DBDirectory Scan rc is %d, "
+            "sqlcode is %d, sqlstate is %s.",
+            rc, SQLCODE, sqlca.sqlstate);
+    }
+  }
+  
+  //Meaning of 'local' of the source differs from the meaning of local
+  //of the target server, because this info is needed
+  //for the crossloader only
+  if ( ((strcmp(src_srvr,trg_srvr))==0) )
+  {
+    psrcConfig -> server_local = TRUE;
+  } else
+  {
+    psrcConfig -> server_local = FALSE;
+  }
+  if (trc)
+  {
+    trace("  INF: Sourceserver '%s' is local to the target is: %s",
+          src_srvr, BOOL2STRINGALPHA(psrcConfig -> server_local));
+  }
+  
+ exit:
+  
+  if (trc)
+  {
+    trace(" Exiting serverlocations with return code %d\n",rc);
+  }
+  
+  return rc;
+
+}
+
+/******************************************************************************
+ *
+ *  Function Name  = runapplychecks
+ *
+ *  Descriptive Name = run the applychecks
+ *
+ *  Function = This function runs several checks against the loadx_type
+ *             that is passed from Apply. It either needs or calls
+ *             set_default_loadxtype (in the case apply has passed null)
+ *             or it figures out if a user preset loadx_type is applicable
+ *             for a given replication environment. To do so there might be
+ *             called various functions.
+ *             
+ *  Input params:
+ *    trc (global): traceindicator
+ *    cntl_srvr (global): control server name
+ *    trg_srvr (global): target server name
+ *    src_srvr (global): source server name
+ *    push_load (global): indicates if push load is suitable
+ *
+ *  Output params:
+ *    sConfig (global): structure of type repl_srvr_config to save the
+ *                      configuration of the source server/table
+ *    tConfig (global): structure of type repl_srvr_config to save the
+ *                      configuration of the target server/table
+ *    psrcConfig (global):  pointer to sConfig
+ *    ptrgtConfig (global): pointer to tConfig
+ *
+ *  Output params for DB2SQL param style:
+ *
+ *  Dependencies:
+ *
+ *  Normal Return = 0
+ *
+ *  Error Return = ASNLOAD_ERROR,
+ *                 ASNLOAD_LOADXTYPE_2_NOUSERCODE_PROVIDED,
+ *                 ASNLOAD_LOADXTYPE_REQUIRES_NICKNAME,
+ *                 ASNLOAD_TARGETTAB_INCOMPATIBLE_LOADXTYPE_4,
+ *                 ASNLOAD_TARGETTAB_INCOMPATIBLE_LOADXTYPE_5,
+ *                 ASNLOAD_INVALID_LOADXTYPE,
+ *                 ASNLOAD_ALTERNATE_FULL_REFRESH
+ *
+******************************************************************************/
+int runapplychecks()
+{
+  rc=0;
+  
+  if (trc)
+  {
+    trace(" *** ");
+    trace(" Starting the Applychecks (runapplychecks):");
+    trace(" Passed loadx_type is: %s",loadx_type);
+  }
+  printasnloadmsg(" Verifying input parameter loadx_type: %s",
+                  loadx_type);
+  
+
+  /*** getting the configuration of the source and target server ***/
+  memset(&sConfig,0,sizeof(sConfig));
+  psrcConfig = &sConfig;
+  psrcConfig -> cflags.server = ASN_SRC_SRVR;
+  memset(&tConfig,0,sizeof(tConfig));
+  ptrgtConfig = &tConfig;
+  ptrgtConfig->cflags.server = ASN_TRGT_SRVR;
+  
+  rc=serverlocations( psrcConfig,ptrgtConfig);
+  if ( rc!=0 )
+  {
+    goto exit;
+  }
+  
+  //getting the remaining cfg from the servers and insert it
+  //into rpl_srvr structures
+  /* 
+     / Notes: 
+     / -- In many cases the targetserver == ctrl server -> to get the arch_lvl 
+     /    (control server version ) and nickname from ASN.IBMSNAP_SUBS_MEMBR
+     /    the targetcnfg will be checked first to prevent a time expensive connect 
+     /    to the ctrl server
+     / -- the arch_lvl is needed to check if the ctrlserver is >V7 and so if it is
+     /    possible to select the src_n_owner and src_n_table values from the
+     /    ASN.IBMSNAP_SUBS_MEMBR ctrl table
+     / -- this arch_lvl will be checked in the fct get_cfg_values of the sourceserver
+     /    where the src_n_owner and src_n_table values are selected
+     /    and if possible the exit tries to get loadx_src_n_owner and 
+     /    loadx_src_n_table
+  */
+ 
+  //prepare checking the control server for arch_lvl, loadx_src_n_owner,
+  //loadx_src_n_table
+  //this check is only necessary if the sourcedb != targetdb, because only
+  //then these values could be an issue
+  if ( (psrcConfig -> server_local == TRUE) ||
+       (loadx_type[0] == '4') || (loadx_type[0]== '5'))
+  {
+    ptrgtConfig -> cflags.need_ctrl_values = FALSE;
+    psrcConfig -> cflags.need_ctrl_values =FALSE;
+  } else if ( strcmp(trg_srvr,cntl_srvr) == 0 )
+  {
+    ptrgtConfig -> cflags.need_ctrl_values = TRUE;
+    psrcConfig -> cflags.need_ctrl_values  = FALSE;
+  } else if ( strcmp(src_srvr,cntl_srvr)==0 )
+  {
+    psrcConfig -> cflags.need_ctrl_values = TRUE;
+    ptrgtConfig -> cflags.need_ctrl_values = FALSE;
+  } else
+  {
+    //don't check in the get_cfg_values function get it now
+    ptrgtConfig -> cflags.need_ctrl_values = FALSE;
+    psrcConfig -> cflags.need_ctrl_values =FALSE;
+    rc=connect_db(cntl_srvr);
+    if (rc!=0)
+    {
+      goto exit;
+    }
+    rc=get_ctrlsrvr_values();
+    if ( rc!=0)
+    {
+      goto exit;
+    }
+  }
+
+  //get the server config targetserver
+  rc=get_cfg_values(ptrgtConfig);
+  if (rc!=0)
+  {
+    goto exit;
+  }
+
+  // get the server config sourceserver
+  rc=get_cfg_values(psrcConfig);
+  if (rc!=0)
+  { 
+    goto exit;
+  }
+  
+  //the Applychecks will start now with the just determined configuration
+  //of the source and target
+  if ( (strcmp(loadx_type,"NULL"))==0 )
+  {
+    printasnloadmsg("  INF: Apply passed load_type NULL, so need to determine "
+                    "default loadx_type");
+    rc=set_default_loadxtype(psrcConfig,ptrgtConfig);
+    if (rc!=0)
+    {
+      goto exit;
+    }
+  }
+  else if ( (strcmp(loadx_type,"1"))==0 )
+  {
+    if (trc)
+    {
+      trace("  WRN: loadx_type was set to 1 but Apply should not call ASNLOAD "
+            "in this case");
+    }
+    rc = ASNLOAD_ALTERNATE_FULL_REFRESH;
+    goto exit;
+  }
+else if ( (strcmp(loadx_type,"2"))==0 )
+  {
+/*checkasnlogic*//*3*/
+    /*****************************************************************************/
+    /***       Delete the lines below when you provide your own logic          ***/
+    /*****************************************************************************/
+    /***       Decide here the output loadx_type for further processing...     ***/
+    /***       - if you take 3,4,5 you can use the standard code paths         ***/
+    /***       - if you choose 2 develop your own path and see all other       ***/
+    /***         *checkasnlogic* flags for dependencies                        ***/
+    /*****************************************************************************/
+    if (trc)
+    {
+      trace("  ERR: No user code provided ");
+      trace("       You must recompile the asnload exit for loadx_type 2");
+    }
+    printasnloadmsg("  ERR: Could not verify loadx_type 2");
+    printasnloadmsg("       User has set loadxtype 2 but no logic provided");
+    rc = ASNLOAD_LOADXTYPE_2_NOUSERCODE_PROVIDED;
+    goto exit;
+    /*****************************************************************************/
+    /***       delete the lines above  when you provide your own logic         ***/
+    /*****************************************************************************/
+/*endchecklogic*/    
+  }
+else if ( (strcmp(loadx_type,"3"))==0 )
+  {
+    
+    /* User has set loadx_type to CROSSLOADER - run check if it is possible */ 
+
+    /* 
+       check if targettable allows loadx_type 3 and if yes
+       test the source if load from cursor can be used
+    */
+      
+    //trgt: local, no nick (causes: db2LUW, v8)
+    if ( (ptrgtConfig -> server_local == TRUE) &&
+         (ptrgtConfig -> table_nickname == FALSE) ) 
+    {
+      //test now  if source allows loadx_type 3
+      //source: remote db2 || remote nickname  and nicks are not set -- error 
+      if( (psrcConfig -> server_local == FALSE) )
+      {
+        if (psrcConfig -> cflags.getnick_result == NICKS_ARE_SET)
+        {
+          rc = alterstmnt();
+          if (rc){ goto exit;}
+        } else
+        {
+          traceselnickresult();
+          rc = ASNLOAD_LOADXTYPE_REQUIRES_NICKNAME;
+          goto exit;
+        }
+      }
+    }
+    //target table is not suitable for loadx_type 3 -- error
+    else 
+    {
+      if (trc)
+      {
+        trace("  ERR: Invalid loadx_type");
+      }
+      printasnloadmsg("  ERR: User has set loadx_type to 3(crossload) but ");
+      printasnloadmsg("       this loadx_type is invalid for this environment");
+      rc=ASNLOAD_INVALID_LOADXTYPE;
+      goto exit;
+    }
+  } //end if loadx_type 3
+  else if ( (strcmp(loadx_type,"4"))==0 )
+  {
+    /* user has set loadx_type to LOAD  */
+
+    /* 
+       check if targettable allows loadx_type 4 and if yes
+       test the source if export can be used
+    */
+
+    //trgt: db2LUW, >=v8, no multinode - load might be possible
+    if ( (ptrgtConfig -> db2LUW == TRUE) && 
+         (ptrgtConfig -> db2_version >= 8) &&
+         (ptrgtConfig -> target_multinode == FALSE) &&
+         (ptrgtConfig -> table_nickname == FALSE) )
+    {
+      //trgt: remote -> set up for remote load if possible
+      if (ptrgtConfig -> server_local == FALSE)
+      {
+        //testing if lobs involved
+        rc=checkiflobs();
+        if (rc!=0)
+        {
+          goto exit;
+        }
+        if (push_load==FALSE)
+        {
+          if (trc)
+          {
+            trace("  ERR: Cannot use a push load because the source table is "
+                  "a table that contains LOBs");
+          }
+          printasnloadmsg("  ERR: User has set loadx_type to 4 (export/load) but");
+          printasnloadmsg("       this loadx_type is invalid for this environment,");            
+          printasnloadmsg("       because the source table contains LOBs");
+          rc=ASNLOAD_INVALID_LOADXTYPE;
+          goto exit;
+        }
+      }
+      
+      //now check source for export possibility
+      if ( (psrcConfig -> db2LUW == TRUE) && (psrcConfig -> db2_version < 8) )
+      {
+        if (trc)
+        {
+          trace("  ERR: Couldn't use load because the source table "
+                "is earlier than version 8 ");
+          trace("       (DB2 UDB for UNIX, Windows, Linux)");
+        }
+        printasnloadmsg("  ERR: User has set loadx_type to 4 (export/load) but");
+        printasnloadmsg("       this loadx_type is invalid for this environment,");            
+        printasnloadmsg("       because the export utility is not  allowed for "
+                        "this sourcetable");
+        rc=ASNLOAD_INVALID_LOADXTYPE;
+        goto exit;
+      }
+    }
+    //load utility can't be used
+    else
+    {
+      if (trc)
+      {
+        trace("  ERR: Cannot use load because the target table is "
+              "multinode or not DB2 for Linux, Unix, Windows of at least version 8");
+      }
+      printasnloadmsg("  ERR: User has set loadx_type to 4 (export/load) but");
+      printasnloadmsg("       this loadx_type is invalid for this target table");
+      rc=ASNLOAD_TARGETTAB_INCOMPATIBLE_LOADXTYPE_4;
+      goto exit;
+    }
+  }//end if loadx_type == 4
+  else if ( (strcmp(loadx_type,"5"))==0 )
+  {
+    /* user has set loadx_type to IMPORT  */
+
+    /* 
+       check if targettable allows loadx_type 5 and test
+       simultaneously the source if export can be used
+    */
+    
+    if ((ptrgtConfig -> db2LUW == TRUE) && (ptrgtConfig -> db2_version < 8))
+    {
+      if (trc)
+      {
+        trace("  ERR: Cannot use import because the target table is "
+              "not supported for an import");
+      }
+      printasnloadmsg("  ERR: User has set loadx_type to 5 (export/import)");
+      printasnloadmsg("       but this loadx_type is invalid for this target table");
+      rc= ASNLOAD_TARGETTAB_INCOMPATIBLE_LOADXTYPE_5;
+      goto exit;
+    }
+    else if ((psrcConfig -> db2LUW == TRUE) &&(psrcConfig -> db2_version < 8))
+    {
+      if (trc)
+      {
+        trace("  ERR: Cannot use import because the source table is "
+              "not supported for export.");
+      }
+      printasnloadmsg("  ERR: User has set loadx_type to 5 (export/import)");
+      printasnloadmsg("       but this loadx_type is invalid for this environment");
+      rc=ASNLOAD_INVALID_LOADXTYPE;
+      goto exit;
+    }
+  }//end if loadx_type==5
+  else
+  {
+    /* user has specified an invalid loadx_type */
+    
+    if (trc)
+    {
+      trace("  ERR: Valid loadx_types are only NULL,1,2,3,4,5");
+    }
+    printasnloadmsg("  ERR: Valid loadx_types are only NULL,1,2,3,4,5");
+    rc=ASNLOAD_INVALID_LOADXTYPE;
+    goto exit;
+    
+  }// end else
+
+ exit:
+  
+  if (rc == 0)
+  {
+    if ( (loadx_type[0] == '3') &&
+         ( psrcConfig -> cflags.getnick_result == NICKS_ARE_SET ) )
+    {
+      printasnloadmsg("  INF: A nickname, set in ASN.IBMSNAP_SUBS_MEMBR will "
+                      "be used for crossload");
+      printasnloadmsg("  -- LOADX_SRC_N_OWNER: %s", psrcConfig -> loadx_src_n_owner);
+      printasnloadmsg("  -- LOADX_SRC_N_TABLE: %s", psrcConfig -> loadx_src_n_table);
+    }
+    printasnloadmsg(" The loadx_type has been successfully verified\n");
+    if (trc)
+    {
+      trace(" Exiting runapplychecks successfully - loadx_type is %s",
+            loadx_type);
+      trace(" *** \n");
+    }
+  } else if (rc == 1)
+  {
+    printasnloadmsg(" Asnload will exit with return code 1 for an "
+                    "ALTERNATE FULL REFRESH\n");
+    if (trc)
+    {
+      trace(" Exiting runapplychecks with return code %d for an ALTERNATE FULL REFRESH",rc);
+      trace(" *** \n");
+    }
+  } else
+  {
+    printasnloadmsg(" An error occurred when verifying the passed loadx_type\n");
+    if (trc)
+    {
+      trace(" Exiting runapplychecks unsuccessfully with return code %d",rc);
+      trace(" *** \n");
+    }
+  }
+
+  return(rc);
+  
+} //end of runapplychecks
+
+
+/******************************************************************************
+ *
+ *  Function Name  = split_tbl
+ *
+ *  Descriptive Name = split table
+ *
+ *  Function =  If the EXPORT/LOAD/IMPORT data files ( in our case *.ixf)
+ *              exceed the 2GB limit, you may batch asnload to partition
+ *              the data files into many files. To do so, set up the variables
+ *              below to the appropriate values and repeat the 'if' statement
+ *              for each appropriate table.   
+ *             
+ *  Input params:
+ *    trc (global),
+ *    trg_srvr (global),
+ *    trg_owner (global),
+ *    trg_tbl (global),
+ *
+ *  Output params:
+ *    num_stmt (global): indicates the number of statements that are needed to
+ *                       export/import/load the source table
+ *    split_stmts (global): holds the select stmnts of the source table
+ *
+ *  Output params for DB2SQL param style:
+ *
+ *  Dependencies:
+ *
+ *  Normal Return = void
+ *
+ *  Error Return = void
+ *
+******************************************************************************/
+/*checkasnlogic*//*4*/
+void split_tbl()
+{
+
+/*
+  if (trc)
+  {
+    trace("\n Splitting the sourcetable (split_tbl)");
+  }
+  if ((strcmp(trg_srvr, "DBNAME") == 0) &&
+       (strcmp(trg_owner,  "USRT001") == 0) &&
+       (strcmp(trg_tbl,  "TRGTTBL1") == 0))
+  {
+    num_stmt = 3;
+    strcpy(split_stmts[0],"SELECT * FROM EMP WHERE EMPNO < '200000'");
+    strcpy(split_stmts[1],
+           "SELECT * FROM EMP WHERE EMPNO > '200000' AND EMPNO < '500000'");
+    strcpy(split_stmts[2],"SELECT * FROM EMP WHERE EMPNO > '500000'");
+  }
+  else if ((strcmp(trg_srvr,"DBNAME") == 0) &&
+           (strcmp(trg_owner, "USRT001") == 0) &&
+           (strcmp(trg_tbl, "TRGTTBL2") == 0))
+  {
+    num_stmt = 2;
+    strcpy(split_stmts[0],"SELECT * FROM DEPT WHERE DEPTNO < 'FKK'");
+    strcpy(split_stmts[1],"SELECT * FROM DEPT WHERE DEPTNO > 'FKK'");
+  }
+    
+  if (trc)
+  {
+    trace("  INF: Number of stmt is %d",num_stmt);  
+    trace(" Exiting split_tbl\n");
+  }
+  printasnloadmsg("\n Using split_tbl - Number of stmt is %d",num_stmt);
+*/  
+} // end of split_tbl
+/*endchecklogic*/
+
+/******************************************************************************
+ *
+ *  Function Name  = init
+ *
+ *  Descriptive Name = init
+ *
+ *  Function = initializes for all message files, used in the asnload package
+ *             the filenames (path included) and allocates the necessary
+ *             memory
+ *             
+ *  Input params:
+ *    apply_path (global), app_qual (global), set_name (global),
+ *    cntl_srvr (global), 
+ *
+ *  Output params:
+ *    DATAFILE (global):  name for the export file
+ *    DATAFILE2 (global): needed for output_DATALINK - replacing mode
+ *                        will be later the new "export" file name
+ *                        of datafile (having the new datalinks)
+ *    DLINFILE (global):  needed for output_DATALINK - extracting mode
+ *    DLOUTFILE (global): needed for output_DATALINK - replacing mode
+ *    EMSGFILE (global):  message file name used by the export utility
+ *    IMSGFILE (global):  message file name used by the import utility
+ *    gLMSGFILE (global): message file name used in the asnload package
+ *                        code
+ *    sLMSGFILE (global): message file name used by the load utility    
+ *
+ *  Output params for DB2SQL param style:
+ *
+ *  Dependencies: needs to be called before any file open attempt will be done
+ *
+ *  Normal Return = void
+ *
+ *  Error Return = void
+ *
+******************************************************************************/
+void init()
+{
+  DATAFILE = (char*) malloc ( strlen_applypath+APPQUAL_LENGTH+SETNAME_LENGTH+
+                              MAX_LENGTH_DBALIAS+strlen(FILETYP1)+6 );
+  strcpy(DATAFILE, apply_path );
+  strcat(DATAFILE, "ASNA" );
+  strcat(DATAFILE, app_qual );
+  strcat(DATAFILE, set_name );
+  strcat(DATAFILE, cntl_srvr );
+  strcat(DATAFILE, ".");
+  strcat(DATAFILE, FILETYP1 );
+  datafile = (unsigned char *)&DATAFILE[0];
+
+  DATAFILE2 = (char*) malloc ( strlen_applypath+APPQUAL_LENGTH+SETNAME_LENGTH+
+                               MAX_LENGTH_DBALIAS+strlen(FILETYP1)+7 );
+  strcpy(DATAFILE2,apply_path);
+  strcat(DATAFILE2, "ASNA");
+  strcat(DATAFILE2, app_qual);
+  strcat(DATAFILE2, set_name);
+  strcat(DATAFILE2, cntl_srvr);
+  strcat(DATAFILE2, "2.");
+  strcat(DATAFILE2, FILETYP1);
+
+  DLINFILE = (char*) malloc ( strlen_applypath+APPQUAL_LENGTH+SETNAME_LENGTH+
+                              MAX_LENGTH_DBALIAS+8 );
+  strcpy(DLINFILE,apply_path);
+  strcat(DLINFILE, "ASNA");
+  strcat(DLINFILE, app_qual);
+  strcat(DLINFILE, set_name);
+  strcat(DLINFILE, cntl_srvr);
+  strcat(DLINFILE, ".IN");
+
+  DLOUTFILE = (char*) malloc ( strlen_applypath+APPQUAL_LENGTH+SETNAME_LENGTH+
+                               MAX_LENGTH_DBALIAS+9 );
+  strcpy(DLOUTFILE,apply_path);
+  strcat(DLOUTFILE, "ASNA");
+  strcat(DLOUTFILE, app_qual);
+  strcat(DLOUTFILE, set_name);
+  strcat(DLOUTFILE, cntl_srvr);
+  strcat(DLOUTFILE, ".OUT");
+ 
+  EMSGFILE = (char*) malloc ( strlen_applypath+APPQUAL_LENGTH+13 );
+  strcpy(EMSGFILE,apply_path);
+  strcat(EMSGFILE, "asnaEXPT");
+  strcat(EMSGFILE, app_qual);
+  strcat(EMSGFILE, ".");
+  strcat(EMSGFILE, "msg");
+
+  IMSGFILE = (char*) malloc ( strlen_applypath+APPQUAL_LENGTH+13 );
+  strcpy(IMSGFILE,apply_path);
+  strcat(IMSGFILE, "asnaIMPT");
+  strcat(IMSGFILE, app_qual);
+  strcat(IMSGFILE, ".");
+  strcat(IMSGFILE, "msg");
+
+  /* any general exit failure warning and informational messages goes */
+  /* here inclusive load statistics                                   */
+  gLMSGFILE = (char*) malloc ( strlen_applypath+APPQUAL_LENGTH+12 );
+  strcpy(gLMSGFILE,apply_path);
+  strcat(gLMSGFILE, "asnload");
+  strcat(gLMSGFILE, app_qual);
+  strcat(gLMSGFILE, ".");
+  strcat(gLMSGFILE, "msg");
+
+  /* error warning infos issued by db2load utility */
+  sLMSGFILE = (char*) malloc ( strlen_applypath+APPQUAL_LENGTH+13 );
+  strcpy(sLMSGFILE,apply_path);
+  strcat(sLMSGFILE, "asnaLOAD");
+  strcat(sLMSGFILE, app_qual);
+  strcat(sLMSGFILE, ".");
+  strcat(sLMSGFILE, "msg");
+
+}
+
+
+/* insert UPDANY into signal table */
+int updany_signal_table()
+{
+  EXEC SQL INCLUDE SQLCA;
+
+  EXEC SQL BEGIN DECLARE SECTION;
+  /********************************************************************/
+  /* signal table variables                                           */
+  /********************************************************************/
+  struct {
+     short len;
+     char s[30];
+  } sigType;
+
+  struct {
+     short len;
+     char s[30];
+  } sigSubType;
+
+  struct {
+     short len;
+     char s[500];
+  } sigInp;
+
+  char sigTm[27];
+  char sigState[2];
+
+  char tgtCapSchema[129];               //TGT_CAPTURE_SCHEMA
+  char currtTimestamp[27];
+
+  sqlint32 dummycnt;
+  EXEC SQL END DECLARE SECTION;
+
+  EXEC SQL DECLARE CGCT_CUR1 CURSOR FOR CGCT_STMT1;
+
+  rc = 0;
+
+  if (trc)
+  {
+    trace("\n Entering updany_signal_table\n");
+  }
+
+  /********************************************************************/
+  /*  Obtain TGT_CAPTURE_SCHEMA                                       */
+  /********************************************************************/
+  if (trc)
+  {
+    trace("  Obtaining TGT_CAPTURE_SCHEMA\n");
+  }
+
+  rc = connect_db(cntl_srvr);
+  if (rc != 0)
+  {
+    goto exit;
+  }
+
+  sprintf(temp_stmt.s,
+          "SELECT TGT_CAPTURE_SCHEMA FROM ASN.IBMSNAP_SUBS_SET "
+          "WHERE APPLY_QUAL='%s' AND SET_NAME='%s' AND WHOS_ON_FIRST='S'",
+          app_qual, set_name);
+
+  temp_stmt.len = strlen(temp_stmt.s);
+
+  EXEC SQL PREPARE qtcschema1 FROM :temp_stmt;
+  if ((SQLCODE == -818) || (SQLCODE == -805))
+  {
+    if (trc)
+    {
+      trace("  ERR: ASNLOAD might not have been correctly bound");
+    }
+    prt_err();
+    rc=ASNLOAD_ERROR;
+    goto exit;
+  }
+
+  EXEC SQL DECLARE ctcschema1 CURSOR FOR qtcschema1;
+  EXEC SQL OPEN ctcschema1;
+  EXEC SQL FETCH ctcschema1 INTO :tgtCapSchema :indic1;
+
+  if (SQLCODE != 0)
+  {
+    if (trc)
+    {
+      trace("  FETCH from Cursor sqlcode is %d,"
+            "sqlstate is %s",
+            SQLCODE, sqlca.sqlstate);
+      trace("  Statement: %s", temp_stmt.s);
+    }
+    prt_err();
+    rc = ASNLOAD_ERROR;
+    goto exit;
+  }
+  else
+  {
+    if (trc)
+    {
+      trace("  INF: tgtCapSchema is %s", tgtCapSchema);
+    }
+  }
+
+  EXEC SQL CLOSE ctcschema1;
+
+  rc = connect_db(trg_srvr);
+  if (rc != 0)
+  {
+    goto exit;
+  }
+
+  /********************************************************************/
+  /*  Obtain current timestamp                                        */
+  /********************************************************************/
+  if (trc)
+  {
+    trace("  Obtaining current timestamp\n");
+  }
+
+  sprintf(temp_stmt.s,
+    "SELECT COUNT(*), CURRENT TIMESTAMP FROM SYSIBM.SYSDUMMY1");
+ 
+  temp_stmt.len = strlen(temp_stmt.s);
+
+  EXEC SQL PREPARE CGCT_STMT1 FROM :temp_stmt;
+  EXEC SQL OPEN CGCT_CUR1;
+  EXEC SQL FETCH CGCT_CUR1 INTO :dummycnt, :currtTimestamp;
+  EXEC SQL CLOSE CGCT_CUR1;
+
+  currtTimestamp[26] = '\0';
+  strcpy(sigTm, currtTimestamp);
+
+  /********************************************************************/
+  /*  Insert UPDANY into signal table                                 */
+  /********************************************************************/
+  strcpy(sigType.s, "CMD");
+  sigType.len = strlen(sigType.s);
+
+  strcpy(sigSubType.s, "UPDANY");
+  sigSubType.len = strlen(sigSubType.s);
+ 
+  strcpy(sigInp.s, app_qual);
+  sigInp.len = strlen(sigInp.s);
+
+  sigState[0] = 'P';
+  sigState[1] = '\0';
+
+  if (trc)
+  {
+    trace("  UPDANY: tgtCapSchema = %s\n", tgtCapSchema);
+    trace("  UPDANY: sigTm        = %s\n", sigTm);
+    trace("  UPDANY: sigType      = %s\n", sigType.s);
+    trace("  UPDANY: sigSubType   = %s\n", sigSubType.s);
+    trace("  UPDANY: sigInp       = %s\n", sigInp.s);
+    trace("  UPDANY: sigState     = %c\n", sigState[0]);
+  }
+
+  sprintf(temp_stmt.s, "INSERT INTO \"%s\".IBMSNAP_SIGNAL \
+    (SIGNAL_TIME, SIGNAL_TYPE, SIGNAL_SUBTYPE, SIGNAL_INPUT_IN, \
+    SIGNAL_STATE) VALUES(\'%s\', \'%s\', \'%s\', \'%s\', \'%c\')",
+    tgtCapSchema,
+    sigTm,
+    sigType.s,
+    sigSubType.s,
+    sigInp.s,
+    sigState[0]);
+
+  temp_stmt.len = strlen(temp_stmt.s);
+
+  EXEC SQL EXECUTE IMMEDIATE :temp_stmt;
+
+  if (SQLCODE != 0)
+  {
+    if (trc)
+    {
+      trace("  ERR: %s failed, sqlcode is %d, sqlstate is %s",
+            temp_stmt.s, SQLCODE, sqlca.sqlstate);
+      trace("  Statement: %s", temp_stmt.s);
+    }
+    prt_err();
+    rc = ASNLOAD_ERROR;
+    goto exit;
+  }
+
+ exit:
+
+  if (trc)
+  {
+    trace(" Exiting updany_signal_table with return code %d\n", rc);
+  }
+
+  return (rc);
+}
+
+
+/******************************************************************************
+ *
+ *  Function Name  = delete_target
+ *
+ *  Descriptive Name = delete target table
+ *
+ *  Function = Used if a table is z/OS or contains DATALINKs.
+ *             All target table rows are needed  to be deleted, because a
+ *             replace in the action string for the target table is not
+ *             allowed.
+ *             
+ *  Input params:
+ *    trc (global): traceindicator
+ *
+ *  Output params:
+ *
+ *  Output params for DB2SQL param style:
+ *
+ *  Dependencies:
+ *
+ *  Normal Return = 0
+ *
+ *  Error Return = ASNLOAD_ERROR
+ *
+******************************************************************************/
+int delete_target()
+{
+  rc = 0;
+
+  if (trc)
+  {
+    trace("\n Empty the target table (delete_target)");
+  }
+
+  rc = updany_signal_table();
+
+  if (rc != 0) 
+  {
+    goto exit;
+  }
+
+  sprintf(temp_stmt.s, "DELETE FROM \"%s\".\"%s\"", trg_owner, trg_tbl);
+  temp_stmt.len = strlen(temp_stmt.s);
+  
+  EXEC SQL EXECUTE IMMEDIATE :temp_stmt;
+
+  if ( SQLCODE != 0 && SQLCODE != 100) 
+  {
+    if ( trc )
+    {
+      trace("  ERR: %s failed, sqlcode is %d, sqlstate is %s",
+            temp_stmt.s, SQLCODE, sqlca.sqlstate);
+      trace("  Statement: %s", temp_stmt.s);
+    }
+    prt_err();
+    rc = ASNLOAD_ERROR;
+    goto exit;
+  }
+  
+  EXEC SQL COMMIT;
+
+ exit:
+
+  if (trc)
+  {
+    trace(" Exiting delete_target with return code %d\n",rc);
+  }
+
+  return(rc);
+}
+
+/******************************************************************************
+ *
+ *  Function Name  = swap_byte
+ *
+ *  Descriptive Name = swap byte
+ *
+ *  Function = Swap the byte depending on the used OS
+ *             
+ *  Input params:
+ *
+ *  Output params:
+ *    pShort: pointer to a character to be swapped
+ *
+ *  Output params for DB2SQL param style:
+ *
+ *  Dependencies:
+ *
+ *  Normal Return = void
+ *
+ *  Error Return = void
+ *
+******************************************************************************/
+void swap_byte(unsigned char * pShort)
+{
+#if !(ASN_LITTLE_ENDIAN)
+  unsigned char temp;
+  temp  =  *pShort;
+  *pShort = *( pShort+1);
+  *( pShort+1) = temp;
+#endif
+}
+
+/******************************************************************************
+ *
+ *  Function Name  = readint
+ *
+ *  Descriptive Name = read integer
+ *
+ *  Function = read input string as integer
+ *             
+ *  Input params:
+ *    buf: input string
+ *    size: size of the string
+ *
+ *  Output params:
+ *    number: pointer to an integer - the read value will go here
+ *
+ *  Output params for DB2SQL param style:
+ *
+ *  Dependencies:
+ *
+ *  Normal Return = void
+ *
+ *  Error Return = void
+ *
+******************************************************************************/
+void readint(char * buf, unsigned int size, int * number)
+{
+  char intstr[20];
+  memcpy(intstr, buf, size);
+  intstr[size] = '\0';
+  sscanf(intstr, "%d", number);
+}
+
+/******************************************************************************
+ *
+ *  Function Name  = writeint
+ *
+ *  Descriptive Name = write integer
+ *
+ *  Function = Converts an integer and writes it formatted into a string
+ *             
+ *  Input params:
+ *    number: integer value
+ *    size: size of the output string buf
+ *
+ *  Output params:
+ *    buf: output sting
+ *
+ *  Output params for DB2SQL param style:
+ *
+ *  Dependencies:
+ *
+ *  Normal Return = void
+ *
+ *  Error Return = void
+ *
+******************************************************************************/
+void writeint(int number, unsigned int size, char * buf)
+{
+  int i;
+  int rem = 0;
+  int nnum = number;
+  for (i = size-1; i >= 0; i--)
+  {
+    rem = (nnum % 10);
+    nnum = nnum / 10;
+    buf[i] = (char)(rem + '0');
+  }
+}
+
+/******************************************************************************
+ *
+ *  Function Name  = output_DATALINK
+ *
+ *  Descriptive Name = output datalink
+ *
+ *  Function = Depending on the passed mode this function either extract or
+ *             replace datalink values
+ *             
+ *  Input params:
+ *    trc (global): traceindicator
+ *    mode: character flag used as indicator
+ *    fname: the export filename ->  DATAFILE
+ *    infile: when extracting datalinks from the export file
+ *            this is the file name of the input file where the datalink
+ *            will be extracted to and later passed to ASNDLCOPY
+ *    ofname: the name of the modified *export* file to be used for
+ *            the load/import - DATAFILE2 
+ *    outfile: the name of the datalink out file - DLOUTFILE
+ *
+ *  Output params:
+ *
+ *  Output params for DB2SQL param style:
+ *
+ *  Dependencies:
+ *
+ *  Normal Return = 0
+ *
+ *  Error Return = ASNLOAD_ERROR
+ *
+******************************************************************************/
+int output_DATALINK(char *fname,  char *infile,
+                    char *ofname, char *outfile, char mode)
+{
+  rc = 0;
+
+  char  buf[MAXBUFSIZE];
+  char  obuf[MAXDLSIZE*2];
+  FILE *fptr = NULL;
+  FILE *ifptr = NULL;
+  FILE *ofptr = NULL;
+  FILE *odfptr = NULL;
+  int   done = no;
+  int   bytes;
+  int   byteread = 0;
+  int   totalbytes = 0;
+  int   reclen;
+  int   newreclen;
+  struct dlColInfo *colinfo = NULL;
+  int   colcnt = 0;
+  int   cpos;
+  int   cid;  
+  int   datatype;
+  int   i;
+  int   offset;
+  short linksz, newlinksz, swaplinksz;
+  char  link[MAXDLSIZE];
+  unsigned short nullable;
+  char  *ptr;
+
+  if (trc)
+  {
+    if (mode == 'r')
+    {
+      trace("\n Extract the DATALINK value (output_DATALINK)");
+    } else
+    {
+      trace("\n Replace the DATALINK value (output_DATALINK)");
+    }
+  }
+
+  if ( (fptr = fopen(fname, "rb")) == NULL )
+  {
+    if ( trc )
+    {
+      trace("  ERR: Cannot open the file %s", fname);
+    }
+    rc = ASNLOAD_ERROR;
+    goto exit;
+  }
+
+  if ( mode == 'w' )
+  {
+    if ( (odfptr = fopen(ofname, "wb")) == NULL )
+    {
+      if ( trc )
+      {
+        trace("  ERR: Cannot open the file (%s)", ofname);
+      }
+      rc = ASNLOAD_ERROR;
+      goto exit;
+    }
+    if ( (ofptr = fopen(outfile, "r")) == NULL )
+    {
+      if ( trc )
+      {
+        trace("  ERR: Cannot open the file (%s)", outfile);
+      }
+      rc = ASNLOAD_ERROR;
+      goto exit;
+    }
+  } else
+  {
+    if ( (ifptr = fopen(infile, "w")) == NULL )
+    {
+      if ( trc )
+      {
+        trace("  ERR: Cannot open the file (%s)", infile);
+      }
+      rc = ASNLOAD_ERROR;
+      goto exit;
+    }
+  }
+
+  colinfo = (struct dlColInfo *)malloc(sizeof(struct dlColInfo)*
+                                       numDatalinkCol);
+  if ( colinfo == NULL )
+  {
+    rc = ASNLOAD_ERROR;
+    goto exit;
+  }
+
+  bytes = fread(buf, 1, MAXBUFSIZE, fptr);
+  for (byteread = 0, i = 0; bytes > 0; byteread = 0)
+  {
+    while (bytes > byteread)
+    {
+      done = no;
+      
+      /* record length */
+      readint(buf+byteread, 6, &reclen);
+      if ( reclen <= bytes - byteread - 6)
+      {
+        switch(buf[byteread+6])
+        {
+          case 'C': /* Column Record */
+            readint(buf+byteread+290, 3, &cid);
+            readint(buf+byteread+293, 6, &cpos);
+            readint(buf+byteread+272, 3, &datatype);
+            if ( datatype == SQL_TYP_DATALINK )
+            {
+              colinfo[colcnt].null = buf[byteread+266];
+              colinfo[colcnt].pos = cpos;
+              colinfo[colcnt++].id = cid;
+            }
+            break;
+
+          case 'D': /* Data Record */
+            readint(buf+byteread+7, 3, &cid);
+            if ( colinfo[i].id == cid )
+            {
+              offset = byteread + colinfo[i].pos - 1 + 14;
+              
+              /* check the null byte */
+              if ( colinfo[i].null == 'Y' )
+              {
+                memcpy(&nullable, buf + offset, sizeof(short));
+                offset += sizeof(short);
+              } else
+              {
+                nullable = 0x0000;
+              }
+
+              if ( nullable == 0x0000 )
+              { /* not null */
+                memcpy(&linksz, buf+offset, sizeof(short));
+                swap_byte((unsigned char *)(&linksz));
+                if ( linksz > 0 )
+                {
+                  if ( mode == 'w' )
+                  {
+                    /* replace the link */
+
+                    if ( fgets(obuf, MAXBUFSIZE, ofptr) == NULL )
+                    {
+                      if ( trc )
+                      {
+                        trace("  ERR: Invalid output file format (%s)",
+                              outfile);
+                      }
+                      rc = ASNLOAD_ERROR;
+                      goto exit;
+                    }
+
+                    if ( sscanf(obuf, "%hd", &newlinksz) != 1 )
+                    {
+                      if ( trc )
+                      {
+                        trace("  ERR: Invalid output file format (%s)",
+                              outfile);
+                      }
+                      rc = ASNLOAD_ERROR;
+                      goto exit;
+                    }
+
+                    if ( newlinksz > 0 )
+                    {
+                      ptr = obuf;
+                      while ( *ptr == ' ' ) { ptr++; }
+                      while ( *ptr != ' ' ) { ptr++; }
+                      while ( *ptr == ' ' ) { ptr++; }
+                      memcpy(link, ptr, newlinksz);
+                      if ( strlen(ptr) < newlinksz )
+                      {
+                        if ( trc )
+                        {
+                          trace("  ERR: Invalid output file format (%s)",
+                                outfile);
+                        }
+                        rc = ASNLOAD_ERROR;
+                        goto exit;
+                      }
+                      link[newlinksz] = '\0';
+                    }
+                  
+                    newreclen = reclen + (newlinksz - linksz);
+                    writeint(newreclen, 6, buf+byteread);
+                    
+                    /* write everything up to the link */
+                    fwrite(buf + byteread, 1, offset - byteread,
+                           odfptr);
+                    
+                    swaplinksz = newlinksz;
+                    swap_byte((unsigned char *)(&swaplinksz));
+                    fwrite(&swaplinksz, 1, sizeof(short), odfptr);
+
+                    /* link size */
+                    if ( newlinksz > 0 )
+                    {
+                      fwrite(link, 1, newlinksz, odfptr);
+                    }
+                  
+                    /* write the rest of the data record */
+                    fwrite(buf + offset + linksz + sizeof(short), 1,
+                           reclen- (offset - byteread - 6)
+                           - linksz - sizeof(short),
+                           odfptr);
+                    done = yes;
+                  }
+                  // mode == 'r'
+                  else 
+                  { /* output the link to the INPUT file */
+                    offset += 2;
+                    memcpy(link, buf+offset, linksz);
+                    link[linksz] = '\0';
+                    fprintf(ifptr, "%d %s Y\n", linksz, link, linksz);
+                  }
+                }
+              } /* nullable */
+
+              i = (i + 1) % colcnt;
+            } /* if colname[i].id == cid */
+            break;
+
+          default:
+            break;
+        }
+
+        if ( mode == 'w' && !done )
+        {
+          /* write the record to another IXF file */
+          fwrite(buf + byteread, 1, reclen+6, odfptr);
+        }
+        byteread += reclen+6;
+        
+      } else //from if ( reclen <= bytes - byteread - 6)
+      {
+        fseek(fptr, totalbytes + byteread, 0);
+        break;
+      }
+    } /* while */
+
+    totalbytes += byteread;
+    bytes = fread(buf, 1, MAXBUFSIZE, fptr);    
+  } // end for (byteread = 0, i = 0; bytes ...
+
+ exit:
+  
+  if ( fptr  != NULL ) fclose(fptr);
+  if ( ifptr != NULL ) fclose(ifptr);
+  if ( ofptr != NULL ) fclose(ofptr);
+  if ( odfptr != NULL ) fclose(odfptr);
+  if ( colinfo != NULL ) free(colinfo);
+
+  if (trc)
+  {
+    trace(" Exiting output_DATALINK with return code %d\n",rc);
+  }
+
+  if (rc!=0)
+  {
+    if ( mode == 'r' )
+    {
+      printasnloadmsg("\n  ERR: output_DATALINK - An error occured when "
+                      "extracting the DATALINK value\n");
+    } else
+    {
+      printasnloadmsg("\n  ERR: output_DATALINK - An error occured when "
+                      "replacing the DATALINK value\n");
+    }
+  }
+
+  return rc;
+
+}//end output_DATALINK
+
+/******************************************************************************
+ *
+ *  Function Name  = copy_Datalink
+ *
+ *  Descriptive Name = copy Datalink value
+ *
+ *  Function = replicate DATALINK data by invoking ASNDLCOPY user exit
+ *             
+ *  Input params:
+ *    trc (global): traceindicator
+ *
+ *  Output params:
+ *    datafile (global): export *.ixf file
+ *                       before ASNDLCOPY == DATAFILE, after == DATAFILE2
+ *    
+ *
+ *  Output params for DB2SQL param style:
+ *
+ *  Dependencies:
+ *
+ *  Normal Return = 0
+ *
+ *  Error Return = ASNLOAD_ASNLOADLCOPY_FAILED,
+ *                 ASNLOAD_ERROR
+ *
+******************************************************************************/
+int copy_Datalink()
+{
+  rc=0;
+
+  char argv[300];
+
+  if (trc)
+  {
+    trace("\n Replicate DATALINK data by preparing and invoking ASNDLCOPY "
+          "user exit (copy_Datalink)");
+  }
+  
+  strcpy(argv, "ASNDLCOPY ASNASET ");//program name and set name dummy
+  strcat(argv, app_qual);            
+  strcat(argv, " SRCSVR SRCOWN ");//source table dummy and source owner dummy
+  strcat(argv, src_srvr); strcat(argv, " ");
+  strcat(argv, trg_tbl); strcat(argv, " ");
+  strcat(argv, trg_owner); strcat(argv, " ");
+  strcat(argv, trg_srvr); strcat(argv, " ");
+  strcat(argv, DLINFILE); strcat(argv, " ");
+  strcat(argv, DLOUTFILE); strcat(argv, " ");
+  if (trc)
+  {
+    strcat(argv, "yes ");
+  } else
+  {
+    strcat(argv, "no ");
+  }
+  strncat(argv, psrcConfig -> db2typeANDvers, 10);
+  strcat(argv, " ");
+  strncat(argv, ptrgtConfig -> db2typeANDvers, 10);
+  strcat(argv, " ");
+  strcat(argv, apply_path);
+
+  /* extract all the DATALINK values from the export file */
+  rc = output_DATALINK( (char*)datafile, DLINFILE, NULL, NULL, 'r');
+  if (rc!=0)
+  {
+    goto exit;
+  }
+
+  /* invoke the ASNDLCOPY user exit */
+  rc = system(argv);
+  if ( rc != 0 )
+  {
+    if ( trc )
+    {
+      trace(" ERR: ASNDLCOPY failed with (%d)", rc);
+    }
+    printasnloadmsg("\n  ERR: copy_Datalink - ASNDLCOPY failed\n");
+    rc = ASNLOAD_ASNLOADLCOPY_FAILED;
+    goto exit;
+    
+  } else
+  {
+    /* replace the DATALINK values with the new links specified in   */
+    /* the output file generated by the ASNDLCOPY user exit          */
+    rc = output_DATALINK( (char*) datafile, NULL, DATAFILE2, DLOUTFILE, 'w');
+    if (rc!=0)
+    {
+      goto exit;
+    }
+    
+    datafile = (unsigned char *)&DATAFILE2[0];
+  }  
+
+ exit:
+
+  if (trc)
+  {
+    trace(" Exiting copy_Datalink with return code %d\n",rc);
+  }
+  
+  return (rc);
+  
+} // end copy_Datalink
+
+/******************************************************************************
+ *
+ *  Function Name  = invoke_EXPORT
+ *
+ *  Descriptive Name = prepare and invoke the export API
+ *
+ *  Function = first prepare and then invoke EXPORT (db2Export) API
+ *             
+ *  Input params:
+ *    trc (global): traceindicator
+ *    sql (global): string holding the select statement
+ *    EMSGFILE (global): export message file name
+ *    ifv (global): pointer to inifile values
+ *    point_to_common (global): pointer to the default/common section
+ *    num_stmt, curr_stmt (both global): only if splitted tables are used
+ *    apply_path (global):
+ *    strlen_applypath (global): length of the apply_path
+ *    datafile (global): name of the export *.ixf file
+ *    FileTyp2 (global): indicating ixf format
+ *    
+ *
+ *  Output params:
+ *    LobFileList (global): If the user specified such a list in the inifile
+ *                          LobFileList will be linked with that List to enable
+ *                          removing the lobfiles. 
+ *    LobPathList (global): If the user specified such a list in the inifile
+ *                          LobPathList will be linked with that List to enable
+ *                          removing the lobfiles and it is also needed for
+ *                          import.
+ *    totalRowsExported (global): needed in invoke_IMPORT for the commit
+ *                                count
+ *
+ *  Output params for DB2SQL param style:
+ *
+ *  Dependencies:
+ *
+ *  Normal Return = 0
+ *
+ *  Error Return = ASNLOAD_EXPORT_FAILED
+ *                 ASNLOAD_ERROR
+ *
+******************************************************************************/
+int invoke_EXPORT()
+{
+  rc=0;
+  int                         base_file_number;
+  struct sqlchar             *tcolstrg         = NULL;
+  unsigned char              *msgfile          = NULL;
+  short                       callerac         = 0;
+  struct sqluexpt_out        *output           = NULL;
+  struct sqluexpt_out         ut_output;
+  struct sqlu_media_list     *pLobPathList     = NULL;
+  struct sqlu_location_entry *pLobfileLocEntry = NULL;
+  struct sqldcol              DataDescriptor;
+  void                       *pReserved        = NULL;
+  int                         i;                                
+  db2ExportOut                exportOut;
+  db2ExportStruct             exportParmStruct;
+  struct db2ExportOut        *pOutputInfo      = 0;
+  struct sqllob              *pActionString    = NULL;
+
+  // struct for select stmt at source
+  struct
+  {
+    sqluint32 len;
+    char s[32000];
+  } srcSQL;
+
+  struct {
+    short length;
+    char  data[128];
+  } FileTypeMod;                               
+  
+  memset(&exportParmStruct, 0, sizeof(exportParmStruct));
+  msgfile = (unsigned char *) &EMSGFILE[0];
+  
+  if (trc)
+  {
+    trace(" *** ");
+    trace(" EXPORT (invoke_EXPORT):");
+    trace("  datafile is %s", datafile);
+    trace("  msgfile is  %s", msgfile);
+  }
+
+  printasnloadmsg(" Export ");
+  gettimestamp(timestmpstr,TIMESTRING_LENGTH);
+  printasnloadmsg("  -- Started at: \"%s\"",timestmpstr);
+
+  
+  /** get ifv point to the values of trg_srvr entries int the inifile **/
+  /** or take defaults                                                 **/
+  for (ifv=point_to_common; ifv!=NULL; ifv=ifv->ilink)
+  {
+    if ( (strcmp(ifv->section,trg_srvr))==0 )
+    {
+      if (trc)
+      {
+        trace("  INF: The targetserver %s was specified in the inifile ",trg_srvr);
+        trace("  ---  Using these values...");
+      }
+      printasnloadmsg("  INF: Targetserver %s was specified in the inifile ",
+                      trg_srvr);
+      printasnloadmsg("  ---  Using thes values");
+      break;
+    }
+  }
+  /* else simply point to the common section */
+  if (!(ifv))
+  {
+    ifv=point_to_common;
+  }
+
+/*checkasnlogic*//*5*/
+/* If you split your sqlstmnt activate the following */
+  /*
+   * if (num_stmt > 1)
+   *  {
+   *   strcpy(sql.s, split_stmts[curr_stmt]);
+   *   sql.len = strlen(sql.s);
+   *  }
+   */
+/*endchecklogic*/
+  
+  tcolstrg = (struct sqlchar *)&sql;
+  if (trc)
+  {
+    trace("  Select string is %s", tcolstrg->data);
+  }
+  
+  output = (struct sqluexpt_out *)&ut_output;
+  output->sizeOfStruct=sizeof(struct sqluexpt_out);
+  
+  callerac=0;
+  
+  /********************************************************************/
+  /* initialize lob file names list                                   */
+  /*                                                                  */ 
+  /* NOTE: The sqluexpr API inputs a file names list. The first file- */
+  /*       name is concatenated with a three digit suffix             */
+  /*       ".001" -> ".999" by the export utility.                    */
+  /*       If the namespace of the filename is exausted the next will */
+  /*       be taken -  from now on appended with a suffix             */
+  /*       ".000" to ".999". The Lobs will be written to the files.   */
+  /*       See "initialize lob path list" (below) for details,how     */
+  /*       lobfilenames are used in the lobpaths.                     */
+  /********************************************************************/
+  
+  LobFileList.media_type = SQLU_CLIENT_LOCATION; /* local file */
+
+  /** if user did not specify lobfilelist  use the following logic **/
+  //determine the number of suffixes for the base lobfilename
+  base_file_number = ((ifv -> maxlobs / 1000 ) + 1);
+  
+  /** if user did not specify lobfilelist  use following logic **/
+  //no lobfiles specified -> use defaults
+  if ( ifv -> pLobfileListLocEntries == NULL ) 
+  {
+    LobFileList.sessions = base_file_number;
+    pLobfileLocEntry = (sqlu_location_entry*)
+      malloc(base_file_number * sizeof(sqlu_location_entry));
+
+    for (i = 0; i < base_file_number; i++ )
+    {
+      sprintf((pLobfileLocEntry + i)->location_entry, "ASNLOB%d", i);
+      (pLobfileLocEntry + i) ->reserve_len =
+        strlen((pLobfileLocEntry + i)->location_entry);
+    }
+  }
+  /** if user has specified a lobfilelist  use the following logic   **/
+  else // else use user lobfilelist
+  {
+    // 1st check if the list of infifile provided lobfilebasenames is enough 
+    //to handle the specified or default maxlobs number
+    if ( (ifv -> number_lobfiles * 1000) <= (ifv -> maxlobs) )
+    {
+      // use LobfileList & pLobFileLocEntry and Standardbasefilenames
+      LobFileList.sessions = base_file_number;
+      if (trc)
+      {
+        trace("  INF: %d provided lobfilebasenames are not sufficient ",
+              ifv -> number_lobfiles);
+        trace("       for a maximum of %d Lobs for target server '%s', "
+              "using ",ifv -> maxlobs, trg_srvr);
+        trace("       default names. Add more basefilenames or reduce the "
+              "maxlobnumber in the inifile");
+      }
+      printasnloadmsg("  INF: Couldn't use the user provided lobfilenamelist, ");
+      printasnloadmsg("       because it doesn't have enough lobfilebasenames for ");
+      printasnloadmsg("       the number of %d maxlobs",ifv->maxlobs);
+      printasnloadmsg("  ---  Using default lobfilenames ASNLOB% ");
+
+      LobFileList.sessions = base_file_number;
+      pLobfileLocEntry = (sqlu_location_entry*)
+        malloc(base_file_number * sizeof(sqlu_location_entry));
+      for (i=0; i < base_file_number;i++)
+      {
+        sprintf((pLobfileLocEntry + i)->location_entry, "ASNLOB%d", i);
+        (pLobfileLocEntry + i) ->reserve_len =
+          strlen((pLobfileLocEntry + i)->location_entry);
+      }
+    } else //simply add the infilelobfilenamelist (pointing to the same structure)
+    {
+      LobFileList.sessions = ifv -> number_lobfiles;
+      pLobfileLocEntry = ifv -> pLobfileListLocEntries;
+    }
+  }
+  LobFileList.target.location = pLobfileLocEntry;
+  
+  /********************************************************************/
+  /* initialize the lobpath list                                      */
+  /*                                                                  */
+  /* Note: The lobfilenames, created by the export utility,           */
+  /*       are used for a specified lobpathlist in the way, that      */
+  /*       each given pathname will contain at least one lobfile.     */
+  /*       Since lobfiles can contain multiple lobvalues the next     */
+  /*       filename will only be used in the case on file runs out of */
+  /*       space. The new file will be created in the current path.   */
+  /*                                                                  */
+  /*       See function file_cleanup() for an example, because this is*/
+  /*       important when deleting the file after finishing the load. */
+  /********************************************************************/
+  LobPathList.media_type = SQLU_LOCAL_MEDIA;
+  //if default value simply set applypath as lobpath
+  if (ifv ->pLobpathListMediaEntries == NULL )
+  {
+    LobPathList.sessions = 1;
+    LobPathList.target.media = (sqlu_media_entry*)malloc(sizeof(sqlu_media_entry));
+    
+    if (strlen_applypath > SQLU_DB_DIR_LEN )
+    {
+      if (trc)
+      {
+        trace ("  ERR: Applypath is longer than %d characters - thus cannot "
+               "initalize the Lobpath for the export API",
+               SQLU_DB_DIR_LEN);
+      }
+      rc=ASNLOAD_ERROR;
+      goto exit;
+    }
+    
+    strcpy(LobPathList.target.media -> media_entry, apply_path);
+    LobPathList.target.media ->reserve_len =
+      strlen(LobPathList.target.media -> media_entry);
+  } else
+  {
+    LobPathList.sessions = ifv -> number_lobpaths;
+    LobPathList.target.media = ifv -> pLobpathListMediaEntries;
+  }
+
+  pLobPathList = &LobPathList;
+
+  FileTypeMod.length = strlen("LOBSINFILE");            
+  strcpy(FileTypeMod.data, "LOBSINFILE");               
+  
+  DataDescriptor.dcolmeth = SQL_METH_D;
+  output->sizeOfStruct = SQLUEXPT_OUT_SIZE;
+  
+  memset(&exportOut, 0, sizeof(exportOut));
+  pOutputInfo = (struct db2ExportOut *)&exportOut;
+
+  strcpy(srcSQL.s, tcolstrg->data);
+  srcSQL.len                         = strlen(srcSQL.s);
+  pActionString                      = (struct sqllob *)&srcSQL;
+
+  exportParmStruct.piDataFileName    = (char*) datafile;
+  exportParmStruct.piLobPathList     = pLobPathList;
+  exportParmStruct.piLobFileList     = &LobFileList;
+  exportParmStruct.piDataDescriptor  = &DataDescriptor;
+  exportParmStruct.piActionString    = pActionString;
+  exportParmStruct.piFileType        = FileTyp2;
+  exportParmStruct.piFileTypeMod     = (struct sqlchar *)&FileTypeMod;
+  exportParmStruct.piMsgFileName     = (char*) msgfile;
+  exportParmStruct.iCallerAction     = callerac;
+  exportParmStruct.poExportInfoOut   = pOutputInfo;
+
+#ifdef on_v9
+  rc = db2Export(db2Version900,
+                 &exportParmStruct,
+                 &sqlca);
+#else
+  rc = db2Export(db2Version820,
+                 &exportParmStruct,
+                 &sqlca);
+#endif
+  
+  if (trc)
+  {
+    trace("  INF: Return from EXPORT: rc is %d", rc);
+  }
+  printasnloadmsg("  INF: Return from EXPORT: rc is %d, sqlcode is %d", 
+                  rc, SQLCODE);
+
+  output->rowsExported = pOutputInfo->oRowsExported;
+
+  if (rc != 0 || sqlca.sqlcode < 0)
+  {
+    if (trc)
+    {
+      trace("  ERR: EXPORT failed rc is %d, sqlcode is %d,"
+            "  sqlstate is %s.", rc, SQLCODE, sqlca.sqlstate);
+    }
+    prt_err();
+    rc = ASNLOAD_EXPORT_FAILED;
+    goto exit;
+  }
+  else if (sqlca.sqlcode > 0)
+  {
+    if (trc)
+    {
+      trace("  WARNING: rc is %d, sqlcode is %d,"
+            "  sqlstate is %s.", rc, SQLCODE, sqlca.sqlstate);
+      trace("  ESTAT: Rows exported: %d.", output->rowsExported);
+    }
+    prt_err();
+  }
+  else if (trc)
+  {
+    trace("  ESTAT: Rows exported: %d.", output->rowsExported);
+  }
+  
+   
+ exit:
+
+  totalRowsExported = output-> rowsExported;
+
+  if (rc==0)
+  {
+    printasnloadmsg("  ESTAT: %d Rows exported",output->rowsExported);
+    printasnloadmsg(" Export successful\n");
+  } else
+  {
+    printasnloadmsg(" Export failed\n");
+  }
+
+  if (trc)
+  {
+    trace(" Exiting invoke_EXPORT with return code %d",rc);
+    trace(" *** \n");
+  }
+  
+  return (rc);
+  
+} /* end of invoke_EXPORT */
+
+/******************************************************************************
+ *
+ *  Function Name  = invoke_IMPORT
+ *
+ *  Descriptive Name = prepare and call IMPORT API
+ *
+ *  Function = prepare and call IMPORT API (db2Import)
+ *             
+ *  Input params:
+ *    trc (global): trace indicator
+ *    IMSGFILE (global): name of the import message file
+ *    datafile (global): export file name
+ *    sql_repl (global): holds the statement for the target table
+ *    totalRowsExported (global): Info from the export utility
+ *    FileTyp2 (global): indicating ixf format
+ *    LobPathList (global): holds the Lobpathlist - if one
+ *
+ *  Output params:
+ *
+ *  Output params for DB2SQL param style:
+ *
+ *  Dependencies:
+ *
+ *  Normal Return = 0
+ *
+ *  Error Return = ASNLOAD_IMPORT_FAILED
+ *
+******************************************************************************/
+int invoke_IMPORT()
+{
+  rc=0;
+  
+  struct sqlu_media_list     *pLobPathList    = NULL;
+  struct sqldcol             DataDescriptor;
+  struct sqlchar             *tcolstrg        = NULL;
+  
+  unsigned char              *imsgfile        = NULL;
+  struct sqluimpt_in         *input           = NULL;
+  struct sqluimpt_out        *inout           = NULL;
+  short                      callerac         = 0;
+  sqlint32                   *pNullIndicators = NULL;
+  void                       *pReserved       = NULL;
+
+  struct {
+    short length;
+    char  data[128];
+  } FileTypeMod;
+
+  db2ImportStruct            importParmStruct;
+  struct sqlchar             *pActionString   = NULL;
+  struct db2ImportIn         ut_input;
+  struct db2ImportOut        ut_inout;
+  struct db2ImportIn         *pImportInfoIn   = NULL;
+  struct db2ImportOut        *pImportInfoOut  = NULL;
+  struct sqlchar             *pFileTypeMod = NULL;
+
+  struct
+  {
+    short len;
+    char s[32000];
+  } trgSQL;
+
+  memset(&importParmStruct, 0, sizeof(importParmStruct));
+  memset(&ut_input, 0, sizeof(ut_input));
+  memset(&ut_inout, 0, sizeof(ut_inout));
+  
+  imsgfile = (unsigned char *)&IMSGFILE[0];
+
+  if (trc)
+  {
+    trace(" *** ");
+    trace(" IMPORT (invoke_IMPORT):");
+    trace("  Datafile is   : %s", datafile);
+    trace("  Messagefile is: %s", imsgfile);
+  }
+  printasnloadmsg(" Import");
+  gettimestamp(timestmpstr,TIMESTRING_LENGTH);
+  printasnloadmsg("  -- Started at: \"%s\"",timestmpstr);
+
+  /*** use the global defined Lobpathlist ***/
+#ifdef on_v9
+  if ( (ptrgtConfig -> table_nickname == TRUE ) )
+    pLobPathList = NULL;
+  else
+    pLobPathList = &LobPathList;
+#else
+  pLobPathList = &LobPathList;
+#endif
+  
+  DataDescriptor.dcolmeth = SQL_METH_D;
+  
+  tcolstrg = (struct sqlchar *) &sql_repl;
+  
+  if (trc)
+  {
+    trace("  tcolstring is: %s", tcolstrg->data);
+  }
+  
+  input = (struct sqluimpt_in *) &ut_input;
+  inout = (struct sqluimpt_out *) &ut_inout;
+  
+  memset(input, '\0', SQLUIMPT_IN_SIZE);
+  input->sizeOfStruct = sizeof(struct sqluimpt_in);
+
+  if ( (ptrgtConfig -> db2LUW) == FALSE )
+  {
+    input->commitcnt = 0;
+  } else
+  {
+    input->commitcnt = totalRowsExported;
+  }
+  
+  input->restartcnt = 0;
+  inout->sizeOfStruct = sizeof(struct sqluimpt_out);
+  
+  if (trc)
+  {
+    trace("  Filetype is %s", FileTyp2);
+  }
+  callerac = 0;
+
+  if ( (ptrgtConfig -> table_nickname == TRUE ) )
+    pFileTypeMod = NULL;
+  else
+  {
+    FileTypeMod.length = strlen("LOBSINFILE");
+    strcpy(FileTypeMod.data, "LOBSINFILE");
+    pFileTypeMod = (struct sqlchar *)&FileTypeMod;
+  }
+  
+  strcpy(trgSQL.s, tcolstrg->data);
+  trgSQL.len                         = strlen(trgSQL.s);
+  pActionString                      = (struct sqlchar *)&trgSQL;
+
+  pImportInfoIn                      = (struct db2ImportIn *) &ut_input;
+  pImportInfoIn->piCommitcount       = (db2int32 *)&totalRowsExported;
+  if ( (ptrgtConfig -> table_nickname == TRUE ) )
+    pImportInfoIn->iAccessLevel = SQLU_ALLOW_WRITE_ACCESS;
+  pImportInfoIn->iRestartcount       = 0;
+
+  pImportInfoOut                     = (struct db2ImportOut *)&ut_inout;
+
+  importParmStruct.piDataFileName    = (char *)datafile;
+  importParmStruct.piLobPathList     = pLobPathList;
+  importParmStruct.piDataDescriptor  = &DataDescriptor;
+  importParmStruct.piActionString    = pActionString;
+  importParmStruct.piFileType        = FileTyp2;
+  importParmStruct.piFileTypeMod     = pFileTypeMod;
+  importParmStruct.piMsgFileName     = (char*) imsgfile;
+  importParmStruct.iCallerAction     = callerac;
+  importParmStruct.piNullIndicators  = pNullIndicators;
+
+  importParmStruct.piImportInfoIn    = pImportInfoIn;
+  importParmStruct.poImportInfoOut   = pImportInfoOut;
+
+#ifdef on_v9
+  rc = db2Import(db2Version900,
+                 &importParmStruct,
+                 &sqlca);
+#else
+  rc = db2Import(db2Version820,
+                 &importParmStruct,
+                 &sqlca);
+#endif
+
+  if (trc)
+  {
+    trace("  INF: Return from IMPORT: Rc is %d:", rc);
+  }
+
+  if (rc != 0 || sqlca.sqlcode < 0)
+  { 
+    /* import failed */
+    if (trc)
+    {
+      trace("  ERR: IMPORT failed rc is %d, sqlcode is %d,"
+            " sqlstate is %s.", rc, SQLCODE, sqlca.sqlstate);
+    }
+    prt_err();
+    rc = ASNLOAD_IMPORT_FAILED;
+    goto exit;
+  }
+  else if (sqlca.sqlcode > 0)
+  {
+    if (trc)
+    {
+      trace("  WARNING: rc is %d, sqlcode is %d,"
+            "  sqlstate is %s.", rc, SQLCODE, sqlca.sqlstate);
+    }
+    prt_err();
+  }
+
+  if (rc == 0 && sqlca.sqlcode >= 0)
+  {
+    if (trc)
+    {
+      trace("  ISTAT: Rows imported %d, rows committed %d",
+            pImportInfoOut->oRowsInserted,
+            pImportInfoOut->oRowsCommitted);
+    }
+    printasnloadmsg("  ISTAT: Rows imported %d, Rows committed %d",
+            pImportInfoOut->oRowsInserted,
+            pImportInfoOut->oRowsCommitted);
+  }
+  
+ exit:
+  
+  if (rc!=0)
+  {
+    printasnloadmsg(" Import failed\n");
+  } else
+  {
+    printasnloadmsg(" Import successful\n");
+  }
+  if (trc)
+  {
+    trace(" Exiting invoke_IMPORT with return code %d",rc);
+    trace(" *** \n");
+  }
+
+  return (rc);
+  
+} /* end of invoke_IMPORT */
+
+/******************************************************************************
+ *
+ *  Function Name  = invoke_LOAD
+ *
+ *  Descriptive Name = invoke Load or crossload
+ *
+ *  Function = prepares and invokes the db2load API either as conventional load
+ *             or as crossload
+ *             
+ *  Input params:
+ *    trc (global): trace indicator
+ *    loadx_type (global): -
+ *    trg_srvr (global): target server
+ *    apply_path (global): -
+ *    point_to_common (global): pointer to defaults/common inifile values
+ *    ifv (global): values read from the inifile
+ *    push_load (global): indicates if a push load is possible (conventional
+ *                        load only)
+ *    datafile (global): export file name (conventional load only)
+ *    LobPathList (global): holds the Lobpathlist (conventional load only)
+ *    sLMSGFILE (global): filename of the messagefile for messages of
+ *                        the db2load utility
+ *    sql (global): holds the select statement (cross load only)
+ *    sql_repl (global): holds the statement for the target table
+ *    FileTyp2 (global): indicating ixf format (conventional load only)
+ *
+ *  Output params:
+ *
+ *  Output params for DB2SQL param style:
+ *
+ *  Dependencies:
+ *
+ *  Normal Return = 0
+ *
+ *  Error Return = ASNLOAD_ERROR
+ *                 ASNLOAD_XLOAD_FAILED
+ *                 ASNLOAD_LOAD_FAILED
+ *
+******************************************************************************/
+int invoke_LOAD()
+{
+  rc=0;
+
+  /****************** Declarations *****************/
+  
+  /********* needed for dbconfig **********/
+  struct sqlfupd ItemList[LISTNUMBER];
+  short           vLogRetain;
+  short           vUserExit;
+  
+  char *lmsgfile              =  NULL;
+
+  /* declare db2laod api parms */
+  /*1*/ //versionnumber ...no declaration neccessary
+  /*2*/ struct db2LoadStruct loadStruct;
+  
+  /* concering 2 declare components of loadStruct */
+  struct sqlu_media_list DataFileList;   //SourceList
+  /* for  DataFileList.target.pstatement for xload */
+  struct sqlu_statement_entry StatementEntry;
+  /* DatafileList.target.location for conventional load */
+  struct sqlu_location_entry datafileLocationEntry;
+  struct sqldcol             DataDescriptor;
+  struct db2LoadIn           LoadIn;
+  struct db2LoadOut          LoadOut;
+  struct db2PartLoadOut      PartitionedLoadOut;
+  struct sqlu_media_list*    pCopyTargetList = NULL;
+  bool                       copy_on;
+  struct sqlu_media_list     mList;
+  struct sqlu_media_entry    mEntry;
+
+  struct {
+    short length;
+    char data[128];
+  } FileTypeMod;
+  
+  lmsgfile = &sLMSGFILE[0];
+
+  if (trc)
+  {
+    trace(" *** ");
+    trace(" LOAD (invoke_LOAD):");
+  }
+  
+  printasnloadmsg(" Load");
+  printasnloadmsg("  -- Started at: \"%s\"",timestmpstr);
+
+/*checkasnlogic*//*6*/
+/* If loadx_type 2 set here what should be traced out */
+    
+  /* trace which utility is used */
+  if ( loadx_type[0]=='3' )
+  {
+    if (trc)
+    {
+      trace("  INF: LOAD - using crossloader:");
+    }
+    printasnloadmsg("  INF: LOAD - using crossloader");
+  } else
+  {
+    if (trc)
+    {
+      trace("\n LOAD - using conventional load");
+    }
+    printasnloadmsg("  INF: LOAD - using conventional load");
+  }
+/*endchecklogic*/
+  
+  // let ifv point to the values of trg_srvr entries int the inifile
+  // search if there was an entry for trg_srvr in inifile
+  for (ifv=point_to_common; ifv; ifv=ifv->ilink)
+  {
+    if ( (strcmp(ifv->section,trg_srvr))==0 )
+    {
+      if (trc)
+      {
+        trace("  INF: The targetserver %s was specified in the inifile ", trg_srvr);
+        trace("  ---  Using these values...");
+      }
+      printasnloadmsg("  INF: Targetserver %s was specified in the inifile ",
+                      trg_srvr);
+      printasnloadmsg("  ---  Using thes values");
+      break;
+    }
+  }
+
+  /* if no entry found simply point to the common section */
+  if (!(ifv))
+  {
+    ifv=point_to_common;
+  }
+  
+  
+  /*********************************************************************/
+  /*********** clear the second parm of db2load : loadStruct ***********/
+  /*********************************************************************/
+  memset(&loadStruct, 0, sizeof(loadStruct));
+  
+  /*********************************************************************/
+  /***** define and prepare the structure components of load stuct *****/
+  /*********************************************************************/
+  
+  /*** set values for the SourceList of the db2load struct ***/
+  memset(&DataFileList, 0, sizeof(DataFileList));
+
+/*checkasnlogic*//*7*/
+/* the following lines prepare the API call depending on crossload or  */
+/* conventional load. So add for loadx_type 2 here in the if conditions*/
+/* for the kind of load you want to use.                               */    
+    
+  if (loadx_type[0] == '3' ) //crossloader
+  {
+    DataFileList.media_type = SQLU_SQL_STMT;
+  } else //conventional load
+  {
+    if (push_load==FALSE)
+    {
+      DataFileList.media_type = SQLU_SERVER_LOCATION;
+    } else
+    {
+      DataFileList.media_type = SQLU_CLIENT_LOCATION;
+    }
+  }
+  
+  // define values for fields statement(xload), location(load)
+  if (loadx_type[0] == '3')
+  {
+    //this parameter is the statement where the select from cursor 
+    //will happen
+    memset(&StatementEntry, 0, sizeof(StatementEntry));
+    StatementEntry.length = sql.len;
+    StatementEntry.pEntry = sql.s;
+    DataFileList.target.pStatement = &StatementEntry;
+  } else 
+  {
+    //parameter is path and filename where the *.ixf can be loaded from
+    memset(&datafileLocationEntry, 0, sizeof(datafileLocationEntry));
+    strcpy(datafileLocationEntry.location_entry,(const char*) datafile);
+    DataFileList.target.location = &datafileLocationEntry;
+  }
+  DataFileList.sessions = 1;
+  loadStruct.piSourceList = &DataFileList;
+  
+  /*** set value for the Lobpathlist of the db2load struct***/
+  if ( loadx_type[0]=='4' ) //Lobpathlist will only be needed for exp/load
+  {
+    //if push_load, no Lobpathlist will be passed, because it is only
+    //allowed to be on the client site (was set null in the
+    //beginning)
+    if (push_load == FALSE)
+    {
+      loadStruct.piLobPathList = &LobPathList;
+    }
+  }
+  
+  // set values for DataDescriptor of the db2load 
+  // struct and insert in db2load 
+  memset(&DataDescriptor, 0, sizeof(DataDescriptor));
+  DataDescriptor.dcolmeth = SQL_METH_D;
+  loadStruct.piDataDescriptor = &DataDescriptor;
+  
+  // set values for ActionString of the db2load struct and insert in db2load
+  loadStruct.piActionString = (struct sqlchar*)&sql_repl;
+  
+  /*** set values for FileType of the db2load struct while 
+   *   inserting in db2load                              
+   ************************************************************/
+  if (loadx_type[0]=='3')
+  {
+    loadStruct.piFileType = SQL_CURSOR;
+  } else
+  {
+    loadStruct.piFileType = FileTyp2;
+  }
+/*endchecklogic*/
+  
+  /*** set values for FileTypeMod of the db2load struct and 
+   *   insert in db2load 
+   ***********************************************************/
+  if (loadx_type[0]!='3')
+  {
+    FileTypeMod.length = strlen("LOBSINFILE");            
+    strcpy(FileTypeMod.data, "LOBSINFILE");  
+    loadStruct.piFileTypeMod= (struct sqlchar *) &FileTypeMod;
+  }
+  else
+  {
+    loadStruct.piFileTypeMod = NULL;
+  }
+
+  /*** set values for LocalMsgFileName of the db2load struct 
+   *   and insert in db2load 
+   ***********************************************************/
+  loadStruct.piLocalMsgFileName = lmsgfile;
+  
+  /*** set values for TempFilesPath of the db2load struct 
+   *    and insert in db2load 
+   ***********************************************************/
+  if (push_load==FALSE)
+  {
+    loadStruct.piTempFilesPath = apply_path;
+  } else
+  {
+    loadStruct.piTempFilesPath = NULL;
+  }
+    
+  /*** set value for caller action ***/
+  loadStruct.iCallerAction = SQLU_INITIAL;
+  
+  /*** set values for the struct db2LoadIn ***/
+  memset(&LoadIn,0,sizeof(LoadIn));
+  LoadIn.iRestartphase=SQLU_LOAD_PHASE;
+  LoadIn.iDataBufferSize = ifv -> data_buffer_size;
+  LoadIn.iCpuParallelism = ifv -> cpu_parallelism;
+  LoadIn.iDiskParallelism = ifv -> disk_parallelism;
+  
+  //look for non_recoverload after setting the copy values
+  if (ifv -> statistics == TRUE)
+  {
+    LoadIn.iStatsOpt = SQL_STATS_ALL;
+  } else
+  {
+    LoadIn.iStatsOpt = SQLU_STATS_NONE;
+  }
+  loadStruct.piLoadInfoIn = &LoadIn;
+  
+  /***  set values for the struct db2Lodout ***/
+  memset(&LoadOut,0, sizeof(LoadOut));
+  loadStruct.poLoadInfoOut = &LoadOut;
+  
+  /*** set values for the struct db2PartitionedLoadIn ***/
+  loadStruct.piPartLoadInfoIn = NULL;
+  
+  /*** prepare struct db2PartitionedLoadOut ***/
+  loadStruct.poPartLoadInfoOut = NULL;
+  
+  /******** Set Copyvalues / Determine the DEFAULT for Copy *********/
+  if (trc)
+  {
+    if (ifv->copy==COPY_NOT_SPECIFIED) 
+    {
+      trace("  INF: No Copyoption specified - Setting default");
+    } else if (ifv->copy==COPY_ON)
+    {
+      trace("  INF: User has set Copy on");
+    } else
+    {
+      trace("  INF: User has set Copy off");
+    }
+  }
+  
+  memset(&mList, 0, sizeof(mList));
+  memset(&mEntry, 0, sizeof(mEntry)); 
+  
+  ItemList[0].token = SQLF_DBTN_LOG_RETAIN;
+  ItemList[0].ptrvalue = (char *)&vLogRetain;
+  
+  ItemList[1].token = SQLF_DBTN_USER_EXIT;
+  ItemList[1].ptrvalue = (char *)&vUserExit;
+  
+  /* Default for Copy - GET DATABASE CONFIGURATION API */
+  
+  if (trc)
+  {
+    trace("\n  Getting the db configuration (sqlfxdb)");
+  }
+ 
+  rc = sqlfxdb(trg_srvr,LISTNUMBER,ItemList,&sqlca);
+  
+  if (rc != 0 || sqlca.sqlcode != 0)
+  {
+    printasnloadmsg("  ERR: An error occured, when trying to get the database "
+                    "configuration");
+    if (trc)
+    {
+      trace("  ERR: Get Database configuration failed, sqlcode is %d, "
+            "sqlstate is %s", sqlca.sqlcode, sqlca.sqlstate);
+      trace("  sqlfxdb - Get db cfg failed\n");
+      rc=ASNLOAD_ERROR;
+      goto exit;
+    }
+  } else
+  {
+    if (trc)
+    {
+      trace("  Values receeived from (sqlfxdb)");
+      if(*(short *)ItemList[0].ptrvalue == 0)
+        trace("      LOG RETAIN : OFF" );
+      else if(*(short *)ItemList[0].ptrvalue == 2)
+        trace("      LOG RETAIN : CAPTURE" );
+      else
+        trace("      LOG RETAIN : ON" );
+      trace("      USER EXIT  : %s", BOOL2STRINGBETA(*(short *)ItemList[1].ptrvalue));
+      trace("  sqlfxdb - Get db cfg successful\n");
+    }
+  }
+  
+
+  /*****************************************************************/
+  /* If both LOGRETAIN and USEREXIT are OFF, copy option cannot be */
+  /* used for load.                                                */
+  /*****************************************************************/
+  
+  /***** set default copy *****/
+  if ( ((*(short *)ItemList[0].ptrvalue == 0) ||
+        (*(short *)ItemList[0].ptrvalue == 2)) &&
+       (*(short *)ItemList[1].ptrvalue == 0) )
+  {
+    copy_on = FALSE; //this is a MUST then, because circular logging only
+  } else
+  {
+    copy_on = TRUE;
+  }
+  if ( (trc) && (ifv -> copy ==COPY_NOT_SPECIFIED) )
+  {
+    trace("  INF: Default Copy is %s", BOOL2STRINGBETA(copy_on) );
+  }
+
+  // If the user has set a copy value in the inifile (indicated by COPY_ON or
+  // COPY_OFF when dereferenzing ifv->copy) - this might be rejected, depending
+  // on the environment.
+  // This environment (logretain an userexit and so the default copy value)
+  // has been checked in the lines before; the user will be notified if his 
+  // copy value isn't possible and the FINAL copy value will be set now
+  if ( (ifv->copy == COPY_ON ) && (copy_on==FALSE) )
+  {
+    //since copy is not allowed but it is set in inifile -> notifiy user 
+    if(trc)
+    {
+      trace ("  WRN: Can't use the user defined copyoption, because ");
+      trace ("       logretain and userexit is off");
+    }
+    printasnloadmsg("  WRN: User has set copy to yes, but the load utility can't ");
+    printasnloadmsg("       use this, because logretain and userexit of the database ");
+    printasnloadmsg("       is off. Running load  with copy no");
+  }
+  else if (ifv->copy == COPY_OFF) //if user has set copy to off -> change the 
+  //environment default value to off 
+  {
+    copy_on = FALSE;
+  }
+  
+  if (copy_on==TRUE)
+  {
+    pCopyTargetList = &mList;
+    pCopyTargetList->media_type = SQLU_LOCAL_MEDIA;
+    pCopyTargetList->sessions = 1;
+    pCopyTargetList->target.media = &mEntry;
+    strcpy (pCopyTargetList->target.media->media_entry, ifv->copyto);
+    if (trc)
+    {
+      trace("  Copy to: %s", pCopyTargetList->target.media->media_entry);
+    }
+  } else
+  {
+    pCopyTargetList = NULL;
+  }
+  
+  loadStruct.piCopyTargetList=pCopyTargetList;
+  
+  if (copy_on==FALSE) 
+  {
+    loadStruct.piLoadInfoIn ->iNonrecoverable = SQLU_NON_RECOVERABLE_LOAD;
+  } else
+  {
+    loadStruct.piLoadInfoIn ->iNonrecoverable = SQLU_RECOVERABLE_LOAD;
+  }
+  
+  /***********************************************************************/
+  
+  /*** set value for the  nullIndicators ***/
+  loadStruct.piNullIndicators = NULL;
+  
+  //print out relevant loadapi parms
+  if (trc)
+  {
+    trace("\n   messagefile is: %s",lmsgfile);
+/*checkasnlogic*//*8*/    
+    if (loadx_type[0]=='3')
+    {
+      trace("   Select stmnt used for crossload is: ");
+      trace("      %s ",sql.s);
+    } else
+/*endchecklogic*/    
+    {
+      trace("   datafile is: %s",datafile);
+    }
+    trace("   Actionstring is: %s",sql_repl.s);
+    trace("   Tempfilespath: %s",loadStruct.piTempFilesPath);
+    trace("   Relevant LoadIn values ");
+    trace("     - DataBufferSize:  %d",LoadIn.iDataBufferSize);
+    trace("     - CpuParallelism:  %d",LoadIn.iCpuParallelism);
+    trace("     - DiskParallelism: %d\n",LoadIn.iDiskParallelism);
+  }
+  
+  /**********************************************************************/
+  /******************** call Load API ***********************************/
+  /**********************************************************************/
+#ifdef on_v9
+  rc= db2Load(db2Version900,
+              &loadStruct,
+              &sqlca);
+#else
+  rc= db2Load(db2Version810,
+              &loadStruct,
+              &sqlca);
+#endif
+  
+  if (trc)
+  {
+    trace("  INF:  Return from LOAD: Rc is %d:", rc);
+  }
+
+  if (rc != 0 || sqlca.sqlcode < 0)
+  {
+    if (trc)
+    {
+      trace("  ERR: LOAD failed rc is %d, sqlcode is %d, "
+            "sqlstate is %s.",
+            rc, SQLCODE, sqlca.sqlstate);
+    }
+    prt_err();
+    if (SQLCODE == -3522)
+    {
+      printasnloadmsg("  Check all nodes for either LOGRETAIN or USEREXIT enabled "
+                      "or turn copy off with the inifile.");
+    }
+/*checkasnlogic*//*9*/    
+    if (loadx_type[0]=='3')
+    {
+      rc=ASNLOAD_XLOAD_FAILED;
+    } else
+    {
+      rc=ASNLOAD_LOAD_FAILED;
+    }
+    goto exit;
+    
+  }
+  else if (sqlca.sqlcode > 0)
+  {
+    if (trc)
+    {
+      trace("  WARNING: rc is %d, sqlcode is %d,"
+            "  sqlstate is %s.", rc, SQLCODE, sqlca.sqlstate);
+    }
+    prt_err();
+  }
+
+  if (rc == 0 && sqlca.sqlcode >= 0)
+  {
+    if (trc)
+    {
+      trace("  LSTAT: Rows loaded %d, Rows committed %d",
+            LoadOut.oRowsLoaded, LoadOut.oRowsCommitted);
+    }
+    printasnloadmsg("  LSTAT: Rows loaded %d, Rows committed %d",
+                    LoadOut.oRowsLoaded, LoadOut.oRowsCommitted);
+  }
+/*endchecklogic*/  
+
+ exit:
+  
+  if (rc!=0)
+  {
+    printasnloadmsg(" LOAD failed");
+  } else
+  {
+    printasnloadmsg(" LOAD successful\n"); 
+  }
+  if (trc)
+  {
+    trace(" Exiting invoke_LOAD with return code %d",rc);
+    trace(" *** \n");
+  }
+
+  return (rc);
+
+}//end of invoke_LOAD
+
+/******************************************************************************
+ *
+ *  Function Name  = file_cleanup
+ *
+ *  Descriptive Name = file cleanup
+ *
+ *  Function = removes the export file (datafile) and the lobfiles created by
+ *  the export utility
+ *             
+ *  Input params:
+ *    trc (global): traceindicator
+ *    DATAFILE (global): export file name
+ *    LobPathList (global): -
+ *    LobFileList (global): -
+ *
+ *  Output params:
+ *
+ *  Output params for DB2SQL param style:
+ *
+ *  Dependencies:
+ *
+ *  Normal Return = void
+ *
+ *  Error Return = void
+ *
+******************************************************************************/
+void file_cleanup()
+{
+  int RC=0;
+  char lobfile[SQLU_MEDIA_LOCATION_LEN+SQLU_DB_DIR_LEN+4];
+  const int numfileext = 999; //number of file extensions
+  short actualsuffix=1;   //file name suffix goes 001-999 or 000 to 999
+  int checkedpaths=0;
+  int padress_count=0;    //lobpath adress counter
+  int fadress_count=0;    //base lobfile name adress counter
+
+  unsigned char *datafile    = NULL;
+  
+  datafile = (unsigned char *)&DATAFILE[0];
+  if (trc)
+  {
+    trace("\n Start removing the tempfiles (file_cleanup)");
+  }
+
+  RC = remove( (const char*) datafile);
+  if ( RC==0 && trc )
+  {
+    trace("  Datafile deleted: %s", datafile);
+  }
+  
+  /*Notes: changes have been made to the data movement utilities concerning
+   *       the handling of the the lobfilelist and lobpathlist
+   *
+   *  OLD:
+   *       -each lob goes into a corresponding file
+   *       -the lobs (files) are stored in the specified path
+   *        (see also V7 Docu)
+   *
+   *       example:
+   *       - we have the following lobpaths specified: path1, path2
+   *       - we have the following lobfilebasename specified: lob1, lob2
+   *       - we have 4 lobvalues
+   *
+   *       - each single lobvalue goes into one file, so that
+   *         one lobfile represents one value and the export utility creates
+   *         4 files with the first filebasename of our lobfilelist as
+   *         shown below:
+   *
+   *         path1/lob1.001
+   *         path1/lob1.002
+   *         path1/lob1.003
+   *         path1/lob1.004
+   *
+   *       - these files are written in the first specified path "path1"
+   *         only! Only in the case the name space of our whole file list
+   *         is exhausted the second path will be taken and so on.
+   *
+   *       - If the name space for the 1st file base name "lob1" is exhausted
+   *         the second basename will be taken (lob2.000 lob2.001) in
+   *         the current path.
+   *         
+   *  NEW:
+   *       - each specified lobpath contains at least one lobfile
+   *       - so each lobfilebasename can be found in the given lobpaths
+   *       - the suffixes are unique - so no filename can be found twice
+   *         in another lobpath
+   *
+   *       example:
+   *       - the same situation as above ...
+   *         we have the following lobpaths path1, path2
+   *       - lob file base names:  lob1, lob2 (multiple lobvalues
+   *         can be inserted now into one file until the file space is exausted)
+   *       - now every lobpath will be populated with a created filename:
+   *
+   *         path1/lob1.001
+   *         path2/lob1.002, lob1.003
+   *
+   *         (in our example the file lob1.002 run out of space first and the next
+   *          filename was taken)
+   *       
+   * --> Code change for file deletion done below
+  */
+  if ( LobPathList.sessions != 0 ) //delete only if the list is populated
+  {
+    while ( checkedpaths <= LobPathList.sessions )
+    { 
+                                                        
+      //prepare lobfile with current number
+      sprintf(lobfile,"%s%s.%-1.3d",
+              (LobPathList.target.media + padress_count)->media_entry,
+              (LobFileList.target.location + fadress_count)->location_entry, 
+              actualsuffix
+        );
+      RC=remove(lobfile);
+      if (RC==0)
+      {
+        if ( trc)
+        {
+          trace("  Lobfile deleted: %s",lobfile);
+        }
+        if (actualsuffix==numfileext)
+        {
+          fadress_count++;
+          actualsuffix=0;
+        } else
+        {
+          actualsuffix++;
+        }
+        checkedpaths=0;
+      } else
+      {
+        checkedpaths++;
+      }
+
+      //adress for the Lobpaths
+      if (padress_count==LobPathList.sessions-1)
+      {
+        padress_count=0;
+      } else
+      {
+        padress_count++;
+      }
+
+    } // end while ( checkedpaths <= LobPathList.sessions )
+  }
+ 
+  if (trc)
+  {
+    trace(" Exiting file_cleanup\n");
+  }
+}
+
+
+/******************************************************************************
+ *
+ *  Function Name  = connect_db
+ *
+ *  Descriptive Name = connect to a database
+ *
+ *  Function = performs a connect to a database 
+ *             
+ *  Input params:
+ *    srvrName: db alias name
+ *    trc (global): traceindicator
+ *    ifv (global): inifile values - to find a password there
+ *    fnd_ini_file: shows if the inifile was found
+ *
+ *  Output params:
+ *
+ *  Output params for DB2SQL param style:
+ *
+ *  Dependencies:
+ *
+ *  Normal Return = 0
+ *
+ *  Error Return = ASNLOAD_CONNFAILED_NOASNLOADINI_woUSINGPHRASE,
+ *                 ASNLOAD_CONNFAILED_ASNLOADINI_PWDENTRYFOUND_wUSINGPHRASE,
+ *                 ASNLOAD_CONNFAILED_ASNLOADINI__woUSINGPHRASE;
+ *
+******************************************************************************/
+int connect_db(char *srvrName)
+{
+
+  rc=0;
+
+  if (trc)
+  {
+    trace("\n Connecting (connect_db):");
+  }
+
+  EXEC SQL COMMIT;
+
+  fnd_pwd = FALSE;
+
+  strcpy(cServer, srvrName);
+
+  //try to find the password for a server in the ifv
+  //sample exit only
+  for (ifv=point_to_common; ifv!=NULL; ifv=ifv->ilink)
+  {
+    if ( (strcmp(ifv->section,srvrName))==0 )
+    {
+      break;
+    }
+  }
+  
+  /* if no server specified use pwd entry of the  common section, if any */
+  if (!(ifv))
+  {
+    ifv=point_to_common;
+  }
+
+  if ( (ifv->uid[0]!='\0') && (ifv->pwd[0]!='\0') )
+  {
+    fnd_pwd=TRUE;
+    strcpy(cUsrid, ifv->uid);
+    strcpy(cPwd,ifv->pwd);
+  }
+  
+  /* connection with usr/using phrase: if pwd-entry found in case of passed */
+  /* pwdfile parm or without pwdfile parm passed, but an entry was found in */
+  /* the default file                                                       */
+
+  if ( (fnd_pwd) && (fnd_ini_file) )
+  {
+    if (trc)
+    {
+      trace("  CONNECT TO %s USER %s USING ********",
+            cServer, cUsrid);
+    }
+    EXEC SQL CONNECT TO :cServer USER :cUsrid USING :cPwd;
+  }
+  //no entry for appropriate server and thus connection without uid/using phrase
+  else 
+  {
+    if (trc) 
+    {
+      trace( "  CONNECT TO %s", cServer);
+    }
+    EXEC SQL CONNECT TO :cServer;                
+  }
+
+  if ( sqlca.sqlcode != 0 )
+  {
+    if (trc)
+    {
+      trace("  ERR: Connect failed, sqlcode is %d,"
+            " sqlstate is %s", sqlca.sqlcode, sqlca.sqlstate);
+    }
+    prt_err();
+
+    // set now the returncodes if a connection attempt failed
+    if ( (fnd_ini_file == FALSE) ) 
+    { 
+      rc = ASNLOAD_CONNFAILED_NOASNLOADINI_woUSINGPHRASE;
+      goto exit;
+    }
+    if (fnd_pwd) 
+    {
+      rc = ASNLOAD_CONNFAILED_ASNLOADINI_PWDENTRYFOUND_wUSINGPHRASE;
+      goto exit;
+    }
+    if (!fnd_pwd) 
+    {
+      rc = ASNLOAD_CONNFAILED_ASNLOADINI__woUSINGPHRASE;
+      goto exit;
+    }
+  } 
+
+  if ( sqlca.sqlcode == 0 )
+  {
+    trace("  INF: CONNECT to server %s successful.",cServer);
+  }
+
+ exit:
+  
+  if (trc)
+  {
+    trace(" Exiting connect_db with return code %d\n",rc);
+  }
+  if (rc!=0)
+  {
+    printasnloadmsg(" Connect to database %s - connect failed\n",srvrName);
+  } else 
+  { 
+    printasnloadmsg(" Connect to database %s - connect successful\n",srvrName);
+  }
+  
+  return(rc);
+  
+} /* end connect_db */
+
+/******************************************************************************
+ *
+ *  Function Name  = FindTgtStruct
+ *
+ *  Descriptive Name = find target_structure
+ *
+ *  Function = select from ASN.IBMSNAP_SUBS_MEMBR 
+ *             
+ *  Input params: void
+ *
+ *  Output params: trg_struct
+ *
+ *  Dependencies:
+ *
+ *  Normal Return = 0
+ *
+ *  Error Return = ASNLOAD_ERROR
+ *
+******************************************************************************/
+int FindTgtStruct(void)
+{
+  EXEC SQL DECLARE GMI_CUR CURSOR FOR GMI_STMT;
+
+  rc=0;
+
+/* check target_structure from ASN.IBMSNAP_SUBS_MEMBR table*/
+  sprintf(temp_stmt.s,
+ "SELECT TARGET_STRUCTURE, PREDICATES \
+ FROM ASN.IBMSNAP_SUBS_MEMBR \
+ WHERE APPLY_QUAL = ? AND SET_NAME = ? AND WHOS_ON_FIRST = 'S' \
+ AND SOURCE_OWNER = ? AND SOURCE_TABLE = ? \
+ AND TARGET_OWNER = ? AND TARGET_TABLE = ?");
+   temp_stmt.len = strlen(temp_stmt.s);
+ 
+  EXEC SQL PREPARE GMI_STMT FROM :temp_stmt;
+  if (SQLCODE != 0) 
+  {
+    if (trc)
+    {
+      trace("  ERR: failed to prepare to select from subs_membr table");
+    }
+    prt_err();
+    rc=ASNLOAD_ERROR;
+    goto exit;
+  }
+
+  EXEC SQL OPEN GMI_CUR USING
+            :app_qual,
+            :set_name,
+            :src_owner,
+            :src_table,
+            :trg_owner,
+            :trg_tbl;
+  if (SQLCODE != 0) 
+  {
+    if (trc)
+    {
+      trace("  ERR: failed to open cursor to select from subs_membr table");
+    }
+    prt_err();
+    rc=ASNLOAD_ERROR;
+    goto exit;
+  }
+
+  EXEC SQL FETCH GMI_CUR INTO :trg_struct,
+                              :predicates :pred_ind;
+  if (SQLCODE != 0) 
+  {
+    if (trc)
+    {
+      trace("  ERR: failed to fetch from subs_membr table");
+    }
+    prt_err();
+    rc=ASNLOAD_ERROR;
+    goto exit;
+  }
+
+  EXEC SQL CLOSE GMI_CUR;
+  if (SQLCODE != 0) 
+  {
+    if (trc)
+    {
+      trace("  ERR: failed to close GMI_CUR");
+    }
+    prt_err();
+    rc=ASNLOAD_ERROR;
+    goto exit;
+  }
+
+ exit:
+  if (trc)
+  {
+    trace(" Exiting FindTgtStruct with return code %d\n",rc); 
+  }
+  return rc;
+}
+
+/******************************************************************************
+ *
+ *  Function Name  = BuildSrcTgtCols
+ *
+ *  Descriptive Name = construct source/target column lists
+ *
+ *  Function = select from ASN.IBMSNAP_SUBS_COLS
+ *             
+ *  Input params: void
+ *
+ *  Output params: scolnames, tcolnames
+ *
+ *  Dependencies:
+ *
+ *  Normal Return = 0
+ *
+ *  Error Return = ASNLOAD_ERROR
+ *
+******************************************************************************/
+int BuildSrcTgtCols(void)
+{
+  short tci;
+  short btci;
+  short finished;
+  EXEC SQL DECLARE GCI_CUR CURSOR FOR GCI_STMT;
+
+  rc=0;
+  tbcolnames[0] = '\0';
+  tcolnames[0] = '\0';
+  sbcolnames[0] = '\0';
+  scolnames[0] = '\0';
+  tci = 0;
+  btci = 0;
+  finished = no;
+
+  rc=connect_db(cntl_srvr);
+  if (rc!=0)
+  {
+    goto exit;
+  }
+
+/* get column info from ASN.IBMSNAP_SUBS_COLS table */
+  sprintf(temp_stmt.s,
+ "SELECT COL_TYPE, TARGET_NAME, COLNO, EXPRESSION \
+ FROM ASN.IBMSNAP_SUBS_COLS \
+ WHERE APPLY_QUAL = ? AND SET_NAME = ? AND WHOS_ON_FIRST = 'S'\
+ AND TARGET_OWNER = ? AND TARGET_TABLE = ? \
+ ORDER BY COLNO");
+      temp_stmt.len = strlen(temp_stmt.s);
+
+  EXEC SQL PREPARE GCI_STMT FROM :temp_stmt;
+  if (SQLCODE != 0) 
+  {
+    if (trc)
+    {
+      trace("  ERR: failed to prepare to select from subs_cols table");
+    }
+    prt_err();
+    rc=ASNLOAD_ERROR;
+    goto exit;
+  }
+
+  EXEC SQL OPEN GCI_CUR USING
+            :app_qual,
+            :set_name,
+            :trg_owner,
+            :trg_tbl;
+  if (SQLCODE != 0) 
+  {
+    if (trc)
+    {
+      trace("  ERR: failed to open cursor to select from subs_cols table");
+    }
+    prt_err();
+    rc=ASNLOAD_ERROR;
+    goto exit;
+  }
+
+  while(!finished && rc == 0)
+  {
+    EXEC SQL FETCH GCI_CUR INTO
+               :CCOLTYPE,
+               :CTRGNAME,
+               :CCOLNO,
+               :CEXPRESSION;
+
+    if (SQLCODE != 0 && SQLCODE != 100) 
+    {
+      if (trc)
+      {
+        trace("  ERR: failed to fetch from subs_cols table");
+      }
+      prt_err();
+      rc=ASNLOAD_ERROR;
+      goto exit;
+    }
+    else if (SQLCODE == 100) 
+      finished = yes;
+    else
+    {
+     /* build source/target column lists */
+      switch (CCOLTYPE[0])
+      {
+        case 'A':
+        case 'L':
+        case 'D':
+          if(tci > 0)
+            strcat(scolnames, CMMA);
+          strcat(scolnames, DQ);
+	  CEXPRESSION.s[CEXPRESSION.len] = '\0';
+          strcat(scolnames, CEXPRESSION.s);
+          strcat(scolnames, DQ);
+          if(tci > 0)
+            strcat(tcolnames, CMMA);
+          strcat(tcolnames, DQ);
+          strcat(tcolnames, CTRGNAME);
+          strcat(tcolnames, DQ);
+          tci++;
+          break;
+
+        case 'B':
+        /* before image for CCD source */
+          if(btci > 0)
+            strcat(sbcolnames, CMMA);
+          strcat(sbcolnames, DQ);
+	  CEXPRESSION.s[CEXPRESSION.len] = '\0';
+          strcat(sbcolnames, CEXPRESSION.s);
+          strcat(sbcolnames, DQ);
+          if(btci > 0)
+            strcat(tbcolnames, CMMA);
+          strcat(tbcolnames, DQ);
+          strcat(tbcolnames, CTRGNAME);
+          strcat(tbcolnames, DQ);
+          btci++;
+          break;
+
+	case 'C':
+	case 'F':
+          if(tci > 0)
+            strcat(scolnames, CMMA);
+	  CEXPRESSION.s[CEXPRESSION.len] = '\0';
+          strcat(scolnames, CEXPRESSION.s);
+          if(tci > 0)
+            strcat(tcolnames, CMMA);
+          strcat(tcolnames, DQ);
+          strcat(tcolnames, CTRGNAME);
+          strcat(tcolnames, DQ);
+          tci++;
+          break;
+
+        default:
+          break;
+      } /* end of switch */
+    } /* end of else */
+  } /* end of while */
+
+  if(tci == 0)
+  {
+    if (trc)
+    {
+      trace("  ERR: there is no column defined in subs_cols table");
+    }
+    rc=ASNLOAD_ERROR;
+    goto exit;
+  }
+
+  rc = FindTgtStruct();
+  if (rc!=0)
+  {
+    goto exit;
+  }
+
+  /* add default value for IBMSNAP_ ... columns in source column list */
+  /* for complete CCD target */
+  /* add IBMSNAP_ ... columns to target column list for complete CCD target */
+  if(trg_struct == 3 || trg_struct == 9)
+  {
+    strcat(scolnames, CMMA);
+    strcat(scolnames, COMMITSEQ_DEFAULT);
+    strcat(scolnames, CMMA);
+    strcat(scolnames, INTENTSEQ_DEFAULT);
+    strcat(scolnames, CMMA);
+    strcat(scolnames, OPERATION_DEFAULT);
+    strcat(scolnames, CMMA);
+    strcat(scolnames, LOGMARKER_DEFAULT);
+
+    strcat(tcolnames, CMMA);
+    strcat(tcolnames, "IBMSNAP_COMMITSEQ, ");
+    strcat(tcolnames, "IBMSNAP_INTENTSEQ, ");
+    strcat(tcolnames, "IBMSNAP_OPERATION, ");
+    strcat(tcolnames, "IBMSNAP_LOGMARKER");
+  }
+
+  if (trc)
+  {
+    trace("BuildSrcTgtCols:scolnames is %s,tcolnames is %s.\n",scolnames,tcolnames ); 
+  }
+  
+  EXEC SQL CLOSE GCI_CUR;
+  if (SQLCODE != 0) 
+  {
+    if (trc)
+    {
+      trace("  ERR: failed to close GCI_CUR");
+    }
+    prt_err();
+    rc=ASNLOAD_ERROR;
+    goto exit;
+  }
+
+  exit:
+  if (trc)
+  {
+    trace(" Exiting BuildSrcTgtCols with return code %d\n",rc); 
+  }
+  return rc;
+
+}
+
+/*********************************************************************/
+/* main program                                                      */
+/*********************************************************************/
+int main(int argc, char *argv[])
+{
+  rc=0;
+
+  memset(&LobPathList,0,sizeof(LobPathList));
+  memset(&LobFileList,0,sizeof(LobFileList));
+
+  /* build the sql stmnt */
+  strcpy(sql.s, " ");
+  for (iii=15; iii<=argc-1; iii++)
+  {
+    strcat(sql.s, " ");
+    strcat(sql.s, argv[iii]);
+  } ;
+  sql.len = strlen(sql.s);
+
+  /********************************************************************/
+  /* copy passed-in parameters                                        */
+  /********************************************************************/
+
+  strcpy(trg_srvr, argv[1]);
+  strcpy(trg_owner, argv[2]);
+  strcpy(trg_tbl, argv[3]);
+  //argv[4] will be checked after the apply_path
+  strcpy(src_srvr, argv[5]);
+  strcpy(src_owner, argv[6]);
+  strcpy(src_table, argv[7]);
+  strcpy(cntl_srvr, argv[8]);
+  strcpy(app_qual, argv[9]);
+  strcpy(set_name, argv[10]);
+  
+  strlen_applypath=strlen(argv[11]);
+  apply_path = (char*) malloc(strlen_applypath + 3); //+3 because '\\' might be appended 
+  strcpy(apply_path, argv[11]);
+
+#if onNT
+  if (strlen_applypath > 0 && apply_path[strlen_applypath-1] != '\\')
+  {
+    strcat(apply_path, "\\");
+  }
+#else
+  if (strlen_applypath > 0 && apply_path[strlen_applypath-1] != '/')
+  {
+    strcat(apply_path, "/");
+  }
+#endif
+
+  strcpy(loadx_type,argv[12]);
+
+  if ( argv[13][0]=='-' )
+  {
+    strlen_pwdfile=0;
+    pwdfile = (char*) malloc (1);
+    pwdfile[0]='\0';
+  } else
+  {
+    strlen_pwdfile = strlen(argv[13]);
+    pwdfile = (char*) malloc (strlen_pwdfile + 1);
+    strcpy(pwdfile, argv[13]);
+  }
+
+  /* dl_flag (parameter 14) represents the number of Datalink Columns */
+  numDatalinkCol = atoi(argv[14]);
+
+  /* handle the trcoption */
+  if (strcmp(argv[4], "no") == 0)
+  {
+    trc = no; 
+  } else
+  {
+    trc = yes;
+    trcname = (char*) malloc (strlen_applypath+APPQUAL_LENGTH+12);
+    strcpy(trcname,apply_path);
+    strcat(trcname, "asnload");
+    strcat(trcname, app_qual);
+    strcat(trcname, ".");
+    strcat(trcname, "trc");
+    ftrc = fopen(trcname, "a+");
+  }
+
+  /*********************************************************************/
+  /* trace out passed-in parameters                                    */
+  /*********************************************************************/
+  if (trc)
+  {
+    trace("\n ***************************************\n");
+    trace("ASNLOAD program (GG04665) compiled at \"%s on %s\" ",
+          __TIME__, __DATE__);
+    trace("\nargc = %d", argc);
+    trace("pgmname   = %s", argv[0]);
+    trace("trg_srvr  = %s", argv[1]);
+    trace("trg_owner = %s", argv[2]);
+    trace("trg_tbl   = %s", argv[3]);
+    trace("trc       = %s", argv[4]);
+    trace("src_srvr  = %s", argv[5]);
+    trace("src_owner = %s", argv[6]);
+    trace("src_table = %s", argv[7]);
+    trace("cntl_srvr = %s", argv[8]);
+    trace("app_qual  = %s", argv[9]);
+    trace("set_name  = %s", argv[10]);
+    trace("apply_path= %s", argv[11]);
+    trace("loadx_type= %s", argv[12]);
+    trace("pwdfile   = %s", argv[13]);
+    trace("dl_flag   = %s", argv[14]);
+    trace("sql       = %s\n", sql.s);
+  }
+  
+  /* invoke the procedure init to initalize messagefilename */
+  init();  
+
+  /* open general asnloadmessage file */
+  floadxmsg = fopen(gLMSGFILE ,"a+");
+  
+  printasnloadmsg(" *** ASNLOAD Exit ***");
+  gettimestamp(timestmpstr,TIMESTRING_LENGTH);
+  printasnloadmsg("  -- Started at    : \"%s\"",timestmpstr);
+  printasnloadmsg("  -- Applyqualifier: %s",app_qual);
+  printasnloadmsg("  -- Subset name   : %s",set_name);
+  printasnloadmsg("  -- Target Server : %s",trg_srvr);
+  printasnloadmsg("  -- Target Table  : %s.%s \n ",trg_owner,trg_tbl);
+  
+  /* invoke the parse inifile function */
+  rc = parse_inifile(src_srvr, cntl_srvr, trg_srvr);
+  if (rc != 0 )
+  {
+    goto exit;
+  } 
+
+  /* build sqlstatemnet */
+  rc = BuildSrcTgtCols();
+  if ( rc != 0 )
+  {
+    goto exit;
+  }
+
+ /* build the source sql stmnt */
+  strcpy(sql.s, "SELECT ");
+  strcat(sql.s, scolnames);
+  strcat(sql.s, " FROM ");
+  strcat(sql.s, DQ);
+  strcat(sql.s, src_owner);
+  strcat(sql.s, DQ);
+  strcat(sql.s, ".");
+  strcat(sql.s, DQ);
+  strcat(sql.s,src_table);
+  strcat(sql.s, DQ);
+  if(pred_ind >= 0)
+  {
+    strcat(sql.s, " WHERE (");
+    strncat(sql.s, predicates.s, predicates.len);
+    strcat(sql.s, ")");
+  }
+  strcat(sql.s, " OPTIMIZE FOR 50000 ROWS");
+  sql.len = strlen(sql.s);
+  if(trc)
+    trace("export string: %s", sql.s);
+
+  /* run the applychecks to determine the default loadx_type or if user set */
+  /* loadx_type run a check if this is a valid one*/
+  rc=runapplychecks();
+  if ( rc != 0 )
+  {
+    goto exit;
+  }
+
+  /* if the file size exceeds 2GB user can modify the split table */
+  /* function to use load or import                               */
+/*checkasnlogic*//*10*/  
+  if  ( loadx_type[0] == '4' || loadx_type[0] == '5' ) 
+  {
+    split_tbl();
+  }
+/*endchecklogic*/  
+   
+  /******************************************************************/
+  /* Crossload / Export - Load / Import phases starting now ...     */
+  /******************************************************************/
+   
+  for (curr_stmt=0; curr_stmt < num_stmt; curr_stmt++)
+  {
+    /* invoke EXPORT */
+
+/*checkasnlogic*//*11*/    
+    if ( (loadx_type[0] == '4') || (loadx_type[0] == '5') )
+    {
+      rc = connect_db(src_srvr);
+      if (rc != 0)
+      {
+        goto exit;
+      }
+
+      rc = invoke_EXPORT();
+      if (rc != 0 )
+      {
+        goto exit;
+      }
+
+    } //end if loadx_type == 4 || 5
+/*endchecklogic*/    
+    
+    rc = connect_db(trg_srvr);
+    if (rc != 0)
+    {
+      goto exit;
+    }
+    
+    /* call DELETE to empty the target table because "REPLACE" is   */
+    /* currently not supported for DATALINK columns and z/OS Targets */
+    if (
+         ((curr_stmt == 0) &&
+          (((ptrgtConfig -> db2LUW) == FALSE) || (numDatalinkCol > 0)))
+       )
+    {
+      rc = delete_target();
+      if (rc != 0) 
+      {
+        goto exit;
+      }
+    }
+       
+    if ( (numDatalinkCol > 0)  )
+    {
+      rc = copy_Datalink();
+      if (rc != 0) 
+      {
+        goto exit;
+      }
+    }
+       
+    if( ((curr_stmt == 0) && (numDatalinkCol == 0) &&
+         ((ptrgtConfig -> db2LUW) == TRUE) &&
+         (ptrgtConfig -> table_nickname == FALSE) )
+      )
+    {
+      strcpy(sql_repl.s, "REPLACE INTO ");
+    } else
+    {
+      strcpy(sql_repl.s, "INSERT INTO ");      
+    }
+    strcat(sql_repl.s, "\"");
+    strcat(sql_repl.s, trg_owner);
+    strcat(sql_repl.s, "\".\"");
+    strcat(sql_repl.s, trg_tbl);
+    strcat(sql_repl.s, "\"");
+    strcat(sql_repl.s, "(");
+    strcat(sql_repl.s, tcolnames);
+    strcat(sql_repl.s, ")");
+    sql_repl.len = strlen(sql_repl.s);
+       
+    if(trc)
+      trace("load/import string: %s",sql_repl.s);
+   
+    if (loadx_type[0] == '5')
+    {
+      rc = invoke_IMPORT();
+      if (rc!=0)
+      {            
+        goto exit;
+      }
+    }
+    else if (loadx_type[0] == '2')
+    {
+/*checkasnlogic*//*12*/      
+      /******************************************************************/
+      /* Implement your own logic here in the case you have             */
+      /* modified runapplychecks to output loadx_type 2                 */
+      /******************************************************************/
+      /* Note: Take care to check the if condition which invokes the    */
+      /*       export utility if you use your own logic                 */
+      /*       Also modifiy the runapplychecks routine, where           */
+      /*       loadx_type is checked                                    */
+      /******************************************************************/
+/*endchecklogic*/
+    } else 
+    {
+      rc = invoke_LOAD();
+      if (rc != 0)
+      {
+        goto exit;
+      }
+    }
+       
+  } // end of for...
+   
+  
+ exit:
+
+/*checkasnlogic*//*13*/
+  if(loadx_type[0] != '3')
+  {
+    file_cleanup();
+  }
+/*endchecklogic*/
+    
+  if (trc)
+  {
+    trace("Exiting ASNLOAD : Return Code is: %d\n\n\n",rc );
+  }
+  printasnloadmsg(" *** Exiting ASNLOAD : Return Code is: %d", rc);
+  gettimestamp(timestmpstr,TIMESTRING_LENGTH);
+  printasnloadmsg("  -- Ended at: \"%s\"\n\n",timestmpstr); 
+  return(rc);
+   
+} /* end of main() */

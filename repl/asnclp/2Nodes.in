@@ -1,0 +1,42 @@
+/*********************************************************************/
+/*  IBM DB2 Q Replication                                            */
+/*                                                                   */
+/*     ASNCLP sample files                                           */
+/*                                                                   */
+/*     Licensed Materials - Property of IBM                          */
+/*                                                                   */
+/*     (C) Copyright IBM Corp. 2003, 2004 All Rights Reserved        */
+/*                                                                   */
+/*     US Government Users Restricted Rights - Use, duplication      */
+/*     or disclosure restricted by GSA ADP Schedule Contract         */
+/*     with IBM Corp.                                                */
+/*                                                                   */
+/*********************************************************************/
+/*********************************************************************/
+/*                                                                   */
+/*                                                                   */
+/*           NOTICE TO USERS OF THE SOURCE CODE EXAMPLE              */
+/*                                                                   */
+/* INTERNATIONAL BUSINESS MACHINES CORPORATION PROVIDES THE SOURCE   */
+/* CODE EXAMPLE "AS IS" WITHOUT WARRANTY OF ANY KIND, EITHER         */
+/* EXPRESSED OR IMPLIED, INCLUDING, BUT NOT LIMITED TO THE IMPLIED   */
+/* WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR        */
+/* PURPOSE. THE ENTIRE RISK AS TO THE QUALITY AND PERFORMANCE OF THE */
+/* SOURCE CODE EXAMPLE IS WITH YOU. SHOULD ANY PART OF THE SOURCE    */
+/* CODE EXAMPLE PROVES DEFECTIVE, YOU (AND NOT IBM) ASSUME THE       */
+/* ENTIRE COST OF ALL NECESSARY SERVICING, REPAIR OR CORRECTION.     */
+/*                                                                   */
+/*********************************************************************/
+
+ASNCLP SESSION SET TO Q REPLICATION;
+SET RUN SCRIPT NOW STOP ON SQL ERROR ON;
+
+# Creates a 2-Node P2P setup between 2 existing tables
+LOAD MULTIDIR REPL SCRIPT "2nodes\2Node0.in";
+
+# Creates a 2-Node P2P setup between 1 existing table, and 1 new table to be created.
+# Custom attributes specified in this example.
+#LOAD MULTIDIR REPL SCRIPT "2nodes\2Node1.in";
+
+# Creates 3 2-Node P2P Logical Tables in 1 Subgroup
+#LOAD MULTIDIR REPL SCRIPT "2nodes\2Node2.in";

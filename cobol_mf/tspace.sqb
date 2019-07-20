@@ -1,0 +1,415 @@
+      ***********************************************************************
+      ** (c) Copyright IBM Corp. 2007 All rights reserved.
+      ** 
+      ** The following sample of source code ("Sample") is owned by International 
+      ** Business Machines Corporation or one of its subsidiaries ("IBM") and is 
+      ** copyrighted and licensed, not sold. You may use, copy, modify, and 
+      ** distribute the Sample in any form without payment to IBM, for the purpose of 
+      ** assisting you in the development of your applications.
+      ** 
+      ** The Sample code is provided to you on an "AS IS" basis, without warranty of 
+      ** any kind. IBM HEREBY EXPRESSLY DISCLAIMS ALL WARRANTIES, EITHER EXPRESS OR 
+      ** IMPLIED, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED WARRANTIES OF 
+      ** MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE. Some jurisdictions do 
+      ** not allow for the exclusion or limitation of implied warranties, so the above 
+      ** limitations or exclusions may not apply to you. IBM shall not be liable for 
+      ** any damages you suffer as a result of using, copying, modifying or 
+      ** distributing the Sample, even if IBM has been advised of the possibility of 
+      ** such damages.
+      ***********************************************************************
+      **
+      ** SOURCE FILE NAME: tspace.sqb 
+      **
+      ** SAMPLE: How to copy and free memory in a tablespace
+      **
+      ** DB2 APIs USED:
+      **         sqlgmcpy -- COPY MEMORY
+      **         sqlgfmem -- FREE MEMORY
+      **         sqlgmtsq -- TABLESPACE QUERY
+      **         sqlgtcq -- TABLESPACE CONTAINER QUERY
+      **         sqlgstpq -- SINGLE TABLESPACE QUERY
+      **         sqlgotsq -- OPEN TABLESPACE QUERY
+      **         sqlgftpq -- FETCH TABLESPACE QUERY
+      **         sqlgctsq -- CLOSE TABLESPACE QUERY
+      **         sqlgotcq -- OPEN TABLESPACE CONTAINER QUERY
+      **         sqlgftcq -- FETCH TABLESPACE CONTAINER QUERY
+      **         sqlgctcq -- CLOSE TABLESPACE CONTAINER QUERY
+      **         sqlgstsc -- SET TABLESPACE CONTAINERS
+      **         sqlggtss -- GET TABLESPACE STATISTICS
+      **
+      ** SQL STATEMENTS USED:
+      **         BEGIN DECLARE SECTION 
+      **         END DECLARE SECTION 
+      **         CONNECT
+      **
+      ** OUTPUT FILE: tspace.out (available in the online documentation)
+      ***********************************************************************
+      **
+      ** For more information on the sample programs, see the README file. 
+      **
+      ** For information on developing COBOL applications, see the 
+      ** Application Development Guide.
+      **
+      ** For information on DB2 APIs, see the Administrative API Reference.
+      **
+      ** For information on using SQL statements, see the SQL Reference. 
+      **
+      ** For the latest information on programming, compiling, and running
+      ** DB2 applications, visit the DB2 application development website: 
+      **     http://www.software.ibm.com/data/db2/udb/ad
+      ***********************************************************************
+
+       Identification Division.
+       Program-ID. "tspace".
+
+       Data Division.
+       Working-Storage Section.
+
+           copy "sqlenv.cbl".
+           copy "sql.cbl".
+           copy "sqlutil.cbl".
+           copy "sqlca.cbl".
+           copy "sqlutbsq.cbl".
+           copy "sqlutbcq.cbl".
+
+           EXEC SQL BEGIN DECLARE SECTION END-EXEC.
+       01 dbname            pic x(8).
+       01 userid            pic x(8).
+       01 passwd.
+         49 passwd-length   pic s9(4) comp-5 value 0.
+         49 passwd-name     pic x(18).
+           EXEC SQL END DECLARE SECTION END-EXEC.
+
+       77 errloc          pic x(80).
+       77 rc              pic s9(9) comp-5.
+
+          01 option pic s9(9) comp-5 value 0.
+          01 max-tcq pic s9(9) comp-5 value 1.
+          01 max-tbsqry pic s9(9) comp-5 value 1.
+          01 tbsqry-returned pic s9(9) comp-5.
+          01 tcq-returned pic s9(9) comp-5.
+
+          01 tablespace-count pic s9(9) comp-5.
+          01 i pic s9(4) comp-5.
+
+          01 tbsqry-pointer      usage is pointer.
+          01 tbsqry-pointer-int
+                redefines tbsqry-pointer
+                $IF P64 SET 
+                   pic s9(18) comp-5.
+                $ELSE
+                   pic s9(9) comp-5.
+                $END
+
+          01 tbsqry-pointer-save usage pointer.
+
+          01 tablespace-id pic s9(9) comp-5 value 1.
+          01 tblspace-id pic s9(9) comp-5 value 2.
+          01 tbsid       pic s9(9) comp-5 value 0.
+          01 container-count pic s9(9) comp-5.
+
+          01 tbscontqry-pointer      usage is pointer.
+          01 tbscontqry-pointer-int
+                redefines tbscontqry-pointer
+                pic s9(9) comp-5.
+
+          01 tbscontqry-pointer-save usage pointer.
+
+       Linkage section.
+      *    copy "sqlutbsq.cbl".
+      *    copy "sqlutbcq.cbl".
+
+       Procedure Division.
+       Main Section.
+           display "Sample COBOL program: TSPACE.SQB".
+
+      * Get database connection information.
+           display "Enter in the database name : " with no advancing.
+           accept dbname.
+
+           display "Enter your user id (default none): " 
+                with no advancing.
+           accept userid.
+
+           if userid = spaces
+             EXEC SQL CONNECT TO sample END-EXEC
+           else
+             display "Enter your password : " with no advancing
+             accept passwd-name.
+
+      * Passwords in a CONNECT statement must be entered in a VARCHAR format
+      * with the length of the input string.
+           inspect passwd-name tallying passwd-length for characters
+              before initial " ".
+
+           EXEC SQL CONNECT TO :dbname USER :userid USING :passwd
+               END-EXEC.
+           move "CONNECT TO" to errloc.
+           call "checkerr" using SQLCA errloc.
+
+           display "Testing sqlgmtsq...........................".
+
+      ********************
+      * TABLESPACE QUERY *
+      ********************
+           call "sqlgmtsq" using
+                                by reference    sqlca
+                                by reference    tablespace-count
+                                by reference    tbsqry-pointer
+                                by value        SQLB-RESERVED1
+                                by value        SQLB-RESERVED2
+                          returning rc.
+           display "tsq sqlcode of sqlca: ", sqlcode of sqlca.
+           display "tsq tokens: ", sqlerrmc of sqlca
+      -    (1:sqlerrml of sqlca).
+
+           display "tsq tablespace count: ", tablespace-count.
+
+           set tbsqry-pointer-save to tbsqry-pointer.
+
+           perform print-tablespace-info
+              varying i
+              from 0
+              by 1
+              until i is equal to tablespace-count.
+
+      ***************
+      * FREE MEMORY *
+      ***************
+           call "sqlgfmem" using
+                                 by reference   sqlca
+                                 by value       tbsqry-pointer-save
+                           returning rc.
+           display "fmem sqlcode of sqlca: ", sqlcode of sqlca.
+           display "fmem tokens: ", sqlerrmc of sqlca
+      -    (1:sqlerrml of sqlca).
+
+           display "Testing sqlgtcq...........................".
+           call "sqlgtcq" using
+                by reference sqlca
+                by value tblspace-id
+                by reference container-count
+                by reference tbscontqry-pointer.
+           display "tcq sqlcode of sqlca: ", sqlcode of sqlca.
+           display "tcq tokens: ", sqlerrmc of sqlca
+      -    (1:sqlerrml of sqlca).
+
+           display "tcq container count: ", container-count.
+
+           set tbscontqry-pointer-save to tbscontqry-pointer.
+
+           perform print-container-info
+              varying i
+              from 0
+              by 1
+              until i is equal to container-count.
+
+           call "sqlgfmem" using
+                by reference sqlca
+                by value tbscontqry-pointer-save.
+           display "fmem sqlcode of sqlca: ", sqlcode of sqlca.
+           display "fmem tokens: ", sqlerrmc of sqlca
+      -    (1:sqlerrml of sqlca).
+
+           display "Testing sqlgstpq...........................".
+           call "sqlgstpq" using
+                by reference sqlca
+                by value tbsid
+                by reference sqlb-tbsqry-data
+                by value SQLB-RESERVED1.
+
+           display "stsq sqlcode of sqlca: ", sqlcode of sqlca.
+
+           perform display-tbsqry-data.
+
+           display "Testing sqlgotsq...........................".
+           call "sqlgotsq" using
+                by reference sqlca
+                by value SQLB-OPEN-TBS-ALL
+                by reference tablespace-count.
+           display "otsq sqlcode of sqlca: ", sqlcode of sqlca.
+           display "num of tablespaces: " tablespace-count
+
+           perform fetch-tsqs
+              varying i
+              from 0
+              by 1
+              until i is equal to tablespace-count.
+
+           call "sqlgctsq" using
+                by reference sqlca.
+           display "ftsq sqlcode of sqlca: ", sqlcode of sqlca.
+
+           display "Testing sqlgotcq...........................".
+           call "sqlgotcq" using
+                by reference sqlca
+                by value tablespace-id
+                by reference container-count.
+           display "otcq sqlcode of sqlca: ", sqlcode of sqlca.
+           display "num of containers: " container-count.
+
+           perform fetch-tcqs
+              varying i
+              from 0
+              by 1
+              until i is equal to container-count.
+
+           call "sqlgctcq" using
+                by reference sqlca.
+           display "ctcq sqlcode of sqlca: ", sqlcode of sqlca.
+
+           display "Testing sqlgstsc...........................".
+           call "sqlgtcq" using
+                by reference sqlca
+                by value tblspace-id
+                by reference container-count
+                by reference tbscontqry-pointer.
+           display "tcq sqlcode of sqlca: ", sqlcode of sqlca.
+           display "num of containers: ", container-count.
+
+           set tbscontqry-pointer-save to tbscontqry-pointer.
+
+           perform print-container-info
+              varying i
+              from 0
+              by 1
+              until i is equal to container-count.
+
+           call "sqlgstsc" using
+              by reference sqlca
+              by value option
+              by value tblspace-id
+              by value container-count
+              by value tbscontqry-pointer-save.
+           display "stsc sqlcode of sqlca: ", sqlcode of sqlca.
+
+           call "sqlgfmem" using
+                by reference sqlca
+                by value tbscontqry-pointer-save.
+           display "fmem sqlcode of sqlca: ", sqlcode of sqlca.
+           display "fmem tokens: ", sqlerrmc of sqlca
+      -    (1:sqlerrml of sqlca).
+
+
+           display "Testing sqlggtss...........................".
+           call "sqlggtss" using
+              by reference sqlca
+              by value tblspace-id
+              by reference sqlb-tbs-stats.
+           display "gtss sqlcode of sqlca:    ", sqlcode of sqlca.
+           display "total pages:     ",
+                         sql-total-pages of sqlb-tbs-stats.
+           display "useable pages:   ",
+                         sql-useable-pages of sqlb-tbs-stats.
+           display "used pages:      ",
+                         sql-used-pages of sqlb-tbs-stats.
+           display "free pages:      ",
+                         sql-free-pages of sqlb-tbs-stats.
+           display "high water mark: ",
+                         sql-high-water-mark of sqlb-tbs-stats.
+
+           EXEC SQL CONNECT RESET END-EXEC.
+           move "CONNECT RESET" to errloc.
+           call "checkerr" using SQLCA errloc.
+       End-Main.
+           go to End-Prog.
+
+       Fetch-Loop Section.
+       End-Fetch-Loop. exit.
+
+       End-Prog.
+           stop run.
+
+       fetch-tsqs.
+           call "sqlgftpq" using
+                by reference sqlca
+                by value max-tbsqry
+                by reference sqlb-tbsqry-data
+                by reference tbsqry-returned
+           display "ftsq sqlcode of sqlca: ", sqlcode of sqlca
+           display "tbsqry-returned: " tbsqry-returned
+           perform display-tbsqry-data.
+
+       fetch-tcqs.
+           call "sqlgftcq" using
+                by reference sqlca
+                by value max-tcq
+                by reference sqlb-tbscontqry-data
+                by reference tcq-returned
+           display "ftsq sqlcode of sqlca: ", sqlcode of sqlca
+           display "tbsqry-returned: " tbsqry-returned
+           perform display-tbsqry-data.
+
+       print-tablespace-info.
+ 
+      ***************
+      * COPY MEMORY *
+      ***************
+           call "sqlgmcpy" using
+                                 by reference   sqlb-tbsqry-data
+                                 by value       tbsqry-pointer
+                                 by value       SQLB-TBSQRY-DATA-SIZE
+                           returning rc.
+      * the COPY MEMORY API can be used if the data area is declared in
+      * the "Working-Storage Section".  "set address" can be used if the
+      * data area is declared in teh "Linkage Section".  In this case
+      * the data area is the copied file "sqlutbsq.cbl".
+      *     set address of sqlb-tbsqry-data to tbsqry-pointer
+
+           perform display-tbsqry-data
+           add sqlb-tbsqry-data-size to tbsqry-pointer-int.
+
+       display-tbsqry-data.
+           display "id: ", sql-id of sqlb-tbsqry-data
+           display "total pages: ",
+                        sql-total-pages of sqlb-tbsqry-data
+           display "useable pages: ",
+                        sql-useable-pages of sqlb-tbsqry-data
+           display "flags: ",
+                        sql-flags of sqlb-tbsqry-data
+           display "page size: ",
+                        sql-page-size of sqlb-tbsqry-data
+           display "ext size: ",
+                        sql-ext-size of sqlb-tbsqry-data
+           display "prefetch size: ",
+                        sql-prefetch-size of sqlb-tbsqry-data
+           display "# containers: ",
+                        sql-n-containers of sqlb-tbsqry-data
+           display "tablespace state: ",
+                        sql-tbs-state of sqlb-tbsqry-data
+           display "life lsn: ",
+                        sql-life-lsn of sqlb-tbsqry-data
+           display " ".
+
+       print-container-info.
+      ***************
+      * COPY MEMORY *
+      ***************
+           call "sqlgmcpy" using
+                                 by reference  sqlb-tbscontqry-data
+                                 by value      tbscontqry-pointer
+                                 by value      SQLB-TBSCONTQRY-DATA-SIZE
+                           returning rc.
+
+      * the COPY MEMORY API can be used if the data area is declared in
+      * the "Working-Storage Section".  "set address" can be used if the
+      * data area is declared in teh "Linkage Section".  In this case
+      * the data area is the copied file "sqlutbcq.cbl".
+      *     set address of sqlb-tbscontqry-data to tbscontqry-pointer
+
+           display "id: ", sql-id of sqlb-tbscontqry-data
+           display "# tablespaces: ", sql-n-tbs of sqlb-tbscontqry-data
+           display "tablespace id:",
+                        sql-tbs-id of sqlb-tbscontqry-data
+           display "name: ", sql-name of sqlb-tbscontqry-data
+                             (1:sql-name-len of sqlb-tbscontqry-data)
+           display "container type: ",
+                        sql-cont-type of sqlb-tbscontqry-data
+           display "total pages: ",
+                        sql-total-pages of sqlb-tbscontqry-data
+           display "useable pages: ",
+                        sql-useable-pages of sqlb-tbscontqry-data
+           display "ok?: ",
+                        sql-ok of sqlb-tbscontqry-data
+           display " ",
+           add sqlb-tbscontqry-data-size to tbscontqry-pointer-int.

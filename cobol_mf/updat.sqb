@@ -1,0 +1,145 @@
+      ***********************************************************************
+      ** (c) Copyright IBM Corp. 2007 All rights reserved.
+      ** 
+      ** The following sample of source code ("Sample") is owned by International 
+      ** Business Machines Corporation or one of its subsidiaries ("IBM") and is 
+      ** copyrighted and licensed, not sold. You may use, copy, modify, and 
+      ** distribute the Sample in any form without payment to IBM, for the purpose of 
+      ** assisting you in the development of your applications.
+      ** 
+      ** The Sample code is provided to you on an "AS IS" basis, without warranty of 
+      ** any kind. IBM HEREBY EXPRESSLY DISCLAIMS ALL WARRANTIES, EITHER EXPRESS OR 
+      ** IMPLIED, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED WARRANTIES OF 
+      ** MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE. Some jurisdictions do 
+      ** not allow for the exclusion or limitation of implied warranties, so the above 
+      ** limitations or exclusions may not apply to you. IBM shall not be liable for 
+      ** any damages you suffer as a result of using, copying, modifying or 
+      ** distributing the Sample, even if IBM has been advised of the possibility of 
+      ** such damages.
+      ***********************************************************************
+      **
+      ** SOURCE FILE NAME: updat.sqb 
+      **
+      ** SAMPLE: How to update, delete and insert table data 
+      **
+      **         This sample program demonstrates the use of static SQL.  
+      **         It will obtain all managers in the STAFF table of the    
+      **         SAMPLE database and change their job from 'Mgr' to       
+      **         'Clerk', deletes all who are 'Clerk', and inserts a new  
+      **         row.  In all three SQL statements (UPDATE, DELETE,       
+      **         INSERT) a host variable is implemented. A ROLLBACK will 
+      **         be done so that the SAMPLE database remains unchange.
+      **
+      ** SQL STATEMENTS USED:
+      **         BEGIN DECLARE SECTION 
+      **         END DECLARE SECTION 
+      **         ROLLBACK
+      **         CONNECT
+      **         UPDATE
+      **         DELETE
+      **         INSERT
+      **
+      ** OUTPUT FILE: updat.out (available in the online documentation)
+      ***********************************************************************
+      **
+      ** For more information on the sample programs, see the README file. 
+      **
+      ** For information on developing COBOL applications, see the 
+      ** Application Development Guide.
+      **
+      ** For information on using SQL statements, see the SQL Reference. 
+      **
+      ** For the latest information on programming, compiling, and running
+      ** DB2 applications, visit the DB2 application development website: 
+      **     http://www.software.ibm.com/data/db2/udb/ad
+      ***********************************************************************
+
+       Identification Division.
+       Program-ID. "updat".
+
+       Data Division.
+       Working-Storage Section.
+
+           copy "sql.cbl".
+           copy "sqlenv.cbl".
+           copy "sqlca.cbl".                                            1
+
+           EXEC SQL BEGIN DECLARE SECTION END-EXEC.                     2
+       01 statement         pic x(80).
+       01 userid            pic x(8).
+       01 passwd.
+         49 passwd-length   pic s9(4) comp-5 value 0.
+         49 passwd-name     pic x(18).
+       01 job-update        pic x(5).
+           EXEC SQL END DECLARE SECTION END-EXEC.
+
+      * Local variables
+       77 errloc          pic x(80).
+       77 error-rc        pic s9(9) comp-5.
+       77 state-rc        pic s9(9) comp-5.
+
+      * Variables for the GET ERROR MESSAGE API
+      * Use application specific bound instead of BUFFER-SZ
+       77 buffer-size     pic s9(4) comp-5 value 1024.
+       77 line-width      pic s9(4) comp-5 value 80.
+       77 error-buffer    pic x(1024).
+       77 state-buffer    pic x(1024).
+
+       Procedure Division.
+       Main Section.
+           display "Sample COBOL program:  UPDAT".
+
+           display "Enter your user id (default none): " 
+                with no advancing.
+           accept userid.
+
+           if userid = spaces
+             EXEC SQL CONNECT TO sample END-EXEC
+           else
+             display "Enter your password : " with no advancing
+             accept passwd-name.
+
+      * Passwords in a CONNECT statement must be entered in a VARCHAR format
+      * with the length of the input string.
+           inspect passwd-name tallying passwd-length for characters
+              before initial " ".
+
+           EXEC SQL CONNECT TO sample USER :userid USING :passwd        3
+               END-EXEC.
+           move "CONNECT TO" to errloc.
+           call "checkerr" using SQLCA errloc.
+
+           move "Clerk" to job-update.
+           EXEC SQL UPDATE staff SET job=:job-update                    4
+                    WHERE job='Mgr' END-EXEC.
+           move "UPDATE STAFF" to errloc.
+           call "checkerr" using SQLCA errloc.
+
+           display "All 'Mgr' have been demoted to 'Clerk'!".
+
+           move "Clerk" to job-update.
+           EXEC SQL DELETE FROM staff WHERE job=:job-update END-EXEC.   5
+           move "DELETE FROM STAFF" to errloc.
+           call "checkerr" using SQLCA errloc.
+
+           display "All 'Clerk' people have been deleted!".
+
+           EXEC SQL INSERT INTO staff VALUES (999, 'Testing', 99,       6
+                    :job-update, 0, 0, 0) END-EXEC.
+           move "INSERT INTO STAFF" to errloc.
+           call "checkerr" using SQLCA errloc.
+
+           display "New data has been inserted".
+
+           EXEC SQL ROLLBACK END-EXEC.                                  7
+           move "ROLLBACK" to errloc.
+           call "checkerr" using SQLCA errloc.
+
+           DISPLAY "On second thought -- changes rolled back."
+
+           EXEC SQL CONNECT RESET END-EXEC.
+           move "CONNECT RESET" to errloc.
+           call "checkerr" using SQLCA errloc.
+
+       End-Prog.
+           stop run.

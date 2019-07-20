@@ -1,0 +1,353 @@
+/****************************************************************************
+** (c) Copyright IBM Corp. 2007 All rights reserved.
+** 
+** The following sample of source code ("Sample") is owned by International 
+** Business Machines Corporation or one of its subsidiaries ("IBM") and is 
+** copyrighted and licensed, not sold. You may use, copy, modify, and 
+** distribute the Sample in any form without payment to IBM, for the purpose of 
+** assisting you in the development of your applications.
+** 
+** The Sample code is provided to you on an "AS IS" basis, without warranty of 
+** any kind. IBM HEREBY EXPRESSLY DISCLAIMS ALL WARRANTIES, EITHER EXPRESS OR 
+** IMPLIED, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED WARRANTIES OF 
+** MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE. Some jurisdictions do 
+** not allow for the exclusion or limitation of implied warranties, so the above 
+** limitations or exclusions may not apply to you. IBM shall not be liable for 
+** any damages you suffer as a result of using, copying, modifying or 
+** distributing the Sample, even if IBM has been advised of the possibility of 
+** such damages.
+*****************************************************************************
+**
+** SOURCE FILE NAME: tbast.sqc
+**
+** SAMPLE: How to use staging table for updating deferred AST 
+**          
+**         This sample:
+**         1. Creates a refresh-deferred summary table 
+**         2. Creates a staging table for this summary table 
+**         3. Applies contents of staging table to AST
+**         4. Restores the data in a summary table 
+**
+** SQL STATEMENTS USED:
+**         CREATE TABLE
+**         DROP
+**         EXECUTE IMMEDIATE
+**         INSERT
+**         REFRESH
+**         SET INTEGRITY
+**
+** STRUCTURES USED:
+**         sqlca
+**
+** OUTPUT FILE: tbast.out (available in the online documentation)
+*****************************************************************************
+**
+** For more information on the sample programs, see the README file.
+**
+** For information on developing C applications, see the Application
+** Development Guide.
+**
+** For information on using SQL statements, see the SQL Reference.
+**
+** For the latest information on programming, building, and running DB2 
+** applications, visit the DB2 application development website: 
+**     http://www.software.ibm.com/data/db2/udb/ad
+****************************************************************************/
+
+#include <stdio.h>
+#include <stdlib.h>
+#include <sqlenv.h>
+#include <sqlutil.h>
+#include <sqlcodes.h>
+#include "utilemb.h" 
+
+EXEC SQL INCLUDE SQLCA;
+
+int CreateStagingTable(void);
+int PropagateStagingToAst(void);
+int RestoreSummaryTable(void);
+int DisplayTable(char *);
+int DropTables(void);
+
+EXEC SQL BEGIN DECLARE SECTION;
+  char strStmt[100];
+  short c1;
+  short c2;
+  short count;
+EXEC SQL END DECLARE SECTION;
+
+int main(int argc, char *argv[])
+{
+  int rc = 0;
+  char dbAlias[SQL_ALIAS_SZ + 1];
+  char user[USERID_SZ + 1];
+  char pswd[PSWD_SZ + 1];
+    
+  /* Check the command line arguments */
+  rc = CmdLineArgsCheck1(argc, argv, dbAlias, user, pswd);
+  if (rc != 0)
+  {
+    return rc;
+  }
+
+  printf("\nTHIS SAMPLE SHOWS THE USAGE OF STAGING TABLE TO UPDATE"); 
+  printf("\nREFRESH DEFERRED AST AND RESTORE DATA IN A SUMMARY TABLE\n");
+
+  /* Connect to database */
+  printf("\n-----------------------------------------------------------\n");
+  rc = DbConn(dbAlias, user, pswd);
+  if (rc != 0)
+  {
+    return rc;
+  }
+
+  /* create a base table, summary table, staging table */
+  rc = CreateStagingTable();
+  if (rc != 0)
+  {
+    return rc;
+  }
+ 
+  printf("\n-----------------------------------------------------------\n");
+
+  /* To show the propagation of changes of base table to
+     summary tables through the staging table */
+
+  printf("To show the propagation of changes from base table to\n");
+  printf("summary tables through the staging table:\n");
+  rc = PropagateStagingToAst();
+  if (rc != 0)
+  {
+    return rc;
+  }
+
+  printf("\n------------------------------------------------------------\n");
+  
+  /* To show restoring of data in a summary table */
+
+  printf("\nTo show restoring of data in a summary table\n");
+  rc = RestoreSummaryTable();
+  if (rc != 0)
+  {
+    return rc;
+  }
+
+  /* drop the created tables */
+  printf("\nDrop the created tables\n");
+  rc = DropTables();
+  if (rc != 0)
+  {
+    return rc;
+  }
+
+  /* disconnect from the database */
+  rc = DbDisconn(dbAlias);
+  if (rc != 0)
+  {
+    return rc;
+  }
+
+  return rc;
+} /* main */
+
+/* Creates base table, summary table and staging table */
+int CreateStagingTable(void)
+{
+  int rc =0;
+ 
+  /* create base table */ 
+  printf("\nUSE THE SQL STATEMENT:\n");
+  printf("    CREATE TABLE \n");
+  printf("To create base table, summary table, staging table\n\n");
+  printf("\nCreating the base table T\n");
+  printf("  CREATE TABLE T\n");
+  printf("    (C1 SMALLINT NOT NULL, C2 SMALLINT NOT NULL, \n");
+  printf("     C3 SMALLINT, C4 SMALLINT)\n");
+  
+  EXEC SQL CREATE TABLE T (C1 SMALLINT NOT NULL, C2 SMALLINT NOT NULL, 
+                           C3 SMALLINT, C4 SMALLINT);
+  EMB_SQL_CHECK(" create -- base table");
+  EXEC SQL COMMIT;
+  
+  /* create summary table */
+  printf("\nCreating summary table D_AST\n");
+  printf("  CREATE TABLE D_AST AS (SELECT C1, C2, COUNT(*)\n"); 
+  printf("    AS COUNT FROM T GROUP BY C1, C2) DATA INITIALLY\n");
+  printf("    DEFERRED REFRESH DEFERRED\n"); 
+  EXEC SQL CREATE TABLE D_AST AS (SELECT C1, C2, COUNT(*) 
+    AS COUNT FROM T GROUP BY C1, C2) DATA INITIALLY DEFERRED REFRESH DEFERRED;
+  EMB_SQL_CHECK(" create -- summary table");
+  EXEC SQL COMMIT;
+
+  /* create staging table */
+  printf("\nCreating the staging table G\n");
+  printf("  CREATE TABLE G FOR D_AST PROPAGATE IMMEDIATE\n");
+  EXEC SQL CREATE TABLE G FOR D_AST PROPAGATE IMMEDIATE;
+  EMB_SQL_CHECK(" create -- staging table");
+  EXEC SQL COMMIT;
+
+  return rc;
+} /* CreateStagingTable */
+
+/* Show how to propagate the changes from base table to
+   summary tables through the staging table */ 
+int PropagateStagingToAst(void)
+{
+  int rc =0;
+
+  printf("\nBring staging table out of pending state\n");
+  printf("  SET INTEGRITY FOR G IMMEDIATE CHECKED\n");    
+  EXEC SQL SET INTEGRITY FOR G IMMEDIATE CHECKED; 
+  EMB_SQL_CHECK(" set -- integrity for statging table");
+  EXEC SQL COMMIT;
+
+  printf("\nRefresh summary table, get it out of pending state.\n"); 
+  printf("  REFRESH TABLE D_AST NOT INCREMENTAL\n"); 
+  EXEC SQL REFRESH TABLE D_AST NOT INCREMENTAL; 
+  EMB_SQL_CHECK(" refresh -- summary table");
+  EXEC SQL COMMIT;
+
+  printf("\nInsert data into base table T\n");
+  strcpy(strStmt, "INSERT INTO T VALUES(1,1,1,1), (2,2,2,2), "
+                  "                    (1,1,1,1), (3,3,3,3)");
+  EXEC SQL EXECUTE IMMEDIATE :strStmt;
+  EMB_SQL_CHECK(" insert -- table");
+  EXEC SQL COMMIT;
+
+  printf("Display the contents of staging table G.\n"); 
+  printf("The Staging table contains incremental changes to base table.\n"); 
+  DisplayTable("G");
+ 
+  printf("\nRefresh the summary table\n");
+  printf("  REFRESH TABLE D_AST INCREMENTAL\n");
+  EXEC SQL REFRESH TABLE D_AST INCREMENTAL; 
+  EMB_SQL_CHECK(" refresh -- summary table");
+  EXEC SQL COMMIT;
+
+  printf("\nDisplay the contents of staging table G\n"); 
+  printf("   NOTE: The staging table is pruned after AST is\n"); 
+  printf("         refreshed. The contents are propagated to AST\n");
+  printf("         from the staging table\n\n");
+  DisplayTable("G");
+
+  printf("Display the contents of AST\n");
+  printf("Summary table has the changes propagated from staging table\n");
+  DisplayTable("D_AST");
+ 
+  return rc;
+} /* PropageStagingToAst */
+
+/* Shows how to restore the data in a summary table */ 
+int RestoreSummaryTable(void)
+{
+  int rc = 0;
+
+  printf("\nBlock all modifications to the summary table\n");
+  printf("by setting the integrity to off\n");
+  printf("  (G is placed in pending and G.CC=N)\n");
+  printf("  SET INTEGRITY FOR G OFF\n");
+  EXEC SQL SET INTEGRITY FOR G OFF;
+  EMB_SQL_CHECK(" set -- integrity off for staging table");
+  EXEC SQL COMMIT;
+
+  printf("\nExport the query definition in summary table and load\n");
+  printf("directly back to the summary table.\n");
+  printf("  (D_AST and G both in pending)\n");
+  printf("  SET INTEGRITY FOR D_AST OFF CASCADE IMMEDIATE\n");
+  EXEC SQL SET INTEGRITY FOR D_AST OFF CASCADE IMMEDIATE;
+  EMB_SQL_CHECK(" set -- integrity off for AST");
+  EXEC SQL COMMIT;
+
+  printf("\nPrune staging table and place it in normal state\n");
+  printf("  (G.CC=F)\n");
+  printf("  SET INTEGRITY FOR G IMMEDIATE CHECKED PRUNE\n");
+  EXEC SQL SET INTEGRITY FOR G IMMEDIATE CHECKED PRUNE;
+  EMB_SQL_CHECK(" set -- integrity for G");
+  EXEC SQL COMMIT;
+
+  printf("\nChanging staging table state to U\n");
+  printf("  (G.CC to U)\n");
+  printf("  SET INTEGRITY FOR G STAGING IMMEDIATE UNCHECKED\n");
+  EXEC SQL SET INTEGRITY FOR G STAGING IMMEDIATE UNCHECKED;
+  EMB_SQL_CHECK(" set -- integrity for G");
+  EXEC SQL COMMIT; 
+
+  printf("\nPlace D_AST in normal and D_AST.CC to U\n");
+  printf("  SET INTEGRITY FOR D_AST MATERIALIZED QUERY\n"); 
+  printf("    IMMEDIATE UNCHECKED\n");
+  EXEC SQL SET INTEGRITY FOR D_AST MATERIALIZED QUERY IMMEDIATE UNCHECKED;
+  EMB_SQL_CHECK(" set -- integrity for G");
+  EXEC SQL COMMIT;
+
+  return rc;
+} /* RestoreSummaryTable */ 
+
+/* Displays the contents of the table being passed as the argument */
+int DisplayTable(char *table)
+{
+  int rc = 0;
+
+  char tbl[10];
+  
+  strcpy(tbl, table);
+
+  if(!strcmp(tbl, "G"))
+  {
+    printf("  SELECT c1, c2, count FROM G\n\n");
+    strcpy(strStmt, "SELECT c1, c2, count FROM G");
+    EXEC SQL PREPARE stmt1 FROM :strStmt;
+    EMB_SQL_CHECK("stmt1 -- prepare");
+  }
+  else if(!strcmp(tbl, "D_AST"))
+  {
+    printf("  SELECT c1, c2, count FROM D_AST\n\n");
+    strcpy(strStmt, "SELECT c1, c2, count FROM D_AST");
+    EXEC SQL PREPARE stmt1 FROM :strStmt;
+    EMB_SQL_CHECK("stmt1 -- prepare");
+  }
+
+  EXEC SQL DECLARE cur CURSOR FOR stmt1;
+
+  EXEC SQL OPEN cur;
+  EMB_SQL_CHECK("cursor -- open");
+
+  EXEC SQL FETCH cur INTO :c1, :c2, :count;
+  EMB_SQL_CHECK("cursor -- fetch");
+
+  printf("  C1    C2    COUNT \n");
+  printf("  ------------------\n");
+  
+  while (sqlca.sqlcode != 100)
+  {
+    printf("  %d     %d       %d  \n", c1, c2, count);
+    EXEC SQL FETCH cur INTO :c1, :c2, :count;
+    EMB_SQL_CHECK("cursor -- fetch");
+  }
+
+  printf("\n");
+  EXEC SQL CLOSE cur;
+  EMB_SQL_CHECK("cursor -- close");
+
+  return rc;
+} /* DisplayTable */
+
+/* Drops the staging table, summary table and base table */
+int DropTables(void)
+{
+  int rc = 0;
+
+  printf("Dropping a base table implicitly drops summary table defined\n");
+  printf("on it which in turn cascades to dropping its staging table.\n");
+
+  printf("\nUSE THE SQL STATEMENT:\n");
+  printf("  DROP TABLE \n");
+  printf("To drop a table\n\n");
+  printf("  DROP TABLE T\n");
+
+  strcpy(strStmt, "DROP TABLE T");
+  EXEC SQL EXECUTE IMMEDIATE :strStmt;
+  EMB_SQL_CHECK(" drop -- base table");
+  EXEC SQL COMMIT;
+
+  return rc;
+} /* DropTables */

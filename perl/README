@@ -1,0 +1,183 @@
+******************************************************************************
+* (c) Copyright IBM Corp. 2007 All rights reserved.
+* 
+* The following sample of source code ("Sample") is owned by International 
+* Business Machines Corporation or one of its subsidiaries ("IBM") and is 
+* copyrighted and licensed, not sold. You may use, copy, modify, and 
+* distribute the Sample in any form without payment to IBM, for the purpose of 
+* assisting you in the development of your applications.
+* 
+* The Sample code is provided to you on an "AS IS" basis, without warranty of 
+* any kind. IBM HEREBY EXPRESSLY DISCLAIMS ALL WARRANTIES, EITHER EXPRESS OR 
+* IMPLIED, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED WARRANTIES OF 
+* MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE. Some jurisdictions do 
+* not allow for the exclusion or limitation of implied warranties, so the above 
+* limitations or exclusions may not apply to you. IBM shall not be liable for 
+* any damages you suffer as a result of using, copying, modifying or 
+* distributing the Sample, even if IBM has been advised of the possibility of 
+* such damages.
+*
+******************************************************************************
+*
+*                       README for Perl Samples
+*
+* The <install path>sqllib\samples\perl directory contains this README file
+* where <install_path> is the location of DB2 9.7 on your hard drive. The
+* default location for <install_path> is C:\Program Files\IBM on Windows and
+* $HOME on unix
+*
+* This README describes how to run Perl sample code for DB2 9.7.
+* The DB2 9.7 sample code and build files for Perl are located
+* in the following directory:
+*
+*  Windows:
+*    <install_path>\sqllib\samples\perl
+*  Unix:
+*    <install_path>/sqllib/samples/perl
+*
+* Copy the sample files from this directory to a working directory prior to
+* running the sample programs. The sample program directories are typically
+* read-only on most platforms and some samples produce output files that
+* require write perimssions on the directory.
+*
+* WARNING: Some of these samples may change your database or database manager
+*          configuration.  Execute the samples against a test database
+*          only, such as the DB2 SAMPLE database.
+*
+******************************************************************************
+*
+*               Prepare your DB2 sample development environment
+*
+*   On Windows all samples should be run and built in a DB2 Command Window.
+*   The DB2 Command Window is needed to execute the db2 specific commands.
+*   Listed below is how to opening the DB2 Command Window:
+*
+*   o From the Start Menu click Start --> Programs --> IBM DB2 -->
+*    <DB2 copy name> --> Command Line Tools --> Command Window
+*
+*  1) Copy the files in <install path>sqllib\samples\perl\* (windows),
+*     <install path>sqllib/samples/perl/* (unix) to a working directory and
+*     ensure that directory has write permission.
+*
+*  2) Start the Database Manager with the following command:
+*       db2start
+*
+*  3) Create the sample database with the following command:
+*       db2sampl
+*
+*  5) Test that you can connect to the database with the following command:
+*       db2 connect to sample
+*
+*  6) cd to the directory containing the files copied in Step 1.
+*
+******************************************************************************
+*
+*              Common file Descriptions
+* 
+* The following are the common files for Perl samples. For more
+* information on these files, refer to the program source files.
+*
+*******************************************************************************
+*
+* Common files
+*
+* README        - this file!
+*
+******************************************************************************
+*
+* Script files
+*
+* tbselinit.bat (Windows)
+* tbselinit     (UNIX)    - A script file used to set up some databases for
+*                           tbsel.pl
+*
+******************************************************************************
+*
+* Common Utility Perl Module
+*
+* DB2SampUtil.pm - Defines common functions like command line argument
+*                  checking. Also, functions to prepare and execute an SQL
+*                  statement, and roll back if an error occurs.
+*
+* DB2WlmHist.pm  - Defines common functions like prepare and execute SQL
+*                  statements and roll back if an error occurs that will be
+*                  used for the WLM Historical Generator and the WLM
+*                  Historical Reports tools.
+*
+******************************************************************************
+*
+*                          Perl Samples Design
+*
+* The Perl sample programs form an object-based design reflecting the
+* component nature of DB2. Related samples demonstrate a specific level of
+* database programming. Each level is identified by the first two characters
+* of the sample name. Here are the database levels represented by the
+* samples:
+*
+* Identifier     DB2 Level
+*
+*     db        Database Level.
+*     tb        Table Level.
+*     dt        Data Type Level.
+*     sp        Stored Procedure client program.
+*
+******************************************************************************
+*
+*               Perl Sample Descriptions
+*
+* The following are the Perl sample files included with DB2.
+* For more information on the sample programs, refer to the program source
+* files.
+*
+******************************************************************************
+*
+* Database Level
+*
+* dbauth.pl      - How to grant/display/revoke authorities at database level.
+* dbuse.pl       - How to use database objects.
+*
+******************************************************************************
+*
+* Table Level
+*
+* tbconstr.pl     - How to work with table constraints.
+* tbinfo.pl       - How to get and set information at a table level.
+* tbpriv.pl       - How to grant/display/revoke privileges at a table level.
+* tbsel.pl        - How to select from each of: insert, update, delete.
+*                   Please run 'tbselinit.bat' (on Windows) or
+*                   'tbselinit' (on UNIX) prior to running this sample.
+*                   Refer to the sample header for detailed instructions.
+* tbselcreate.db2 - How to create the tables for the tbsel program.
+* tbseldrop.db2   - How to drop the tables for the tbsel program.
+* tbtrig.pl       - How to use a trigger on a table.
+* tbuse.pl        - How to manipulate table data.
+*
+******************************************************************************
+*
+* Data Type Level
+*
+* dtlob.pl        - How to read and write LOB data.
+*
+******************************************************************************
+*
+* Stored Procedure Level
+*
+* spclient.pl     - Client application that calls the stored procedures in
+*                   the spserver or SpServer shared library (which must be
+*                   built in another supported language).
+*
+******************************************************************************
+*
+* WLM Historical Analysis sample tool
+* 
+* wlmhist.pl    - Generates historical data for activities that are captured
+*                 in the event_activity and event_activitystmt logical data
+*                 groups.  The data that is generated is put into the
+*                 wlmhist table.  This table will be created if it does not    
+*                 already exist.
+* wlmhistrep.pl - Generates historical analysis reports based on user input
+*                 and input from the wlmhist table.
+******************************************************************************
+
+
+

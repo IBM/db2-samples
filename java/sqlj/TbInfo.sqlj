@@ -1,0 +1,185 @@
+//***************************************************************************
+// (c) Copyright IBM Corp. 2007 All rights reserved.
+// 
+// The following sample of source code ("Sample") is owned by International 
+// Business Machines Corporation or one of its subsidiaries ("IBM") and is 
+// copyrighted and licensed, not sold. You may use, copy, modify, and 
+// distribute the Sample in any form without payment to IBM, for the purpose of 
+// assisting you in the development of your applications.
+// 
+// The Sample code is provided to you on an "AS IS" basis, without warranty of 
+// any kind. IBM HEREBY EXPRESSLY DISCLAIMS ALL WARRANTIES, EITHER EXPRESS OR 
+// IMPLIED, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED WARRANTIES OF 
+// MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE. Some jurisdictions do 
+// not allow for the exclusion or limitation of implied warranties, so the above 
+// limitations or exclusions may not apply to you. IBM shall not be liable for 
+// any damages you suffer as a result of using, copying, modifying or 
+// distributing the Sample, even if IBM has been advised of the possibility of 
+// such damages.
+//***************************************************************************
+//
+// SOURCE FILE NAME: TbInfo.sqlj
+//
+// SAMPLE: How to get information about a table
+//
+// SQL Statements USED:
+//         SELECT
+//
+// Classes used from Util.sqlj are:
+//         Db
+//         SqljException
+//
+// OUTPUT FILE: TbInfo.out (available in the online documentation)
+// Output will vary depending on the JDBC driver connectivity used.
+//***************************************************************************
+//
+// For more information on the sample programs, see the README file.
+//
+// For information on developing SQLJ applications, see the Application
+// Development Guide.
+//
+// For information on using SQL statements, see the SQL Reference.
+//
+// For the latest information on programming, compiling, and running DB2
+// applications, visit the DB2 application development website at
+//     http://www.software.ibm.com/data/db2/udb/ad
+//**************************************************************************/
+
+import java.sql.*;
+import sqlj.runtime.*;
+import sqlj.runtime.ref.*;
+
+#sql iterator TbInfo_Cursor(String, String, int, int);
+
+class TbInfo
+{
+  public static void main(String argv[])
+  {
+    try
+    {
+      Db db = new Db(argv);
+      String tableName;
+
+      System.out.println();
+      System.out.println(
+        "THIS SAMPLE SHOWS HOW TO GET INFORMATION ABOUT A TABLE.");
+
+
+      // connect to the 'sample' database
+      db.getDefaultContext();
+
+      // call the sample methods
+      tableName = "STAFF";
+      getSchemaName(tableName);
+      getColumnInfo(tableName);
+
+      // disconnect from the 'sample' database
+      db.disconnect();
+    }
+    catch (Exception e)
+    {
+      SqljException sqljExc = new SqljException(e);
+      sqljExc.handle();
+    }
+  } // main
+
+  // This function demonstrates how to get the schema name for a table
+  static void getSchemaName(String tableName)
+  {
+    try
+    {
+      String schemaName;
+
+      System.out.println();
+      System.out.println(
+        "----------------------------------------------------------\n" +
+        "USE THE SQL STATEMENT:\n" +
+        "  SELECT INTO\n" +
+        "TO GET A TABLE SCHEMA NAME.");
+
+      // get the table schema name for a table
+      System.out.println();
+      System.out.println(
+          "  Execute the statement:\n" +
+          "    SELECT tabschema INTO :schemaName\n" +
+          "      FROM syscat.tables\n" +
+          "      WHERE tabname = :tableName\n" +
+          "  for tableName = '" + tableName + "'.");
+
+      #sql {SELECT tabschema INTO :schemaName
+              FROM syscat.tables
+              WHERE tabname = :tableName};
+
+      System.out.println();
+      System.out.println("  Table schema name is: " + schemaName);
+    }
+    catch (Exception e)
+    {
+      SqljException sqljExc = new SqljException(e);
+      sqljExc.handle();
+    }
+  } // getSchemaName
+
+  // This function demonstrates how to get the column information for a table
+  static void getColumnInfo(String tableName)
+  {
+    try
+    {
+      TbInfo_Cursor cur;
+      String colName = "", dataType = "";
+      int dataLength = 0, dataScale = 0;
+
+      System.out.println();
+      System.out.println(
+        "----------------------------------------------------------\n" +
+        "USE THE SQL STATEMENTS:\n" +
+        "  SELECT\n" +
+        "  FETCH\n" +
+        "TO GET TABLE COLUMN INFORMATION.");
+
+      // get the column information for a table
+      System.out.println();
+      System.out.println(
+        "  Get info for '" + tableName + "' table columns: ");
+      System.out.println(
+        "    column name          data type      data size\n" +
+        "    -------------------- -------------- ----------");
+
+      #sql cur = {SELECT colname, typename, length, scale
+                    FROM syscat.columns
+                    WHERE tabname = :tableName};
+
+      #sql {FETCH :cur INTO :colName, :dataType, :dataLength, :dataScale};
+
+      if (cur.endFetch())
+      {
+        System.out.println();
+        System.out.println("  Data not found.\n");
+      }
+
+      while (!cur.endFetch())
+      {
+        System.out.print("    " + Data.format(colName,20) +
+                         " " + Data.format(dataType,14) +
+                         " " + dataLength);
+        if (dataScale != 0)
+        {
+          System.out.println("," + dataScale);
+        }
+        else
+        {
+          System.out.println();
+        }
+
+        #sql {FETCH :cur INTO :colName, :dataType, :dataLength, :dataScale};
+      }
+      cur.close();
+    }
+    catch (Exception e)
+    {
+      SqljException sqljExc = new SqljException(e);
+      sqljExc.handle();
+    }
+  } // getColumnInfo
+} // TbInfo
+

@@ -1,0 +1,449 @@
+/****************************************************************************
+** (c) Copyright IBM Corp. 2007 All rights reserved.
+** 
+** The following sample of source code ("Sample") is owned by International 
+** Business Machines Corporation or one of its subsidiaries ("IBM") and is 
+** copyrighted and licensed, not sold. You may use, copy, modify, and 
+** distribute the Sample in any form without payment to IBM, for the purpose of 
+** assisting you in the development of your applications.
+** 
+** The Sample code is provided to you on an "AS IS" basis, without warranty of 
+** any kind. IBM HEREBY EXPRESSLY DISCLAIMS ALL WARRANTIES, EITHER EXPRESS OR 
+** IMPLIED, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED WARRANTIES OF 
+** MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE. Some jurisdictions do 
+** not allow for the exclusion or limitation of implied warranties, so the above 
+** limitations or exclusions may not apply to you. IBM shall not be liable for 
+** any damages you suffer as a result of using, copying, modifying or 
+** distributing the Sample, even if IBM has been advised of the possibility of 
+** such damages.
+*****************************************************************************
+**
+** SOURCE FILE NAME: xmlindex.sqc
+**
+** SAMPLE: How to create an index on an xml column
+**
+**         This is a tutorial sample showing basic operation on creating an
+**          index on xml column
+**
+** SQL STATEMENTS USED:
+**         INSERT
+**	   INDEX
+** 	   CREATE
+**         DROP
+**
+** OUTPUT FILE: xmlindex.out (available in the online documentation)
+*****************************************************************************
+**
+** For more information on the sample programs, see the README file.
+**
+** For information on developing C applications, see the Application
+** Development Guide.
+**
+** For information on using SQL statements, see the SQL Reference.
+**
+** For the latest information on programming, building, and running DB2
+** applications, visit the DB2 application development website:
+**     http://www.software.ibm.com/data/db2/udb/ad
+****************************************************************************/
+
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+#include <sqlenv.h>
+#include <sqlutil.h>
+#include <sqlcodes.h>
+#include "utilemb.h"
+
+EXEC SQL BEGIN DECLARE SECTION; 
+  char dbAlias[700];
+  char user[700];
+  char pswd[700];
+  char stmt[700];
+  char stmt1[700];
+  SQL TYPE IS XML AS CLOB( 10K ) salary;
+  SQL TYPE IS XML AS BLOB( 10K ) xmlblob;
+  SQL TYPE IS XML AS BLOB( 10K ) xmlblob1;
+EXEC SQL END DECLARE SECTION;
+
+int main(int argc, char *argv[])
+{
+  int rc = 0;
+  struct sqlca sqlca;
+
+  /* check the command line arguments */
+  rc = CmdLineArgsCheck1(argc, argv, dbAlias, user, pswd);
+  if (rc != 0)
+  {
+    return rc;
+  }
+
+  printf("THIS SAMPLE SHOWS HOW TO CREATE AN INDEX ON AN XML COLUMN\n");
+  /* connect to database */
+  rc = DbConn(dbAlias, user, pswd);
+  if (rc != 0)
+  {
+    return rc;
+  }
+
+  /* create table */
+  printf("create table called company to perform index operation\n");
+  EXEC SQL CREATE TABLE COMPANY(ID int, DOCNAME VARCHAR(20), DOC XML);
+  EMB_SQL_CHECK("CREATE TABLE COMPANY"); 
+
+
+  /* insert into row1 into table company */
+
+  printf("insert row1 into company \n");
+  strcpy(stmt, "INSERT INTO COMPANY VALUES(1, 'doc1', xmlparse" 
+               " (document '<company name=\"Company1\"><emp id=\"31201\" "
+               " salary=\"60000\" gender=\"Female\" DOB=\"10-10-80\"> " 
+               " <name><first>Laura </first><last>Brown</last></name> "
+               " <dept id=\"M25\">Finance</dept><!-- good --></emp> "
+               " </company>'))");
+
+  EXEC SQL EXECUTE IMMEDIATE :stmt; 
+  EMB_SQL_CHECK("INSERT INTO COMPANY");
+
+  /* insert row2 into table company */
+
+  printf("insert row2 into table company \n");
+  strcpy(stmt,  "Insert into company values (2, 'doc2', xmlparse "
+                "(document '<company name=\"Company2\"><emp id=\"31664\" "
+                "salary=\"60000\" gender=\"Male\" DOB=\"09-12-75\"><name> "
+                "<first>Chris</first><last>Murphy</last></name> "
+                "<dept id=\"M55\">Marketing</dept> </emp> <emp id=\"42366\" "
+                "salary=\"50000\" gender=\"Female\" DOB=\"08-21-70\"><name> "
+                "<first>Nicole</first><last>Murphy</last></name> "
+                "<dept id=\"K55\">Sales</dept></emp></company>'))");
+
+  EXEC SQL EXECUTE IMMEDIATE :stmt; 
+  EMB_SQL_CHECK("INSERT INTO COMPANY");
+
+  printf("\nXQUERY STATEMENT CANNOT BE EXECUTED STATICALLY.");
+  printf("\nTO EMBED AN XQUERY STATEMENT, APPLICATION SHOULD MAKE USE OF DYNAMIC SQL LIKE");
+  printf("\n PREPARE, DECLARE CURSOR, OPEN AND FETCH STATEMENT");
+  printf("OR XMLQUERY FUNCTION WHICH");
+  printf("\nCAN BE EMBEDDED STATICALLY\n");
+ 
+
+  /* create index on attribute */
+
+  printf("\n\ncreate index on attribute \n");
+  printf("----------------------------\n");
+  EXEC SQL CREATE INDEX empindex1 on company(doc) GENERATE KEY USING 
+              XMLPATTERN '/company/emp/@*' AS SQL VARCHAR(15) ;
+  EMB_SQL_CHECK("CREATE INDEX");
+
+
+  /* example query using above index */  
+  sprintf(stmt, "XQUERY for $i in db2-fn:xmlcolumn('COMPANY.DOC')"
+               " /company/emp[@id='42366'] return $i/name"); 
+
+  EXEC SQL PREPARE s1 from :stmt;
+  EMB_SQL_CHECK("prepare -- statement");
+  EXEC SQL DECLARE c1 CURSOR FOR s1;
+  EMB_SQL_CHECK("declare -- cusrsor");
+  EXEC SQL OPEN c1;
+  EMB_SQL_CHECK("cursor -- open");
+ 
+  while(sqlca.sqlcode == SQL_RC_OK)
+  {
+    xmlblob.length = 0;
+    EXEC SQL FETCH c1 into :xmlblob;
+    EMB_SQL_CHECK("cursor -- fetch");
+    printf("\n\n\n%s\n",xmlblob.data);
+    /* Display results */ 
+  }
+ 
+  EXEC SQL CLOSE c1;
+  EMB_SQL_CHECK("cursor -- close");
+
+
+  /* create index with self or descendent forward axis */
+
+  printf("\n\ncreate index with self or descendent forward axis\n");
+  printf("------------------------------------------------------\n");
+  EXEC SQL CREATE INDEX empindex2 on company(doc)  GENERATE KEY USING 
+                 XMLPATTERN '//@salary' AS SQL DOUBLE;
+  EMB_SQL_CHECK("CREATE INDEX");
+ 
+  sprintf(stmt, "XQUERY for $i in db2-fn:xmlcolumn('COMPANY.DOC')"
+               " /company/emp[@salary > 35000] return <salary>{$i/@salary} </salary>");
+
+  EXEC SQL PREPARE s2 from :stmt;
+  EMB_SQL_CHECK("prepare -- statement");
+  EXEC SQL DECLARE c2 CURSOR FOR s2;
+  EMB_SQL_CHECK("declare -- cusrsor");
+  EXEC SQL OPEN c2;
+  EMB_SQL_CHECK("cursor -- open");
+
+  while(sqlca.sqlcode == SQL_RC_OK)
+  {
+    EXEC SQL FETCH c2 into :salary;
+    EMB_SQL_CHECK("cursor -- fetch");
+    printf("\n\n\n%s\n",salary.data);
+    /* Display results */
+  }
+
+
+  EXEC SQL CLOSE c2;
+  EMB_SQL_CHECK("cursor -- close");
+
+  /* create index on a text node */
+
+  printf("\n\ncreate index on a text node \n"); 
+  printf("----------------------------------\n");
+  EXEC SQL CREATE INDEX empindex3 on company(doc) GENERATE KEY USING 
+          XMLPATTERN '/company/emp/dept/text()' AS SQL VARCHAR(30); 
+  EMB_SQL_CHECK("CREATE INDEX");
+
+  sprintf(stmt, "XQUERY for $i in db2-fn:xmlcolumn('COMPANY.DOC')"
+               "/company/emp[dept/text()='Finance' or dept/"
+               "text()='Marketing'] return $i/name");
+
+  EXEC SQL PREPARE s3 from :stmt;
+  EMB_SQL_CHECK("prepare -- statement");
+  EXEC SQL DECLARE c3 CURSOR FOR s3;
+  EMB_SQL_CHECK("declare -- cusrsor");
+  EXEC SQL OPEN c3;
+  EMB_SQL_CHECK("cursor -- open");
+
+  while(sqlca.sqlcode == SQL_RC_OK)
+  {
+    xmlblob.length = 0;
+    EXEC SQL FETCH c3 into :xmlblob;
+    EMB_SQL_CHECK("cursor -- fetch");
+    printf("\n\n\n%s\n",xmlblob.data);
+    /* Display results */
+  }
+ 
+  EXEC SQL CLOSE c3;
+  EMB_SQL_CHECK("cursor -- close");
+
+
+  /* create index when 2 paths are qualified by an xml pattern */
+
+  printf("\n\ncreate index when 2 paths are qualified by an xml pattern\n");
+  printf("--------------------------------------------------------------\n");
+  EXEC SQL  CREATE INDEX empindex4 on company(doc) GENERATE KEY USING 
+                  XMLPATTERN '//@id' AS SQL VARCHAR(25);
+  EMB_SQL_CHECK("CREATE INDEX");
+
+  sprintf(stmt, "XQUERY for $i in db2-fn:xmlcolumn('COMPANY.DOC')"
+               "/company/emp[@id='31201']  return $i/name");
+  sprintf(stmt1, "XQUERY for $i in db2-fn:xmlcolumn('COMPANY.DOC')"
+                " /company/emp/dept[@id='K55']  return $i/name ");
+
+  EXEC SQL PREPARE s5 from :stmt;
+  EXEC SQL PREPARE s4 from :stmt1;
+  EMB_SQL_CHECK("prepare -- statement");
+  EXEC SQL DECLARE c5 CURSOR FOR s5;
+  EXEC SQL DECLARE c4 CURSOR FOR s4;
+  EMB_SQL_CHECK("declare -- cusrsor");
+  EXEC SQL OPEN c5;
+  EXEC SQL OPEN c4;
+  EMB_SQL_CHECK("cursor -- open");
+
+  while(sqlca.sqlcode == SQL_RC_OK)
+  {
+    xmlblob.length = 0;
+    xmlblob1.length = 0;
+    EXEC SQL FETCH c5 into :xmlblob;
+    EXEC SQL FETCH c4 into :xmlblob;
+    EMB_SQL_CHECK("cursor -- fetch");
+    printf("\n\n\n%s\n",xmlblob.data);
+    printf("\n\n\n%s\n",xmlblob1.data);
+    /* Display results */
+  }
+
+  EXEC SQL CLOSE c4;
+  EXEC SQL CLOSE c5;
+  EMB_SQL_CHECK("cursor -- close");
+
+
+  /* create index with namespace */
+
+  printf("\n\ncreate index with namespace \n");
+  printf("----------------------------------\n");
+  EXEC SQL CREATE INDEX empindex5 on company(doc) GENERATE KEY USING 
+             XMLPATTERN 'declare default element namespace \
+             "http://www.mycompany.com/";declare namespace \
+              m="http://www.mycompanyname.com/";/company/emp/@m:id'
+             AS SQL VARCHAR(30);
+  EMB_SQL_CHECK("CREATE INDEX");
+
+
+  /* create indexes with same XMLPATTERN but with different data types */
+
+  printf("\n\ncreate indexes with different data types \n");
+  printf("----------------------------------------------\n");
+  EXEC SQL CREATE INDEX empindex7 on company(doc)  GENERATE KEY USING 
+             XMLPATTERN '/company/emp/@id' AS SQL VARCHAR(10);
+  EXEC SQL CREATE INDEX empindex8 on company(doc)  GENERATE KEY USING 
+             XMLPATTERN '/company/emp/@id' AS SQL DOUBLE;
+  EMB_SQL_CHECK("CREATE INDEX");
+
+  /* create index to use in joins (Anding) */
+
+  printf("\n\ncreate index to use in joins (Anding) \n");
+  printf("---------------------------------------------\n");
+  EXEC SQL CREATE INDEX empindex9 on company(doc) GENERATE KEY USING 
+          XMLPATTERN '/company/emp/name/last' AS SQL VARCHAR(100);
+  EXEC SQL CREATE INDEX deptindex on company(doc) GENERATE KEY USING 
+          XMLPATTERN '/company/emp/dept/text()' AS SQL VARCHAR(30);
+  EMB_SQL_CHECK("CREATE INDEX");
+
+  sprintf(stmt, "XQuery for $i in db2-fn:xmlcolumn('COMPANY.DOC')"
+               "/company/emp[name/last='Murphy' and dept/text()='Sales']"
+                " return $i/name/last");
+
+  EXEC SQL PREPARE s6 from :stmt;
+  EMB_SQL_CHECK("prepare -- statement");
+  EXEC SQL DECLARE c6 CURSOR FOR s6;
+  EMB_SQL_CHECK("declare -- cusrsor");
+  EXEC SQL OPEN c6;
+  EMB_SQL_CHECK("cursor -- open");
+
+  while(sqlca.sqlcode == SQL_RC_OK)
+  {
+    xmlblob.length = 0;
+    EXEC SQL FETCH c6 into :xmlblob;
+    EMB_SQL_CHECK("cursor -- fetch");
+    printf("\n\n\n%s\n",xmlblob.data);
+    /* Display results */
+  }
+
+  EXEC SQL CLOSE c6;
+  EMB_SQL_CHECK("cursor -- close");
+
+
+  /* create indexes to use in joins ( Anding or Oring ) */
+
+  printf("\n\ncreate indexes to use in joins ( Anding or Oring ) \n");
+  printf("-------------------------------------------------------\n");
+  EXEC SQL CREATE INDEX empindex10 on company(doc) GENERATE KEY USING 
+            XMLPATTERN '/company/emp/@salary' AS SQL DOUBLE;
+  EXEC SQL CREATE INDEX empindex11 on company(doc) GENERATE KEY USING 
+          XMLPATTERN '/company/emp/dept' AS SQL VARCHAR(25);
+  EXEC SQL CREATE INDEX empindex12 on company(doc) GENERATE KEY USING 
+         XMLPATTERN '/company/emp/name/last' AS SQL VARCHAR(25);
+  EMB_SQL_CHECK("CREATE INDEX");
+
+  sprintf(stmt, "XQUERY for $i in db2-fn:xmlcolumn('COMPANY.DOC')"
+               "/company.emp[ @salary > 50000 or dept='Finance'] "
+               "/name [ last = 'Brown'] return $i/name/last");
+
+  EXEC SQL PREPARE s7 from :stmt;
+  EMB_SQL_CHECK("prepare -- statement");
+  EXEC SQL DECLARE c7 CURSOR FOR s7;
+  EMB_SQL_CHECK("declare -- cusrsor");
+  EXEC SQL OPEN c7;
+  EMB_SQL_CHECK("cursor -- open");
+
+  while(sqlca.sqlcode == SQL_RC_OK)
+  {
+    xmlblob.length = 0;
+    EXEC SQL FETCH c7 into :xmlblob;
+    EMB_SQL_CHECK("cursor -- fetch");
+    printf("\n\n\n%s\n",xmlblob.data);
+    /* Display results */
+  }
+
+  EXEC SQL CLOSE c7;
+  EMB_SQL_CHECK("cursor -- close");
+
+
+  /* create index with Date Data type */
+
+  printf("\n\nCreate index with Data type date \n");
+  printf("-------------------------------------\n");
+  EXEC SQL CREATE INDEX empindex13 on company(doc) GENERATE KEY USING 
+        XMLPATTERN '/company/emp/@DOB' as SQL DATE;
+  EMB_SQL_CHECK("CREATE INDEX");
+
+  sprintf(stmt, "XQUERY for $i in db2-fn:xmlcolumn('COMPANY.DOC')"
+               "/company/emp[@DOB < '11-11-78'] return $i/name");
+
+  EXEC SQL PREPARE s8 from :stmt;
+  EMB_SQL_CHECK("prepare -- statement");
+  EXEC SQL DECLARE c8 CURSOR FOR s8;
+  EMB_SQL_CHECK("declare -- cusrsor");
+  EXEC SQL OPEN c8;
+  EMB_SQL_CHECK("cursor -- open");
+
+  while(sqlca.sqlcode == SQL_RC_OK)
+  {
+    xmlblob.length = 0;
+    EXEC SQL FETCH c8 into :xmlblob;
+    EMB_SQL_CHECK("cursor -- fetch");
+    printf("\n\n\n%s\n",xmlblob.data);
+    /* Display results */
+  }
+
+  EXEC SQL CLOSE c8;
+  EMB_SQL_CHECK("cursor -- close");
+
+ 
+
+  /* create index on comment node  */
+
+  printf("\n\nCreate index on comment node \n");
+  printf("---------------------------------\n");
+  EXEC SQL CREATE INDEX empindex14 on company(doc) GENERATE KEY USING 
+               XMLPATTERN '/company//comment()' AS SQL VARCHAR HASHED;
+  EMB_SQL_CHECK("CREATE INDEX");
+
+  sprintf(stmt, "XQUERY for $i in db2-fn:xmlcolumn('COMPANY.DOC')"
+               "/company/emp[comment()=' good ']return $i/name");
+
+  EXEC SQL PREPARE s9 from :stmt;
+  EMB_SQL_CHECK("prepare -- statement");
+  EXEC SQL DECLARE c9 CURSOR FOR s9;
+  EMB_SQL_CHECK("declare -- cusrsor");
+  EXEC SQL OPEN c9;
+  EMB_SQL_CHECK("cursor -- open");
+
+  while(sqlca.sqlcode == SQL_RC_OK)
+  {
+    xmlblob.length = 0;
+    EXEC SQL FETCH c9 into :xmlblob;
+    EMB_SQL_CHECK("cursor -- fetch");
+    printf("\n\n\n%s\n",xmlblob.data);
+    /* Display results */
+  }
+
+  EXEC SQL CLOSE c9;
+  EMB_SQL_CHECK("cursor -- close");
+
+
+  EXEC SQL DROP INDEX "EMPINDEX1";
+  EXEC SQL DROP INDEX "EMPINDEX2";
+  EXEC SQL DROP INDEX "EMPINDEX3";
+  EXEC SQL DROP INDEX "EMPINDEX4";
+  EXEC SQL DROP INDEX "EMPINDEX5";
+  EXEC SQL DROP INDEX "EMPINDEX7";
+  EXEC SQL DROP INDEX "EMPINDEX8";
+  EXEC SQL DROP INDEX "EMPINDEX9";
+  EXEC SQL DROP INDEX "DEPTINDEX";
+  EXEC SQL DROP INDEX "EMPINDEX10";
+  EXEC SQL DROP INDEX "EMPINDEX11";
+  EXEC SQL DROP INDEX "EMPINDEX12";
+  EXEC SQL DROP INDEX "EMPINDEX13";
+  EXEC SQL DROP INDEX "EMPINDEX14";
+  EMB_SQL_CHECK("DROP INDEX");
+ 
+  /* drop the table company */
+
+  printf("DROP the table \n"); 
+  EXEC SQL DROP TABLE "COMPANY";
+  EMB_SQL_CHECK("DROP TABLE COMPANY");
+ 
+  /* disconnect from the database */
+  rc = DbDisconn(dbAlias);
+  if(rc != 0)
+  {
+    return rc;
+  }
+
+  return 0;
+}

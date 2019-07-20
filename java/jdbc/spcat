@@ -1,0 +1,58 @@
+#! /bin/ksh
+#############################################################################
+# (c) Copyright IBM Corp. 2007 All rights reserved.
+# 
+# The following sample of source code ("Sample") is owned by International 
+# Business Machines Corporation or one of its subsidiaries ("IBM") and is 
+# copyrighted and licensed, not sold. You may use, copy, modify, and 
+# distribute the Sample in any form without payment to IBM, for the purpose of 
+# assisting you in the development of your applications.
+# 
+# The Sample code is provided to you on an "AS IS" basis, without warranty of 
+# any kind. IBM HEREBY EXPRESSLY DISCLAIMS ALL WARRANTIES, EITHER EXPRESS OR 
+# IMPLIED, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED WARRANTIES OF 
+# MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE. Some jurisdictions do 
+# not allow for the exclusion or limitation of implied warranties, so the above 
+# limitations or exclusions may not apply to you. IBM shall not be liable for 
+# any damages you suffer as a result of using, copying, modifying or 
+# distributing the Sample, even if IBM has been advised of the possibility of 
+# such damages.
+#############################################################################
+# SCRIPT: spcat
+# To catalog JDBC stored procedures on UNIX
+# Catalogs the stored procedures in the SpServer library
+# SpDrop.db2 uncatalogs the stored procedures if previously cataloged
+# SpCreate.db2 catalogs the stored procedures
+# Both CLP scripts can be run on their own
+# Usage: spcat
+#############################################################################
+
+# Uncatalog the stored procedures if previously cataloged
+db2 -td@ -vf SpDrop.db2
+
+# Connect to 'sample' database
+db2 connect to sample
+
+# Uninstall the jar file if already installed
+db2 "CALL sqlj.remove_jar('MYJAR')"
+
+# Remove the jar file if it already exists
+rm SpServer.jar
+
+# Create a jar file 'SPServer.jar' using the class file 'SpServer.class'
+# Compile 'SpServer.java' to get the class file 'SpServer.class'
+echo "Executing 'javac SpServer.java'..."
+javac SpServer.java
+
+# Create the jar file
+echo "Executing 'jar cf SpServer.jar SpServer.class'..."
+jar cf $HOME/SpServer.jar SpServer.class
+
+# Install the jar file using a unique jar-id.
+db2 "CALL sqlj.install_jar('file:$HOME/SpServer.jar', 'MYJAR')"
+
+# Disconnect from 'sample' database
+db2 connect reset
+
+# Catalog the stored procedures
+db2 -td@ -vf SpCreate.db2

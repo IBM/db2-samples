@@ -1,0 +1,85 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- IBM Corporation  version 1.0 -->
+
+<!-- Configuration file for automatic reorganization  -->
+
+<!--
+
+The data defragmentation maintenance activity automatically reorganizes the data in tables and indexes in your database to optimize storage.
+
+Use this file to configure DB2 to automatically reorganize the data in tables and indexes in your database according to the following criteria:
+
+  1)  reorganization options (compression dictionary creation , and index reorganization); and
+
+  2)  which tables to include in the automatic reorganization.
+
+ -->
+
+<DB2AutoReorgPolicy     
+xmlns="http://www.ibm.com/xmlns/prod/db2/autonomic/config">
+
+<!--  Reorganization options  -->
+<!--
+
+There are five reorganization options: dictionary, useSystemTempTableSpace, indexReorgMode, reclaimExtentsSizeForTables and reclaimExtentsSizeForIndexObjects.
+
+1. Valid options for dictionary are:
+   1) Rebuild - DB2 will rebuild Compression dictionary.
+   2) Keep - DB2 will keep existing Compression dictionary.
+
+2. indexReorgMode specifies whether the index reorganization should be performed online or offline:
+
+  1)  Online - Users can access the database during the reorganization. An online reorganization will run during the online maintenance window.
+  2)  Offline - Users cannot access the database during the reorganization. Offline reorganization will run during offline maintenance window.
+
+3. Specify useSystemTempTableSpace="true", if you need to use system temporary table space with a compatible page size.
+
+4. Specify reclaimExtentsSizeForTables attribute, to execute the RECLAIM EXTENTS option of auto reorg for table reorg, for MDC, ITC or column organized tables of DMS type.  The value of reclaimExtentsSizeForTables attribute, specifies the minimum reclaimable space ( in kilobytes) that should be available to consider any MDC, ITC or column organized table of DMS type for automatic reorg.  If reclaimExtentsSizeForTables is specified, the value should be a non zero integer value.
+
+5. Specify reclaimExtentsSizeForIndexObjects attribute to enable and configure the minimum amount of space (in kilobytes) which is reclaimable before a reclaim is triggered for an index object in a DMS table space.  If reclaimExtentsSizeForIndexObjects is specified, the value should be a non zero integer value.
+
+  For example, if reclaimExtentsSizeForTables="52", it means that, for MDC, ITC or column organized tables of DMS type, if the reclaimable space is >52 KB then the table will be considered for automatic reorganization using reclaim reorg.
+  The following specifies Compression Dictionary mode as "Rebuild", use system temporary table space with compatible page size, indexreorg mode as online and minimum reclaim size for MDC or ITC tables to be greater than 52KB.
+
+ <ReorgOptions dictionaryOption="Rebuild" indexReorgMode="Online"  useSystemTempTableSpace="true" reclaimExtentsSizeForTables="52"/>
+
+  For example the following specifies Compression Dictionary mode as "Keep", use system temporary table space with compatible page size, indexreorg mode as online, minimum reclaim size for MDC, ITC or column organized tables to be greater than 128KB and minimum reclaim size for Index object to be greater than 512KB.
+
+ <ReorgOptions dictionaryOption="Rebuild" indexReorgMode="Online"  useSystemTempTableSpace="true" reclaimExtentsSizeForTables="128" reclaimExtentsSizeForIndexObjects="512"/>
+
+ -->
+
+ <ReorgOptions dictionaryOption="Keep" indexReorgMode="Offline"  useSystemTempTableSpace="false" />
+
+
+<!--  Tables to include for automatic reorganization  -->
+
+<!--
+Specify which tables in your database to include for automatic reorganization using FilterClause. Automatic reorganization will be done for the list of tables from the result of the below query
+    "select * from SYSCAT.TABLES".
+
+You can specify which tables to exclude from the automatic reorganization by using an expression similar to an SQL-style "where clause" in the FilterClause.  For example, the following specifies that all tables with names that match the pattern 'EMP%' should be excluded from the automatic reorganization:
+ <ReorgTableScope>
+  <FilterClause>TABSCHEMA NOT LIKE 'EMP%' </FilterClause>
+ </ReorgTableScope>
+
+You can specify <FilterClause/> to select all the tables.
+For example, the following specifies that automatic reorganization should be done for all tables, including system tables:
+
+ <ReorgTableScope>
+  <FilterClause/>
+ </ReorgTableScope>
+
+To restrict the size of tables to include in an automatic reorganization, use the maxOfflineReorgTableSize attribute to specify the size limit (in kilobytes.)  For example, the following specifies that only tables 52KB and smaller:
+
+ <ReorgTableScope maxOfflineReorgTableSize="52">
+   <FilterClause/>
+ </ReorgTableScope>
+
+ If reclaimExtentsSizeForTables attribute is specified with ReorgOptions element, maxOfflineReorgTableSize will not be applicable for MDC, ITC or column organized tables of DMS types
+ -->
+
+ <ReorgTableScope maxOfflineReorgTableSize="52">
+  <FilterClause />
+ </ReorgTableScope>
+</DB2AutoReorgPolicy>

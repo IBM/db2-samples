@@ -1,0 +1,882 @@
+//*************************************************************************
+// (c) Copyright IBM Corp. 2007 All rights reserved.
+// 
+// The following sample of source code ("Sample") is owned by International 
+// Business Machines Corporation or one of its subsidiaries ("IBM") and is 
+// copyrighted and licensed, not sold. You may use, copy, modify, and 
+// distribute the Sample in any form without payment to IBM, for the purpose of 
+// assisting you in the development of your applications.
+// 
+// The Sample code is provided to you on an "AS IS" basis, without warranty of 
+// any kind. IBM HEREBY EXPRESSLY DISCLAIMS ALL WARRANTIES, EITHER EXPRESS OR 
+// IMPLIED, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED WARRANTIES OF 
+// MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE. Some jurisdictions do 
+// not allow for the exclusion or limitation of implied warranties, so the above 
+// limitations or exclusions may not apply to you. IBM shall not be liable for 
+// any damages you suffer as a result of using, copying, modifying or 
+// distributing the Sample, even if IBM has been advised of the possibility of 
+// such damages.
+//*************************************************************************
+//
+// SOURCE FILE NAME: SpServer.sqlj
+//    
+// SAMPLE: Code implementations of various types of stored procedures
+//         The stored procedures defined in this program are called by the
+//         client application SpClient.sqlj. Before building and running
+//         SpClient.sqlj, build the shared library by completing the following
+//         steps:
+//
+// Steps to run the sample with command line window:
+//         I) If you have a compatible make/nmake program on your system, 
+//            do the following:
+//            1. Update makefile with a valid userid, password and 
+//               an available port number.
+//            2. Compile the server source file SpServer.sqlj (this will also 
+//               compile the Utility file, Util.sqlj, erase the existing 
+//               library/class files and copy the newly compiled class files, 
+//               SpServer.class, SpContext.class, SpIterat.class, 
+//               SpServerEmployees.class, SpServerSalary.class, 
+//               SpServer_SJProfileKeys.class and SpServer_SJProfile0.ser 
+//               from the current directory to the $(DB2PATH)\function directory):
+//                 nmake/make SpServer
+//            3. Compile the client source file SpClient.sqlj (this will also 
+//               call the script 'spcat' to create and catalog the stored 
+//               procedures):
+//                 nmake/make SpClient
+//            4. Run the client SpClient:
+//                 java SpClient
+//
+//         II) If you don't have a compatible make/nmake program on your 
+//             system do the following:
+//             1. Compile the utility file and the server source file with:
+//                  sqlj Util.sqlj
+//                  sqlj SpServer.sqlj
+//             2. Update bldsqljs and bldsqlj build files with a valid userid
+//                and password.
+//             3. Erase the existing library/class files (if exists), 
+//                SpContext.class, SpIterat.class, SpServer.class, 
+//                SpServerEmployees.class, SpServerSalary.class, 
+//                SpServer_SJProfileKeys.class and SpServer_SJProfile0.ser 
+//                from the following path, $(DB2PATH)\function. 
+//             4. Compile the Iterator class file for SpServer.sqlj with
+//                the following command:
+//                  sqlj SpIterat.sqlj
+//             5. Build the SQLj stored procedure server with the following
+//                command (It will also copy the following class files from
+//                the current directory to the $(DB2PATH)\function for you:
+//                SpContext.class, SpIterat.class, SpServer.class, 
+//                SpServerEmployees.class, SpServerSalary.class, 
+//                SpServer_SJProfileKeys.class and SpServer_SJProfile0.ser):
+//                  bldsqljs SpServer
+//             6. Register the stored procedures with the following script:
+//                  spcat
+//             7. Build the SQLj stored procedure client with the following
+//                command:
+//                  bldsqlj SpClient
+//             8. Run SpClient with:
+//                  java SpClient
+//
+// Class SpServer contains nine methods:
+//         1. outLanguage: returns the implementation language of the stored 
+//            procedure library
+//         2. outParameter: returns median salary of employee salaries
+//         3. inParams: accepts 3 salary values and updates employee
+//            salaries in the EMPLOYEE table based on these values for a
+//            given department
+//         4. inoutParam: accepts an input value and returns the median
+//            salary of those employees in the EMPLOYEE table who earn more 
+//            than the input value 
+//         5. clobExtract: returns a section of a CLOB type as a string
+//         6. decimalType: manipulates an INOUT DECIMAL parameter
+//         7. allDataTypes: uses all of the common data types in a stored 
+//            procedure
+//         8. resultSetToClient: returns a result set to the client 
+//            application
+//         9. twoResultSets: returns two result sets to the client
+//            application
+//
+// SQL Statements USED:
+//         FETCH
+//         SELECT
+//         UPDATE
+//
+// OUTPUT FILE: SpClient.out (available in the online documentation)
+// Output will vary depending on the JDBC driver connectivity used.
+//*************************************************************************
+//
+// For more information on the sample programs, see the README file.
+//
+// For information on developing SQLJ applications, see the Application
+// Development Guide.
+//
+// For information on using SQL statements, see the SQL Reference. 
+//
+// For the latest information on programming, compiling, and running DB2 
+// applications, visit the DB2 application development website at 
+//     http://www.software.ibm.com/data/db2/udb/ad
+//**************************************************************************/
+
+import java.sql.*;              // JDBC classes
+import java.io.*;               // Input/Output classes
+import java.math.BigDecimal;    // Packed Decimal class
+import sqlj.runtime.*;
+import sqlj.runtime.ref.*;
+
+#sql context SpContext;
+
+#sql iterator SpServerSalary(double);
+#sql iterator SpServerEmployees(String, String, double);
+
+///////
+// SQLj stored procedure is in this class
+///////
+public class SpServer
+{
+  //*************************************************************************
+  //  Stored Procedure: outLanguage
+  // 
+  //  Purpose:  Returns the code implementation language of
+  //            routine 'OutLanguage' (as it appears in the
+  //            database catalog) in an output parameter.
+  //  
+  //  Parameters:
+  //
+  //   IN:      (none)
+  //   OUT:     outLanguage - the code language of this routine
+  //
+  //*************************************************************************
+  public static void outLanguage(String[] outLanguage) // CHAR(8)
+  throws SQLException
+  {
+    
+    int errorCode = 0; // SQLCODE = 0 unless SQLException occurs
+    String errorLabel = null;
+    SpContext ctx = null;
+    
+    try
+    {
+      String procName;
+      String language;
+
+      ctx = new SpContext("jdbc:default:connection", false);
+      
+      // initialize variables
+      procName = "OUT_LANGUAGE";
+      
+      #sql [ctx] {SELECT language INTO :language
+                    FROM syscat.procedures
+                    WHERE procname = :procName};
+
+      outLanguage[0] = language;
+         
+      // clean up resources
+      ctx.close();
+    }
+
+    catch (SQLException sqle)
+    {
+      if(ctx != null)
+      {
+        try { ctx.close(); } catch(Exception e) {}
+      }
+
+      errorCode = sqle.getErrorCode();
+      throw new SQLException(errorCode + " : " + errorLabel + " FAILED"); 
+    }
+  } // outLanguage
+
+  //*************************************************************************
+  //  Stored Procedure: outParameter
+  //
+  //  Purpose:  Sorts table STAFF by salary, locates and returns
+  //            the median salary
+  //
+  //  Parameters:
+  //
+  //   IN:      (none)
+  //   OUT:     outMedianSalary - median salary in table STAFF
+  //
+  //*************************************************************************
+  public static void outParameter(double[] outMedianSalary)  
+  throws SQLException    
+  {
+   
+    int errorCode = 0; // SQLCODE = 0 unless SQLException occurs
+    String errorLabel = null;
+    SpContext ctx = null;
+    int counter;
+    int numRecords;    
+    SpServerSalary curOutParam;
+    double salary;
+    
+    try
+    {     
+      ctx = new SpContext("jdbc:default:connection", false);
+      
+      // initialize variables
+      counter = 0;
+      salary = 0;
+      
+      errorLabel = "COUNT NUMBER OF ROWS";
+      #sql [ctx] {SELECT COUNT(*) INTO :numRecords FROM staff};
+
+      // declare salary iterator    
+      errorLabel = "DECLARE SALARY ITERATOR";
+      #sql [ctx] curOutParam = {SELECT CAST(salary AS DOUBLE) FROM staff ORDER BY salary};         
+     
+      errorLabel = "MOVE TO NEXT ROW";   
+      while (counter < (numRecords / 2 + 1))
+      {
+        #sql {FETCH :curOutParam INTO :salary};
+        if (curOutParam.endFetch()) break;
+        counter++;	      
+      }
+  
+      errorLabel = "GET MEDIAN SALARY";
+      outMedianSalary[0] = salary;              
+
+      // clean up resources
+     curOutParam.close();
+     ctx.close();                                
+
+    }
+    catch (SQLException sqle)
+    {
+      if(ctx != null)
+      {
+        try { ctx.close(); } catch(Exception e) {}
+      }	    
+      
+      errorCode = sqle.getErrorCode();
+      throw new SQLException(errorCode + " : " + errorLabel + " FAILED"); 
+    }
+  } // outParameter
+  
+  //*************************************************************************
+  //  Stored Procedure: inParams
+  //
+  //  Purpose:  Updates salaries of employees in department 'inDepartment'
+  //            using inputs inLowSal, inMedSal, inHighSal as
+  //            salary raise/adjustment values.
+  //
+  //  Parameters:
+  //
+  //   IN:      inLowSal      - new salary for low salary employees
+  //            inMedSal      - new salary for mid salary employees
+  //            inHighSal     - new salary for high salary employees
+  //            inDepartment  - department to use in SELECT predicate
+  //   OUT:     (none)
+  //
+  //*************************************************************************
+  public static void inParams(double inLowSal,
+                              double inMedSal,
+                              double inHighSal,
+                              String inDepartment) // CHAR(3)
+  throws SQLException                        
+  {
+    String errorLabel = null;
+    int errorCode = 0; // SQLCODE = 0 unless SQLException occurs
+     
+    SpContext ctx = null;
+    double salary;
+    String cursorName;
+    SpIterat updateIterator;
+        
+    // initialize variables
+    salary = 0;
+    cursorName = "";
+
+    try
+    {
+      ctx = new SpContext("jdbc:default:connection", false);
+
+      errorLabel = "DECLARE ITERATOR";
+      #sql [ctx] updateIterator = {SELECT CAST(salary AS DOUBLE)
+                                     FROM employee
+                                     WHERE workdept = :inDepartment};
+
+      errorLabel = "FETCH FIRST ROW";
+      #sql {FETCH :updateIterator INTO :salary};
+
+      if (updateIterator.endFetch())
+      {
+        // iterator contains no data, so return SQLCODE 100 to client 
+        errorLabel = "100 : NO DATA FOUND";
+      }
+      else
+      {
+        while (!updateIterator.endFetch())
+        {
+          if (inLowSal > salary)
+          {
+            errorLabel = "UPDATE -- LOW CASE";
+            #sql [ctx] {UPDATE employee SET salary = :inLowSal
+                          WHERE CURRENT OF :updateIterator};
+          }  
+          else if (inMedSal > salary)
+          {
+            errorLabel = "UPDATE -- MEDIUM CASE";
+            #sql [ctx] {UPDATE employee SET salary = :inMedSal
+                          WHERE CURRENT OF :updateIterator};
+          }
+          else if (inHighSal > salary)
+          {
+            errorLabel = "UPDATE -- HIGH CASE";
+            #sql [ctx] {UPDATE employee SET salary = :inHighSal
+                          WHERE CURRENT OF :updateIterator};
+          }
+          else
+          {
+            errorLabel = "UPDATE -- FINAL CASE";
+            #sql [ctx] {UPDATE employee SET salary = (salary * 1.10)
+                          WHERE CURRENT OF :updateIterator};          
+          }
+          #sql {FETCH :updateIterator INTO :salary};
+        }
+      }
+      updateIterator.close();
+      ctx.close();
+    }
+    catch (SQLException sqle)
+    {
+      if( ctx != null )
+      {
+        try { ctx.close(); } catch( Exception e ) {}
+      }
+      
+      errorCode = sqle.getErrorCode();
+      if (errorLabel.equalsIgnoreCase("100 : NO DATA FOUND"))
+        throw new SQLException(sqle.getMessage());
+      else
+        throw new SQLException(errorCode + " : " + errorLabel + " FAILED"); 
+    }
+  } // inParams
+
+  //*************************************************************************
+  //  Stored Procedure: inOutParam
+  //
+  //  Purpose:  Calculates the median salary of all salaries in the STAFF
+  //            table greater than the input median salary.
+  //
+  //  Parameters:
+  //
+  //   IN/OUT:  inOutMedianSalary - median salary
+  //                                The input value is used in a SELECT 
+  //                                predicate. Its output value is set to the
+  //                                median salary. 
+  //
+  //*************************************************************************
+  public static void inoutParam(double[] inoutMedianSalary)
+  throws SQLException
+  {
+    SpContext ctx = null;
+    int counter;
+    int numRecords = 0;
+    double salary;
+    double inSalary;
+    String cursorName;
+    SpServerSalary curInOutParam;
+    int errorCode = 0; // SQLCODE = 0 unless SQLException occurs
+    String errorLabel = null;
+    
+    // initialize variables
+    counter = 0;
+    salary = 0;
+    cursorName = "";
+    inSalary = inoutMedianSalary[0];
+    
+    try
+    {       
+      ctx = new SpContext( "jdbc:default:connection", false );   
+      errorLabel = "GET NUMBER OF RECORDS";
+      #sql [ctx] {SELECT COUNT(*) INTO :numRecords
+                    FROM staff
+                    WHERE CAST(salary AS DOUBLE) > :inSalary};
+    
+      if (numRecords == 0)
+      {
+        // set errorCode to SQL0100 to indicate data not found       
+        errorLabel = "100 : NO DATA FOUND";
+        throw new SQLException(errorLabel);
+      }
+      else
+      {
+        errorLabel = "GET SALARY RESULT SET";
+        #sql [ctx] curInOutParam = {SELECT CAST(salary AS DOUBLE)
+                                      FROM staff
+                                      WHERE CAST(salary AS DOUBLE) > :inSalary
+                                      ORDER BY salary};
+        
+        while (counter < (numRecords / 2 + 1))
+        {
+          errorLabel = "MOVE TO NEXT ROW";
+          #sql {FETCH :curInOutParam INTO :salary};
+          counter++;
+        }
+        
+        inoutMedianSalary[0] = salary;
+
+        curInOutParam.close();
+      }
+      ctx.close();
+    }
+    catch (SQLException sqle)
+    {
+      if( ctx != null )
+      {
+        try { ctx.close(); } catch( Exception e ) {}
+      }
+      
+      errorCode = sqle.getErrorCode();
+      if (errorLabel.equalsIgnoreCase("100 : NO DATA FOUND"))
+        throw new SQLException(sqle.getMessage());
+      else
+        throw new SQLException(errorCode + " : " + errorLabel + "FAILED"); 
+    }
+  } // inoutParam
+
+  //*************************************************************************
+  //  Stored Procedure: clobExtract
+  //
+  //  Purpose:  Extracts department information from a large object (LOB) 
+  //            resume of employee data returns this information
+  //            to the caller in output parameter outDeptInfo.
+  // 
+  //  Parameters:
+  //  
+  //   IN:      inEmpNumber - employee number
+  //   OUT:     outDeptInfo - department information section of the 
+  //            employee's resume   
+  //
+  //*************************************************************************
+  public static void clobExtract(String inEmpNumber,   // CHAR(6) 
+                                 String[] outDeptInfo) // VARCHAR(1000) 
+  throws Exception
+  {
+    int counter;
+    int index;
+    int maximumLength;
+    byte[] clobBytes;
+    char[] clobData;
+    int errorCode = 0; // SQLCODE = 0 unless SQLException occurs
+    String errorLabel = null;
+    
+    try
+    {
+      errorLabel = "GET CONNECTION";
+      
+      // get caller's connection to the database
+      Connection con = DriverManager.getConnection("jdbc:default:connection");
+
+      // choose the employee resume that matches the employee number
+      errorLabel = "SELECT STATEMENT";    
+      Statement stmt = con.createStatement();       
+      ResultSet rs = stmt.executeQuery("SELECT resume FROM emp_resume " +
+                                       "  WHERE empno = '" + inEmpNumber + "'" +
+                                       "  AND resume_format = 'ascii'");
+
+      if (rs.next())
+      {
+        // copy the CLOB into an array of characters by converting all
+        // bytes into characters as they are read in
+        InputStream inStream = rs.getAsciiStream(1);
+
+        // InputStream.available() may not work on larger files
+        maximumLength = inStream.available();
+        clobBytes = new byte[maximumLength];
+        clobData = new char[maximumLength];
+
+        inStream.read(clobBytes);
+        for (counter = 0; counter < maximumLength; counter++)
+        {
+          clobData[counter] = (char)clobBytes[counter];
+        }
+
+        String clob = String.valueOf(clobData);
+
+        // copy substring from "Department Info" to "Education"
+        // into OUT parameter
+        index = clob.indexOf("Department Info");
+        if (index == -1)
+        {
+          outDeptInfo[0] = "Resume does not contain a " +
+                           "Department Info section.";
+        }
+        else
+        {
+          outDeptInfo[0] = clob.substring(clob.indexOf("Department Info"),
+                                          clob.indexOf("Education"));
+        }
+      }
+      else
+      {
+        outDeptInfo[0] = ("\nEmployee " + inEmpNumber + 
+                          " does not have a resume.");
+      }
+      rs.close();
+      stmt.close();
+    }
+    catch (SQLException sqle)
+    {
+      errorCode = sqle.getErrorCode();
+      throw new SQLException(errorCode + " : " + errorLabel + "FAILED");
+    }
+  } // clobExtract
+
+  //*************************************************************************
+  // PARAMETER STYLE JAVA procedures do not support the DBINFO clause.
+  // The following PARAMETER STYLES can be used with DBINFO or PROGRAM TYPE
+  // clauses: 
+  //          - DB2SQL
+  //          - GENERAL
+  //          - GENERAL WITH NULLS
+  //          - SQL
+  // Please see the spserver implementation for C/C++/CLI language to
+  // see this functionality.
+  //*************************************************************************
+
+  //*************************************************************************
+  // PROGRAM TYPE MAIN is only valid for LANGUAGE C, COBOL or CLR, and 
+  // following PARAMETER STYLE:
+  //          - DB2SQL
+  //          - GENERAL
+  //          - GENERAL WITH NULLS
+  //          - SQL
+  // Please see the spserver implementation for C/C++/CLI language to
+  // see this functionality.
+  //*************************************************************************
+
+  //*************************************************************************
+  //  Stored Procedure: decimalType
+  //
+  //  Purpose:  Takes in a decimal number as input, divides it by 2 
+  //            and returns the resulting decimal rounded off to 2 
+  //            decimal places.
+  //
+  //  Parameters:
+  //  
+  //   INOUT:   inOutDecimal - DECIMAL(10,2)
+  //                            
+  //*************************************************************************
+  public static void decimalType(BigDecimal[] inoutDecimal) // DECIMAL(10,2)
+  throws SQLException
+  {
+    int errorCode = 0;  // SQLCODE = 0 unless SQLException occurs
+    String errorLabel = null;   
+    
+    try
+    {
+      // get caller's connection to the database
+      errorLabel = "GET CONNECTION";  
+      Connection con = DriverManager.getConnection("jdbc:default:connection");
+
+      if (inoutDecimal[0].equals(BigDecimal.valueOf(0)))
+      {
+        inoutDecimal[0].add(BigDecimal.valueOf(1));
+      }
+      else
+      {
+        inoutDecimal[0] = inoutDecimal[0].divide(BigDecimal.valueOf(2),
+                                                 BigDecimal.ROUND_HALF_UP);
+      }
+
+      // close our connection
+      con.close();
+    }
+
+    catch (SQLException sqle)
+    {
+      errorCode = sqle.getErrorCode();
+      throw new SQLException(errorCode + " : DECIMAL_TYPE FAILED"); 
+    }
+  } // decimalType
+
+  //*************************************************************************
+  //  Stored Procedure: allDataTypes 
+  //
+  //  Purpose: Take each parameter and set it to a new output value.
+  //           This sample shows only a subset of DB2 supported data types.
+  //           For a full listing of DB2 data types, please see the SQL 
+  //           Reference. 
+  //
+  //  Parameters:
+  //  
+  //   INOUT:   inOutSmallint, inOutInteger, inOutBigint, inOutReal,
+  //            outDouble
+  //   OUT:     outChar, outChars, outVarchar, outDate, outTime
+  //
+  //*************************************************************************
+  public static void allDataTypes(short[] inoutSmallint,       
+                                  int[] inoutInteger,          
+                                  long[] inoutBigint,         
+                                  float[] inoutReal,          
+                                  double[] inoutDouble,        
+                                  String[] outChar, // CHAR(1)           
+                                  String[] outChars, // CHAR(15)          
+                                  String[] outVarchar, // VARCHAR(13)        
+                                  Date[] outDate, // DATE             
+                                  Time[] outTime) // TIME              
+  throws SQLException
+  {
+    int errorCode = 0; // SQLCODE = 0 unless SQLException occurs
+    String errorLabel = null;
+    SpContext ctx = null;    
+    String query;
+    String hvOutChar;
+    String hvOutChars;
+    String hvOutVarchar;
+    Date hvOutDate;
+    Time hvOutTime;
+    Connection con = null;
+    ResultSet rs;
+    Statement stmt;
+
+    try
+    {
+      // get caller's connection to the database
+      ctx = new SpContext("jdbc:default:connection", false);
+      con = ctx.getConnection();
+
+      if (inoutSmallint[0] == 0)
+      {
+        inoutSmallint[0] = 1;
+      }
+      else
+      {
+        inoutSmallint[0] = (short)(inoutSmallint[0] / 2);
+      }
+
+      if (inoutInteger[0] == 0)
+      {
+        inoutInteger[0] = 1;
+      }
+      else
+      {
+        inoutInteger[0] = (inoutInteger[0] / 2);
+      }
+
+      if (inoutBigint[0] == 0)
+      {
+        inoutBigint[0] = 1;
+      }
+      else
+      {
+        inoutBigint[0] = (inoutBigint[0] / 2);
+      }
+
+      if (inoutReal[0] == 0)
+      {
+        inoutReal[0] = 1;
+      }
+      else
+      {
+        inoutReal[0] = (inoutReal[0] / 2);
+      }
+
+      if (inoutDouble[0] == 0)
+      {
+        inoutDouble[0] = 1;
+      }
+      else
+      {
+        inoutDouble[0] = (inoutDouble[0] / 2);
+      }
+
+      errorLabel = "SELECT MIDINIT, LASTNAME ...";
+      #sql [ctx] {SELECT midinit, lastname, firstnme
+                    INTO :hvOutChar, :hvOutChars, :hvOutVarchar
+                    FROM employee
+                    WHERE empno = '000180'};
+      
+      // get the value of the midinit column
+      outChar[0] = hvOutChar;
+      // get the value of the lastname column
+      outChars[0] = hvOutChars;
+      // get the value of the firstnme column
+      outVarchar[0] = hvOutVarchar;
+      
+      // get current date using JDBC
+      query = "VALUES(CURRENT DATE)";
+
+      errorLabel = "create VALUES(CURRENT DATE)";
+      // create the SQL statement
+      stmt = con.createStatement();
+
+      // get the result set
+      rs = stmt.executeQuery(query);
+
+      // move to first row of result set
+      rs.next();
+
+      // get the date value
+      outDate[0] = rs.getDate(1);
+
+      // clean up resources
+      rs.close();
+      stmt.close();
+
+      // get current time using JDBC
+      query = "VALUES(CURRENT TIME)";
+
+      errorLabel = "create VALUES(CURRENT TIME)";
+      // create the SQL statement
+      stmt = con.createStatement();
+
+      // get the result set
+      rs = stmt.executeQuery(query);
+
+      // move to first row of result set
+      rs.next();
+
+      // get the time value
+      outTime[0] = rs.getTime(1);
+
+      // clean up resources
+      rs.close();
+      stmt.close();
+
+      // close our connection
+      ctx.close();
+    }
+
+    catch (SQLException sqle)
+    {
+      if(ctx != null)
+      {
+        try { ctx.close(); } catch( Exception e ) {}
+      }
+      
+      errorCode = sqle.getErrorCode();
+      throw new SQLException(errorCode + " : " + errorLabel + " FAILED"); 
+    }
+  } // allDataTypes
+
+  //*************************************************************************
+  //  Stored Procedure: resultSetToClient
+  //
+  //  Purpose:  Returns a result set to the caller that identifies employees
+  //            with salaries greater than the value of input parameter
+  //            inSalaryThreshold.
+  //
+  //  Parameters:
+  // 
+  //   IN:      inSalaryThreshold - salary
+  //   OUT:     outRs - ResultSet
+  //
+  //*************************************************************************
+  public static void resultSetToClient(double inSalaryThreshold, 
+                                       ResultSet[] outRs)           
+  throws SQLException
+  {
+    int errorCode = 0; // SQLCODE = 0 unless SQLException occurs
+    String errorLabel = null;
+    SpContext ctx = null;    
+    SpServerEmployees curResSetToClient;
+    double inSalary;
+    inSalary = inSalaryThreshold;
+
+    try
+    {
+      ctx = new SpContext( "jdbc:default:connection", false );
+
+      errorLabel = "SELECT STATEMENT";
+ 
+      // declare iterator for result set
+      #sql [ctx] curResSetToClient = {SELECT name, job, CAST(salary AS DOUBLE)
+                                        FROM staff
+                                        WHERE salary > :inSalary
+                                        ORDER BY salary};
+
+      // get the result set that is returned to the client
+      outRs[0] = curResSetToClient.getResultSet();
+    
+    }
+
+    catch (SQLException sqle)
+    {
+      if(ctx != null)
+      {
+        try { ctx.close(); } catch( Exception e ) {}
+      }
+
+      errorCode = sqle.getErrorCode();
+      throw new SQLException(errorCode + " : " + errorLabel + " FAILED"); 
+    }
+  } // resultSetToClient
+
+  //*************************************************************************
+  //  Stored Procedure: twoResultSets
+  //
+  //  Purpose:  Returns two result sets to the caller. One result set
+  //            consists of employee data of all employees with
+  //            salaries greater than inSalaryThreshold.  The other
+  //            result set contains employee data for employees with salaries
+  //            less than inSalaryThreshold.
+  //
+  //  Parameters:
+  // 
+  //   IN:      inSalaryThreshold - salary
+  //   OUT:     outRs1 - first ResultSet
+  //            outRs2 - second ResultSet
+  //
+  //*************************************************************************
+  public static void twoResultSets(double inSalaryThreshold,    
+                                   ResultSet[] outRs1,             
+                                   ResultSet[] outRs2)            
+  throws SQLException
+  {
+    SpContext ctx = null; 
+    int errorCode = 0; // SQLCODE = 0 unless SQLException occurs
+    String errorLabel = null;
+
+    SpServerEmployees curTwoResultSets1;
+    SpServerEmployees curTwoResultSets2;
+    double inSalary;
+    inSalary = inSalaryThreshold;
+
+    try
+    {    
+      ctx = new SpContext("jdbc:default:connection", false);
+
+      errorLabel = "SELECT STATEMENT 1";
+      // declare iterator for the first result set
+      #sql [ctx] curTwoResultSets1 = {SELECT name, job, CAST(salary AS DOUBLE)
+                                        FROM staff
+                                        WHERE salary > :inSalary
+                                        ORDER BY salary};
+
+      // get the first result set that is returned to the client
+      outRs1[0] = curTwoResultSets1.getResultSet();
+
+      errorLabel = "SELECT STATEMENT 2";    
+      // declare iterator for the second result set
+      #sql [ctx] curTwoResultSets2 = {SELECT name, job, CAST(salary AS DOUBLE)
+                                        FROM staff
+                                        WHERE salary < :inSalary
+                                        ORDER BY salary DESC};
+
+      // get the second result set that is returned to the client
+      outRs2[0] = curTwoResultSets2.getResultSet();
+      ctx.close();
+
+    }
+    catch (SQLException sqle)
+    {
+      if(ctx != null)
+      {
+        try { ctx.close(); } catch( Exception e ) {}
+      }
+
+      errorCode = sqle.getErrorCode();
+      throw new SQLException(errorCode + " : " + errorLabel + " FAILED"); 
+    }
+  } // twoResultSets
+  
+  //*************************************************************************
+  // PARAMETER STYLE GENERAL and GENERAL WITH NULLS can be specified when
+  // LANGUAGE C, COBOL, or CLR is used.
+  // Please see the spserver implementation for C/C++/CLI language to see
+  // this functionality.
+  //*************************************************************************
+
+} // SpServer

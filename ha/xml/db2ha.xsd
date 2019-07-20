@@ -1,0 +1,341 @@
+<?xml version='1.0' encoding='UTF-8'?>
+<xs:schema xmlns:xs='http://www.w3.org/2001/XMLSchema' elementFormDefault='qualified' attributeFormDefault='qualified'>
+  <xs:annotation>
+    <xs:documentation xml:lang='en'>
+    DB2 High Availability configuration schema. 
+    This schema describes the elements of DB2 High Availability that are used in the configuration of a HA cluster.            
+    </xs:documentation> 
+  </xs:annotation> 
+  <!-- ================================--> 
+  <!-- = DB2Cluster element           =--> 
+  <!-- ================================--> 
+  <xs:element name='DB2Cluster' type='DB2ClusterType'/> 
+  <xs:complexType name='DB2ClusterType'> 
+    <xs:annotation> 
+      <xs:documentation> 
+      Each DB2 HA configuration document begins with the DB2Cluster element.  
+      This element encapsulates the cluster configuration specification for the instance 
+      </xs:documentation> 
+    </xs:annotation> 
+    <xs:sequence> 
+      <xs:element name='DB2ClusterTemplate' type='DB2ClusterTemplateType' minOccurs='0' maxOccurs='unbounded'/> 
+      <xs:element name='ClusterDomain' type='ClusterDomainType' maxOccurs='unbounded'/> 
+      <xs:element name='FailoverPolicy' type='FailoverPolicyType' minOccurs='0'/> 
+      <xs:element name='DB2PartitionSet' type='DB2PartitionSetType' minOccurs='0' maxOccurs='unbounded'/> 
+      <xs:element name='HADRDBSet' type='HADRDBType' minOccurs='0' maxOccurs='unbounded'/> 
+      <xs:element name='HADBSet' type='HADBType' minOccurs='0' maxOccurs='unbounded'/> 
+    </xs:sequence> 
+    <xs:attribute name='clusterManagerName' type='xs:string' use='optional'/> 
+    <xs:attribute name='version' type='xs:string' use='optional'/> 
+  </xs:complexType> 
+  <!-- ================================--> 
+  <!-- = DB2ClusterTemplate element   =--> 
+  <!-- ================================--> 
+  <xs:complexType name='DB2ClusterTemplateType'> 
+    <xs:annotation> 
+      <xs:documentation> 
+      The DB2ClusterTemplate type encapsulates parameterization information about the DB2 cluster.  
+      It can be used to deploy complex DB2 DPF configurations or roll out a number of similar DB2 HA configurations 
+      </xs:documentation> 
+    </xs:annotation> 
+    <xs:sequence> 
+      <xs:element name='DB2ClusterTemplateParameter' type='DB2ClusterTemplateParameterType' maxOccurs='unbounded'/> 
+    </xs:sequence> 
+  </xs:complexType> 
+  <!-- =======================================--> 
+  <!-- = DB2ClusterTemplateParameter element =--> 
+  <!-- =======================================--> 
+  <xs:complexType name='DB2ClusterTemplateParameterType'> 
+    <xs:annotation> 
+      <xs:documentation> 
+      The DB2ClusterTemplateParameter type is used to define the parameters for the cluster template 
+      </xs:documentation> 
+    </xs:annotation> 
+    <xs:sequence> 
+      <xs:element name='DB2ClusterTemplateParameterException' type='DB2ClusterTemplateParameterExceptionType' minOccurs='0' maxOccurs='unbounded'/> 
+    </xs:sequence> 
+    <xs:attribute name='parameterName' type='xs:string' use='required'/> 
+    <xs:attribute name='parameterValue' type='DB2ClusterTemplateParameterValueType' use='required'/> 
+  </xs:complexType> 
+  <!-- =================================================--> 
+  <!-- = DB2ClusterTemplateParameterException element  =--> 
+  <!-- =================================================--> 
+  <xs:complexType name='DB2ClusterTemplateParameterExceptionType'> 
+    <xs:annotation> 
+      <xs:documentation> 
+      The DB2ClusterTemplateParameterException type is used to define the exception element for parameterization 
+      </xs:documentation> 
+    </xs:annotation> 
+    <xs:attribute name='argument' type='xs:integer' use='required'/> 
+    <xs:attribute name='value' type='xs:string' use='required'/> 
+  </xs:complexType> 
+  <!-- =============================================--> 
+  <!-- = DB2ClusterTemplateParameterValue element  =--> 
+  <!-- =============================================--> 
+  <xs:simpleType name='DB2ClusterTemplateParameterValueType'> 
+    <xs:annotation> 
+      <xs:documentation> 
+      The DB2ClusterTemplateParameterValue type is used to define the value  for parameterization 
+      </xs:documentation> 
+    </xs:annotation> 
+    <xs:restriction base='xs:string'/> 
+  </xs:simpleType> 
+  <!-- ====================================--> 
+  <!-- = DB2Instance element              =--> 
+  <!-- ====================================--> 
+  <xs:complexType name='DB2PartitionSetType'> 
+    <xs:annotation> 
+      <xs:documentation> 
+      The DB2Instance element encapsulates the cluster confiuguration specification for the instance 
+      </xs:documentation> 
+    </xs:annotation> 
+    <xs:sequence> 
+      <xs:element name='DB2Partition' type='DB2PartitionType' maxOccurs='unbounded'/> 
+    </xs:sequence> 
+    <xs:attribute name='resourceGroupName' type='xs:string' use='optional'/> 
+    <xs:attribute name='clusterDomainName' type='xs:string' use='optional'/> 
+    <xs:attribute name='type' type='xs:string' use='optional'/> 
+    <xs:attribute name='failoverNodeSequence' type='xs:string' use='optional'/> 
+  </xs:complexType> 
+  <!-- ===================================--> 
+  <!-- = ClusterDomain element           =--> 
+  <!-- ===================================--> 
+  <xs:complexType name='ClusterDomainType'> 
+    <xs:annotation> 
+      <xs:documentation> 
+      Each cluster domain can have a number of physical systems (nodes).  
+      TSA currently supports a maximum of 32 nodes per cluster domain.  
+      DB2 single partition instances will typically only have a single cluster domain.  
+      In DB2 DPF implementations, it is not uncommon to have database partition groups setup for mutual failover  
+      in pairs of nodes where both nodes are in a single cluster domain.  
+      </xs:documentation> 
+    </xs:annotation> 
+    <xs:sequence> 
+      <xs:element name='Quorum' type='QuorumType' minOccurs='0'/> 
+      <xs:element name='PhysicalNetwork' type='PhysicalNetworkType' minOccurs='0' maxOccurs='unbounded'/> 
+      <xs:element name='ClusterNode' type='ClusterNodeType' maxOccurs='unbounded'/> 
+    </xs:sequence> 
+    <xs:attribute name='domainName' type='xs:string' use='required'/> 
+  </xs:complexType> 
+  <!-- ===========================================--> 
+  <!-- = Failover policy element                 =--> 
+  <!-- ===========================================--> 
+  <xs:complexType name='FailoverPolicyType'> 
+    <xs:annotation> 
+      <xs:documentation> 
+      The failover policy specifies the failover order of the cluster nodes 
+      </xs:documentation> 
+    </xs:annotation> 
+    <xs:choice> 
+      <xs:element name='RoundRobin' type='xs:string' minOccurs='0' /> 
+      <xs:element name='Mutual' type='xs:string' minOccurs='0' maxOccurs='unbounded'/> 
+      <xs:element name='NPlusM' type='xs:string' minOccurs='0' maxOccurs='unbounded'/> 
+      <xs:element name='LocalRestart' type='xs:string' fixed=''/> 
+      <xs:element name='HADRFailover' type='xs:string' fixed=''/> 
+      <xs:element name='Custom' type='xs:string' minOccurs='0' /> 
+    </xs:choice> 
+  </xs:complexType> 
+  <!-- ===========================================--> 
+  <!-- = Failover pair type element              =--> 
+  <!-- ===========================================--> 
+  <xs:complexType name='FailoverPairType'> 
+    <xs:attribute name='systemPairNode1' type='xs:string' use='required'/> 
+    <xs:attribute name='systemPairNode2' type='xs:string' use='required'/> 
+  </xs:complexType> 
+  <!-- ===============================================--> 
+  <!-- = HADRDBSet element                           =--> 
+  <!-- = NOTE: If you specify the HADRDBSet, ensure  =--> 
+  <!-- =       you do not have a DPF setup at the    =--> 
+  <!-- =       same time. Also it is mandatory to    =--> 
+  <!-- =       specify the HADRFailover policy under =--> 
+  <!-- =       the FailoverPolicy element.           =--> 
+  <!-- ===============================================--> 
+  <xs:complexType name='HADRDBType'> 
+    <xs:annotation> 
+      <xs:documentation> 
+      The HADRDB element lists the HADRDB Sets 
+      </xs:documentation> 
+    </xs:annotation> 
+    <xs:sequence> 
+      <xs:element name='HADRDB' type='HADRDBDefn' maxOccurs='1' minOccurs='1'/> 
+      <xs:element name='VirtualIPAddress' type='IPAddressType' minOccurs='0' maxOccurs='1'/> 
+    </xs:sequence> 
+  </xs:complexType> 
+  <!-- =============================================--> 
+  <!-- = HADRDB element                            =--> 
+  <!-- = Defines the HADR DBs to be made HA        =--> 
+  <!-- =============================================--> 
+  <xs:complexType name='HADRDBDefn'> 
+    <xs:annotation> 
+      <xs:documentation> 
+      The HADRDB element defines the HADR databases to be automated for takeover 
+      </xs:documentation> 
+    </xs:annotation> 
+    <xs:attribute name='databaseName' type='xs:string' use='required'/> 
+    <xs:attribute name='localInstance' type='xs:string' use='required'/> 
+    <xs:attribute name='remoteInstance' type='xs:string' use='required'/> 
+    <xs:attribute name='localHost' type='xs:string' use='required'/> 
+    <xs:attribute name='remoteHost' type='xs:string' use='required'/> 
+    <xs:attribute name='resourceGroupName' type='xs:string' use='optional'/> 
+  </xs:complexType> 
+  <!-- =============================================--> 
+  <!-- = HADBType element                          =--> 
+  <!-- =============================================--> 
+  <xs:complexType name='HADBType'> 
+    <xs:annotation> 
+      <xs:documentation> 
+      The HADB element lists the Databases to be made HA 
+      </xs:documentation> 
+    </xs:annotation> 
+    <xs:sequence> 
+      <xs:element name='HADB' type='HADBDefn' maxOccurs='unbounded'/> 
+    </xs:sequence> 
+    <xs:attribute name='instanceName' type='xs:string' use='required'/> 
+  </xs:complexType> 
+  <!-- =============================================--> 
+  <!-- = HADB element                              =--> 
+  <!-- =============================================--> 
+  <xs:complexType name='HADBDefn'> 
+    <xs:annotation> 
+      <xs:documentation> 
+      The HADB element defines the HADR database to be made HA 
+      </xs:documentation> 
+    </xs:annotation> 
+    <xs:attribute name='databaseName' type='xs:string' use='required'/> 
+  </xs:complexType> 
+  <!-- ============================================--> 
+  <!-- = Quorum element                           =--> 
+  <!-- ============================================--> 
+  <xs:complexType name='QuorumType'> 
+    <xs:annotation> 
+      <xs:documentation> 
+      The quorum specifies the quorum configuration for the cluster domain 
+      </xs:documentation> 
+    </xs:annotation> 
+    <xs:attribute name='quorumDeviceProtocol' type='QuorumDeviceProtocolType' use='required'/> 
+    <xs:attribute name='quorumDeviceName' type='xs:string' use='required'/> 
+  </xs:complexType> 
+  <!-- ===============================================--> 
+  <!-- = Quorum device type element                  =--> 
+  <!-- ===============================================--> 
+  <xs:simpleType name='QuorumDeviceProtocolType'> 
+    <xs:annotation> 
+      <xs:documentation> 
+      This element type is an enumeration of the quorum types supported. 
+      </xs:documentation> 
+    </xs:annotation> 
+    <xs:restriction base='xs:string'> 
+      <xs:enumeration value='disk'/> 
+      <xs:enumeration value='scsi'/> 
+      <xs:enumeration value='network'/> 
+      <xs:enumeration value='eckd'/> 
+      <xs:enumeration value='mns'/> 
+    </xs:restriction> 
+  </xs:simpleType> 
+  <!-- ============================================--> 
+  <!-- = Physical network element                 =--> 
+  <!-- ============================================--> 
+  <xs:complexType name='PhysicalNetworkType'> 
+    <xs:annotation> 
+      <xs:documentation> 
+      The physical network specifies the network type 
+      </xs:documentation> 
+    </xs:annotation> 
+    <xs:sequence> 
+      <xs:element name='Interface' type='InterfaceType' minOccurs='1' maxOccurs='unbounded'/> 
+      <xs:element name='LogicalSubnet' type='IPAddressType' minOccurs='0' maxOccurs='unbounded'/> 
+    </xs:sequence> 
+    <xs:attribute name='physicalNetworkName' type='xs:string' use='required'/> 
+    <xs:attribute name='physicalNetworkProtocol' type='PhysicalNetworkProtocolType' use='required'/> 
+  </xs:complexType> 
+  <!-- ============================================--> 
+  <!-- = Physical network protocol type           =--> 
+  <!-- ============================================--> 
+  <xs:simpleType name='PhysicalNetworkProtocolType'> 
+    <xs:restriction base='xs:string'> 
+      <xs:enumeration value='ip'/> 
+      <xs:enumeration value='rs232'/> 
+      <xs:enumeration value='scsi'/> 
+      <xs:enumeration value='ssa'/> 
+      <xs:enumeration value='disk'/> 
+    </xs:restriction> 
+  </xs:simpleType> 
+  <!-- ============================================--> 
+  <!-- = Interface type element                   =--> 
+  <!-- ============================================--> 
+  <xs:complexType name='InterfaceType'> 
+    <xs:sequence> 
+      <xs:element name='IPAddress' type='IPAddressType'/> 
+    </xs:sequence> 
+    <xs:attribute name='interfaceName' type='xs:string' use='required'/> 
+    <xs:attribute name='clusterNodeName' type='xs:string' use='required'/> 
+  </xs:complexType> 
+  <!-- =============================================--> 
+  <!-- = IPAddress type  element                   =--> 
+  <!-- =============================================--> 
+  <xs:complexType name='IPAddressType'> 
+    <xs:attribute name='baseAddress' type='xs:string' use='required'/> 
+    <xs:attribute name='subnetMask' type='xs:string' use='required'/> 
+    <xs:attribute name='networkName' type='xs:string' use='required'/> 
+  </xs:complexType> 
+  <!-- =============================================--> 
+  <!-- = Cluster Node element                      =--> 
+  <!-- =============================================--> 
+  <xs:complexType name='ClusterNodeType'> 
+    <xs:annotation> 
+      <xs:documentation> 
+      The cluster node specifies the physical machine/node in the cluster domain 
+      </xs:documentation> 
+    </xs:annotation> 
+    <xs:attribute name='clusterNodeName' type='xs:string' use='required'/> 
+    <xs:attribute name='type' type='xs:string' use='optional'/> 
+  </xs:complexType> 
+  <!-- =============================================--> 
+  <!-- = DB2 Partition  element                    =--> 
+  <!-- =============================================--> 
+  <xs:complexType name='DB2PartitionType'> 
+    <xs:annotation> 
+      <xs:documentation> 
+      The DB2 partition type specifies a DB2 Partition 
+      </xs:documentation> 
+    </xs:annotation> 
+    <xs:sequence> 
+      <xs:element name='VirtualIPAddress' type='IPAddressType' minOccurs='0' maxOccurs='unbounded'/> 
+      <xs:element name='Mount' type='MountType' minOccurs='0' maxOccurs='unbounded'/> 
+      <xs:element name='HADRDB' type='HADRDBType' minOccurs='0' maxOccurs='unbounded'/> 
+      <xs:element name='MutualPair' type='MutualPolicyType' minOccurs='0' maxOccurs='1'/> 
+      <xs:element name='NPlusMNode' type='NPlusMPolicyType' minOccurs='0' maxOccurs='unbounded'/> 
+      <xs:element name='CustomNode' type='CustomPolicyType' minOccurs='0' maxOccurs='unbounded'/> 
+    </xs:sequence> 
+    <xs:attribute name='instanceName' type='xs:string' use='required'/> 
+    <xs:attribute name='dbpartitionnum' type='xs:integer' use='required'/> 
+    <xs:attribute name='resourceName' type='xs:string' use='optional'/> 
+  </xs:complexType>
+  <!-- ===========================================--> 
+  <!-- = MutualPolicyType element                =--> 
+  <!-- ===========================================--> 
+  <xs:complexType name='MutualPolicyType'> 
+    <xs:attribute name='systemPairNode1' type='xs:string' use='required'/> 
+    <xs:attribute name='systemPairNode2' type='xs:string' use='required'/> 
+  </xs:complexType> 
+  <!-- ===========================================--> 
+  <!-- = NPlusMPolicyType element                =--> 
+  <!-- ===========================================--> 
+  <xs:complexType name='NPlusMPolicyType'> 
+    <xs:attribute name='standbyNodeName' type='xs:string' use='required'/> 
+  </xs:complexType> 
+  <!-- ===========================================--> 
+  <!-- = CustomPolicyType element                =--> 
+  <!-- ===========================================--> 
+  <xs:complexType name='CustomPolicyType'> 
+    <xs:attribute name='customNodeName' type='xs:string' use='required'/> 
+  </xs:complexType> 
+  <!-- ===========================================--> 
+  <!-- = Mount type element                      =--> 
+  <!-- ===========================================--> 
+  <xs:complexType name='MountType'> 
+    <xs:attribute name='filesystemPath' type='xs:string' use='required'/> 
+    <xs:attribute name='filesystemType' type='xs:string' use='optional'/> 
+    <xs:attribute name='resourceName' type='xs:string' use='optional'/> 
+  </xs:complexType> 
+</xs:schema>

@@ -1,0 +1,270 @@
+********************************************************************/
+*                                                                  */
+*    IBM InfoSphere Replication Server                             */
+*    Version 9.7 for Linux, UNIX, and Windows                      */
+*                                                                  */
+*    Sample WebSphere MQ queue definitions for Q replication.      */
+*    Licensed Materials - Property of IBM                          */
+*                                                                  */
+*    (C) Copyright IBM Corp. 1993, 2010. All Rights Reserved       */
+*                                                                  */
+*    US Government Users Restricted Rights - Use, duplication      */
+*    or disclosure restricted by GSA ADP Schedule Contract         */
+*    with IBM Corp.                                                */
+*                                                                  */
+********************************************************************/
+********************************************************************/  
+* Overview of WebSphere MQ objects required for Q replication      */
+* 1) Queue manager - Manages message queues for                    */
+*    application programs                                          */                                               
+* 2) Queues - Store messages sent by programs.                     */
+* 3) Message channels - Connect two queue managers.                */
+* 4) Listener - Listens for messages on channels.                  */            
+********************************************************************/
+********************************************************************/
+* This file provides the MQSC commands required to set up          */
+* WebSphere MQ objects for unidirectional Q replication on the     */
+* same system, (LOCAL SETUP) and unidirectional Q replication      */
+* between two queue managers (REMOTE SETUP).                       */
+* You can copy the MQSC commands needed to create queues and       */
+* channels to a text file and run it as a script. Use the          */
+* following command from the directory where the file is saved:    */
+*                                                                  */
+* Linux, UNIX:  runmqsc <qmgr_name> < filepath/script_filename     */
+* Windows:      runmqsc <qmgr_name> < filepath\script_filename     */ 
+*                                                                  */
+* For more information on using MQSC commands or the MQ Explorer   */
+* GUI, see the WebSphere MQ Information Center at the following    */
+* URL:                                                             */
+* http://publib.boulder.ibm.com/infocenter/wmqv7/v7r0/index.jsp    */
+********************************************************************/
+
+
+
+********************************************************************/
+********************************************************************/
+* LOCAL SETUP                                                      */
+* Objects required for a unidirectional setup on the same system   */
+* (Q Capture and Q Apply share the same queue manager).            */
+* Assume the queue manager name is CSQ                             */
+* One local queue is used by Q Apply to get transaction messages   */
+* put by Q Capture (it acts as both send queue and receive queue). */
+* The name for this local queue is IBMQREP.ASN.SEND_RECVQ          */
+* One local queue is used by Q Capture to get control messages put */
+* by Q Apply. The name for this local queue is IBMQREP.ASN.ADMINQ  */
+* One local queue is used by Q Capture to put/get restart messages.*/
+* The name for this local queue is IBMQREP.ASN.RESTARTQ            */
+* If Q Apply will load the target table, a model queue is needed   */
+* to spill messages from Q Capture during the load. The name for   */
+* this model queue is IBMQREP.SPILL.MODELQ                         */
+********************************************************************/  
+
+* On a Windows prompt or UNIX session, use the following command   */
+* to create the queue manager:                                     */
+
+  crtmqm -lp 50 -ls 10 CSQ
+
+* Use the following command to start the queue manager             */
+
+  strmqm CSQ
+
+* Use the following command to start the interactive session so    */
+* that you can define the three local queues and one model queue:  */
+
+  runmqsc CSQ 
+
+* Run the following commands in an interactive runmqsc session:    */
+	
+DEFINE QLOCAL('ASN.ADMINQ') PUT(ENABLED) GET(ENABLED) SHARE
+DEFINE QLOCAL('ASN.RESTARTQ') PUT(ENABLED) GET(ENABLED)
+DEFINE QLOCAL('ASN.SEND_RECVQ') PUT(ENABLED) GET(ENABLED) +
+ DEFSOPT(SHARED) MAXDEPTH(500000)
+DEFINE QMODEL('IBMQREP.SPILL.MODELQ') DEFSOPT(SHARED) +
+ MAXDEPTH(500000) MSGDLVSQ(FIFO) DEFTYPE(PERMDYN)
+
+DISPLAY QUEUE(*) ALL
+
+********************************************************************/
+* Defining objects for Q replication                               */
+* After you create the queue manager and queues, use the           */
+* Replication Center or ASNCLP command-line program to define the  */
+* objects for Q replication.                                       */
+* In the Replication Center, use the Create Control Tables wizard  */
+* to enter the name of the queue manager (CSQ), administration     */
+* queue (IBMQREP.ASN.ADMINQ), and restart queue                    */
+* (IBMQREP.ASN.RESTARTQ). Then, use the Create Replication Queue   */
+* Map window to enter the name of the same administration queue    */
+* (IBMQREP.ASN.ADMINQ), and also the name of the send/receive queue*/
+* (IBMQREP.ASN.SEND_RECVQ). You will need to enter this name twice,*/
+* in the fields for send queue and receive queue.                  */
+* In the ASNCLP, use the SET QMANAGER command, CREATE CONTROL      */
+* TABLES FOR command, and CREATE REPLQMAP command to define the    */
+* objects for Q replication.                                       */
+********************************************************************/
+
+
+
+********************************************************************/
+********************************************************************/
+* REMOTE SETUP                                                     */
+* Objects required for a unidirectional setup where Q Capture and  */
+* Q Apply do not share the same queue manager (a remote setup).    */
+* In this case you need a remote queue definition, channels, and   */
+* listeners.                                                       */
+* A remote queue is a queue owned by a different queue manager.    */
+* A remote queue definition is the local definition of a remote    */
+* queue. You need a transmission queue (xmitq) that is associated  */
+* with the remote queue definition.                                */
+********************************************************************/
+
+********************************************************************/
+* Use the crtmqm command as above to create a queue manager, CSQ1  */
+* on the Q Capture server, and another queue manager, CSQ2, on the */
+* Q Apply server. Use the strmqm command as above to start both    */
+* queue managers.
+********************************************************************/
+
+********************************************************************/
+* Objects at the source                                            */ 
+* The following objects are required at queue manager CSQ1:        */
+* A remote queue definition for Q Capture to put data messages.    */
+* The remote queue definition name is ASN.SAMPLE_TO_TARGET.DATA    */
+* A local administration queue, ASN.ADMINQ                         */
+* A local restart queue, ASN.RESTARTQ                              */
+* A transmission queue (xmitq) named CSQ2                          */ 
+* A sender channel from CSQ1 to CSQ2 using xmitq CSQ2              */
+* A receiver channel from CSQ2 to CSQ1                             */
+* Note: The default disconnect interval for a channel is 6000      */
+* seconds (100 minutes). To prevent channels from timing out,      */
+* increase the default by using the DISCINT parameter, or set the  */
+* value to 0 (channel never times out). Balance this with the CPU  */
+* resource needed to keep the channel alive when no messages are   */
+* being sent.                                                      */
+********************************************************************/
+
+* Run the following commands in an interactive runmqsc session:    */
+
+DEFINE QREMOTE('ASN.SAMPLE_TO_TARGET.DATA') + 
+ RNAME('ASN.SAMPLE_TO_TARGET.DATA') +
+ RQMNAME('CSQ2') XMITQ('CSQ2') PUT(ENABLED)
+
+DEFINE QLOCAL('CSQ2') USAGE(XMITQ) MAXDEPTH(500000)
+
+DEFINE CHL ('CSQ1TOCSQ2') CHLTYPE(SDR) TRPTYPE(TCP) +
+ CONNAME('IP address of CSQ2 server(port)') +
+ XMITQ('CSQ2')  DISCINT(0) CONVERT(NO)
+
+DEFINE CHL('CSQ2TOCSQ1') CHLTYPE(RCVR) TRPTYPE(TCP)
+
+DEFINE QLOCAL('ASN.ADMINQ') PUT(ENABLED) GET(ENABLED) SHARE
+
+DEFINE QLOCAL('ASN.RESTARTQ') PUT(ENABLED) GET(ENABLED)
+
+********************************************************************/
+* Objects at the target                                            */ 
+* The following objects are required at queue manager CSQ2:        */
+* A local queue for Q Apply to get data messages put by Q Capture. */
+* The name for this local queue is ASN.RECVQ                       */
+* A remote queue definition that points to the administration      */
+* queue at the Q Capture server (queue manager CSQ1). The Q Apply  */
+* program uses this remote queue definition to send control        */
+* messages to Q Capture.                                           */
+* A transmission queue (xmitq) for the control messages from       */
+* Q Apply to Q Capture. The name for this local queue is CSQ1.     */ 
+* If Q Apply will load the target table, a model queue is needed   */
+* to spill messages from Q Capture during the load. The name for   */
+* this model queue is IBMQREP.SPILL.MODELQ                         */
+* A sender channel from CSQ2 to CSQ1 using xmitq CSQ1              */
+* A receiver channel from CSQ1 to CSQ2                             */
+* Note: The default disconnect interval for a channel is 6000      */
+* seconds (100 minutes). To prevent channels from timing out,      */
+* increase the default by using the DISCINT parameter, or set the  */
+* value to 0 (channel never times out). Balance this with the CPU  */
+* resource needed to keep the channel alive when no messages are   */
+* being sent.                                                      */
+********************************************************************/
+
+* Run the following commands in an interactive runmqsc session:    */
+
+DEFINE QLOCAL('ASN.SAMPLE_TO_TARGET.DATA') GET(ENABLED) +
+ PUT(ENABLED) DEFSOPT(SHARED) MAXDEPTH(500000)
+
+DEFINE QREMOTE('ASN.ADMINQ') RNAME('ASN.ADMINQ') +
+ RQMNAME('CSQ1') XMITQ('CSQ1') PUT(ENABLED)
+
+DEFINE QLOCAL('CSQ1') USAGE(XMITQ)
+
+DEFINE CHL ('CSQ2TOCSQ1') CHLTYPE(SDR) TRPTYPE(TCP) +
+ CONNAME('IP address of CSQ1 server') + XMITQ('CSQ1') +
+ DISCINT(0) CONVERT(NO)
+
+DEFINE CHL ('CSQ1TOCSQ2') CHLTYPE(RCVR) TRPTYPE(TCP)
+
+DEFINE QMODEL('IBMQREP.SPILL.MODELQ') DEFSOPT(SHARED) +
+ MAXDEPTH(500000) MSGDLVSQ(FIFO) DEFTYPE(PERMDYN)
+
+
+********************************************************************/
+* Defining objects for Q replication                               */
+* After you create the queue manager, queues, and channels at both */
+* servers, use the Replication Center or ASNCLP command-line       */
+* program to define the objects for Q replication.                 */
+* In the Replication Center, use the Create Control Tables wizard  */
+* to enter the name of the objects for the Q Capture control       */
+* tables: queue manager (CSQ1), administration queue               */
+* (ASN.ADMINQ), and restart queue (ASN.RESTARTQ).                  */
+* When creating the Q Apply control tables, use the wizard to      */
+* enter the name of the queue manager CSQ2.                        */
+* Use the Create Replication Queue Map window to enter the name    */
+* of the remote queue definition for the administration queue      */
+* (ASN.ADMINQ), the name of the send queue                         */
+* (ASN.SAMPLE_TO_TARGET.DATA), and the name of the receive queue   */
+* (ASN.RECVQ).                                                     */
+* In the ASNCLP, use the SET QMANAGER command, CREATE CONTROL      */
+* TABLES FOR command, and CREATE REPLQMAP command to define the    */
+* objects for Q replication.                                       */
+********************************************************************/
+
+*********************************************************************/
+* Starting channels                                                 */
+* For the remote setup, before you start replication you need to    */
+* start WebSphere MQ interchannel communication.                    */
+* First make sure that the queue manager is running, then start the */
+* listener and then start the channel:                              */
+* strmqm CSQ1  <<this command starts the qmgr>>                     */
+* runmqlsr -t tcp -m CSQ1 -p 1414 <<this starts the listener        */
+* using tcpip protocol for queue manager CSQ1, port 1414>>          */
+* runmqsc <<starts interactive MQSC command line >>                 */
+* start channel (CSQ1toCSQ2) <<this command starts the channel>>    */
+* end  <<this command ends the runmqsc session>                     */
+* Note: You need to use the same commands at the CSQ2 server.       */
+*********************************************************************/
+
+*********************************************************************/
+* Here is a quick sample to verify the WebSphere MQ setup by        */
+* sending messages.                                                 */
+* Go to the samples directory where WebSphere MQ is installed (on   */
+* an AIX machine the default is /usr/mqm/samp/bin).                 */
+* On the CSQ1 server, issue the following command:                  */
+* amqsput ASN.SAMPLE_TO_TARGET.DATA CSQ1                            */
+* <<put message on the queue>>                                      */
+* <type some message>                                               */
+* <hit return twice>                                                */  
+* If no error is returned, the put was succesful.                   */
+* Now go to the CSQ2 server to get the message. Make sure you are   */
+* in the right directory, and issue following command:              */
+* amqsget ASN.SAMPLE_TO_TARGET.DATA CSQ2 <<get from queue at qmgr>> */   
+* You should be able to retrieve the message.                       */ 
+* Repeat the same steps in the reverse direction.                   */
+*********************************************************************/                              
+
+*********************************************************************/
+* For bidirectional and peer-to-peer replication, you need to       */
+* define another set of the WebSphere MQ objects required for       */
+* unidirectional replication in the opposite direction.             */
+* There are two exceptions:                                         */
+* - Only one queue manager is required on each system               */
+* - Only one transmission queue (xmitq) and send/receive channel    */
+* pair are needed between each queue manager.                       */
+*********************************************************************/
+

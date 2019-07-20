@@ -1,0 +1,1649 @@
+#!/bin/ksh -p
+#-----------------------------------------------------------------------
+# (C) COPYRIGHT International Business Machines Corp. 2001-2010
+# All Rights Reserved
+#
+# US Government Users Restricted Rights - Use, duplication or
+# disclosure restricted by GSA ADP Schedule Contract with IBM Corp.
+#
+# NAME: db2_hang_detect [DB2INSTANCE] [NN] [DETECTLEVEL] [ACTION] [DBNAME] [NOTIFYADDRESS] [LOOPBACKDBNAME] [VERBOSE]
+#
+# FUNCTION: Perform hang detection heuristics
+#
+# Return 0 no hang detected and instance is up
+# 1 indicates instance is offline (i.e. no active db2sysc)
+# 2 indicates some enviromental issue preventing successful execution (e.g.
+# home full, etc.)
+# 3 and higher indicates some potential detected hang
+#
+# Multiple copies should not be executed concurrently
+#-----------------------------------------------------------------------
+PATH=/bin:/usr/bin:/sbin:/usr/sbin
+#
+# BEGIN USER MODIFIABLE VALUES
+#
+DB2INSTANCE=${1:-db2inst1} # instance owner name ... must run script as root
+NN=${2:-0}            # partition number : 0 ... 999
+DETECTLEVEL=${3:-4}         # 0 || 1 || 2 || 3 || 4 ... which hang detection tests to run (0=NONE,4=ALL)
+ACTION=${4:-inform}   # inform || force || terminate
+DBNAME=${5:-sample}      # the database name ... must specify one
+NOTIFYADDRESS=${6:-db2inst1@ca.ibm.com} # for notification email
+LOOPBACKDBNAME=${7:-nulldb} # db cataloged via tcpip, nulldb means no db
+VERBOSE=${8:-noverbose} # verbose || noverbose
+#
+# The longer the values below the longer it will take to detect a true hang
+# generally the defaults are fine but these can be modified to any
+# integer value
+maxdb2pdTime=100
+maxdb2pdTimeAppTime=100
+maxdb2pdTimeAgents=100
+maxdb2pdTimeEdus=100
+maxdblistTime=100
+maxapplistTime=100
+maxgetdbmcfgTime=100
+maxdb2connectTime=100
+MPP=0
+
+maxStackstoCompare=20 #Max number of EDUs to proceed to Stack Comparison phase
+#
+# END USER MODIFIABLE VALUES
+#
+PROGNAME=$(basename $0)
+PROGPATH=$(dirname $0)
+
+# Check if user is root. If not, exit the script.
+UNAME=$(uname)
+if [[ "${UNAME}" = "SunOS" ]]; then
+   RTUSER=$(/usr/xpg4/bin/id -u)
+else
+   RTUSER=$(id -u)
+fi
+
+if [ $RTUSER != 0 ]; then
+   # echo "Your effective user ID: $RTUSER"
+   echo Error:Please run this script as root
+   exit 2
+fi
+
+# No script modifications allowed
+# Validate scripts own checksum
+CKSUM_ME=$(cat $PROGPATH/$PROGNAME | grep -v CKSUM | grep -v ^max | cksum | awk '{print $1}')
+CKSUM=3283999129
+BLDLEVEL="20130201"
+logger -i -p notice -t $0 "My cksum: $CKSUM_ME, stored cksum: $CKSUM: bld:$BLDLEVEL"
+#
+#
+NOTIFYSUBJECT=$PROGNAME # Subject line of email
+informContents=""
+#
+definedMaxRunQ=30 # Will not detection on a too-busy system
+gather_interval=10 # seconds between progress checks
+eduScaleFactor=1 #EDU Scaling Factor for progress_check
+#
+# In seconds (max) to wait for operation to be declared hung
+# Following is a minimum and cannot be changed
+baseWaitTime=20
+#
+deadlatch1=""
+deadlatch2=""
+#
+rc=0
+hangrc=0
+#
+
+if [[ "${UNAME}" = "AIX" ]]; then
+   GREP=/bin/grep
+   grepFlags='-p'
+else
+   GREP=/bin/grep
+   grepFlags='-A2'
+fi
+#
+# ...
+let numberOfEDUsUsingCPU=0
+let potentialHungAgent=0
+let potentialHungAgentFound=0
+
+#######################################################
+#######################################################
+
+#######################################################
+# Timer related
+#######################################################
+enableTimer=0
+entrySet=0
+scriptcalled=1
+typeset -i timeIdx=0
+typeset -i functDuration=0
+typeset -i durationSecond=0
+typeset -i durationHSec=0
+calTime()
+{
+   if [[ $enableTimer -eq 1 ]];then
+      if [[ $scriptcalled -eq 1 ]];then
+         echo ---------------------------- >> timelog.out.$$
+         date >> timelog.out.$$
+         scriptcalled=0
+         functionNameList[$timeIdx]=$1
+         functionStartTime=$(date "+%s" )
+         functionTimeList[$timeIdx]=$functionStartTime
+      fi
+      
+      if [[ $1 = ${functionNameList[$timeIdx]} ]];then
+             functionEndTime=$(date "+%s") 
+             functDuration=functionEndTime-functionTimeList[$timeIdx]
+             echo ${functionNameList[$timeIdx]}:$functDuration >> timelog.out.$$
+             functionNameList[$timeIdx]=""
+             if [[ $timeIdx -gt 0 ]];then
+                 timeIdx=$timeIdx-1
+             fi
+             
+      else
+             timeIdx=$timeIdx+1
+             functionNameList[$timeIdx]=$1
+             functionStartTime=$(date "+%s")
+             functionTimeList[$timeIdx]=$functionStartTime
+       fi
+   fi
+}
+
+#######################################################
+# instanceHomeCheck
+#######################################################
+instanceHomeCheck()
+{
+    instanceHomeIsOK=0
+    homeWriteable=0
+
+    if [[ -w ${INSTHOME} ]];then
+       homeWriteable=1
+    else
+       logger -i -p error -t $0 "Error: ${INSTHOME} is not writeable"
+       homeWriteable=0
+    fi
+
+    if [[ ${homeWriteable} -eq 1 ]];then
+        freeDisk=$(df -k -P ${INSTHOME} | tail -1 | awk '{print $(NF-2)}')
+        # Need at least 1024k (about 1M) free
+        if [[ $freeDisk -gt 1024 ]];then
+            instanceHomeIsOK=1
+        else
+           logger -i -p error -t $0 "Error: ${INSTHOME} does not have more than 1 MB available space"
+        fi
+         
+    fi    
+    return $instanceHomeIsOK
+
+}
+#######################################################      
+#######################################################
+#function premain
+#
+# Initial setup of enviroment, check inputs, etc.
+#
+# INPUT:  Globals
+#
+# OUTPUT: None
+#
+# RETURN: Return 0 if premain() validation was OK
+#######################################################
+premain()
+{
+  # logger -i -p debug -t $PROGNAME "premain() enters"
+  calTime "premain"
+
+   if [[ "$VERBOSE" = "verbose" ]]; then
+      set -x
+      typeset -ft $(typeset +f)
+   else
+      # exec  2> /dev/null
+      # exec  1> /dev/null
+      set +x
+   fi
+
+   if [[ -z $DB2INSTANCE ]]; then
+      logger -i -p error -t $0 "Error: Must specify instance name"
+      rc=2
+   fi
+
+   if [[ -z ${INSTHOME} ]] ; then
+      userhome=~${DB2INSTANCE?}
+      eval userhome=$userhome
+      INSTHOME=${userhome}
+   fi
+   if [[ -z ${INSTHOME} ]] ; then
+      INSTHOME=$(cat /etc/passwd | ${GREP?} "^${DB2INSTANCE?}:" | cut -f 6 -d \:)
+   fi
+   if [[ -z ${INSTHOME} ]] ; then
+      logger -i -p error -t $0 "There is no home directory defined for ${DB2INSTANCE?}"
+      rc=2
+   fi
+
+   INSTHOME=${INSTHOME#*=}
+   INSTHOME=${INSTHOME%%*( )}
+
+   if [[ -e ${INSTHOME?}/sqllib/db2nodes.cfg ]] ; then
+      MPP=1
+   fi
+
+   # Make sure lack of hanginess of home dir and basic system livenss
+   system_liveness_check
+
+   #check instance home availablility
+   instanceHomeCheck
+   if [[ $instanceHomeIsOK -eq 1 ]];then
+      rc=2
+   fi
+
+   DB2PD=${INSTHOME?}/sqllib/adm/db2pd
+   if test -r $DB2PD ; then
+   :
+   else
+      logger -i -p error -t $0 "Cannot read $DB2PD"
+      rc=2
+   fi
+
+   # logger -i -p debug -t $PROGNAME "premain() returns $rc"
+   calTime "premain"
+   return $rc
+}
+
+#######################################################
+# postmain()
+#
+# Cleanup function 
+#
+# INPUT:  None
+# OUTPUT: None
+#
+# RETURN: Return 0 if cleanup OK
+#######################################################
+postmain()
+{
+   calTime "postmain"
+   logger -i -p debug -t $PROGNAME "postmain() enters"
+   if [ ${fname} ]; then rm -f ${fname?}; fi
+   if [ ${fname1} ]; then rm -f ${fname1?}; fi
+   if [ ${fname2} ]; then rm -f ${fname2?}; fi
+   if [ ${fname4} ]; then rm -f ${fname4?}; fi
+   if [ ${fname5} ]; then rm -f ${fname5?}; fi
+   if [ ${fname6} ]; then rm -f ${fname6?}; fi
+   if [ ${fname7} ]; then rm -f ${fname7?}; fi
+   if [ ${fname8} ]; then rm -f ${fname8?}; fi
+   if [ ${fname9} ]; then rm -f ${fname9?}; fi
+   if [ ${fnamea} ]; then rm -f ${fnamea?}; fi
+   if [ ${fnameb} ]; then rm -f ${fnameb?}; fi
+   if [ ${llfname} ]; then rm -f ${llfname?}; fi
+   rm -f ${INSTHOME?}/sqllib/tmp/.${PROGNAME?}.${NN?}.lock
+   rc=$?
+   logger -i -p debug -t $PROGNAME "postmain() cleanup returns $rc"
+   calTime "postmain"
+   rc=0 # Don't want cleanup failure to impact overall rc
+   return $rc
+}
+
+
+##################
+#function if_error
+##################
+if_error()
+{
+   calTime "if_error"
+   if [[ $? -ne 0 ]]; then # check return code passed to function
+      print "$1" # if rc > 0 then print error msg and quit
+      exit $?
+      exit $?
+   fi
+   if [[ $rc -ne 0 ]]; then # check return code passed to function
+      print "$1" # if rc > 0 then print error msg and quit
+      exit $?
+      exit $?
+   fi
+   # logger -i -p debug -t $PROGNAME "if_error() returns: $rc"
+   calTime "if_error"
+   return $rc
+}
+
+
+#######################################################
+#remotePartitionControl
+#######################################################
+remotePartitionControl()
+{
+    calTime "remotePartitionControl"
+    #$1 is the partition number
+    #$2 is the remote command
+    #echo $2
+    rc=0
+    if [[  $1 -eq $NN ]];then
+        su - $DB2INSTANCE -c "$2"
+        rc=$?
+    else
+        su - $DB2INSTANCE -c "db2_all \"<<+$1<$2\" > ${INSTHOME?}/sqllib/tmp/remoteCmdTmp.${DBNAME?}.${NN?}"
+        su - $DB2INSTANCE -c "cat ${INSTHOME?}/sqllib/tmp/remoteCmdTmp.${DBNAME?}.${NN?}" | awk '!/completed ok/' | awk '!/completed rc/'| awk 'NR > 1'
+        exeResult=$(su - $DB2INSTANCE -c "cat ${INSTHOME?}/sqllib/tmp/remoteCmdTmp.${DBNAME?}.${NN?}" | awk '/completed rc/ {print $NF}')
+        su - $DB2INSTANCE -c "rm ${INSTHOME?}/sqllib/tmp/remoteCmdTmp.${DBNAME?}.${NN?}"
+        rc=${exeResult#rc=}
+    fi
+    calTime "remotePartitionControl"
+    return $rc
+}
+
+
+
+#######################################################
+#dumpAndCompareForEDU
+#######################################################
+dumpAndCompareForEDU()
+{
+   calTime "dumpAndCompareForEDU"
+   # Get the file path
+   # $1 is the EDU
+   # $2 is the syscPID
+   # $3 is the partition number
+   # Check time bewteen two stack dump
+   # logger -i -p debug -t $PROGNAME "dumpAndCompareForEDU() enters: $1 $2 $3
+   checkEDUResult=0
+   stackCheckTime=1
+   checkHungEDU=$1
+   checkHungsyscPID=$2
+   partitionNum=$3
+   partitionLen=${#partitionNum}
+   stackFileExist=0
+   potentialHungAgent=0
+
+
+   if [[ $partitionLen -lt 3 ]];then
+
+       if [[ $partitionLen -eq 2 ]];then
+           partitionNum="0$partitionNum"
+       fi
+       if [[ $partitionLen -eq 1 ]];then
+           partitionNum="00$partitionNum"
+       fi
+   fi
+
+   checkHungEDU=${checkHungEDU##0*(0)}
+
+   stackFile="$checkHungsyscPID.$checkHungEDU.${partitionNum?}.stack.txt"
+
+   #echo $stackFile file
+   # path
+   stackPath=$(remotePartitionControl $3 "db2 get dbm cfg" | awk '/resolved DIAGPATH/ {print $6}')
+
+   if [[ ! -d $stackPath  ]];then
+      stackPath="${INSTHOME?}/sqllib/db2dump"
+   fi
+   stackLocation="$stackPath/$stackFile"
+
+   #echo $stackLocation file
+
+   remotePartitionControl $3 "mv $stackLocation $stackLocation.old 2> /dev/null > /dev/null"
+
+   # Dump the stack
+   #First Dump
+   if [[ $MPP -eq 1 ]];then
+     remotePartitionControl $3 "${DB2PD?} -stack $checkHungEDU -dbp $3 2> /dev/null > /dev/null"
+   else
+     remotePartitionControl $3 "${DB2PD?} -stack $checkHungEDU 2> /dev/null > /dev/null"
+   fi
+
+   remotePartitionControl $3 "cat $stackLocation | awk '/<StackTrace>/,/<\/StackTrace>/' > $stackLocation.firstDump"
+   remotePartitionControl $3 "rm -f $stackLocation 2> /dev/null > /dev/null"
+
+   # After sleep(Removed)
+   # sleep $stackCheckTime
+   # Second dump
+
+   if [[ $MPP -eq 1 ]];then
+     remotePartitionControl $3 "${DB2PD?} -stack $checkHungEDU -dbp $3 2>/dev/null > /dev/null"
+   else
+     remotePartitionControl $3 "${DB2PD?} -stack $checkHungEDU 2>/dev/null > /dev/null"
+   fi
+   remotePartitionControl $3 "cat $stackLocation | awk '/<StackTrace>/,/<\/StackTrace>/' > $stackLocation.secondDump"
+   remotePartitionControl $3 "rm -f $stackLocation 2> /dev/null > /dev/null"
+
+   remotePartitionControl $3 "mv $stackLocation.old $stackLocation 2> /dev/null > /dev/null"
+
+   #check empty
+   checkFirstEmpty=$(remotePartitionControl $3 "cat $stackLocation.firstDump" | awk '/<StackTrace>/{print "Nonempty"}')
+   checkSecondEmpty=$(remotePartitionControl $3 "cat $stackLocation.secondDump" | awk '/<StackTrace>/{print "Nonempty"}')
+   
+   if [[ $checkSecondEmpty != "Nonempty" || $checkFirstEmpty != "Nonempty" ]];then
+       checkEDUResult=0
+       remotePartitionControl $3 "rm -f $stackLocation.firstDump" 2>/dev/null > /dev/null
+       remotePartitionControl $3 "rm -f $stackLocation.secondDump" 2>/dev/null > /dev/null
+       return $checkEDUResult
+   fi
+   
+   # Compare
+   #remove any old stack dump
+
+   remotePartitionControl $3 "diff $stackLocation.firstDump $stackLocation.secondDump" 2>/dev/null > /dev/null
+ 
+   if [[ $? -eq 0 ]];then
+      justWaitAgent=$(remotePartitionControl $3 "cat $stackLocation.secondDump" | awk '/ thread_wait /{print "skip"}')
+      if [[ $justWaitAgent = "skip" ]];then
+         potentialHungAgent=0 
+         checkEDUResult=0
+      else
+         checkEDUResult=1
+         potentialHungAgent=1
+         partitionInvolved=1
+      fi
+   fi
+
+   # We may want to keep the two files if there is difference
+   # Otherwise, may just remove then
+   if [[ $potentialHungAgent -ne 1 ]];then
+       remotePartitionControl $3 "rm -f $stackLocation.firstDump" 2>/dev/null > /dev/null
+       remotePartitionControl $3 "rm -f $stackLocation.secondDump" 2>/dev/null > /dev/null
+   fi
+   # logger -i -p debug -t $PROGNAME "dumpAndCompareForEDU() returns:$checkEDUResult"
+   calTime "dumpAndCompareForEDU"
+   return $checkEDUResult
+}
+
+#######################################################
+# compareStacksForEDU()
+#######################################################
+compareStacksForEDU()
+{
+   calTime "compareStacksForEDU"
+   #logger -i -p debug -t $PROGNAME "compareStacksForEDU() : $potentiallyHungEDU, $db2syscPID"
+
+   dumpAndCompareForEDU $potentiallyHungEDU $db2syscPID ${NN?}
+   #logger -i -p debug -t $PROGNAME "compareStacksForEDU() returns  : $potentiallyHungAgent"
+   calTime "compareStacksForEDU"
+   return $potentialHungAgent
+}
+
+##################
+#function checkAllPartitionsAboutApp
+##################
+checkAllPartitionsAboutApp()
+{
+   calTime "checkAllPartitionsAboutApp"
+   # logger -i -p debug -t $PROGNAME "checkAllPartitionsAboutApp() enters: $1 check app"
+   typeset -i applicationHandle=$1
+
+   # pass in the application handle number
+
+   remotePartitionControl $NN "cat $INSTHOME/sqllib/db2nodes.cfg 2> /dev/null" | awk '{print $1,$2}' | { while read nodeNumber serverName;do
+
+         #echo $nodeNumber $serverName
+         if [[ ${NN?} -ne $nodeNumber ]];then
+             #Get the agent id
+             otherAgentID=$(remotePartitionControl $nodeNumber "db2pd -agent" | awk '{if ($2 = '$applicationHandle') print $4}')
+             #Get the db2sysc PID
+             otherPartitionSysID=$(remotePartitionControl $nodeNumber "db2pd -edu" | awk '/db2sysc PID:/ {print $3}')
+             if [[ -n $otherAgentID ]];then
+                 #Dump the stack for this agent
+                 if [[ -n $otherPartitionSysID ]];then
+                     partitionInvolved=0
+                     dumpAndCompareForEDU $otherAgentID $otherPartitionSysID $nodeNumber
+                     if [[ $partitionInvolved -eq 1 ]];then
+                         rc=0
+                         remotePartitionControl $nodeNumber "$INSTHOME/sqllib/bin/db2gcf -t 100 -d -p ${nodeNumber?} -i ${DB2INSTANCE?}" 2> /dev/null > /dev/null
+                         
+                         if [[ $rc != 0 ]]; then
+                           logger -i -p notice -t $PROGNAME "Killing db2 processes"
+                           remotePartitionControl $nodeNumber "db2nkill $nodeNumber;ipclean -a" 2> /dev/null > /dev/null
+                           logger -i -p notice -t $PROGNAME "Completed hard kill ( $DB2INSTANCE, $nodeNumber)"
+                           rc=0
+                         fi
+                     fi
+                     partitionInvolved=0
+                 fi
+             fi
+         fi
+      done }
+      # logger -i -p debug -t $PROGNAME "checkAllPartitionsAboutApp()"
+      calTime "checkAllPartitionsAboutApp"
+}
+##################
+#function take_inform_action
+##################
+take_inform_action()
+{
+  calTime "take_inform_action"
+  logger -i -p notice -t $PROGNAME "take_inform_action() enters"
+  print "$1" # if rc > 0 then print error msg and quit
+  rc=$?
+  logger -i -p notice -t $PROGNAME "take_inform_action() returns:$rc"
+  print "$informContents" | mail -s $NOTIFYSUBJECT $NOTIFYADDRESS
+  calTime "take_inform_action"
+  return $rc
+}
+
+#######################################################
+#take_debug_action()
+#######################################################
+take_debug_action()
+{
+   calTime "take_debug_action"
+   # logger -i -p debug -t $PROGNAME "take_debug_action() enters"
+   rc=0
+
+   # Before terminating, we will get a call stack
+   # su - ${DB2INSTANCE?} -c "db2_call_stack"
+   remotePartitionControl ${NN?} "db2pd -stack all 2> /dev/null > /dev/null"
+   #su - ${DB2INSTANCE?} -c "db2ncstk ${NN?}"
+   rc=$?
+
+   # logger -i -p debug -t $PROGNAME "take_debug_action() returns:$rc"
+   calTime "take_debug_action"
+   return $rc
+}
+
+#######################################################
+#take_force_action()
+#######################################################
+take_force_action()
+{
+   calTime "take_force_action"
+   # logger -i -p debug -t $PROGNAME "take_force_action() enters"
+   rc=0
+
+   # Only take action on an apparently idle instance partition
+   if [[ ${numberOfEDUsUsingCPU?} -eq 0 ]]; then
+      logger -i -p notice -t $PROGNAME "take_force_action(): About to force applications all"
+      /bin/ksh -c "su - ${DB2INSTANCE?} -c \"LANG=C;db2 force applications all |grep xyz  > /dev/null 2> /dev/null\"" &
+   fi
+
+   # logger -i -p debug -t $PROGNAME "take_force_action() returns $rc"
+   calTime "take_force_action"
+   return $rc
+}
+#######################################################
+#take_terminate_action()
+#######################################################
+take_terminate_action()
+{
+   calTime "take_terminate_action"
+   # logger -i -p debug -t $PROGNAME "take_terminate_action() enters"
+   rc=0
+
+   logger -i -p notice -t $PROGNAME "take_terminate_action(): About to force partition"
+   # Check other partitions
+
+   #echo ${#potentiallyNonProgressingAgents[*]}
+   if [[ ${#potentiallyNonProgressingAgents[*]} -gt 0 ]]; then
+   :
+      let index=0
+         while [ $index -lt ${#potentiallyNonProgressingAgents[*]} ];
+         do
+            hungAppHandle=${potentiallyNonProgressingAgents[$index]}
+            checkAllPartitionsAboutApp $hungAppHandle
+            let index+=1
+         done
+   fi
+
+   su - ${DB2INSTANCE} -c "$INSTHOME/sqllib/bin/db2gcf -t 100 -k -p ${NN?} -i ${DB2INSTANCE?} 2> /dev/null > /dev/null"
+   rc=$?
+ 
+   if [[ $rc != 0 ]]; then
+      logger -i -p notice -t $PROGNAME "Killing db2 processes"
+      su - ${DB2INSTANCE} -c "db2nkill ${NN?};ipclean -a 2> /dev/null > /dev/null"
+      logger -i -p notice -t $PROGNAME "Completed hard kill ( $DB2INSTANCE, $NN )"
+      rc=0
+   fi
+ 
+   # logger -i -p debug -t $PROGNAME "take_terminate_action() returns $rc"
+   calTime "take_terminate_action"
+   return $rc
+}
+
+
+##################
+#function if_hang_resolve
+##################
+if_hang_resolve()
+{
+  calTime "if_hang_resolve"
+  # logger -i -p debug -t $PROGNAME "if_hang_resolve() enters: $hang_rc"
+  if [[ $ACTION = "inform" ]]; then
+     take_inform_action 
+  fi
+  if [[ $ACTION = "force" ]]; then
+     take_inform_action 
+     take_debug_action 
+     take_force_action
+  fi
+  if [[ $ACTION = "terminate" ]]; then
+      take_inform_action 
+      take_debug_action 
+      take_force_action
+      take_terminate_action
+  fi
+
+  # logger -i -p debug -t $PROGNAME "if_hang_resolve() returns $hang_rc"
+  calTime "if_hang_resolve"
+  return $hang_rc
+}
+
+
+#######################################################
+# checkCompletion()
+#
+# Wait at most $waitTime seconds for command completion
+#
+# INPUT:  $ProcNum : PID to wait on
+# INPUT:  $waitTime: seconds to wait
+#
+# OUTPUT: None
+#
+# RETURN: Return 0 if $ProcNum still executing after $waitTime
+#         Return 1 if $ProcNum not executing after $waitTime
+#######################################################
+checkCompletion()
+{
+   calTime "checkCompletion"
+   # logger -i -p debug -t $PROGNAME "checkCompletion() enters"
+
+   let counter=0
+
+   kill -0 ${ProcNum} 2> /dev/null > /dev/null
+   ret=$?
+   while [[ $counter -lt ${waitTime?} && $ret -eq 0 ]]; 
+   do
+      # logger -i -p debug -t $PROGNAME "$ProcNum still executing: Iteration $counter"
+      sleep 1
+      kill -0 ${ProcNum} 2> /dev/null > /dev/null
+      ret=$?
+      let counter+=1
+   done
+
+   if [[ ${ret?} -eq 0 ]]; then
+      logger -i -p error -t $PROGNAME "$ProcNum still executing!"
+      rc=0
+   else
+      rc=1
+   fi
+
+   # logger -i -p debug -t $PROGNAME "checkCompletion() returns $rc"
+   calTime "checkCompletion"
+   return $rc
+}
+
+#######################################################
+# system_liveness_check()
+#######################################################
+system_liveness_check()
+{
+   calTime "system_liveness_check"
+   # logger -i -p debug -t $PROGNAME "system_liveness_check() enters"
+
+   # logger -i -p debug -t $PROGNAME "About to : db2pd -help"
+   rc=1
+   /bin/ksh -c "su - ${DB2INSTANCE?} -c \"LANG=C;db2pd -help > ~/sqllib/tmp/db2pd.help.$$;rm -f ~/sqllib/tmp/db2pd.help.$$ 2> /dev/null\"" &
+   ProcNum=$!
+   waitTime=${maxdb2pdTime?}
+   checkCompletion
+   if [[ $rc -eq 0 ]]; then
+      # Have to abort ... need db2pd functional
+      logger -i -p error -t $PROGNAME "db2pd hangs"
+      rc=2
+      if_error
+      exit $rc
+      exit $rc
+   fi
+   # logger -i -p debug -t $PROGNAME "system_liveness() returns $rc"
+   calTime "system_liveness_check"
+   return $rc
+}
+
+
+#######################################################
+# instance_level_detect()
+#
+# Detect if instance level commands hang
+#
+# INPUT:  Globals
+#
+# OUTPUT: None
+#
+# FILES: osinfo.txt: db2pd -osinfo 
+#        dblist.txt: list of dbs in this instance
+#
+# RETURN: Return 0 if all operations complete
+#         Return 1 if db2pd cannot be called or if run-q exceeds max allowable
+#         Return 2 if instance level commands exceed time allowed
+#######################################################
+instance_level_detect()
+{
+   calTime "instance_level_detect"
+   # logger -i -p debug -t $PROGNAME "instance_level_detect() enters"
+   rc=0
+
+   system_liveness_check
+
+   # Check the cpu load  here ... 
+   # logger -i -p debug -t $PROGNAME "About to : db2pd -osinfo"
+   rc=1
+   fname=${INSTHOME?}/sqllib/tmp/tmp.txt.$$
+   fname1=${INSTHOME?}/sqllib/tmp/osinfo.txt.$$
+   # /bin/ksh -c "su - ${DB2INSTANCE?} -c \"LANG=C;${DB2PD?} -osinfo | ${GREP?} ${grepFlags?} CPU\ Load | ${GREP?} [0-9] | tail -1 2> /dev/null > ${fname1?}\" " &
+   /bin/ksh -c "su - ${DB2INSTANCE?} -c \"LANG=C;${DB2PD?} -osinfo | ${GREP?} ${grepFlags?} CPU\ Load | ${GREP?} \[0-9\] | tail -1 2> /dev/null > ${fname1?}\" " &
+   ProcNum=$!
+   waitTime=${maxdb2pdTime?}
+   checkCompletion
+   if [[ $rc -eq 0 ]]; then
+      # Have to abort ... need db2pd functional
+      logger -i -p error -t $PROGNAME "db2pd hangs"
+      rc=2
+      if_error
+      exit $rc
+      exit $rc
+   fi
+   shortRunQ=$(cat ${fname1?} | tr "." " " | awk '{print $1}')
+   rc=$?
+   if_error "cannot cat ${fname1?}"
+   if [[ ${shortRunQ?} -gt ${definedMaxRunQ?} ]]; then
+      logger -i -p error -t $PROGNAME "RunQ length of $shortRunQ: this exceeds maximum allowable $definedMaxRunQ. Abort."
+      informContents="${informContents}RunQ length of $shortRunQ: this exceeds maximum allowable $definedMaxRunQ. Abort.\n"
+      rc=2
+      if_error
+      exit $rc
+      exit $rc
+   fi
+
+   # Take some dbm level latches indirectly via well chosen operations
+   # logger -i -p debug -t $PROGNAME "About to : db2 get dbm cfg"
+   /bin/ksh -c "su - ${DB2INSTANCE?} -c \"LANG=C;db2 get dbm cfg 2> /dev/null > /dev/null \" " &
+   ProcNum=$!
+   let waitTime=baseWaitTime+maxgetdbmcfgTime+shortRunQ*5  # Approximation to model effects of system load
+   checkCompletion
+   if [[ $rc -eq 0 ]]; then
+      logger -i -p error -t $PROGNAME "db2 get dbm cfg NOT COMPLETE after ${waitTime?} seconds"
+      informContents="${informContents}db2 get dbm cfg NOT COMPLETE after ${waitTime?} seconds\n"
+      hangrc=3
+      if_hang_resolve
+      exit $hangrc
+      exit $hangrc
+   fi
+
+   # logger -i -p debug -t $PROGNAME "About to : db2 list database directory"
+   /bin/ksh -c "su - ${DB2INSTANCE?} -c \"LANG=C;db2 list database directory | ${GREP?}   ^\ Database\ name 2> /dev/null > ${fname?}\" " &
+   ProcNum=$!
+   let waitTime=baseWaitTime+maxdblistTime+shortRunQ*5  # Approximation to model effects of system load
+   checkCompletion
+   if [[ $rc -eq 0 ]]; then
+      logger -i -p error -t $PROGNAME "db2 list database directory NOT COMPLETE after ${waitTime?} seconds"
+      informContents="${informContents}db2 list database directory NOT COMPLETE after ${waitTime?} seconds\n"
+      hangrc=4
+      # This is likely an NFS issue...we will simply over-ride and inform for hang_action
+      # ACTION=inform
+      if_hang_resolve
+      exit $hangrc
+      exit $hangrc
+   fi
+   fname2=${INSTHOME?}/sqllib/tmp/dblist.txt.$$
+   cat ${fname?} | awk '{print $4}' > ${fname2?}
+   rm -f ${fname?}
+   rc=$?
+   if_error
+
+   while read line; do
+      if [[ ${DBNAME?} = ${line?} ]]; then # only interested for the defined db
+         logger -i -p info -t $PROGNAME "*** About to : db2 list applications for database ${line?}"
+         fname=${INSTHOME?}/sqllib/tmp/listapps.txt.$$
+         /bin/ksh -c "su - ${DB2INSTANCE?} -c \"LANG=C;db2 list applications for database ${line?} 2> /dev/null > ${fname?} \"" &
+         ProcNum=$!
+         let waitTime=baseWaitTime+maxapplistTime+shortRunQ*5  # Approximation to model effects of system load
+         checkCompletion
+         if [[ $ret -eq 0 ]]; then
+            logger -i -p error -t $PROGNAME "db2 list applications for database ${line?} NOT COMPLETE after ${waitTime?} seconds"
+            informContents="${informContents}db2 list applications for database ${line?} NOT COMPLETE after ${waitTime?} seconds\n"
+            hangrc=5
+            if_hang_resolve
+            exit $hangrc
+            exit $hangrc
+         fi
+      fi
+   done < ${fname2?}
+   rm -f ${fname?}
+
+   # logger -i -p debug -t $PROGNAME "instance_level_detect() returns $rc"
+   calTime "instance_level_detect"
+   return $rc
+}
+#######################################################
+# doCheck()
+#
+# Check if there is a cycle by given current waiter and holder
+#
+# INPUT:  $1 Current waiter
+#         $2 Current holder
+#
+# OUTPUT: The cycle found
+#
+#
+# RETURN: Return 0 if there is no cycle found
+#         Return 1 if there is a cycle found
+#######################################################
+doCheck()
+{
+   # logger -i -p debug -t $PROGNAME "checkCycle() enters"
+   rc=0
+
+   # If the waiter is 0 which means no EDU wait, just return
+   if [[ $1 -eq 0 ]];then
+      return $rc
+   fi
+
+   # If the reportCycle is nothing and it's not at beginning of the path
+   # return
+   if [[  $3 -ne 0  && $reportCycle = "" ]];then
+      return $rc
+   fi
+
+   #check cycle
+   #check if there is type 1 cycle (One latch is Holded and Waited by same EDU
+
+   if [[ $1 -eq $2 ]];then
+       reportCycle="$1->$2"
+       #echo $reportCycle
+       logger -i -p notice -t $PROGNAME "Potential Deadlatch Found: $reportCycle"
+       informContents="${informContents}Potential Deadlatch Found: $reportCycle\n"
+       if [[ $firstDetect -eq 1 ]];then
+          deadlatch1="${deadlatch1}Deadlatch Found: $reportCycle"
+       else
+          deadlatch2="${deadlatch2}Deadlatch Found: $reportCycle"
+       fi
+       foundCycle=1
+       rc=1
+       # logger -i -p debug -t $PROGNAME "checkCycle() returns $rc"
+       return $rc
+   fi
+
+   #check if there is type 2 cycle (The inner cycle in the path)
+
+   if [[ $reportCycle = *\>$2-* ]];then
+       #echo ${reportCycle#*\>$2-}
+       reportCycle=${reportCycle#*\>$2-}
+       reportCycle="$2-$reportCycle->$2"
+       #echo $reportCycle
+       logger -i -p notice -t $PROGNAME "Potential Deadlatch Found: $reportCycle"
+       informContents="${informContents}Potential Deadlatch Found: $reportCycle\n"
+       if [[ $firstDetect -eq 1 ]];then
+          deadlatch1="${deadlatch1}Deadlatch Found: $reportCycle"
+       else
+          deadlatch2="${deadlatch2}Deadlatch Found: $reportCycle"
+       fi
+ 
+       foundCycle=1
+       rc=1
+       # logger -i -p debug -t $PROGNAME "checkCycle() returns $rc"
+       return $rc
+
+   fi
+
+   if [[ $3 -eq 0 ]];then
+
+       reportCycle="$1->$2"
+       currentRoot=$1
+
+   else
+       reportCycle="$reportCycle->$2"
+
+   fi
+
+   #Cycle check
+   #check if there is type 3 cycle (The beginning node of the path is the same
+   #as the end node of the path)
+
+   if [[ $currentRoot -eq $2 ]];then
+       foundCycle=1
+       #echo $reportCycle
+       logger -i -p notice -t $PROGNAME "Potential Deadlatch Found: $reportCycle"
+       informContents="${informContents}Potential Deadlatch Found: $reportCycle\n"
+       if [[ $firstDetect -eq 1 ]];then
+          deadlatch1="${deadlatch1}Deadlatch Found: $reportCycle"
+       else
+          deadlatch2="${deadlatch2}Deadlatch Found: $reportCycle"
+       fi
+ 
+       reportCycle=""
+       rc=1
+       # logger -i -p debug -t $PROGNAME "checkCycle() returns $rc"
+       return $rc
+
+   fi
+
+
+   #Recursively find the path by given holder
+
+   typeset -i localHIdx=0
+   for eWaiter in ${waiterList[*]};do
+       if [[ $eWaiter -ne 0 && $eWaiter -eq $2 ]];then
+          #add path
+          #echo $localHIdx index
+          counter[$counterIdx]=$localHIdx
+          globalReportCyc[$counterIdx]=$reportCycle
+          #echo $reportCycle
+          
+          #If we find the path is not end, the recursively call the doCheck method
+          doCheck $eWaiter ${holderList[$localHIdx]} 1
+
+          localHIdx=${counter[$counterIdx]}
+          #echo remove ${waiterList[$localHIdx]} ${holderList[$localHIdx]}
+           
+          #Remove the path we found, so we don't need to go through in future
+          waiterList[$localHIdx]=0
+          reportCycle=${globalReportCyc[$counterIdx]}
+          counterIdx=$counterIdx+1
+       fi
+       localHIdx=$localHIdx+1
+   done
+
+   #echo $reportCycle
+
+   # logger -i -p debug -t $PROGNAME "checkCycle() returns $rc"
+   return $rc
+
+}
+
+#######################################################
+# checkDeadLatch()
+#
+# Check deadlatch by parsing the db2pd -latch
+#
+# INPUT:  none
+#
+# OUTPUT: The cycle found
+#
+#
+# RETURN: Return 0 if there is no cycle found
+#         Return 1 if there is a cycle found
+#######################################################
+checkDeadLatch()
+{
+   calTime "checkDeadLatch"
+   # logger -i -p debug -t $PROGNAME "checkDeadLatch() enters"
+
+   latchResult="No deadlatch detected"
+   foundCycle=0
+   typeset -i counterIdx=0
+
+   #index of the holder array
+   typeset -i holderIdx=0
+   typeset -i waiterIdx=0
+   informContents="${informContents}Latch List:\n"
+   informContents="${informContents}Holder Waiter\n"
+
+   #build the latch graph and detect the deadlatch
+   llfname=${INSTHOME?}/sqllib/tmp/latchList.${DBNAME?}.${NN?}
+   if [[ $MPP -eq 1 ]];then
+     su - $DB2INSTANCE -c "${DB2PD?} -latch -dbp ${NN?}" | awk '/Unable to attach to database manager/ {print "db2 not start"}
+                         /0x/ {print $2,$3 }' > ${llfname?}
+   else
+     su - $DB2INSTANCE -c "${DB2PD?} -latch" | awk '/Unable to attach to database manager/ {print "db2 not start"}
+                         /0x/ {print $2,$3 }' > ${llfname?}
+   fi
+                       while read myline;do
+
+     db2manager=$(echo $myline | awk '/db2 not start/')
+     if [[ -n $db2manager ]];then
+         logger -i -p notice -t "Unable to attach to database manager.  Please ensure db2start has been run."
+         exit
+     fi
+
+     latchHolder=$(echo $myline | awk '{print $1}')
+     latchWaiter=$(echo $myline | awk '{print $2}')
+     #push into the list
+     if [[ $latchWaiter -ne 0 && $latchHolder -ne 0 ]];then
+         #echo $latchHolder $latchWaiter 
+         holderList[$holderIdx]=$latchHolder
+         waiterList[$waiterIdx]=$latchWaiter
+         holderIdx=$holderIdx+1
+         waiterIdx=$waiterIdx+1
+     fi
+
+     if [[ $firstDetect -eq 1 ]];then
+         deadlatch1="${deadlatch1}$latchHolder $latchWaiter/n"
+     else
+         deadlatch2="${deadlatch2}$latchHolder $latchWaiter/n"
+     fi
+ 
+     informContents="$informContents $myline\n"
+   done < ${llfname?}
+
+   #cycle check
+   typeset -i searchHolderIdx=0
+
+   for eachWaiter in ${waiterList[*]}; do
+      theHolder=${holderList[$searchHolderIdx]}
+      #check deadlatch for each EDU in the waiting list
+      if [[ waiterList[$searchHolderIdx] -ne 0 ]];then
+         doCheck $eachWaiter $theHolder 0
+         #Remove from list
+         waiterList[$searchHolderIdx]=0
+      fi
+      searchHolderIdx=$searchHolderIdx+1
+   done
+   
+   # logger -i -p debug -t $PROGNAME "checkDeadLatch() returns: $foundCycleng_detect.ksh"
+   calTime "checkDeadLatch"
+   return $foundCycle
+}
+
+
+#######################################################
+latch_level_detect()
+#######################################################
+{
+   calTime "latch_level_detect"
+   # logger -i -p debug -t $PROGNAME "latch_level_detect() enters"
+   rc=0
+   findDeadLatch=0
+   firstDetect=1
+
+   informContents="${informContents}Partition Number:$NN\n"
+   informContents="${informContents}\n"
+      
+   #check deadlatch 1st time
+   informContents="${informContents}Latch detection\n"
+   informContents="${informContents}----------------\n"
+   informContents="${informContents}First Iteration:\n"
+
+   checkDeadLatch
+
+   #if there is a deadlatch then check again
+
+   if [[ $foundCycle -gt 0 ]]; then
+       #sleep for 1 second
+      informContents="${informContents}\n"
+      informContents="${informContents}Second Iteration:\n"
+       sleep 1
+       #check deadlatch 2nd time
+       firstDetect=2
+       checkDeadLatch
+       #if there is still a deadlatch, report it
+       if [[ $foundCycle -gt 0 ]]; then
+          #check if the two deadlatch we found are same
+          #if they are same, report it
+          if [[ "$deadlatch1" = "$deadlatch2" ]];then
+          #Compare two lists of db2pd latches
+              findDeadLatch=1
+
+          fi 
+       fi 
+   fi
+ 
+   if [[ $findDeadLatch -gt 0 ]]; then
+      informContents="${informContents}\n"
+      informContents="${informContents}***Result: Potential deadlatch detected\n"
+      informContents="${informContents}----------------\n"
+      logger -i -p error -t $PROGNAME "Potential deadlatch detected"
+      hangrc=6
+      if_hang_resolve
+      exit $hangrc
+      exit $hangrc
+   else
+      informContents="${informContents}\n"
+      informContents="${informContents}***Result: No Deadlatch Found\n"
+   fi
+   informContents="${informContents}----------------\n"
+   # logger -i -p debug -t $PROGNAME "latch_level_detect() returns $rc"
+   calTime "latch_level_detect"
+   return $rc
+}
+
+#######################################################
+# listNumberofInterruptedAgents()
+#######################################################
+listNumberofInterruptedAgents()
+{
+   calTime "listNumberofInterruptedAgents"
+   let numberOfIntteruptedAgents=0
+   if [[ $MPP -eq 1 ]];then
+     su - $DB2INSTANCE -c "${DB2PD?} -agents -dbp ${NN?}" | awk '/0x/ {print $4}' | { while read listAgent;do
+      #Loop all the agent
+      interruptFlag=$(su - $DB2INSTANCE -c "${DB2PD?} -gagent $listAgent" | awk '/int interrupted:/ {print $3}')
+
+      if [[ $interruptFlag = "1" ]];then
+         numberOfIntteruptedAgents='expr $numberOfIntteruptedAgents + 1'
+      fi
+
+      done }
+   else
+     su - $DB2INSTANCE -c "${DB2PD?} -agents" | awk '/0x/ {print $4}' | { while read listAgent;do
+      #Loop all the agent
+      interruptFlag=$(su - $DB2INSTANCE -c "${DB2PD?} -gagent $listAgent" | awk '/int interrupted:/ {print $3}')
+
+      if [[ $interruptFlag = "1" ]];then
+         numberOfIntteruptedAgents='expr $numberOfIntteruptedAgents + 1'
+      fi
+
+      done }
+   fi
+       
+   # logger -i -p debug -t $PROGNAME "listNumberOfInterruptedAgents() returns $numberOfInterruptedAgents"
+   calTime "listNumberofInterruptedAgents"
+   return $numberOfIntteruptedAgents
+}
+
+#######################################################
+# db_cat_node_fail_monitor()
+#######################################################
+db_cat_node_fail_monitor()
+{
+    calTime "db_cat_node_fail_monitor"
+    rc=0
+
+   fnamer=${INSTHOME?}/sqllib/tmp/recovery.txt.$$
+   # /bin/ksh -c "su - ${DB2INSTANCE?} -c \"LANG=C;${DB2PD?} -recovery -db ${DBNAME?} -dbp ${NN?} 2> /dev/null > ${fname?}\" " &
+   if [[ $MPP -eq 1 ]];then
+     /bin/ksh -c "su - ${DB2INSTANCE?} -c \"LANG=C;${DB2PD?} -recovery -db ${DBNAME?} -dbp ${NN?} \" 2\> \/dev\/null > ${fnamer} " &
+   else
+     /bin/ksh -c "su - ${DB2INSTANCE?} -c \"LANG=C;${DB2PD?} -recovery -db ${DBNAME?} \" 2\> \/dev\/null > ${fnamer} " &
+   fi
+   ProcNum=$!
+   let waitTime=baseWaitTime+maxdb2pdTimeEdus+shortRunQ*5  # Approximation to model effects of system load
+   checkCompletion
+   if [[ $rc -eq 0 ]]; then
+      logger -i -p error -t $PROGNAME "db2pd -edu hangs"
+      rc=2
+      if_error
+      exit $rc
+      exit $rc
+   fi
+   
+   output=$(cat $fnamer | awk '/CATALOGNODEFAIL/ {print "SQLENODEFAIL" }')
+   rm $fnamer
+
+    if [[ "X$output" = "XSQLENODEFAIL" ]]; then
+        logger -i -p error -t $PROGNAME "Catalog node failure detected at this partition"
+        informContents="${informContents}\n";
+        informContents="${informContents}Catalog node failure detected at this partition"
+        # If cat node failure has occurred, there can be any number (including 0) of interrupted agents
+        listNumberofInterruptedAgents
+        # Print out the # of interrupted agents for informational purposes
+        logger -i -p notice -t $PROGNAME "$numberOfInterruptedAgent: interrupted agents ... database ${DBNAME?} is idle"
+
+        # We would expect a -1229 on a connect, but the key is to ensure that there is no hang
+        system_liveness_check
+        rc=1
+
+        # CONNECT locally
+        /bin/ksh -c "su - ${DB2INSTANCE?} -c \"LANG=C;db2 connect to ${DBNAME?} 2> /dev/null > /dev/null \"" &
+        ProcNum=$!
+        maxdb2connecTime=10
+        let waitTime=baseWaitTime+maxdb2connecTime+shortRunQ*5  # Approximation to model effects of system load
+        checkCompletion
+        if [[ $ret -eq 0 ]]; then
+           # CONNECT is still going ... ensure that SQLENODEFAIL is still present
+           system_liveness_check
+           if [[ $MPP -eq 1 ]];then
+             output=$(su - $DB2INSTANCE -c "${DB2PD?} -recovery -db ${DBNAME?} -dbp ${NN?}" | awk '/CATALOGNODEFAIL/ {print "SQLENODEFAIL" }')
+           else
+             output=$(su - $DB2INSTANCE -c "${DB2PD?} -recovery -db ${DBNAME?}" | awk '/CATALOGNODEFAIL/ {print "SQLENODEFAIL" }')
+           fi
+           # if [[ "X$output" != "XSQLENODEFAIL" ]]; then
+           #    if [[ $ret -eq 0 ]]; then
+           if [[ "X$output" = "XSQLENODEFAIL" ]]; then
+              if [[ $ret -eq 2 ]]; then
+                # We would expect that the CONNECT time is bounded (short)
+                logger -i -p error -t $PROGNAME "db2 connect to ${DBNAME?} not complete"
+                hangrc=7
+                if_hang_resolve
+                exit $hangrc
+                exit $hangrc
+              fi
+           fi
+        else # as db2pd -edu does not hang and no CATALOGNODEFAIL situation reset rc=0 for the final return code of the testcase
+           rc=0
+        fi
+
+        # CONNECT to loopback
+        if [[ $LOOPBACKDBNAME != "nulldb" ]]; then
+         /bin/ksh -c "su - ${DB2INSTANCE?} -c \"LANG=C;db2 connect to ${LOOPBACKDBNAME?} 2> /dev/null > /dev/null \"" &
+         ProcNum=$!
+         let waitTime=baseWaitTime+maxdb2connecTime+shortRunQ*5  # Approximation to model effects of system load
+         checkCompletion
+         if [[ $ret -eq 0 ]]; then
+           # CONNECT is still going ... ensure that SQLENODEFAIL is still present
+           system_liveness_check
+           if [[ $MPP -eq 1 ]];then
+             output=$(su - $DB2INSTANCE -c "${DB2PD?} -recovery -db ${DBNAME?} -dbp ${NN?}" | awk '/CATALOGNODEFAIL/ {print "SQLENODEFAIL" }')
+           else
+             output=$(su - $DB2INSTANCE -c "${DB2PD?} -recovery -db ${DBNAME?}" | awk '/CATALOGNODEFAIL/ {print "SQLENODEFAIL" }')
+           fi
+           if [[ "X$output" != "XSQLENODEFAIL" ]]; then
+              if [[ $ret -eq 0 ]]; then
+                # We would expect that the CONNECT time is bounded (short)
+                logger -i -p error -t $PROGNAME "db2 connect to ${LOOPBACKDBNAME?} not complete"
+                hangrc=8
+                if_hang_resolve
+                exit $hangrc
+                exit $hangrc
+              fi
+           fi
+         fi
+        fi
+
+
+     fi
+     calTime "db_cat_node_fail_monitor"
+     return $rc
+}
+
+#######################################################
+# progress_detect_gather()
+#
+# Gather app level info
+#
+# INPUT:  Globals
+#
+# OUTPUT: None
+# FILES:
+#         angtInfoJoinapplinfo.txt.N
+#         agntinfo.txt.N
+#         applinfo.txt.N
+#         agntJoinapplinfo.txt.N
+#         agntapplinfo.txt.N
+#
+# RETURN: Return 0 if all operations complete
+#         Return 1 if db2pd cannot be called or if run-q exceeds max allowable
+#         Return 2 if instance level commands exceed time allowed
+#
+#######################################################
+progress_detect_gather()
+{
+   calTime "progress_detect_gather"
+   # logger -i -p debug -t $PROGNAME "progress_detect_gather() enters"
+
+   # Gather data via db2pd and joins ... 
+   system_liveness_check
+   # logger -i -p debug -t $PROGNAME "About to : db2pd -applications"
+   fname=${INSTHOME?}/sqllib/tmp/tmp.txt.$$
+   /bin/ksh -c "su - ${DB2INSTANCE?} -c \"LANG=C;${DB2PD?} -applications -db ${DBNAME?} 2> /dev/null > ${fname?}\" " &
+   ProcNum=$!
+   let waitTime=baseWaitTime+maxdb2pdTimeAppTime+shortRunQ*5  # Approximation to model effects of system load
+   checkCompletion
+   if [[ $rc -eq 0 ]]; then
+      # db2pd timeouts are generally not instance related hangs 
+      # since db2pd codepath does no latching 
+      logger -i -p error -t $PROGNAME "db2pd -applications hangs"
+      rc=2
+      if_error
+      exit $rc
+      exit $rc
+   fi
+
+   # Column format will be : AppHandl CoorEDUID Status
+   fname4=${INSTHOME?}/sqllib/tmp/applinfo.txt.${DBNAME?}.${NN?}.${gather_iteration?}
+   cat ${fname?} | awk '{print $2 " " $5 " " $6}' | egrep "(PerformingLoad|Executing|CommitActive|Compiling)" | sort -d > ${fname4?}
+   rc=$?
+   if_error "cannot cat ${fname?}"
+
+   rm -f ${fname?}
+   rc=$?
+   if_error "cannot rm ${fname?}"
+
+   # logger -i -p debug -t $PROGNAME "About to : db2pd -agents"
+   fname=${INSTHOME?}/sqllib/tmp/tmp.txt.$$
+   if [[ $MPP -eq 1 ]];then
+     /bin/ksh -c "su - ${DB2INSTANCE?} -c \"LANG=C;${DB2PD?} -agents -dbp ${NN?} 2> /dev/null > ${fname?}\" " &
+   else
+     /bin/ksh -c "su - ${DB2INSTANCE?} -c \"LANG=C;${DB2PD?} -agents 2> /dev/null > ${fname?}\" " &
+   fi
+   ProcNum=$!
+   let waitTime=baseWaitTime+maxdb2pdTimeAgents+shortRunQ*5  # Approximation to model effects of system load
+   checkCompletion
+   if [[ $rc -eq 0 ]]; then
+      # db2pd timeouts are generally not instance related hangs 
+      logger -i -p error -t $PROGNAME "db2pd -agents hangs"
+      rc=2
+      if_error
+      exit $rc
+      exit $rc
+   fi
+   # Column format will be : AppHandl AgentEDUID Rowsread Rowswrtn
+   fname5=${INSTHOME?}/sqllib/tmp/agntinfo.txt.${DBNAME?}.${NN?}.${gather_iteration?}
+   # cat ${fname?} | awk 'NR>10 {print $2 " " $4 " " $11 " " $12}' | grep [0-9] | sort -d > ${fname5?}
+   cat ${fname?} | awk 'NR>10 {print $2 " " $4 " " $11 " " $12}' | grep \[0-9\] | sort -d > ${fname5?}
+
+   rc=$?
+   if_error "cannot cat ${fname?}"
+   rm -f ${fname?}
+   rc=$?
+   if_error "cannot rm ${fname?}"
+
+   # logger -i -p debug -t $PROGNAME "About to : db2pd -edu"
+   if [[ $MPP -eq 1 ]];then
+     /bin/ksh -c "su - ${DB2INSTANCE?} -c \"LANG=C;${DB2PD?} -edu -dbp ${NN?} 2> /dev/null > ${fname?}\" " &
+   else
+     /bin/ksh -c "su - ${DB2INSTANCE?} -c \"LANG=C;${DB2PD?} -edu 2> /dev/null > ${fname?}\" " &
+   fi
+   ProcNum=$!
+   let waitTime=baseWaitTime+maxdb2pdTimeEdus+shortRunQ*5  # Approximation to model effects of system load
+   checkCompletion
+   if [[ $rc -eq 0 ]]; then
+      logger -i -p error -t $PROGNAME "db2pd -edu hangs"
+      rc=2
+      if_error
+      exit $rc
+      exit $rc
+   fi
+
+   # Column format will be : EDUID USR(s) SYS(s)
+   fname6=${INSTHOME?}/sqllib/tmp/eduinfo.txt.${DBNAME?}.${NN?}.${gather_iteration?}
+   cat ${fname?} | cut -c 1-10,87-113 | ${GREP?} -v \[a-zA-Z\] | ${GREP?} \^\[0-9\] | sort -d > ${fname6?}
+   rc=$?
+   if_error "cannot cat ${fname?}"
+
+   db2syscPID=$(cat ${fname?} | grep "^db2sysc PID: " | awk '{print $3}')
+   rc=$?
+   if_error "cannot cat ${fname?}"
+
+   rm -f ${fname?}
+   rc=$?
+   if_error "cannot rm ${fname?}"
+
+   # Column format will be : ApplHandl AgentEDUID RowsRead Rowswrtn CoorEDUID Status
+   fname7=${INSTHOME?}/sqllib/tmp/agntinfoJoinapplinfo.txt.${DBNAME?}.${NN?}.${gather_iteration?}
+   join ${fname5?} ${fname4?} > ${fname7?}
+   rc=$?
+   if_error "failed to join ${fname4?} ${fname5?}"
+   rm -f ${fname4?} ${fname5?}
+
+   # Column format will be : AgentEDUID CoorEDUID ApplHandl Status RowsRead Rowswrtn
+   fname8=${INSTHOME?}/sqllib/tmp/agntapplinfo.txt.${DBNAME?}.${NN?}.${gather_iteration?}
+   cat  ${fname7?} |  awk '{print $2 " " $5 " " $1 " " $6 " " $3 " " $4}'  | sort -d  > ${fname8?}
+   rc=$?
+   if_error "failed to cat ${fname7?}"
+   rm -f ${fname?}
+   rm -f ${fname7?}
+
+   # Column format will be : AgentEDUID USR(s) SYS(s) CoorEDUID ApplHandl Status RowsRead Rowswrtn
+   fname9=${INSTHOME?}/sqllib/tmp/joinedEduInfo.txt.${DBNAME?}.${NN?}.${gather_iteration?}
+   join ${fname6?} ${fname8?} > ${fname9?}
+   rc=$?
+   if_error "failed to join ${fname6?} ${fname8?}"
+   rm -f ${fname8?}
+
+   # logger -i -p debug -t $PROGNAME "progress_detect_gather() returns $rc"
+   calTime "progress_detect_gather"
+   return $rc
+}
+
+#######################################################
+# app_level_calculate_deltas()
+# Get deltas from currently existing data files
+#
+# INPUT:  Globals
+#         eduinfo.txt.N
+#         joinedEduInfo.txt.N
+# OUTPUT: 
+# FILES: 
+#        joinedEduInfo.txt.joined
+#        eduinfo.txt.joined
+#
+# RETURN: 0 or error
+#######################################################
+app_level_calculate_deltas()
+{
+   calTime "app_level_calculate_deltas"
+   # logger -i -p debug -t $PROGNAME "app_level_calculate_deltas() enters"
+
+   rc=0
+   let numberOfAppsThatShouldBeProgressingAndAreNot=0 
+
+   # Need to join various infomation 
+
+   # Column format will be : AgentEDUID USR(s) SYS(s) CoorEDUID ApplHandl Status RowsRead Rowswrtn USR(s) SYS(s) CoorEDUID ApplHandl Status RowsRead Rowswrtn  
+   fnamea=${INSTHOME?}/sqllib/tmp/joinedEduInfo.txt.joined.${DBNAME?}.${NN?}
+   join ${INSTHOME?}/sqllib/tmp/joinedEduInfo.txt.${DBNAME?}.${NN?}.0 ${INSTHOME?}/sqllib/tmp/joinedEduInfo.txt.${DBNAME?}.${NN?}.1 > ${fnamea?}
+   if_error "failed to join {fnamea?}"
+   rm -f ${INSTHOME?}/sqllib/tmp/joinedEduInfo.txt.${DBNAME?}.${NN?}.0 ${INSTHOME?}/sqllib/tmp/joinedEduInfo.txt.${DBNAME?}.${NN?}.1
+
+   # Column format will be : EDUID USR(s) SYS(s) USR(s) SYS(s)
+   fnameb=${INSTHOME?}/sqllib/tmp/eduinfo.txt.${DBNAME?}.${NN?}.joined
+   join ${INSTHOME?}/sqllib/tmp/eduinfo.txt.${DBNAME?}.${NN?}.0 ${INSTHOME?}/sqllib/tmp/eduinfo.txt.${DBNAME?}.${NN?}.1 > ${fnameb?}
+   if_error "failed to join ${fnameb?}"
+   rm -f ${INSTHOME?}/sqllib/tmp/eduinfo.txt.${DBNAME?}.${NN?}.0 ${INSTHOME?}/sqllib/tmp/eduinfo.txt.${DBNAME?}.${NN?}.1
+
+   # logger -i -p debug -t $PROGNAME "app_level_calculate_deltas() returns $rc"
+   calTime "app_level_calculate_deltas"
+   return $rc
+}
+
+#######################################################
+# progress_detect_take_terminate_action()
+#######################################################
+progress_detect_take_terminate_action()
+{
+   calTime "progress_detect_take_terminate_action"
+   # logger -i -p debug -t $PROGNAME "progress_detect_take_terminate_action() enters"
+   rc=0
+
+   # Only take action on an apparently idle instance...
+   if [[ ${numberOfEDUsUsingCPU?} -eq 0 ]]; then
+      take_terminate_action
+   fi
+
+   # logger -i -p debug -t $PROGNAME "progress_detect_take_terminate_action() returns $rc"
+   calTime "progress_detect_take_terminate_action"
+   return $rc
+}
+#######################################################
+# progress_detect_take_force_action()
+#######################################################
+progress_detect_take_force_action()
+{
+   calTime "progress_detect_take_force_action"
+   # logger -i -p debug -t $PROGNAME "progress_detect_take_force_action() enters"
+   rc=0
+
+   let index=0
+   while [ $index -lt ${#nonProgressingAgents[*]} ];
+   do
+      :
+      logger -i -p notice -t $PROGNAME "progress_detect_take_force_action(): 100: About to : force application \( ${nonProgressingAgents[$index]} \)"
+      su - ${DB2INSTANCE?} -c "LANG=C;db2 force application \( ${nonProgressingAgents[$index]} \)"
+      let index+=1
+   done
+
+   # logger -i -p debug -t $PROGNAME "progress_detect_take_force_action() returns $rc"
+   calTime "progress_detect_take_force_action"
+   return $rc
+}
+
+#######################################################
+# progress_detect_analyse()
+#######################################################
+progress_detect_analyse()
+{
+   calTime "progress_detect_analyse"
+   logger -i -p info -t $PROGNAME "progress_detect_analyse() enters"
+
+
+   # Are there any EDUs taking CPU ... 
+   let lineno=1
+   let numberOfEDUsUsingCPU=0
+   # Column format : EDUID USR(s) SYS(s) USR(s) SYS(s)
+   while read -r a b c d e
+   do
+      if [[ $b != $d || $c != $e ]] ; then
+         let numberOfEDUsUsingCPU+=1
+         logger -i -p notice -t $0 "progress_detect_analyse: EDUID $a alive: $b,$d:$c,$e"
+      fi
+      let lineno+=1
+   done < ${fnameb?}
+
+
+   # Are there any apps EXECUTING yet making no progress ... 
+   nl=$(wc -l ${INSTHOME?}/sqllib/tmp/joinedEduInfo.txt.joined.${DBNAME?}.${NN?} | awk '{print $1}' | $GREP \[0-9\])
+
+   let numberOfAppsThatShouldBeProgressingAndAreNot=0 
+   if [[ ${nl?} = 0 ]]; then
+      let numberOfAppsThatShouldBeProgressingAndAreNot=0 
+   else
+      let lineno=1
+      unset potentiallyNonProgressingAgents
+      unset potentiallyNonProgressingAgentsEDUID
+      tolerance=$(echo $shortRunQ $eduScaleFactor | awk ' { if ($1 > 1)  { print 0.01 / ($1 ^ $2) } else print "0.01" }')
+      # Column format : AgentEDUID USR(s) SYS(s) CoorEDUID ApplHandl Status RowsRead Rowswrtn USR(s) SYS(s) CoorEDUID ApplHandl Status RowsRead Rowswrtn  
+      while read -r a b c d e f g h i j k l m n o 
+      do
+         # XXXXXXXX
+         # systemTime=$(echo $b $i $c $j | awk '{exeF=$2-$1;exeS=$4-$3;if(exeF < 0) exeF=-exeF; if(exerS < 0) exeS=-exeS ; if ((exeF < 0.01) && (exeS < 0.01)) print "no progress"; else print "executing"}')
+         systemTime=$(echo $b $i $c $j $tolerance | awk '{exeF=$2-$1;exeS=$4-$3;tol=$5;if(exeF < 0) exeF=-exeF; if(exerS < 0) exeS=-exeS ; if ((exeF < tol) && (exeS < tol)) print "no progress"; else print "executing"}')
+         if [[ $systemTime = "no progress" && $g = $n && $h = $o && $f = $m ]] ; then
+            logger -i -p notice -t $0 "progress_detect_analyse: AgentEUIDID: $a, ApplHandle: $e UOW Executing with no apparent progress..."
+            potentiallyNonProgressingAgents[$numberOfAppsThatShouldBeProgressingAndAreNot]=${e?}
+            potentiallyNonProgressingAgentsEDUID[$numberOfAppsThatShouldBeProgressingAndAreNot]=${a?}
+            let numberOfAppsThatShouldBeProgressingAndAreNot+=1
+         fi
+         let lineno+=1
+      done < ${INSTHOME?}/sqllib/tmp/joinedEduInfo.txt.joined.${DBNAME?}.${NN?}
+   fi
+
+   # At this point all we really have is an agentedu which is using no CPU and
+   # doing no rows read/written
+   if [[ ${#potentiallyNonProgressingAgents[*]} -gt 0 ]]; then
+      logger -i -p notice -t $0 "progress_detect_analyse: number of potentially hung (non progressing agents): ${#potentiallyNonProgressingAgents[*]}"
+   fi
+
+   # For these let's see if the stacks are varying over time
+   potentialHungAgent=0
+   unset nonProgressingAgents
+   let innerIndex=0
+   if [[ ${#potentiallyNonProgressingAgentsEDUID[*]} -gt 0 ]]; then
+   :
+      let index=0
+      while [[ $index -lt ${#potentiallyNonProgressingAgentsEDUID[*]} && $index -lt $maxStackstoCompare ]];
+      do
+         potentiallyHungEDU=${potentiallyNonProgressingAgentsEDUID[$index]}
+         compareStacksForEDU
+         if [[ $potentialHungAgent -gt 0 ]]; then
+            potentialHungAgentFound=1
+            nonProgressingAgents[$innerIndex]=${potentiallyHungEDU?}
+            logger -i -p notice -t $PROGNAME "potentiallyHungEDU = ${potentiallyHungEDU?}: no progress in stacks, no CPU, no activity"
+            let innerIndex+=1
+         fi
+         let index+=1
+      done
+   fi
+
+   logger -i -p debug -t $PROGNAME "progress_detect_analyse() returns $rc"
+   calTime "progress_detect_analyse"
+   return $rc
+}
+
+#######################################################
+# progress_detect1()
+#######################################################
+progress_detect1()
+{
+   calTime "progress_detect1"
+   gather_iteration=0
+   progress_detect_gather
+   
+   let totalSleepForGather=shortRunQ+gather_interval
+   sleep ${totalSleepForGather?}
+   gather_iteration=1
+   progress_detect_gather
+
+   app_level_calculate_deltas
+
+   progress_detect_analyse
+   calTime "progress_detect1"
+}
+
+#######################################################
+# progress_detect()
+#######################################################
+progress_detect()
+{
+   calTime "progress_detect"
+   rc=0
+
+   progress_detect1
+
+   if [[ $potentialHungAgentFound -eq 1 ]]; then
+      hangrc=9
+      logger -i -p error -t $PROGNAME "Number Potential Hung Agent Found:${#nonProgressingAgents[*]}"
+      informContents="${informContents}\n";
+      informContents="${informContents}Number Potential Hung Agent Found:${#nonProgressingAgents[*]}\n"
+      informContents="${informContents}${nonProgressingAgents[*]}\n"
+      # For agent lack of progress check it will be inform only action
+      # regardless of user input
+      ACTION=inform 
+      if_hang_resolve
+      exit $hangrc
+      exit $hangrc
+   fi
+   
+   calTime "progress_detect"
+   return $rc
+}
+
+instance_level_status()
+{
+   calTime "instance_level_status"
+
+   system_liveness_check
+
+   su - ${DB2INSTANCE} -c "$INSTHOME/sqllib/bin/db2gcf -s -p ${NN?} -i ${DB2INSTANCE?} > /dev/null 2> /dev/null"
+   rc=$? # rc == 0 ==> instance up
+
+   if [[ $rc -eq 0 ]]; then
+      logger -i -p notice -t $0 "instance $DB2INSTANCE Partition $NN is UP"
+   else
+      logger -i -p notice -t $0 "instance $DB2INSTANCE Partition $NN is DOWN"
+   fi
+   calTime "instance_level_status"
+   return $rc
+}
+
+
+#######################################################
+# main()
+#######################################################
+main()
+{
+   calTime "main"
+
+   instance_level_status # Will always run db2gcf to monitor the instance UP or DOWN
+
+   # Run any or all of the instance level hang detect heuristics
+   # Note that if a potential hang is identified code performs hang_action
+   #  sets hangrc and returns directly ... i.e. does not fall through
+   if [[ $DETECTLEVEL -gt 0 ]]; then
+      :
+      instance_level_detect
+   fi
+
+   if [[ $DETECTLEVEL -gt 1 ]]; then
+      :
+      latch_level_detect 
+   fi
+
+   if [[ $DETECTLEVEL -gt 2 ]]; then
+      :
+      db_cat_node_fail_monitor
+   fi
+
+   if [[ $DETECTLEVEL -gt 3 ]]; then
+      :
+      progress_detect
+   fi
+
+   if [[ $hangrc -ne 0 ]]; then
+      rc=$hangrc
+   fi
+   
+   calTime "main"
+
+   return $rc
+}
+#######################################################
+logger -i -p notice -t $0 "******************** Entering  : $*"
+premain "${@:-}"
+main "${@:-}"
+postmain "${@:-}"
+logger -i -p notice -t $0 "******************** Returning : $rc"
+return ${rc?}

@@ -1,0 +1,109 @@
+#!/bin/sh
+
+if [ $# != 3 ] || [ \( $1 != "-a" \) -a \( $1 != "-d" \) ]
+then
+  echo ""
+  echo "Usage: $0 OPTION DB2_INSTANCE_NAME DB2_INSTANCE_HOME_DIR"
+  echo ""
+  echo "Options:"
+  echo "  -a  Add SELinux file contexts in the given DB2 instance's home directory"
+  echo "  -d  Delete SELinux file contexts from the given DB2 instance's home directory"
+  echo ""
+  echo "Examples:"
+  echo "  $0 -a db2inst1 /home/db2inst1"
+  echo "  $0 -d db2inst1 /home/db2inst1"
+  echo ""
+  exit
+fi
+
+if [ ! -d $3 ]
+then
+  echo "Error: directory $3 does not exist"
+  exit
+fi
+
+
+# Use semange to set file contexts of DB2 directories and files in /home to
+# override the rules in targeted/contexts/files/file_contexts.homedirs
+#
+# Subsequent rules override preceeding ones, otherwise this list is ordered by directory or file name
+#
+
+# Label the instance's home directory for DB2 data
+semanage fcontext $1 --ftype "" --seuser user_u -t db2_data_t       "$3"
+
+# Label the instance's data directory
+semanage fcontext $1 --ftype "" --seuser user_u -t db2_data_t       "$3/$2(/.*)?"
+
+# Routine that allows us to apply a label to both files and symbolic links for the
+# same file
+semanage_file_and_symlink()
+{
+  semanage fcontext "$1" --ftype -- --seuser user_u -t "$2" "$3"
+  semanage fcontext "$1" --ftype -l --seuser user_u -t "$2" "$3"
+}
+
+# Routine that allows us to apply a label to both directories and symbolic links for the
+# same directory
+semanage_directory_and_symlink()
+{
+  semanage fcontext "$1" --ftype -d --seuser user_u -t "$2" "$3"
+  semanage fcontext "$1" --ftype -l --seuser user_u -t "$2" "$3"
+}
+
+
+## Label the instance's sqllib directory
+semanage fcontext $1 --ftype "" --seuser user_u -t db2_file_t       "$3/sqllib(/.*)?"
+
+semanage_file_and_symlink "$1" "db2adm_exec_t" "$3/sqllib/adm/.*"
+semanage_file_and_symlink "$1" "db2_file_t"    "$3/sqllib/adm/ITLMready.properties"
+semanage_file_and_symlink "$1" "db2_exec_t"    "$3/sqllib/adsm/.*"
+semanage_file_and_symlink "$1" "db2_exec_t"    "$3/sqllib/bin/.*"
+semanage_file_and_symlink "$1" "db2_file_t"    "$3/sqllib/bin/db2refs.ndx"
+semanage_file_and_symlink "$1" "db2_file_t"    "$3/sqllib/bin/MQLInstall.sql"
+semanage_file_and_symlink "$1" "db2_file_t"    "$3/sqllib/bin/readme.pct"
+semanage_file_and_symlink "$1" "db2_exec_t"    "$3/sqllib/cfg/db2ln"
+semanage_file_and_symlink "$1" "db2_exec_t"    "$3/sqllib/cfg/db2rmln"
+semanage_file_and_symlink "$1" "db2_shlib_t"   "$3/sqllib/dasfcn/.*"
+semanage_file_and_symlink "$1" "db2_exec_t"    "$3/sqllib/ha/tsa/.*"
+semanage_file_and_symlink "$1" "db2_shlib_t"   "$3/sqllib/function/.*"
+semanage_file_and_symlink "$1" "db2_exec_t"    "$3/sqllib/install/db2ls"
+semanage_file_and_symlink "$1" "db2_exec_t"    "$3/sqllib/install/db2ls_exec"
+semanage_file_and_symlink "$1" "db2_exec_t"    "$3/sqllib/instance/.*"
+semanage_file_and_symlink "$1" "db2_file_t"    "$3/sqllib/instance/common/.*"
+semanage_file_and_symlink "$1" "db2_file_t"    "$3/sqllib/instance/native/.*"
+semanage_file_and_symlink "$1" "db2_exec_t"    "$3/sqllib/instance/native/install/db2help"
+semanage_file_and_symlink "$1" "db2_exec_t"    "$3/sqllib/instance/native/install/db2incpy"
+semanage_file_and_symlink "$1" "db2_exec_t"    "$3/sqllib/instance/native/install/db2iure"
+semanage_file_and_symlink "$1" "db2_exec_t"    "$3/sqllib/instance/native/install/db2_run_as"
+semanage_file_and_symlink "$1" "db2_exec_t"    "$3/sqllib/instance/native/install/qpmigrate"
+semanage_file_and_symlink "$1" "db2_exec_t"    "$3/sqllib/instance/native/install/qpsetup"
+semanage_file_and_symlink "$1" "db2_shlib_t"   "$3/sqllib/lib(32|64)?/.*"
+semanage_file_and_symlink "$1" "db2_exec_t"    "$3/sqllib/security(32|64)?/db2aud"
+semanage_file_and_symlink "$1" "db2_exec_t"    "$3/sqllib/security(32|64)?/db2chkau"
+semanage_file_and_symlink "$1" "db2_exec_t"    "$3/sqllib/security(32|64)?/db2ckpw"
+semanage_file_and_symlink "$1" "db2adm_exec_t" "$3/sqllib/security(32|64)?/db2flacc"
+semanage_file_and_symlink "$1" "db2_shlib_t"   "$3/sqllib/security(32|64)?/plugin/client/(.*)?"
+semanage_file_and_symlink "$1" "db2_shlib_t"   "$3/sqllib/security(32|64)?/plugin/group/(.*)?"
+semanage_file_and_symlink "$1" "db2_shlib_t"   "$3/sqllib/security(32|64)?/plugin/server/(.*)?"
+semanage_file_and_symlink "$1" "db2_shlib_t"   "$3/sqllib/security(32|64)?/plugin/IBM/client/(.*)?"
+semanage_file_and_symlink "$1" "db2_shlib_t"   "$3/sqllib/security(32|64)?/plugin/IBM/group/(.*)?"
+semanage_file_and_symlink "$1" "db2_shlib_t"   "$3/sqllib/security(32|64)?/plugin/IBM/server/(.*)?"
+
+semanage fcontext $1 --ftype "" --seuser user_u -t db2_diag_t       "$3/sqllib/db2dump(/.*)?"
+
+# Label directories
+semanage_directory_and_symlink "$1" "db2_shlib_t"   "$3/sqllib/function"
+semanage_directory_and_symlink "$1" "db2_shlib_t"   "$3/sqllib/function/unfenced"
+semanage_directory_and_symlink "$1" "db2_shlib_t"   "$3/sqllib/lib(32|64)?"
+semanage_directory_and_symlink "$1" "db2_shlib_t"   "$3/sqllib/security(32|64)?/plugin"
+semanage_directory_and_symlink "$1" "db2_shlib_t"   "$3/sqllib/security(32|64)?/plugin/client"
+semanage_directory_and_symlink "$1" "db2_shlib_t"   "$3/sqllib/security(32|64)?/plugin/group"
+semanage_directory_and_symlink "$1" "db2_shlib_t"   "$3/sqllib/security(32|64)?/plugin/server"
+semanage_directory_and_symlink "$1" "db2_shlib_t"   "$3/sqllib/security(32|64)?/plugin/IBM"
+semanage_directory_and_symlink "$1" "db2_shlib_t"   "$3/sqllib/security(32|64)?/plugin/IBM/client"
+semanage_directory_and_symlink "$1" "db2_shlib_t"   "$3/sqllib/security(32|64)?/plugin/IBM/group"
+semanage_directory_and_symlink "$1" "db2_shlib_t"   "$3/sqllib/security(32|64)?/plugin/IBM/server"
+
+# Run restorecon to apply the SELinux labels
+restorecon -R $3
