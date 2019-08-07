@@ -4,9 +4,12 @@ Nowadays data scientists and data engineers have to collect, handle, and analyze
 
 In these three notebooks, we will be demonstrating how programmers can use Db2 as a data source when creating machine learning models with huge data sets. Each notebook talks about how Db2 can be used with a specific popular machine learning libarary- `sklearn`, `h2o`, and `tensorflow`.
 
-Before you start using these notebooks, make sure you have created a Db2 On Cloud instance.
+Before you start using these notebooks, make sure you have created a Db2 On Cloud instance. You may also use any other current version of Db2 instances. However in the notebooks, we are specifically using Db2 on Cloud instances. 
 
-Below will give instructions on how to create Db2 on Cloud instance.
+If you already have a Db2 instance, make sure you have that instances service credentials in handy and have loaded the two datasets. 
+
+Below will give instructions on how to create and load data onto a Db2 on Cloud instance. If you are using a different type of Db2 instance, the instructions will be different from below.
+
 
 
 ### 1. Create an IBM Cloud account
