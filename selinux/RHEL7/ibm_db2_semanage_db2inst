@@ -1,0 +1,74 @@
+#!/bin/sh
+
+# Label a Db2 instance directory, as well as default database directory
+# Usage: [-a|-d]  DB2_INSTANCE_NAME  DB2_INSTANCE_HOME_DIR
+
+if [ $# != 3 ] || [ \( $1 != "-a" \) -a \( $1 != "-d" \) ]
+then
+  echo ""
+  echo "Usage: $0 OPTION DB2_INSTANCE_NAME DB2_INSTANCE_HOME_DIR"
+  echo ""
+  echo "Options:"
+  echo "  -a  Add SELinux file contexts in the given DB2 instance's home directory"
+  echo "  -d  Delete SELinux file contexts from the given DB2 instance's home directory"
+  echo ""
+  echo "Examples:"
+  echo "  $0 -a db2inst1 /home/db2inst1"
+  echo "  $0 -d db2inst1 /home/db2inst1"
+  echo ""
+  exit
+fi
+
+if [ ! -d $3 ]
+then
+  echo "Error: directory $3 does not exist"
+  exit
+fi
+
+
+
+## Label the instance's sqllib directory
+semanage fcontext $1 -t db2_file_t       "$3/sqllib(/.*)?"
+
+semanage fcontext $1 -t db2_shell_script_t  "$3/sqllib/db2cshrc"
+semanage fcontext $1 -t db2_shell_script_t  "$3/sqllib/usercshrc"
+semanage fcontext $1 -t db2_shell_script_t  "$3/sqllib/db2profile"
+semanage fcontext $1 -t db2_shell_script_t  "$3/sqllib/usercshrc"
+
+semanage fcontext $1 -t db2_cfg_t  "$3/sqllib/db2nodes.cfg"
+semanage fcontext $1 -t db2_cfg_t  "$3/sqllib/db2systm"
+semanage fcontext $1 -t db2_cfg_t  "$3/sqllib/profile.env"
+semanage fcontext $1 -t db2_cfg_t  "$3/sqllib/nodes.reg"
+
+semanage fcontext $1 -t db2adm_exec_t  "$3/sqllib/adm(/.*)?"
+semanage fcontext $1 -t db2d_exec_t  "$3/sqllib/adm/db2start"
+semanage fcontext $1 -t db2fmp_exec_t  "$3/sqllib/adm/db2fmp"
+semanage fcontext $1 -t db2fmp_exec_t  "$3/sqllib/adm/db2fmpt32"
+semanage fcontext $1 -t db2fmp_exec_t  "$3/sqllib/adm/db2fmpr"
+semanage fcontext $1 -t db2fmp_exec_t  "$3/sqllib/adm/db2fmpr32"
+
+semanage fcontext $1 -t db2_diag_t  "$3/sqllib/db2dump(/.*)?"
+
+semanage fcontext $1 -t db2_cfg_t  "$3/sqllib/cfg(/.*)?"
+semanage fcontext $1 -t db2_exec_t  "$3/sqllib/cfg/db2ln"
+semanage fcontext $1 -t db2_exec_t  "$3/sqllib/cfg/db2rmln"
+
+semanage fcontext $1 -t db2_shlib_t  "$3/sqllib/function(/.*)?"
+
+semanage fcontext $1 -t db2adm_exec_t "$3/sqllib/security/db2aud"
+semanage fcontext $1 -t db2adm_exec_t "$3/sqllib/security/db2chkau"
+semanage fcontext $1 -t db2adm_exec_t "$3/sqllib/security/db2flacc"
+semanage fcontext $1 -t db2adm_exec_t "$3/sqllib/security/db2ckpw"
+semanage fcontext $1 -t db2adm_exec_t "$3/sqllib/security/db2chpw"
+semanage fcontext $1 -t db2_data_t "$3/sqllib/security/auditdata"
+semanage fcontext $1 -t db2_cfg_t "$3/sqllib/security/db2audit.cfg"
+semanage fcontext $1 -t db2_shlib_t "$3/sqllib/security(32|64)(/.*)?"
+
+semanage fcontext $1 -t db2_exec_t "$3/sqllib/bin(/.*)?"
+
+# Label the instance's data directory
+semanage fcontext $1 -t db2_data_t   "$3/$2(/.*)?"
+semanage fcontext $1 -t db2_cfg_t    "$3/$2/NODE.*/sqldbdir(/.*)?"
+
+# Run restorecon to apply the SELinux labels
+restorecon -R -v $3

@@ -1,0 +1,80 @@
+
+## <summary>policy for db2</summary>
+
+
+########################################
+## <summary>
+##    Role access for db2 admins
+## </summary>
+## <param name="role">
+##    <summary>
+##       Role allowed to access Db2 administrative functions.
+##    </summary>
+## </param>
+## <param name="domain">
+##    <summary>
+##       User domain for the role.
+##    </summary>
+## </param>
+#
+interface(`db2_admin_role',`
+    require {
+        attribute_role db2_admin_roles;
+        attribute_role db2_user_roles;
+        attribute db2_admin_types;
+        attribute db2_user_types;
+    }
+
+   roleattribute $1 db2_admin_roles;
+   typeattribute $2 db2_admin_types;
+   roleattribute $1 db2_user_roles;
+   typeattribute $2 db2_user_types;
+')
+
+
+########################################
+## <summary>
+##    Role access for db2 users
+## </summary>
+## <param name="role">
+##    <summary>
+##       Role allowed to access Db2 user functions.
+##    </summary>
+## </param>
+## <param name="domain">
+##    <summary>
+##       User domain for the role.
+##    </summary>
+## </param>
+#
+
+
+interface(`db2_user_role',`
+    require {
+        attribute_role db2_user_roles;
+        attribute db2_user_types;
+    }
+
+   roleattribute $1 db2_user_roles;
+   typeattribute $2 db2_user_types;
+')
+
+
+################################################
+#
+# <summary>Sample IBM DB2 policy for SELinux</summary>
+# <desc>
+#   <p>
+#     Allow caller to execute DB2 shell scripts
+#     (e.g. dasprofile)
+#   </p>
+# </desc>
+#
+################################################
+
+interface(`db2_exec_db2_shell_scripts',`
+  read_files_pattern( $1, db2_shell_script_t, db2_shell_script_t )
+  read_lnk_files_pattern( $1, db2_shell_script_t, db2_shell_script_t )
+  can_exec($1,db2_shell_script_t)
+')
+
