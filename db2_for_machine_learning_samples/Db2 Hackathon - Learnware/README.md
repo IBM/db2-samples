@@ -29,3 +29,5 @@ Special thanks Kuro Souza for letting us use to Db2 Hackathon project as a way t
 
 Check you this Github repo - https://github.com/kurosouza
 
+This notebook and project has only been run on Db2 on Cloud Free Tier instance. 
+
