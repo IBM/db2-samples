@@ -6,8 +6,6 @@ Our recent Db2 hackathon demonstrate the versatile powers of Db2 combined with m
 Original Data Files - https://www.kaggle.com/rocki37/open-university-learning-analytics-dataset
 
 
-Live Version of Learnware - http://sparge1.fyre.ibm.com:8888/notebooks/notebook/learnware.ipynb
-
 ## Upload Data Files to Db2
 
 The first thing we need to do is upload all the data files into your Db2 instance. If you open the `learnware.ipynb`, the names of the tables for each data file is outlined in the `table_names` list. For reference I have outlined them over here as well.
