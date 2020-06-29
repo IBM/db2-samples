@@ -15,13 +15,7 @@ To load the sample graph data:
         db2 -tvf 02_import.sql
         db2 -tvf 03_foreignKeys.sql
 
-4. The demo uses the IBM Db2 python package, for proper setup review the requirements for your system https://github.com/ibmdb/python-ibmdb#-pre-requisites
-
-        When using miniconda any environment variables you need to set are relative
-        to the miniconda installation, for example:
-        export DYLD_LIBRARY_PATH=/Users/<user>/miniconda3/envs/graphdemo/lib/python3.6/site-packages/clidriver/lib
-
-5. The IBM Db2 Graph sample contains a set of Jupyter notebooks to run graph queries and visualize the results. There are specific package versions required for these notebooks and it is recommended you use miniconda (https://docs.conda.io/en/latest/miniconda.html) to create a graph demo environment:
+4. The IBM Db2 Graph sample contains a set of Jupyter notebooks to run graph queries and visualize the results. There are specific package versions required for these notebooks and it is recommended you use miniconda (https://docs.conda.io/en/latest/miniconda.html) to create a graph demo environment:
 
         # There is an open defect with conda that may cause problems updating conda
         # Refer to https://github.com/conda/conda/issues/9899#issuecomment-638098661 for a workaround:
@@ -36,10 +30,19 @@ To load the sample graph data:
         jupyterhub==0.8.1 \
         notebook==5.7.8 \
         nbfinder
+
+5. Setup the Python Db2 Driver for your system https://github.com/ibmdb/python-ibmdb#-pre-requisites
+
+        When using miniconda any environment variables you need to set are relative
+        to the miniconda installation, for example:
+        export DYLD_LIBRARY_PATH=/Users/<user>/miniconda3/envs/graphdemo/lib/python3.6/site-packages/clidriver/lib
+
+6. Open the notebook
+
         cd <directory where you extracted the the sample notebooks>
         jupyter notebook
 
-6. To setup IBM Db2 Graph please see the technote at https://www.ibm.com/support/pages/node/6205946
+7. To setup IBM Db2 Graph please see the technote at https://www.ibm.com/support/pages/node/6205946
 
 
 ## License
