@@ -1,5 +1,5 @@
--- -- #----------------------------------------------------------------------------------------------#
--- #  NAME:     02_import.sql                                                                #
+-- #----------------------------------------------------------------------------------------------#
+-- #  NAME:     02_import.sql                                                                     #
 -- #                                                                                              #
 -- #----------------------------------------------------------------------------------------------#
 -- #                     DISCLAIMER OF WARRANTIES AND LIMITATION OF LIABILITY                     #
@@ -24,6 +24,7 @@
 -- #  damages you suffer as a result of using, copying, modifying or distributing the Sample,     #
 -- #  even if IBM has been advised of the possibility of such damages.                            #
 -- #----------------------------------------------------------------------------------------------#
+
 import from CLAIM.csv OF DEL INSERT INTO DEMO.CLAIM;
 import from HAS_DISEASE.csv OF DEL INSERT INTO DEMO.HAS_DISEASE;
 import from INCHARGE_OF_CLAIM.csv OF DEL INSERT INTO DEMO.INCHARGE_OF_CLAIM;
