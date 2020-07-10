@@ -107,7 +107,7 @@ To use the [regression demo](https://github.com/IBM/db2-samples/tree/master/In_D
 - [Numpy](https://pypi.org/project/numpy/)
 - [Matplotlib](https://matplotlib.org/users/installing.html)
 
-Also make sure that you have the [InDBMLModules.py](https://github.com/IBM/db2-samples/tree/master/In_Db2_Machine_Learning/Datasets/InDBMLModules.py) file in the same directory as your notebook.
+Also make sure that you have the [InDBMLModules.py](https://github.com/IBM/db2-samples/tree/master/In_Db2_Machine_Learning/lib/InDBMLModules.py) file in the same directory as your notebook.
 
 Once the above prerequisites have been met, ensure that:
 - The parameters in the connection string variable `conn_str` have been changed to your particular Db2 instance (cell 3)
