@@ -115,5 +115,5 @@ AGE, IS_TENT) as model_prediction from TEST_INPUT;"
 
 ## 6. Reference and Further Reading <a name="Reference"></a>
 
-[Creating Python UDX in Db2](https://www.ibm.com/support/knowledgecenter/SSHRBY/com.ibm.swg.im.dashdb.udx.doc/doc/udx_t_create_udx_python.html)
-[Deploying Python UDX in Db2](https://www.ibm.com/support/knowledgecenter/SSHRBY/com.ibm.swg.im.dashdb.udx.doc/doc/udx_t_deploying_python.html)
+- [Creating Python UDX in Db2](https://www.ibm.com/support/knowledgecenter/SSHRBY/com.ibm.swg.im.dashdb.udx.doc/doc/udx_t_create_udx_python.html)
+- [Deploying Python UDX in Db2](https://www.ibm.com/support/knowledgecenter/SSHRBY/com.ibm.swg.im.dashdb.udx.doc/doc/udx_t_deploying_python.html)
