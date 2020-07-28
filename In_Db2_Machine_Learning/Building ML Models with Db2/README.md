@@ -85,7 +85,7 @@ IMPORT FROM "<full_path_to_csv>" OF DEL skipcount 1 INSERT INTO
 <table_schema>.<table_name>(ID, GENDER, AGE, MARITAL_STATUS, PROFESSION, IS_TENT, PRODUCT_LINE, PURCHASE_AMOUNT)
 ```
 
-## 4 Notebook-specific requirements <a name="Notebook-specific"></a>
+## 4. Notebook-specific requirements <a name="Notebook-specific"></a>
 ### 4.1 Using the Classification Notebook
 To use the [classification demo](Notebooks/Classification_Demo.ipynb) notebook, please ensure that the following Python libraries are installed in your development environment:
 - [Pandas](https://pandas.pydata.org/pandas-docs/stable/getting_started/install.html)
