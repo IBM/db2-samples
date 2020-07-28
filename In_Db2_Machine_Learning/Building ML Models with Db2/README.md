@@ -29,11 +29,11 @@ Please follow the documentation [here](https://www.ibm.com/support/knowledgecent
 ## 2. Downloading the Datasets <a name="Downloads"></a>
 ### 2.1 Regression with GoSales
 
-Download the file [GoSales.csv](https://github.com/IBM/db2-samples/tree/master/In_Db2_Machine_Learning/Datasets/GoSales.csv) from the `Datasets` directory
+Download the file [GoSales.csv](Datasets/GoSales.csv) from the `Datasets` directory
 
 ### 2.2 Classification with Titanic
 
-Download the file [Titanic.csv](https://github.com/IBM/db2-samples/tree/master/In_Db2_Machine_Learning/Datasets/Titanic.csv) from the `Datasets` directory
+Download the file [Titanic.csv](Datasets/Titanic.csv) from the `Datasets` directory
 
 ## 3. Loading the Dataset into a Db2 Table <a name="Loading"></a>
 
@@ -87,7 +87,7 @@ IMPORT FROM "<full_path_to_csv>" OF DEL skipcount 1 INSERT INTO
 
 ## 4 Notebook-specific requirements <a name="Notebook-specific"></a>
 ### 4.1 Using the Classification Notebook
-To use the [classification demo](https://github.com/IBM/db2-samples/tree/master/In_Db2_Machine_Learning/Notebooks/Classification_Demo.ipynb) notebook, please ensure that the following Python libraries are installed in your development environment:
+To use the [classification demo](Notebooks/Classification_Demo.ipynb) notebook, please ensure that the following Python libraries are installed in your development environment:
 - [Pandas](https://pandas.pydata.org/pandas-docs/stable/getting_started/install.html)
 - [Numpy](https://pypi.org/project/numpy/)
 - [IPython](https://ipython.org/install.html)
@@ -102,12 +102,12 @@ Once the above prerequisites have been met, ensure that:
 - The value `DATA.TITANIC` in cells 8, 11, 14, 17, and 18 is changed to the `<schema_name>.<table_name>` where the csv data was loaded (section 3)
 
 ### 4.2 Using the Regression Notebook
-To use the [regression demo](https://github.com/IBM/db2-samples/tree/master/In_Db2_Machine_Learning/Notebooks/Regression_Demo.ipynb) notebook, please ensure that the following Python libraries are installed in your development environment:
+To use the [regression demo](Notebooks/Regression_Demo.ipynb) notebook, please ensure that the following Python libraries are installed in your development environment:
 - [Pandas](https://pandas.pydata.org/pandas-docs/stable/getting_started/install.html)
 - [Numpy](https://pypi.org/project/numpy/)
 - [Matplotlib](https://matplotlib.org/users/installing.html)
 
-Also make sure that you have the [InDBMLModules.py](https://github.com/IBM/db2-samples/tree/master/In_Db2_Machine_Learning/lib/InDBMLModules.py) file in the same directory as your notebook.
+Also make sure that you have the [InDBMLModules.py](lib/InDBMLModules.py) file in the same directory as your notebook.
 
 Once the above prerequisites have been met, ensure that:
 - The parameters in the connection string variable `conn_str` have been changed to your particular Db2 instance (cell 3)
