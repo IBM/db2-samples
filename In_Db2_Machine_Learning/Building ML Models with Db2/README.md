@@ -1,6 +1,6 @@
 # Instructions
 
-This repository contains notebooks and datasets that will allow Db2 customers to use in-Db2 machine learning functionality.
+This repository contains notebooks and datasets that will allow Db2 customers build ML models with IBM Db2's in-database machine learning capabilities.
 
 # Table of Contents
 1. [Prerequistes](#Prerequisites)

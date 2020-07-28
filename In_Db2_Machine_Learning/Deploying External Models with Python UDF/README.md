@@ -100,7 +100,9 @@ Call the UDF to make a prediction either from the command line or via a Jupyter 
 
 First we create a temporary view using the transformed test data that does not include the primary key column "ID" as it was not used in the model building process, and will cause an error to be thrown
 
-`"CREATE VIEW TEST_INPUT AS SELECT F, M, MARRIED, SINGLE, UNSPECIFIED, EXECUTIVE, HOSPITALITY, OTHER, PROFESSIONAL, RETAIL, RETIRED, SALES, STUDENT, TRADES, CAMPING_EQUIPMENT, GOLF_EQUIPMENT, MOUNTAINEERING_EQUIPMENT, OUTDOOR_PROTECTION, PERSONAL_ACCESSORIES, AGE, IS_TENT FROM <table_schema>.<table_name>;"`
+```
+"CREATE VIEW TEST_INPUT AS SELECT F, M, MARRIED, SINGLE, UNSPECIFIED, EXECUTIVE, HOSPITALITY, OTHER, PROFESSIONAL, RETAIL, RETIRED, SALES, STUDENT, TRADES, CAMPING_EQUIPMENT, GOLF_EQUIPMENT, MOUNTAINEERING_EQUIPMENT, OUTDOOR_PROTECTION, PERSONAL_ACCESSORIES, AGE, IS_TENT FROM <table_schema>.<table_name>;"
+```
 
 Then, call the UDF to make a prediction
 
