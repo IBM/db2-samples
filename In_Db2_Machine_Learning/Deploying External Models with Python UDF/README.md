@@ -1,12 +1,23 @@
 # Deploying an External Model in Db2
 
-# 0. Prerequisites
+This repository contains notebooks and datasets that will allow Db2 customers to deploy an externally created model in IBM Db2 with a Python UDF, and call that model to make predictions.
+
+# Table of Contents
+0. [Prerequistes](#Prerequisites)
+1. [Download the GoSales Data, Create, and Export the External Model](#Create)
+2. [Create and Upload the UDF File](#Upload)
+3. [Register the UDF](#Register)
+4. [Download and Store the Test Data in a Db2 Table](#ImportData)
+5. [Call your UDF to Make a Prediction](#Predict)
+6. [Reference and Further Reading](#Reference)
+
+## 0. Prerequisites <a name="Prerequisites"></a>
 
 You must have the following dependencies installed on the machine where your IBM Db2 instance resides:
-- Scikit-learn
-- Joblib
+- [Scikit-learn](https://scikit-learn.org/stable/install.html)
+- [Joblib](https://joblib.readthedocs.io/en/latest/installing.html)
 
-# 1. Download the GoSales Data, Create, and Export the External Model
+## 1. Download the GoSales Data, Create, and Export the External Model <a name="Create"></a>
 
 First, download the [GoSales.csv](GoSales.csv) file, and run the notebook [Create External LR Model](CreatinganExternalModel.ipynb) to create a linear regression model. Note that you may have to modify the file path in cell 60 a path of your choice. This notebook will save a linear regressor created with scikit-learn and save it as a joblib file. You may also choose to skip this step and directly download the [sample model provided](external_model.joblib).
 
@@ -18,7 +29,7 @@ cd <path_where_you_want_to_put_the_file>
 put <path_to_local_joblib_file>
 ```
 
-# 2. Create and Upload the UDF File
+## 2. Create and Upload the UDF File <a name="Upload"></a>
 
 Once the model joblib file has been successfully uploaded, you will then need to create a Python UDF file.
 
@@ -26,7 +37,7 @@ Download the Python UDF file provided: [lin_regressor.py](lin_regressor.py). Not
 
 Upload the UDF file to all Db2 nodes or to a network drive that is accessible from all Db2 nodes, for example, `home/test/sqllib/function/routine/lin_regressor.py`. Because Python UDXs are executed as Db2 fenced processes, the UDX file must be readable for the fenced user ID.
 
-# 3. Register the UDF
+## 3. Register the UDF <a name="Register"></a>
 
 Register the UDF using the following CREATE FUNCTION statement:
 
@@ -38,10 +49,9 @@ RETURNS NULL ON NULL INPUT  NO SQL \
 external name 'home/test/sqllib/function/routine/lin_regressor.py'
 ```
 
-
 Note that you may have to change the file path in the last line to the file path where the `lin_regressor.py` file was saved.
 
-# 4. Download and Store the Test Data in a Db2 Table
+## 4. Download and Store the Test Data in a Db2 Table <a name="ImportData"></a>
 
 Download the [test data](UDFTestData.csv) csv file.
 
@@ -83,7 +93,7 @@ IMPORT FROM "<full_path_to_csv>" OF DEL skipcount 1 INSERT INTO
 
 It is important to note that the data being fed into the model must be in the same form as the data used to train the model - that is, the table columns should be in the same order and the data should be transformed similarly to the training data.
 
-# 5. Call your UDF to make a prediction
+## 5. Call your UDF to Make a Prediction <a name="Predict"></a>
 
 Call the UDF to make a prediction either from the command line or via a Jupyter notebook with the following SQL commands:
 
@@ -101,6 +111,6 @@ GOLF_EQUIPMENT, MOUNTAINEERING_EQUIPMENT, OUTDOOR_PROTECTION, PERSONAL_ACCESSORI
 AGE, IS_TENT) as model_prediction from TEST_INPUT;"
 ```
 
-# Reference and Further Reading
+## 6. Reference and Further Reading <a name="Reference"></a>
 
 [Creating Python UDX in Db2](https://www.ibm.com/support/knowledgecenter/SSHRBY/com.ibm.swg.im.dashdb.udx.doc/doc/udx_t_deploying_python.html)
