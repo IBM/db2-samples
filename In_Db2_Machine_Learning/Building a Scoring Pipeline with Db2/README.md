@@ -19,7 +19,7 @@ Please follow the documentation [here](https://www.ibm.com/support/knowledgecent
 
 ### 1.2 Train a linear regression model to predict the PURCHASE_AMOUNT using the GoSales dataset
 
-Please follow the steps provided [here](../Building ML Models with Db2/README.md) to download the GoSales dataset and load it into your Db2 database. Then use this [notebook](../Building ML Models with Db2/Notebooks/Regression_Demo.ipynb) to pre-process the data, collect and store the statistics, train and deploy a linear regression model in your database.
+Please follow the steps provided [here](../Building%20ML%20Models%20with%20Db2/README.md) to download the GoSales dataset and load it into your Db2 database. Then use this [notebook](../Building%20ML%20Models%20with%20Db2/Notebooks/Regression_Demo.ipynb) to pre-process the data, collect and store the statistics, train and deploy a linear regression model in your database.
 
 Once you take these steps, verify that the following tables are created and contain values:
 - GO_SALES_SUM1000_NUM (statistics for the numerical columns)
