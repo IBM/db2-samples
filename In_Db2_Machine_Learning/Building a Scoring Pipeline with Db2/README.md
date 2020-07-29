@@ -139,7 +139,7 @@ Open a blank report based on the data module you just created and take the follo
 - Add a *Prompt button*. When the report runs, by clicking this button you pass the parameters from the prompt controls to the stored procedure.
 - Click *Save*.
 
-Alternatively, you can copy the report specification provided here into your clipboard, and then from *More* menu( ![Gear](Gear.png) ) select *Open report from clipboard*. Click *Save*.
+Alternatively, you can copy the report specification provided [here](Cognos_Report_Specs.txt) into your clipboard, and then from *More* menu( ![Gear](Gear.png) ) select *Open report from clipboard*. Click *Save*.
 
 ![Dashboard3](Dashboard3.png)
 
