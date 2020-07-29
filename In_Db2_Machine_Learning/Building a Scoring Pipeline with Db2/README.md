@@ -68,7 +68,7 @@ You should see the result printed like this:
 
 ```
 
-## 3. Calling the stored procedure from Cognos Analytics 
+## 3. Calling the stored procedure from Cognos Analytics <a name="Cognos"></a>
 
 We use Cognos Analytics platform in this demo, but this solution would generalize to different applications that need to interact with Machine Learning models from Db2. In any other use-cases, you would need to: 
 1)	Establish a connection to your Db2 database
@@ -143,7 +143,7 @@ Alternatively, you can copy the report specification provided here into your cli
 
 ![Dashboard3](Dashboard3.png)
 
-## 4. Other resources
+## 4. Other resources <a name="Resources"></a>
 Find step-by-step demonstrations for creating the scoring pipeline stored procedure here:
 - Building a scoring pipeline inside Db2
 
