@@ -29,7 +29,7 @@ Once you take these steps, verify that the following tables are created and cont
 ## 2. Create the scoring pipeline stored procedure <a name="CreateSP"></a>
 ### 2.1 Copy the stored procedure file
 
-Copy the file [scoring_pipeline](scoring_pipeline) to your working directory. The steps needed to write the code in this file in described in this demo.
+Copy the file [scoring_pipeline](scoring_pipeline) to your working directory. The steps needed to write the code in this file in described in this [demo](https://youtu.be/kreSl8Pjazs).
 
 ### 2.2 Create the stored procedure
 Execute the following command to create or update the stored procedure:
@@ -145,6 +145,6 @@ Alternatively, you can copy the report specification provided [here](Cognos_Repo
 
 ## 4. Other resources <a name="Resources"></a>
 Find step-by-step demonstrations for creating the scoring pipeline stored procedure here:
-- Building a scoring pipeline inside Db2
+- [Building a scoring pipeline inside Db2](https://youtu.be/kreSl8Pjazs)
 
 Db2 Machine Learning [Documentation](https://www.ibm.com/support/knowledgecenter/SSEPGG_11.5.0/com.ibm.db2.luw.ml.doc/doc/ml_prereqs.html)
