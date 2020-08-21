@@ -40,7 +40,7 @@ Download the file [Titanic.csv](Datasets/Titanic.csv) from the `Datasets` direct
 To load the TITANIC dataset into your Db2 table:
 
 ```
-db2 start
+db2start
 db2 connect to <database_name>
 
 db2 "CREATE TABLE <table_schema>.<table_name> (
