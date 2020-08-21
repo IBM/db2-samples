@@ -61,7 +61,7 @@ Import the data into a Db2 Table using the following:
 db2start
 connect to <database_name>
 
-CREATE TABLE <table_schema>.<table_name> (
+db2 "CREATE TABLE <table_schema>.<table_name> (
 ID INT NOT NULL GENERATED ALWAYS AS IDENTITY (START WITH 1, INCREMENT BY 1, NO CACHE),
 F FLOAT,
 M FLOAT,
@@ -85,10 +85,10 @@ PERSONAL_ACCESSORIES FLOAT,
 AGE FLOAT,
 IS_TENT  FLOAT,
 PRIMARY KEY (ID))
-ORGANIZE BY ROW;
+ORGANIZE BY ROW;"
 
-IMPORT FROM "<full_path_to_csv>" OF DEL skipcount 1 INSERT INTO 
-<table_schema>.<table_name>(F, M, MARRIED, SINGLE, UNSPECIFIED, EXECUTIVE, HOSPITALITY, OTHER, PROFESSIONAL, RETAIL, RETIRED, SALES, STUDENT, TRADES, CAMPING_EQUIPMENT, GOLF_EQUIPMENT, MOUNTAINEERING_EQUIPMENT, OUTDOOR_PROTECTION, PERSONAL_ACCESSORIES, AGE, IS_TENT)
+db2 "IMPORT FROM "<full_path_to_csv>" OF DEL skipcount 1 INSERT INTO 
+<table_schema>.<table_name>(F, M, MARRIED, SINGLE, UNSPECIFIED, EXECUTIVE, HOSPITALITY, OTHER, PROFESSIONAL, RETAIL, RETIRED, SALES, STUDENT, TRADES, CAMPING_EQUIPMENT, GOLF_EQUIPMENT, MOUNTAINEERING_EQUIPMENT, OUTDOOR_PROTECTION, PERSONAL_ACCESSORIES, AGE, IS_TENT)"
 ```
 
 It is important to note that the data being fed into the model must be in the same form as the data used to train the model - that is, the table columns should be in the same order and the data should be transformed similarly to the training data.
@@ -101,13 +101,13 @@ Call the UDF to make a prediction either from the command line or via a Jupyter 
 First we create a temporary view using the transformed test data that does not include the primary key column "ID" as it was not used in the model building process, and will cause an error to be thrown
 
 ```
-"CREATE VIEW TEST_INPUT AS SELECT F, M, MARRIED, SINGLE, UNSPECIFIED, EXECUTIVE, HOSPITALITY, OTHER, PROFESSIONAL, RETAIL, RETIRED, SALES, STUDENT, TRADES, CAMPING_EQUIPMENT, GOLF_EQUIPMENT, MOUNTAINEERING_EQUIPMENT, OUTDOOR_PROTECTION, PERSONAL_ACCESSORIES, AGE, IS_TENT FROM <table_schema>.<table_name>;"
+db2 "CREATE VIEW TEST_INPUT AS SELECT F, M, MARRIED, SINGLE, UNSPECIFIED, EXECUTIVE, HOSPITALITY, OTHER, PROFESSIONAL, RETAIL, RETIRED, SALES, STUDENT, TRADES, CAMPING_EQUIPMENT, GOLF_EQUIPMENT, MOUNTAINEERING_EQUIPMENT, OUTDOOR_PROTECTION, PERSONAL_ACCESSORIES, AGE, IS_TENT FROM <table_schema>.<table_name>;"
 ```
 
 Then, call the UDF to make a prediction
 
 ```
-"SELECT *, predict_price(F, M, MARRIED, SINGLE, UNSPECIFIED, EXECUTIVE, HOSPITALITY, 
+db2 "SELECT *, predict_price(F, M, MARRIED, SINGLE, UNSPECIFIED, EXECUTIVE, HOSPITALITY, 
 OTHER, PROFESSIONAL, RETAIL, RETIRED, SALES, STUDENT, TRADES, CAMPING_EQUIPMENT, 
 GOLF_EQUIPMENT, MOUNTAINEERING_EQUIPMENT, OUTDOOR_PROTECTION, PERSONAL_ACCESSORIES, 
 AGE, IS_TENT) as model_prediction from TEST_INPUT;"
