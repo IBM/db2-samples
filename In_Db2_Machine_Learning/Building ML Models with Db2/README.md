@@ -40,10 +40,10 @@ Download the file [Titanic.csv](Datasets/Titanic.csv) from the `Datasets` direct
 To load the TITANIC dataset into your Db2 table:
 
 ```
-db2 start
+db2start
 db2 connect to <database_name>
 
-CREATE TABLE <table_schema>.<table_name> (
+db2 "CREATE TABLE <table_schema>.<table_name> (
 PASSENGERID INTEGER NOT NULL,
 SURVIVED INTEGER,
 PCLASS INTEGER,
@@ -57,10 +57,10 @@ FARE DECIMAL(30,5),
 CABIN VARCHAR(255),
 EMBARKED VARCHAR(3),
 PRIMARY KEY (PASSENGERID))
-ORGANIZE BY ROW;
+ORGANIZE BY ROW;"
 
-db2 IMPORT FROM "<full_path_to_csv>" OF DEL skipcount 1 INSERT INTO 
-<table_schema>.<table_name>(PASSENGERID, SURVIVED, PCLASS, NAME, SEX, AGE, SIBSP, PARCH, TICKET, FARE, CABIN, EMBARKED)
+db2 "IMPORT FROM "<full_path_to_csv>" OF DEL skipcount 1 INSERT INTO 
+<table_schema>.<table_name>(PASSENGERID, SURVIVED, PCLASS, NAME, SEX, AGE, SIBSP, PARCH, TICKET, FARE, CABIN, EMBARKED)"
 ```
 
 For loading the GO_SALES data you can take the following steps:
@@ -69,7 +69,7 @@ For loading the GO_SALES data you can take the following steps:
 db2start
 connect to <database_name>
 
-CREATE TABLE <table_schema>.<table_name> (
+db2 "CREATE TABLE <table_schema>.<table_name> (
 ID INTEGER NOT NULL,
 GENDER VARCHAR(3),
 AGE INTEGER,
@@ -79,10 +79,10 @@ IS_TENT INTEGER,
 PRODUCT_LINE VARCHAR(30),
 PURCHASE_AMOUNT DECIMAL(30, 5),
 PRIMARY KEY (ID))
-ORGANIZE BY ROW;
+ORGANIZE BY ROW;"
 
-IMPORT FROM "<full_path_to_csv>" OF DEL skipcount 1 INSERT INTO 
-<table_schema>.<table_name>(ID, GENDER, AGE, MARITAL_STATUS, PROFESSION, IS_TENT, PRODUCT_LINE, PURCHASE_AMOUNT)
+db2 "IMPORT FROM "<full_path_to_csv>" OF DEL skipcount 1 INSERT INTO 
+<table_schema>.<table_name>(ID, GENDER, AGE, MARITAL_STATUS, PROFESSION, IS_TENT, PRODUCT_LINE, PURCHASE_AMOUNT)"
 ```
 
 ## 4. Notebook-specific requirements <a name="Notebook-specific"></a>
