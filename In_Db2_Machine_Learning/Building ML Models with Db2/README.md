@@ -162,6 +162,7 @@ To use the [clustering demo](Notebooks/Clustering_Demo.ipynb) notebook, please e
 - [Itertools](https://docs.python.org/3/library/itertools.html)
 - [Matplotlib](https://matplotlib.org/users/installing.html)
 - [Seaborn](https://pypi.org/project/seaborn/#description)
+
 Also make sure that you have the [InDBMLModules.py](lib/InDBMLModules.py) file in the same directory as your notebook.
 
 Once the above prerequisites have been met, ensure that:
