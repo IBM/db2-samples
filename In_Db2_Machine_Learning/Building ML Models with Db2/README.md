@@ -190,6 +190,6 @@ If the path in `sys.executable` is not in `sys.path`, you can add it using the f
 Find step-by-step demonstrations here:
 - [Classification with Db2](https://youtu.be/jCgschThiRQ)
 - [Linear Regression with Db2](https://youtu.be/RpX0iHL97dc)
-- [Clustering with Db2]()
+- [Clustering with Db2](https://video.ibm.com/channel/23952663/video/db2_115_ml_demo_k-means)
 
 Db2 Machine Learning [Documentation](https://www.ibm.com/support/knowledgecenter/SSEPGG_11.5.0/com.ibm.db2.luw.ml.doc/doc/ml_prereqs.html)
