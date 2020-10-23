@@ -27,16 +27,20 @@ Please follow the documentation [here](https://www.ibm.com/support/knowledgecent
 
 
 ## 2. Downloading the Datasets <a name="Downloads"></a>
-### 2.1 Regression with GoSales
-
-Download the file [GoSales.csv](Datasets/GoSales.csv) from the `Datasets` directory
-
-### 2.2 Classification with Titanic
+### 2.1 Classification with Titanic
 
 Download the file [Titanic.csv](Datasets/Titanic.csv) from the `Datasets` directory
 
-## 3. Loading the Dataset into a Db2 Table <a name="Loading"></a>
+### 2.2 Regression with GoSales
 
+Download the file [GoSales.csv](Datasets/GoSales.csv) from the `Datasets` directory
+
+### 2.3 Clustering with TPC-DS
+
+Download the file [TPCDS-50K.csv](Datasets/TPCDS-50K.csv) from the `Datasets` directory
+
+## 3. Loading the Dataset into a Db2 Table <a name="Loading"></a>
+### 3.1 Classification with Titanic
 To load the TITANIC dataset into your Db2 table:
 
 ```
@@ -57,11 +61,13 @@ FARE DECIMAL(30,5),
 CABIN VARCHAR(255),
 EMBARKED VARCHAR(3),
 PRIMARY KEY (PASSENGERID))
-ORGANIZE BY ROW;"
+ORGANIZE BY ROW";
 
 db2 "IMPORT FROM "<full_path_to_csv>" OF DEL skipcount 1 INSERT INTO 
 <table_schema>.<table_name>(PASSENGERID, SURVIVED, PCLASS, NAME, SEX, AGE, SIBSP, PARCH, TICKET, FARE, CABIN, EMBARKED)"
 ```
+
+### 3.2 Regression with GoSales
 
 For loading the GO_SALES data you can take the following steps:
 
@@ -79,10 +85,44 @@ IS_TENT INTEGER,
 PRODUCT_LINE VARCHAR(30),
 PURCHASE_AMOUNT DECIMAL(30, 5),
 PRIMARY KEY (ID))
-ORGANIZE BY ROW;"
+ORGANIZE BY ROW";
 
 db2 "IMPORT FROM "<full_path_to_csv>" OF DEL skipcount 1 INSERT INTO 
 <table_schema>.<table_name>(ID, GENDER, AGE, MARITAL_STATUS, PROFESSION, IS_TENT, PRODUCT_LINE, PURCHASE_AMOUNT)"
+```
+
+### 3.3 Clustering with TPC-DS
+
+For loading the TPC-DS data you can take the following steps:
+
+```
+db2start
+connect to <database_name>
+
+db2 "CREATE TABLE <table_schema>.<table_name> (
+client_id INT NOT NULL GENERATED ALWAYS AS IDENTITY (START WITH 1, INCREMENT BY 1, NO CACHE),
+first_name VARCHAR(30),
+last_name VARCHAR(30),
+age FLOAT,
+gender VARCHAR(5),
+marital_status VARCHAR (5),
+education VARCHAR(20), 
+purchase_estimate FLOAT, 
+credit_rating VARCHAR(20), 
+num_dependants INT, 
+num_dependants_employed INT, 
+num_dependants_count INT,
+household_income INT,
+income_lower FLOAT,
+income_upper FLOAT,
+household_buy_potential VARCHAR(30),
+PRIMARY KEY (client_id))
+ORGANIZE BY ROW";
+
+db2 "LOAD FROM "full_path_to_csv>" OF DEL insert into DATA.TPCDS_50K(first_name, last_name, age, gender, marital_status, 
+education, purchase_estimate, credit_rating, num_dependants, num_dependants_employed, num_dependants_count, 
+household_income, income_lower, income_upper, household_buy_potential)"
+
 ```
 
 ## 4. Notebook-specific requirements <a name="Notebook-specific"></a>
@@ -99,7 +139,7 @@ To use the [classification demo](Notebooks/Classification_Demo.ipynb) notebook, 
 Once the above prerequisites have been met, ensure that:
 - The parameters in the connection string variable `conn_str` have been changed to your particular Db2 instance (cell 2)
 - The value of the variable `schema` has been changed to the appropriate schema where the ML pipeline will be executed (cell 2)
-- The value `DATA.TITANIC` in cells 8, 11, 14, 17, and 18 is changed to the `<schema_name>.<table_name>` where the csv data was loaded (section 3)
+- The value `DATA.TITANIC` in cells 8, 11, 14, 17, and 18 is changed to the `<schema_name>.<table_name>` where the csv data was loaded (section 3.1)
 
 ### 4.2 Using the Regression Notebook
 To use the [regression demo](Notebooks/Regression_Demo.ipynb) notebook, please ensure that the following Python libraries are installed in your development environment:
@@ -111,7 +151,24 @@ Also make sure that you have the [InDBMLModules.py](lib/InDBMLModules.py) file i
 
 Once the above prerequisites have been met, ensure that:
 - The parameters in the connection string variable `conn_str` have been changed to your particular Db2 instance (cell 3)
-- The value `DATA.GO_SALES` in cells 6,10, and 11 is changed to the `<schema_name>.<table_name>` where the csv data was loaded (section 3)
+- The value `DATA.GO_SALES` in cells 6,10, and 11 is changed to the `<schema_name>.<table_name>` where the csv data was loaded (section 3.2)
+
+### 4.3 Using the Clustering Notebook
+To use the [clustering demo](Notebooks/Clustering_Demo.ipynb) notebook, please ensure that the following Python libraries are installed in your development environment
+- [Pandas](https://pandas.pydata.org/pandas-docs/stable/getting_started/install.html)
+- [Numpy](https://pypi.org/project/numpy/)
+- [IPython](https://ipython.org/install.html)
+- [Scipy](https://www.scipy.org/install.html)
+- [Itertools](https://docs.python.org/3/library/itertools.html)
+- [Matplotlib](https://matplotlib.org/users/installing.html)
+- [Seaborn](https://pypi.org/project/seaborn/#description)
+
+Also make sure that you have the [InDBMLModules.py](lib/InDBMLModules.py) file in the same directory as your notebook.
+
+Once the above prerequisites have been met, ensure that:
+- The parameters in the connection string variable `conn_str` have been changed to your particular Db2 instance (cell 3)
+- The value of the variable `schema` has been changed to the appropriate schema where the ML pipeline will be executed (cell 4)
+- The value `DATA.TPCDS_50K` in cells 5 and 8 is changed to the `<schema_name>.<table_name>` where the csv data was loaded (section 3.3)
 
 ## 5. Troubleshooting <a name="Troubleshooting"></a>
 
@@ -133,5 +190,6 @@ If the path in `sys.executable` is not in `sys.path`, you can add it using the f
 Find step-by-step demonstrations here:
 - [Classification with Db2](https://youtu.be/jCgschThiRQ)
 - [Linear Regression with Db2](https://youtu.be/RpX0iHL97dc)
+- [Clustering with Db2](https://video.ibm.com/channel/23952663/video/db2_115_ml_demo_k-means)
 
 Db2 Machine Learning [Documentation](https://www.ibm.com/support/knowledgecenter/SSEPGG_11.5.0/com.ibm.db2.luw.ml.doc/doc/ml_prereqs.html)
