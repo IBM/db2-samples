@@ -172,7 +172,7 @@ Once the above prerequisites have been met, ensure that:
 
 ## 5. Troubleshooting <a name="Troubleshooting"></a>
 
-When using a jupyter notebook, some users may find that they are unable to import a module that has been successfully installed via pip.
+When using a Jupyter notebook, some users may find that they are unable to import a module that has been successfully installed via pip.
 
 Check `sys.executable` to see which Python and environment you're running in, and `sys.path` to see where it looks to import modules:
 
@@ -188,8 +188,8 @@ If the path in `sys.executable` is not in `sys.path`, you can add it using the f
 ## 6. Demo Videos <a name="Resources"></a>
 
 Find step-by-step demonstrations here:
-- [Classification with Db2](https://youtu.be/jCgschThiRQ)
-- [Linear Regression with Db2](https://youtu.be/RpX0iHL97dc)
+- [Classification with Db2](https://video.ibm.com/recorded/127807200)
+- [Linear Regression with Db2](https://video.ibm.com/recorded/127807190)
 - [Clustering with Db2](https://video.ibm.com/channel/23952663/video/db2_115_ml_demo_k-means)
 
 Db2 Machine Learning [Documentation](https://www.ibm.com/support/knowledgecenter/SSEPGG_11.5.0/com.ibm.db2.luw.ml.doc/doc/ml_prereqs.html)
