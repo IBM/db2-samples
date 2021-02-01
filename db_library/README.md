@@ -1,6 +1,6 @@
 # A Db2 Library
 
-This library contains Db2 SQL
+This library contains a set of hopefully useful of Db2 SQL views, functions and procedural code.
 
 - **Views** to simplify working with Db2's system catalog and monitoring SQL functions.
 - **Functions** to augment Db2's built-in ones
@@ -97,6 +97,9 @@ We use the following options on all ATOMIC SQL scalar functions that are not usi
     DETERMINISTIC       -- The default is NOT DETERMINISTIC which is not needed for most SQL UDFs
     NO EXTERNAL ACTION  -- The default is EXTERNAL ACTION   which is not needed for most SQL UDFs
 
+
+Finally, this library is far from perfect. It is provided AS-IS, however if you feel you can improve it,
+ please do send pulls requests for new or improved code.
 
 ## License
 

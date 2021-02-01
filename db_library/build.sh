@@ -118,9 +118,7 @@ done
 ## Now build the docs by again taking the 5th line
 
 echo "
-# A Library of useful Db2 Views, Compound Statements, SQL User Defined Functions and Procedures.
-
-[Readme](README.md)
+# db-library
 
 - [Compound Statements](#compound_statements)
 - [Procedures](#procedures)
@@ -130,6 +128,8 @@ echo "
 
 - [DB2 Catalog Poster](images/db2-syscat-11.5.2.0.png)
 - [DB2 WLM Poster](images/db2-wlm-syscat-11.5.4.0.png)
+
+[Readme](README.md)
 
 "  > ${DOCS}
 
