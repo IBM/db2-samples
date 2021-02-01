@@ -1,0 +1,17 @@
+--# Copyright IBM Corp. All Rights Reserved.
+--# SPDX-License-Identifier: Apache-2.0
+
+/*
+ * WLM Thresholds 
+ */
+
+CREATE OR REPLACE VIEW DB_THRESHOLDS AS
+SELECT 
+    THRESHOLDNAME       AS THRESHOLD_NAME
+,   THRESHOLDPREDICATE || ' > ' || MAXVALUE AS RULE
+,   CASE EXECUTION WHEN 'R' THEN 'Remap' WHEN 'S' THEN 'Stop' WHEN 'C' THEN 'Continue' WHEN 'F' THEN 'Force off' ELSE EXECUTION END AS ACTION 
+,   VIOLATIONRECORDLOGGED AS LOG
+,   ENABLED
+,   CASE ENFORCEMENT WHEN 'D' THEN 'Database' WHEN 'P' THEN 'Partition' WHEN 'W' THEN 'Workload occurrence' END AS ENFORCEMENT
+FROM 
+    SYSCAT.THRESHOLDS

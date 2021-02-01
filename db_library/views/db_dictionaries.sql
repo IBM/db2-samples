@@ -1,0 +1,29 @@
+--# Copyright IBM Corp. All Rights Reserved.
+--# SPDX-License-Identifier: Apache-2.0
+
+/*
+ * Shows size of table dictionaries for each table, and statistics on how they were built
+ */
+
+CREATE OR REPLACE VIEW DB_DICTIONARIES AS
+SELECT
+    T.TABSCHEMA
+,   T.TABNAME
+,   MAX(I.BUILDER)            BUILDER
+,   MAX(I.OBJECT_TYPE)        OBJECT_TYPE
+,   MAX(I.BUILD_TIMESTAMP)    BUILD_TIMESTAMP
+,   AVG(I.SIZE)               SIZE
+,   MAX(I.ROWS_SAMPLED)       ROWS_SAMPLED
+--,   PCTPAGESSAVED
+--,   AVGCOMPRESSEDROWSIZE
+FROM
+    SYSCAT.TABLES  T
+,   TABLE(ADMIN_GET_TAB_DICTIONARY_INFO( T.TABSCHEMA, T.TABNAME)) AS I
+WHERE
+    T.TABSCHEMA = I.TABSCHEMA
+AND T.TABNAME   = I.TABNAME
+AND T.TYPE NOT IN ('A','N','V','W')
+AND T.TABSCHEMA NOT IN ('SYSIBM')
+GROUP BY
+    T.TABSCHEMA
+,   T.TABNAME

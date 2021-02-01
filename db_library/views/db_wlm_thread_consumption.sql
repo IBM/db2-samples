@@ -1,0 +1,32 @@
+--# Copyright IBM Corp. All Rights Reserved.
+--# SPDX-License-Identifier: Apache-2.0
+
+/*
+ * Shows thread/agent consumption of currently executing queries on the most constrained partition
+ * 
+ * Use this if DB_WLM_CONSTRAINED_REOURCE shows threads is the most constrained resource  
+ * 
+ */
+
+CREATE OR REPLACE VIEW DB_WLM_THREAD_CONSUMPTION AS
+SELECT 
+    A.APPLICATION_HANDLE
+,   A.UOW_ID
+,   A.ACTIVITY_ID
+,   A.LOCAL_START_TIME
+,   SECONDS_BETWEEN(CURRENT_TIMESTAMP, A.LOCAL_START_TIME)    AS TOTAL_RUNTIME_SECS
+,   B.APPLICATION_NAME
+,   B.SESSION_AUTH_ID
+,   B.CLIENT_IPADDR
+,   A.ACTIVITY_STATE
+,   A.MEMBER
+,   STMT_TEXT
+FROM
+    TABLE(MON_GET_ACTIVITY  (NULL,-2)) AS A
+,   TABLE(MON_GET_CONNECTION(NULL,-2)) AS B
+WHERE
+     A.APPLICATION_HANDLE = B.APPLICATION_HANDLE
+AND  A.MEMBER = B.MEMBER 
+AND  A.ACTIVITY_STATE IN ('EXECUTING', 'IDLE') 
+AND  A.MEMBER = A.COORD_PARTITION_NUM 
+AND  A.ADM_BYPASSED = 0

@@ -1,0 +1,26 @@
+--# Copyright IBM Corp. All Rights Reserved.
+--# SPDX-License-Identifier: Apache-2.0
+
+/*
+ * Returns the current native encryption settings for the database
+ * 
+ */
+
+CREATE OR REPLACE VIEW DB_ENCRYPTION AS
+SELECT
+    OBJECT_NAME AS DATABASE_NAME
+,   ALGORITHM
+,   ALGORITHM_MODE
+,   KEY_LENGTH
+,   MASTER_KEY_LABEL
+,   KEYSTORE_NAME
+,   KEYSTORE_TYPE
+,   KEYSTORE_HOST
+,   KEYSTORE_IP
+,   KEYSTORE_IP_TYPE
+,   PREVIOUS_MASTER_KEY_LABEL
+,   AUTH_ID
+,   APPL_ID
+,   ROTATION_TIME          
+FROM
+    TABLE(SYSPROC.ADMIN_GET_ENCRYPTION_INFO())

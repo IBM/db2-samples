@@ -1,0 +1,17 @@
+--# Copyright IBM Corp. All Rights Reserved.
+--# SPDX-License-Identifier: Apache-2.0
+
+/*
+ * CASTs the input to a DATE but returns NULL if the value can't be CAST successfully
+ */
+
+CREATE OR REPLACE FUNCTION DB_TO_DATE(i VARCHAR(64)) RETURNS DATE
+    CONTAINS SQL ALLOW PARALLEL
+    NO EXTERNAL ACTION
+    DETERMINISTIC
+BEGIN 
+  DECLARE NOT_VALID CONDITION FOR SQLSTATE '22018';
+  DECLARE EXIT HANDLER FOR NOT_VALID RETURN NULL;
+  --
+  RETURN CAST(i AS DATE);
+END

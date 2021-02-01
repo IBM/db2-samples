@@ -1,0 +1,25 @@
+--# Copyright IBM Corp. All Rights Reserved.
+--# SPDX-License-Identifier: Apache-2.0
+
+/*
+ * Lists all table function columns in the database
+ */
+
+CREATE OR REPLACE VIEW DB_TABLE_FUNCTION_COLUMNS AS
+SELECT
+    ROUTINESCHEMA       AS TABSCHEMA
+,   ROUTINEMODULENAME
+,   ROUTINENAME         AS TABNAME
+,   SPECIFICNAME
+,   ROWTYPE
+,   PARMNAME            AS COLNAME
+,   ORDINAL             AS COLNO
+,   LENGTH
+,   STRINGUNITSLENGTH
+,   SCALE 
+,   REMARKS
+FROM
+    SYSCAT.ROUTINEPARMS P
+WHERE
+    P.ROWTYPE IN ('R','C','S')
+AND P.PARMNAME IS NOT NULL

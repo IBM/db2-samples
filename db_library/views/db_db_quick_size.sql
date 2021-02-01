@@ -1,0 +1,36 @@
+--# Copyright IBM Corp. All Rights Reserved.
+--# SPDX-License-Identifier: Apache-2.0
+
+/*
+ * Show an estimate of the size of the database via summing the sizes of all the active tablespaces in MON_GET_TABLESPACE
+ */
+
+CREATE OR REPLACE VIEW DB_DB_QUICK_SIZE AS
+SELECT
+    CASE DBPARTITIONNUM WHEN 0 THEN 'Single-Partition Data' ELSE 'Partitioned Data' END   AS DATA_SET
+,   SUM(TBSP_USED_BYTES        )/POWER(2,30) AS USED_GB
+,   SUM(TBSP_FREE_BYTES        )/POWER(2,30) AS FREE_GB
+,   SUM(TBSP_USABLE_BYTES      )/POWER(2,30) AS USABLE_GB
+,   SUM(TBSP_TOTAL_BYTES       )/POWER(2,30) AS TOTAL_GB
+,   SUM(TBSP_PAGE_TOP_BYTES    )/POWER(2,30) AS HWM_GB           -- TABLE Space high watermark
+,   SUM(TBSP_PENDING_FREE_BYTES)/POWER(2,30) AS PENDING_FREE_GB  -- Pending free pages in table space
+,   SUM(TBSP_MAX_PAGE_TOP_BYTES)/POWER(2,30) AS MAX_USED_GB      -- MAXimum table space page high watermark 
+,   DECIMAL( (MAX(TBSP_USED_BYTES) - AVG(TBSP_USED_BYTES)) * COUNT(*) / POWER(1024.0,3),17,1) AS WASTED_GB
+,   DECIMAL((1 - AVG(TBSP_PAGE_TOP_BYTES)::DECFLOAT/ NULLIF(MAX(TBSP_PAGE_TOP_BYTES),0))*100,5,2)       AS SKEW_PCT
+FROM
+(   SELECT
+        DBPARTITIONNUM    
+    ,   SUM(TBSP_USED_PAGES         * TBSP_PAGE_SIZE) AS TBSP_USED_BYTES         
+    ,   SUM(TBSP_FREE_PAGES         * TBSP_PAGE_SIZE) AS TBSP_FREE_BYTES       
+    ,   SUM(TBSP_USABLE_PAGES       * TBSP_PAGE_SIZE) AS TBSP_USABLE_BYTES       
+    ,   SUM(TBSP_TOTAL_PAGES        * TBSP_PAGE_SIZE) AS TBSP_TOTAL_BYTES 
+    ,   SUM(TBSP_PENDING_FREE_PAGES * TBSP_PAGE_SIZE) AS TBSP_PENDING_FREE_BYTES
+    ,   SUM(TBSP_PAGE_TOP           * TBSP_PAGE_SIZE) AS TBSP_PAGE_TOP_BYTES
+    ,   SUM(TBSP_MAX_PAGE_TOP       * TBSP_PAGE_SIZE) AS TBSP_MAX_PAGE_TOP_BYTES
+    FROM
+        TABLE(MON_GET_TABLESPACE(NULL,-2)) T
+    GROUP BY
+         DBPARTITIONNUM
+) 
+GROUP BY
+        CASE DBPARTITIONNUM WHEN 0 THEN 'Single-Partition Data' ELSE 'Partitioned Data' END

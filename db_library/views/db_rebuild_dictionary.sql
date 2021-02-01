@@ -1,0 +1,30 @@
+--# Copyright IBM Corp. All Rights Reserved.
+--# SPDX-License-Identifier: Apache-2.0
+
+/*
+ * Generates an ADMIN_MOVE_TABLE (AMT) that can recreate a column organized table with a new dictonary using LOAD. Generally use on SMALLish TABLES only. The table is READ ONLY while AMT runs
+ */
+
+CREATE OR REPLACE VIEW DB_REBUILD_DICTIONARY AS
+SELECT 
+    TABSCHEMA
+,   TABNAME
+,   TBSPACE
+,   PCTPAGESSAVED
+,   AVG_PCTENCODED
+,   CARD
+,   NPAGES
+,   FPAGES
+,   'CALL ADMIN_MOVE_TABLE (''' || RTRIM(TABSCHEMA)  || ''',''' 
+    || TABNAME || ''','''','''','''','''','''','''','''',''ALLOW_READ_ACCESS,COPY_USE_LOAD NONRECOVERABLE'',''MOVE'')' --    || '-- ' || CARD || ' / ' || NPAGES   
+        AS REBUILD_STMT
+,   'CALL ADMIN_CMD (''RUNSTATS ON TABLE "' || RTRIM(TABSCHEMA)  || '"."' || TABNAME || '"' 
+    || CASE WHEN STATISTICS_PROFILE IS NOT NULL THEN ' USE PROFILE' ELSE ' WITH DISTRIBUTION AND SAMPLED DETAILED INDEXES ALL' END || ''')' 
+        AS RUNSTATS_STMT
+FROM
+    SYSCAT.TABLES T
+JOIN
+    (SELECT TABNAME, TABSCHEMA, DECIMAL(AVG(PCTENCODED),5,2) AVG_PCTENCODED FROM SYSCAT.COLUMNS GROUP BY TABNAME, TABSCHEMA ) USING (TABNAME, TABSCHEMA)
+WHERE TYPE NOT IN ('A','N','V','W') 
+AND TABSCHEMA NOT LIKE 'SYS%'
+AND T.TABLEORG = 'C'
