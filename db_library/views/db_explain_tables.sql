@@ -1,0 +1,111 @@
+--# Copyright IBM Corp. All Rights Reserved.
+--# SPDX-License-Identifier: Apache-2.0
+
+/*
+ * Shows information about tables referenced along in access plans in the explain tables
+ */
+
+CREATE OR REPLACE VIEW DB_EXPLAIN_TABLES AS
+SELECT
+    RANK() OVER(ORDER BY EXPLAIN_TIME DESC) AS SEQ
+,   EXPLAIN_TIME
+,   TABSCHEMA
+,   TABNAME
+,   D.DISTRIBUTION_KEY
+,   D.DISTRIBUTION_COLUMN_COUNT
+,   D.DISTRIBUTION_KEY_TYPES
+,   S.ROW_COUNT      
+,   S.COLUMN_COUNT   
+,   S.WIDTH          
+,   S.PAGES          
+,   S.CREATE_TIME    
+,   S.STATISTICS_TIME
+,   S.DISTINCT       
+,   S.TABLESPACE_NAME
+FROM
+(    SELECT
+        EXPLAIN_TIME
+    ,   OBJECT_SCHEMA        AS TABSCHEMA
+    ,   OBJECT_NAME          AS TABNAME
+    ,   MAX(ROW_COUNT)       AS ROW_COUNT
+    ,   MAX(COLUMN_COUNT)    AS COLUMN_COUNT
+    ,   MAX(WIDTH)           AS WIDTH
+    ,   MAX(PAGES)           AS PAGES
+    ,   MAX(CREATE_TIME)     AS CREATE_TIME
+    ,   MAX(STATISTICS_TIME) AS STATISTICS_TIME
+    ,   MAX(DISTINCT)        AS DISTINCT
+    ,   MAX(TABLESPACE_NAME) AS TABLESPACE_NAME
+    ,   MAX(OVERHEAD)                      AS OVERHEAD
+    ,   MAX(TRANSFER_RATE)                 AS TRANSFER_RATE
+    ,   MAX(PREFETCHSIZE)                  AS PREFETCHSIZE
+    ,   MAX(EXTENTSIZE)                    AS EXTENTSIZE
+    ,   MAX(CLUSTER)                       AS CLUSTER
+    ,   MAX(NLEAF)                         AS NLEAF
+    ,   MAX(NLEVELS)                       AS NLEVELS
+    ,   MAX(FULLKEYCARD)                   AS FULLKEYCARD
+    ,   MAX(OVERFLOW)                      AS OVERFLOW
+    ,   MAX(FIRSTKEYCARD)                  AS FIRSTKEYCARD
+    ,   MAX(FIRST2KEYCARD)                 AS FIRST2KEYCARD
+    ,   MAX(FIRST3KEYCARD)                 AS FIRST3KEYCARD
+    ,   MAX(FIRST4KEYCARD)                 AS FIRST4KEYCARD
+    ,   MAX(SEQUENTIAL_PAGES)              AS SEQUENTIAL_PAGES
+    ,   MAX(DENSITY)                       AS DENSITY
+    ,   MAX(STATS_SRC)                     AS STATS_SRC
+    ,   MAX(AVERAGE_SEQUENCE_GAP)          AS AVERAGE_SEQUENCE_GAP
+    ,   MAX(AVERAGE_SEQUENCE_FETCH_GAP)    AS AVERAGE_SEQUENCE_FETCH_GAP
+    ,   MAX(AVERAGE_SEQUENCE_PAGES)        AS AVERAGE_SEQUENCE_PAGES
+    ,   MAX(AVERAGE_SEQUENCE_FETCH_PAGES)  AS AVERAGE_SEQUENCE_FETCH_PAGES
+    ,   MAX(AVERAGE_RANDOM_PAGES)          AS AVERAGE_RANDOM_PAGES
+    ,   MAX(AVERAGE_RANDOM_FETCH_PAGES)    AS AVERAGE_RANDOM_FETCH_PAGES
+    ,   MAX(NUMRIDS)                       AS NUMRIDS
+    ,   MAX(NUMRIDS_DELETED)               AS NUMRIDS_DELETED
+    ,   MAX(NUM_EMPTY_LEAFS)               AS NUM_EMPTY_LEAFS
+    ,   MAX(ACTIVE_BLOCKS)                 AS ACTIVE_BLOCKS
+    ,   MAX(NUM_DATA_PARTS)                AS NUM_DATA_PARTS
+    ,   MAX(NULLKEYS)                      AS NULLKEYS
+    FROM
+        SYSTOOLS.EXPLAIN_OBJECT
+    WHERE
+        OBJECT_TYPE IN ('TA','CO') 
+    AND NOT (OBJECT_SCHEMA = 'SYSIBM' AND OBJECT_NAME LIKE 'SYN%')
+    GROUP BY
+       EXPLAIN_TIME, OBJECT_SCHEMA, OBJECT_NAME
+) S
+LEFT JOIN
+(
+--CREATE OR REPLACE VIEW DB_DISTRIBUTION_KEYS AS
+    SELECT
+        TABSCHEMA
+    ,   TABNAME
+    ,   LISTAGG('"' || COLNAME || '"', ', ') WITHIN GROUP (ORDER BY PARTKEYSEQ) AS DISTRIBUTION_KEY
+    ,   COUNT(*)                                                AS DISTRIBUTION_COLUMN_COUNT
+    ,   LISTAGG(CASE
+                WHEN TYPENAME IN ('CHARACTER', 'VARCHAR', 'GRAPHIC', 'VARGRAPHIC', 'LONG VARCHAR','CLOB','DBCLOB') 
+                THEN CASE WHEN TYPENAME = 'CHARACTER' THEN 'CHAR' ELSE TYPENAME END  
+                     || '(' || COALESCE(STRINGUNITSLENGTH,LENGTH) || COALESCE(' ' || TYPESTRINGUNITS,'') || ')'
+                     || CASE WHEN C.CODEPAGE = 0 THEN ' FOR BIT DATA' ELSE '' END
+                WHEN TYPENAME IN ('BLOB', 'BINARY', 'VARBINARY') 
+                THEN TYPENAME || '(' || LENGTH || ')'  
+                WHEN TYPENAME IN ('TIMESTAMP') AND SCALE = 6
+                THEN TYPENAME
+                WHEN TYPENAME IN ('TIMESTAMP')
+                THEN TYPENAME || '(' || RTRIM(CHAR(SCALE))  || ')'
+                WHEN TYPENAME IN ('DECIMAL') AND SCALE = 0
+                THEN TYPENAME || '(' || RTRIM(CHAR(LENGTH))  || ')'
+                WHEN TYPENAME IN ('DECIMAL') AND SCALE > 0
+                THEN TYPENAME || '(' || LENGTH || ',' || SCALE || ')'
+                WHEN TYPENAME = 'DECFLOAT' AND LENGTH = 8  THEN 'DECFLOAT(16)' 
+                ELSE TYPENAME END 
+            ,   ',' ) WITHIN GROUP (ORDER BY PARTKEYSEQ )     AS DISTRIBUTION_KEY_TYPES
+    FROM
+        SYSCAT.TABLES T JOIN SYSCAT.COLUMNS C USING ( TABSCHEMA, TABNAME )
+    WHERE 
+        TYPE NOT IN ('A','N','V','W')
+    AND PARTKEYSEQ > 0
+    AND TABSCHEMA NOT IN ('SYSIBM')
+    GROUP BY
+        TABSCHEMA 
+    ,   TABNAME
+) AS D
+USING
+    (TABSCHEMA, TABNAME )

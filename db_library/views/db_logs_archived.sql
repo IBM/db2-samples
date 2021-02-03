@@ -1,0 +1,20 @@
+--# Copyright IBM Corp. All Rights Reserved.
+--# SPDX-License-Identifier: Apache-2.0
+
+/*
+ * Shows log archive events from database history file
+ */
+
+CREATE OR REPLACE VIEW DB_LOGS_ARCHIVED AS
+SELECT
+    TIMESTAMP(START_TIME)               AS LOG_ARCHIVE_TS
+,   H.DBPARTITIONNUM                      AS MEMBER
+,   NUM_LOG_ELEMS                       AS ARCHIVED_LOG_FILE_COUNT
+,   NUM_LOG_ELEMS * VALUE * 4096        AS ARCHIVED_LOG_SIZE_BYTES
+--,   QUANTIZE(DECFLOAT(SUM(NUM_LOG_ELEMS * VALUE * 4096)) / POWER(2,30),.1)   AS ARCHIVED_LOG_SIZE_GBYTES
+FROM SYSIBMADM.DB_HISTORY H
+JOIN SYSIBMADM.DBCFG      C ON C.DBPARTITIONNUM = H.DBPARTITIONNUM 
+WHERE 
+    C.NAME ='logfilsiz'
+AND H.OPERATION = 'X' 
+AND H.OPERATIONTYPE IN ('N','P','1')

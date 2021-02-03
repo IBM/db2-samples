@@ -1,0 +1,32 @@
+--# Copyright IBM Corp. All Rights Reserved.
+--# SPDX-License-Identifier: Apache-2.0
+
+/*
+ * Returns a description of each DB view, function and variable
+ */
+
+CREATE OR REPLACE VIEW DB_HELP AS
+SELECT
+    TABNAME                 AS NAME
+,   'VIEW'                  AS TYPE
+,   COALESCE(REMARKS,'')    AS COMMENT
+FROM    SYSCAT.TABLES WHERE TYPE = 'V' AND TABSCHEMA = CURRENT_SCHEMA
+AND TABNAME LIKE 'DB\_%' ESCAPE '\'
+UNION ALL
+SELECT
+    FUNCNAME                AS NAME
+,   'FUNCTION'              AS TYPE
+,   COALESCE(REMARKS,'')    AS COMMENT
+FROM    SYSCAT.FUNCTIONS
+WHERE
+    FUNCSCHEMA = CURRENT_SCHEMA
+AND FUNCNAME LIKE 'DB\_%' ESCAPE '\'
+UNION ALL
+SELECT
+    VARNAME                 AS NAME
+,   'VARIABLE'              AS TYPE
+,   COALESCE(REMARKS,'')    AS COMMENT
+FROM    SYSCAT.VARIABLES
+WHERE 
+    VARSCHEMA = CURRENT_SCHEMA
+AND VARNAME LIKE 'DB\_%' ESCAPE '\'

@@ -1,0 +1,21 @@
+If you do not have e.g. the EXPLAIN tables or ADMIN_MOVE_TABLE in SYSTOOLS one or two views will fail
+  as some views depend on objects in SYSTOOLS schema.
+
+      You can either ignore such errors, or create the missing objects as follows
+       
+                    CALL SYSINSTALLOBJECTS('explain', 'c', '', '')
+                    @
+                    SET SCHEMA SYSTOOLS
+                    @
+                    CREATE TABLE ADMIN_MOVE_TABLE
+                    (
+                        TABSCHEMA    VARCHAR(128 OCTETS) NOT NULL
+                    ,   TABNAME      VARCHAR(128 OCTETS) NOT NULL
+                    ,   KEY          VARCHAR(32 OCTETS) NOT NULL
+                    ,   VALUE        CLOB(10485760 OCTETS) INLINE LENGTH 256  DEFAULT NULL
+                    ,   CONSTRAINT ADMIN_MOVE_TABLEP PRIMARY KEY ( TABSCHEMA, TABNAME, KEY ) ENFORCED
+                    )
+                    ORGANIZE BY ROW 
+                    DISTRIBUTE BY (TABSCHEMA, TABNAME)
+                    IN SYSTOOLSPACE
+                    @

@@ -1,0 +1,22 @@
+--# Copyright IBM Corp. All Rights Reserved.
+--# SPDX-License-Identifier: Apache-2.0
+
+/*
+ * Returns the Row Id from a LOCK_NAME
+ */
+
+CREATE OR REPLACE FUNCTION DB_LOCK_NAME_TO_RID(LOCK_NAME VARCHAR(32)) 
+    CONTAINS SQL --ALLOW PARALLEL
+    NO EXTERNAL ACTION
+    DETERMINISTIC
+RETURNS BIGINT
+RETURN 
+SELECT
+    COALESCE(
+        (MAX(CASE WHEN NAME = 'DATA_PARTITION_ID' THEN BIGINT(VALUE) ELSE 0 END) * power(bigint(2),48)
+       + MAX(CASE WHEN NAME = 'PAGEID'             THEN BIGINT(VALUE) ELSE 0 END) * power(bigint(2),16) 
+       + MAX(CASE WHEN NAME = 'ROWID'              THEN BIGINT(VALUE) END))
+    ,    MAX(CASE WHEN NAME = 'TSN'                THEN BIGINT(VALUE) END)
+    )
+FROM
+    TABLE( MON_FORMAT_LOCK_NAME(LOCK_NAME))

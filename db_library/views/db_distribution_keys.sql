@@ -1,0 +1,40 @@
+--# Copyright IBM Corp. All Rights Reserved.
+--# SPDX-License-Identifier: Apache-2.0
+
+/*
+ * Shows the distribution key of each table with a distribution key in the database
+ */
+
+CREATE OR REPLACE VIEW DB_DISTRIBUTION_KEYS AS
+SELECT
+    TABSCHEMA
+,   TABNAME
+,   LISTAGG('"' || COLNAME || '"', ', ') WITHIN GROUP (ORDER BY PARTKEYSEQ) AS DISTRIBUTION_KEY
+,   COUNT(*)                                                AS DISTRIBUTION_COLUMN_COUNT
+,   LISTAGG(CASE
+            WHEN TYPENAME IN ('CHARACTER', 'VARCHAR', 'GRAPHIC', 'VARGRAPHIC', 'LONG VARCHAR','CLOB','DBCLOB') 
+            THEN CASE WHEN TYPENAME = 'CHARACTER' THEN 'CHAR' ELSE TYPENAME END  
+                 || '(' || COALESCE(STRINGUNITSLENGTH,LENGTH) || COALESCE(' ' || TYPESTRINGUNITS,'') || ')'
+                 || CASE WHEN C.CODEPAGE = 0 THEN ' FOR BIT DATA' ELSE '' END
+            WHEN TYPENAME IN ('BLOB', 'BINARY', 'VARBINARY') 
+            THEN TYPENAME || '(' || LENGTH || ')'  
+            WHEN TYPENAME IN ('TIMESTAMP') AND SCALE = 6
+            THEN TYPENAME
+            WHEN TYPENAME IN ('TIMESTAMP')
+            THEN TYPENAME || '(' || RTRIM(CHAR(SCALE))  || ')'
+            WHEN TYPENAME IN ('DECIMAL') AND SCALE = 0
+            THEN TYPENAME || '(' || RTRIM(CHAR(LENGTH))  || ')'
+            WHEN TYPENAME IN ('DECIMAL') AND SCALE > 0
+            THEN TYPENAME || '(' || LENGTH || ',' || SCALE || ')'
+            WHEN TYPENAME = 'DECFLOAT' AND LENGTH = 8  THEN 'DECFLOAT(16)' 
+            ELSE TYPENAME END 
+        ,   ',' ) WITHIN GROUP (ORDER BY PARTKEYSEQ )     AS DISTRIBUTION_KEY_TYPES
+FROM
+    SYSCAT.TABLES T JOIN SYSCAT.COLUMNS C USING ( TABSCHEMA, TABNAME )
+WHERE 
+    TYPE NOT IN ('A','N','V','W')
+AND PARTKEYSEQ > 0
+AND TABSCHEMA NOT IN ('SYSIBM')
+GROUP BY
+    TABSCHEMA 
+,   TABNAME

@@ -1,0 +1,55 @@
+--# Copyright IBM Corp. All Rights Reserved.
+--# SPDX-License-Identifier: Apache-2.0
+
+/*
+ * Find the ENCODESIZE distribution of each COLUMN in each COLUMN ORGANIZED TABLE
+ */
+--DROP TABLE DB_ENCODE_SIZE
+--TRUNCATE TABLE DB_ENCODE_SIZE IMMEDIATE
+
+CREATE TABLE DB_ENCODE_SIZE (
+    TABSCHEMA    VARCHAR(128) NOT NULL
+,   TABNAME      VARCHAR(128) NOT NULL
+,   COLNAME      VARCHAR(128) NOT NULL
+,   ENCODE_SIZE  SMALLINT NOT NULL
+,   IS_NULL      BOOLEAN  NOT NULL
+,   ROW_COUNT    BIGINT NOT NULL
+--,   PRIMARY KEY (TABSCHEMA, TABNAME, COLNAME, ENCODE_SIZE, IS_NULL) ENFORCED
+) DISTRIBUTE ON ( TABSCHEMA, TABNAME )
+@
+
+    
+BEGIN
+    FOR C AS cur CURSOR WITH HOLD FOR
+        SELECT
+           'INSERT INTO DB_ENCODE_SIZE' || CHR(10)
+        || 'SELECT ''' || TABSCHEMA || ''',''' || TABNAME || ''',''' || COLNAME || ''''
+        || ' , ENCODE_SIZE, IS_NULL, COUNT(*) AS ROW_COUNT ' || CHR(10)
+        || ' FROM ( '    || CHR(10)
+        || '    SELECT'  || CHR(10)
+        || '        ENCODESIZE("' || COLNAME || '") AS ENCODE_SIZE' || CHR(10)
+        || '    ,   "' || COLNAME || '" IS NULL AS IS_NULL'             || CHR(10)
+        || '    FROM "' || TABSCHEMA || '"."' || TABNAME || '"'     || CHR(10)      
+        || ')' || CHR(10)
+        || 'GROUP BY IS_NULL, ENCODE_SIZE'
+        AS S
+        FROM
+            SYSCAT.COLUMNS JOIN SYSCAT.TABLES USING (TABSCHEMA, TABNAME)
+        WHERE
+            TYPE IN ('T','S')
+        AND TABLEORG = 'C'
+        AND TABSCHEMA NOT LIKE 'SYS%'
+        AND TYPENAME NOT IN ('XML','CLOB','BLOB','DBCLOB')
+        AND (TABSCHEMA, TABNAME, COLNAME) NOT IN (SELECT TABSCHEMA, TABNAME, COLNAME FROM DB_ENCODE_SIZE)
+        AND TABNAME NOT IN ('DB_ENCODE_SIZE')
+        ORDER BY
+            TABSCHEMA, TABNAME, COLNAME
+        WITH UR
+    DO
+          EXECUTE IMMEDIATE C.S;
+          COMMIT;
+    END FOR;
+END
+@
+
+SELECT * FROM DB_ENCODE_SIZE

@@ -1,0 +1,75 @@
+--# Copyright IBM Corp. All Rights Reserved.
+--# SPDX-License-Identifier: Apache-2.0
+
+/*
+ * Call ADMIN_MOVE_TABLE for multiple tables and write the dynamic result sets from the CALL to a persistent table
+ * 
+ */
+
+DROP  TABLE DB_ADMIN_MOVE_TABLE_RESULT
+@
+
+CREATE TABLE DB_ADMIN_MOVE_TABLE_RESULT (
+    TABSCHEMA   VARCHAR(128 OCTETS) NOT NULL
+,   TABNAME     VARCHAR(128 OCTETS) NOT NULL
+,   KEY         VARCHAR(32 OCTETS)  NOT NULL-- Name of the attribute.
+,   VALUE       CLOB(10M  OCTETS)       --Value of the attribute.
+,   PRIMARY KEY (TABSCHEMA, TABNAME, KEY) NOT ENFORCED
+)
+@
+
+TRUNCATE TABLE DB_ADMIN_MOVE_TABLE_RESULT
+@
+
+BEGIN
+    DECLARE    TYPE VARCHAR_ARRAY AS VARCHAR(128)ARRAY[];
+    DECLARE SCHEMAS VARCHAR_ARRAY;
+    DECLARE TABLES  VARCHAR_ARRAY;
+    DECLARE i INTEGER DEFAULT 1;
+    --
+    DECLARE SQLSTATE CHAR(5);
+    DECLARE V_KEY         VARCHAR(32 OCTETS) ;
+    DECLARE V_VALUE       CLOB(10M  OCTETS)  ;
+    DECLARE V1 RESULT_SET_LOCATOR   VARYING;
+    --
+    DECLARE LOAD_PENDING CONDITION FOR SQLSTATE '57016';    -- Skip LOAD pending tables 
+    DECLARE NOT_ALLOWED  CONDITION FOR SQLSTATE '57007';    -- Skip Set Integrity Pending  tables  I.e. SQL0668N Operation not allowed
+    DECLARE UNDEFINED_NAME CONDITION FOR SQLSTATE '42704';  -- Skip tables that no longer exist/not commited
+    DECLARE CONTINUE HANDLER FOR LOAD_PENDING, NOT_ALLOWED, UNDEFINED_NAME BEGIN END;
+    --
+    SELECT
+        ARRAY_AGG(TABSCHEMA ORDER BY TABSCHEMA, TABNAME)
+     ,  ARRAY_AGG(TABNAME   ORDER BY TABSCHEMA, TABNAME)
+            INTO  SCHEMAS, TABLES
+    --SELECT TABSCHEMA, TABNAME
+    FROM
+        SYSCAT.TABLES  T
+    WHERE
+        TABSCHEMA = 'MOVE_ME'
+    AND TYPE = 'T'
+    WITH UR
+    ;
+    WHILE i <= CARDINALITY(TABLES)
+    DO
+        CALL SYSPROC.ADMIN_MOVE_TABLE( SCHEMAS[i], TABLES[i], '','','','','','','','ALLOW_READ_ACCESS,COPY_USE_LOAD','MOVE'); 
+        --CALL SYSPROC.ADMIN_MOVE_TABLE (TABSCHEMA => SCHEMAS[i], TABNAME => TABLES[i], TARGET_TAB_NAME => '', OPTIONS => '', OPERATION => '');   -- Call method version 1  https://www.ibm.com/support/knowledgecenter/SSEPGG_11.5.0/com.ibm.db2.luw.sql.ref.doc/doc/r0050494.html
+        --CALL SYSPROC.ADMIN_MOVE_TABLE (TABSCHEMA => SCHEMAS[i], TABNAME => TABLES[i], DATA_TBSP => '', INDEX_TBSP => '', LOB_TBSP => '', MDC_COLS => '', PARTKEY_COLS => '', RANGE_PART => '', COLDEF => '', OPTIONS => '', OPERATION => '');  -- Call method version 2
+        --
+        ASSOCIATE RESULT SET LOCATOR (V1) WITH PROCEDURE SYSPROC.ADMIN_MOVE_TABLE;
+        ALLOCATE C1 CURSOR FOR RESULT SET V1;
+        --
+        L1: LOOP
+            FETCH C1                                   INTO V_KEY, V_VALUE ;
+            IF SQLSTATE<>'00000' THEN LEAVE L1; END IF;
+            INSERT INTO DB_ADMIN_MOVE_TABLE_RESULT VALUES ( SCHEMAS[i], TABLES[i], V_KEY, V_VALUE);
+        END LOOP L1;
+        CLOSE C1;
+        -- 
+        COMMIT;
+        SET i = i + 1;
+    END WHILE;
+    COMMIT;
+END
+@
+
+SELECT * FROM DB_ADMIN_MOVE_TABLE_RESULT

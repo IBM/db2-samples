@@ -1,0 +1,26 @@
+--# Copyright IBM Corp. All Rights Reserved.
+--# SPDX-License-Identifier: Apache-2.0
+
+/*
+ * Lists all Primary Keys in the database
+ */
+
+CREATE OR REPLACE VIEW DB_PRIMARY_KEYS AS
+SELECT
+    TABSCHEMA
+,   TABNAME
+,   CONSTNAME
+,   LISTAGG(COLNAME,', ') WITHIN GROUP (ORDER BY COLSEQ) AS PK_COLS
+,   MAX(ENFORCED)   AS ENFORCED
+FROM
+    SYSCAT.TABCONST C
+JOIN
+    SYSCAT.KEYCOLUSE
+USING
+    ( TABSCHEMA , TABNAME, CONSTNAME ) 
+WHERE  
+    C.TYPE = 'P'
+GROUP BY
+    TABSCHEMA
+,   TABNAME
+,   CONSTNAME
