@@ -145,6 +145,6 @@ Alternatively, you can copy the report specification provided [here](Cognos_Repo
 
 ## 4. Other resources <a name="Resources"></a>
 Find step-by-step demonstrations for creating the scoring pipeline stored procedure here:
-- [Building a scoring pipeline inside Db2](https://youtu.be/kreSl8Pjazs)
+- [Building a scoring pipeline inside Db2](https://video.ibm.com/recorded/127807226)
 
 Db2 Machine Learning [Documentation](https://www.ibm.com/support/knowledgecenter/SSEPGG_11.5.0/com.ibm.db2.luw.ml.doc/doc/ml_prereqs.html)
