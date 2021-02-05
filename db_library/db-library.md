@@ -12,6 +12,8 @@
 
 [Readme](README.md)
 
+
+
 ## [Compound Statements](compound_statements)
 | Compound Statement | Description
 | ------------ | -------------
@@ -36,9 +38,9 @@
 |[copy_schema](compound_statements/copy_schema.sql)|Copy all data from one schema to an new schema|
 |[count_data_in_chunks](compound_statements/count_data_in_chunks.sql)|Example of counting rows in a table 1 month at a time.|
 |[count_multi_byte_utf8_columns](compound_statements/count_multi_byte_utf8_columns.sql)|Count the number of rows for every character column that contain any multi-byte characters|
+|[count_rows](compound_statements/count_rows.sql)|Count the number of rows in each table|
 |[count_rows_by_data_slice](compound_statements/count_rows_by_data_slice.sql)|Count the number of rows in each table by data slice.|
 |[count_rows_by_slice_by_insert_range](compound_statements/count_rows_by_slice_by_insert_range.sql)|Count the number of rows in each table by data slice and insert range.|
-|[count_rows](compound_statements/count_rows.sql)|Count the number of rows in each table|
 |[create_catalog_nicknames_for_sql_server](compound_statements/create_catalog_nicknames_for_sql_server.sql)|Create Nicknames for the catalog views of all remote SQL servers registered in Db2|
 |[create_data_load_test_table](compound_statements/create_data_load_test_table.sql)|Create an empty table LIKE another table, but with all columns changed to VARCHAR|
 |[create_nicknames_for_sql_server](compound_statements/create_nicknames_for_sql_server.sql)|Create Nicknames for a remote source by reading the remote catalog and creating a nickname for each entry found|
@@ -79,9 +81,9 @@
 | ----------- | -------------
 |[db_cancel_my_activity](procedures/db_cancel_my_activity.sql)|A sample procedure to allow users to cancel their own statements|
 |[db_connect_procedure](procedures/db_connect_procedure.sql)|A sample Connect Procedure to set special registers etc when users connect|
+|[db_dynamic_select](procedures/db_dynamic_select.sql)|A procedure to run the passed SQL statement and return it's result as a dynamic result set|
 |[db_dynamic_select_2](procedures/db_dynamic_select_2.sql)|A procedure to run the passed two SQL statements and return thier results as a dynamic result sets|
 |[db_dynamic_select_int](procedures/db_dynamic_select_int.sql)|A procedure to run the passed SQL statement and one integer parameter, and return it's result as a dynamic result set|
-|[db_dynamic_select](procedures/db_dynamic_select.sql)|A procedure to run the passed SQL statement and return it's result as a dynamic result set|
 |[db_find_row_from_lock](procedures/db_find_row_from_lock.sql)||
 |[db_fix_load_pending](procedures/db_fix_load_pending.sql)|A Procedure to look for and take any tables out of LOAD PENDING|
 |[db_run_sql](procedures/db_run_sql.sql)|A simple procedure to run SQL statements stored in a table and record the return code in the same table|
@@ -121,16 +123,16 @@
 |[db_remove_special_characters](scalar_functions/db_remove_special_characters.sql)|Removes characters in a string that are not "plain" printable 7-bit ASCII values or TAB, LF and CR|
 |[db_rtrim_whitespace](scalar_functions/db_rtrim_whitespace.sql)|Trim trailing whitespace characters such as such No Break Space as well as Tab, New Line, Form Feed and Carriage Returns.|
 |[db_sqlerrm](scalar_functions/db_sqlerrm.sql)|Returns the SQL error message for the passed SQLCODE. Returns NULL is the SQLCODE is invalid|
-|[db_to_bigint_debug](scalar_functions/db_to_bigint_debug.sql)|CASTs the input to an BIGINT but returns an error containing the value if it can't be cast to an BIGINT|
 |[db_to_bigint](scalar_functions/db_to_bigint.sql)|CASTs the input to a BIGINT but returns NULL if the value can't be CAST successfully|
-|[db_to_date_debug](scalar_functions/db_to_date_debug.sql)|CASTs the input to an DATE but returns an error containing the value if it can't be cast to an DATE|
+|[db_to_bigint_debug](scalar_functions/db_to_bigint_debug.sql)|CASTs the input to an BIGINT but returns an error containing the value if it can't be cast to an BIGINT|
 |[db_to_date](scalar_functions/db_to_date.sql)|CASTs the input to a DATE but returns NULL if the value can't be CAST successfully|
-|[db_to_decfloat_debug](scalar_functions/db_to_decfloat_debug.sql)|CASTs the input to a DECFLOAT but returns an error containing the value if it can't be cast to DECFLOAT|
+|[db_to_date_debug](scalar_functions/db_to_date_debug.sql)|CASTs the input to an DATE but returns an error containing the value if it can't be cast to an DATE|
 |[db_to_decfloat](scalar_functions/db_to_decfloat.sql)|CASTs the input to a DECFLOAT but returns NULL if the value can't be CAST successfully|
-|[db_to_integer_debug](scalar_functions/db_to_integer_debug.sql)|CASTs the input to an INTEGER but returns an error containing the value if it can't be cast to an INTEGER|
+|[db_to_decfloat_debug](scalar_functions/db_to_decfloat_debug.sql)|CASTs the input to a DECFLOAT but returns an error containing the value if it can't be cast to DECFLOAT|
 |[db_to_integer](scalar_functions/db_to_integer.sql)|CASTs the input to an INTEGER but returns NULL if the value can't be CAST successfully|
-|[db_to_timestamp_debug](scalar_functions/db_to_timestamp_debug.sql)|CASTs the input to an TIMESTAMP but returns an error containing the value if it can't be cast to an TIMESTAMP|
+|[db_to_integer_debug](scalar_functions/db_to_integer_debug.sql)|CASTs the input to an INTEGER but returns an error containing the value if it can't be cast to an INTEGER|
 |[db_to_timestamp](scalar_functions/db_to_timestamp.sql)|CASTs the input to a TIMESTAMP but returns NULL if the value can't be CAST successfully|
+|[db_to_timestamp_debug](scalar_functions/db_to_timestamp_debug.sql)|CASTs the input to an TIMESTAMP but returns an error containing the value if it can't be cast to an TIMESTAMP|
 |[db_tsn](scalar_functions/db_tsn.sql)|Returns the tuple sequence number of a row on a COLUMN organized table when passed the RID_BIT() function|
 |[db_unhex](scalar_functions/db_unhex.sql)|The inverse of HEX(). Converts a a hexadecimal string into a character string|
 |[db_win1252_latin1_to_utf8](scalar_functions/db_win1252_latin1_to_utf8.sql)|Changes Windows-1252 codepoints that have been incorrectly loaded as Latin-1 (ISO-8859-1) into their correct UTF-8 encoding|
@@ -154,18 +156,18 @@
 |[db_column_groups](views/db_column_groups.sql)|Shows any column group statistics that have been defined|
 |[db_column_list](views/db_column_list.sql)|Returns common separated lists of column names for all tables|
 |[db_column_redesign](views/db_column_redesign.sql)|Generates SQL that can be run to find max used sizes for column data-types, which can then be used to generate redesigned DDL|
-|[db_columns_all](views/db_columns_all.sql)|Lists all table function, nickname, table and view columns in the database|
-|[db_columns](views/db_columns.sql)|Lists all table and view columns in the database|
 |[db_column_stats](views/db_column_stats.sql)|Shows the COLCARD, FREQ_VALUEs and HIGH2KEY statistics stored for each column.|
+|[db_columns](views/db_columns.sql)|Lists all table and view columns in the database|
+|[db_columns_all](views/db_columns_all.sql)|Lists all table function, nickname, table and view columns in the database|
 |[db_constraint_ddl](views/db_constraint_ddl.sql)|Generates DDL for Primary and Unique Constraints|
 |[db_db2w_default_distribution_keys](views/db_db2w_default_distribution_keys.sql)|Lists all distribution keys that are (probably) ones that Db2 has picked automatically, rather an having been picked by a User|
-|[db_db_cfg_change_history](views/db_db_cfg_change_history.sql)|Shows database configuration changes from the db2diag.log. |
 |[db_db_cfg](views/db_db_cfg.sql)|Shows current database configuration parameter values|
-|[db_dbm_cfg](views/db_dbm_cfg.sql)|Shows current database manager configuration parameter values|
+|[db_db_cfg_change_history](views/db_db_cfg_change_history.sql)|Shows database configuration changes from the db2diag.log. |
 |[db_db_partition_groups](views/db_db_partition_groups.sql)|Lists all the partition groups on the database|
 |[db_db_quick_size](views/db_db_quick_size.sql)|Show an estimate of the size of the database via summing the sizes of all the active tablespaces in MON_GET_TABLESPACE|
-|[db_diag_filtered](views/db_diag_filtered.sql)|Db2 diag.log records with some arguably uninteresting records filtered out|
+|[db_dbm_cfg](views/db_dbm_cfg.sql)|Shows current database manager configuration parameter values|
 |[db_diag](views/db_diag.sql)|Shows records from Db2's diag.log file(s)|
+|[db_diag_filtered](views/db_diag_filtered.sql)|Db2 diag.log records with some arguably uninteresting records filtered out|
 |[db_dictionaries](views/db_dictionaries.sql)|Shows size of table dictionaries for each table, and statistics on how they were built|
 |[db_distribution_keys](views/db_distribution_keys.sql)|Shows the distribution key of each table with a distribution key in the database|
 |[db_encryption](views/db_encryption.sql)|Returns the current native encryption settings for the database|
@@ -188,14 +190,14 @@
 |[db_level](views/db_level.sql)|Database version and release information|
 |[db_load_history](views/db_load_history.sql)|Show history of LOAD operations from the database history file|
 |[db_load_progress](views/db_load_progress.sql)|Show progress on any LOAD statements|
-|[db_locked_rows](views/db_locked_rows.sql)|Lists all rows locks on the system, and generates SQL to SELECT the locked row(s).|
 |[db_lock_escalations](views/db_lock_escalations.sql)|Returns any lock escalation messages from the diag.log. Set the DB_DIAG_FROM_TIMESTAMP variable to see data before today|
 |[db_lock_modes](views/db_lock_modes.sql)|Describes the possible values of the LOCK_MODE_CODE column|
-|[db_locks](views/db_locks.sql)|Shows all current locks on the system (run WITH UR)|
 |[db_lock_statements](views/db_lock_statements.sql)|Shows all current locks and lock requests on the system along with the SQL Statement holding or requesting the lock|
 |[db_lock_waits](views/db_lock_waits.sql)|Shows applications that are waiting on locks|
-|[db_logs_archived](views/db_logs_archived.sql)|Shows log archive events from database history file|
+|[db_locked_rows](views/db_locked_rows.sql)|Lists all rows locks on the system, and generates SQL to SELECT the locked row(s).|
+|[db_locks](views/db_locks.sql)|Shows all current locks on the system (run WITH UR)|
 |[db_log_used](views/db_log_used.sql)|Shows current transaction log usage|
+|[db_logs_archived](views/db_logs_archived.sql)|Shows log archive events from database history file|
 |[db_member_quick_size](views/db_member_quick_size.sql)|Shows the size of each data slice . Use to check for overall system data Skew|
 |[db_memory_change_history](views/db_memory_change_history.sql)|Shows STMM and manual memory area changes from the db2diag.log. Set the DB_DIAG_FROM_TIMESTAMP variable to see data before today|
 |[db_monitor_table_functions](views/db_monitor_table_functions.sql)|Lists all MON_, ENV_ and WLM_ system table functions, and generates SQL to select from them|
@@ -210,9 +212,9 @@
 |[db_procedures](views/db_procedures.sql)|Lists all stored procedures on the database. Includes the parameter signature and an example CALL statement for each procedure|
 |[db_rebuild_dictionary](views/db_rebuild_dictionary.sql)|Generates an ADMIN_MOVE_TABLE (AMT) that can recreate a column organized table with a new dictonary using LOAD. Generally use on SMALLish TABLES on|
 |[db_registry_variables](views/db_registry_variables.sql)|Shows current database registry variables set on the database server (Db2set)|
+|[db_runstats](views/db_runstats.sql)|Generate runstats commands|
 |[db_runstats_log](views/db_runstats_log.sql)|Shows auto and manual runstats history from the db2optstats log. Defaults to entries for the current day|
 |[db_runstats_queue](views/db_runstats_queue.sql)|Shows runstats queued for processing by Db2 Automatic maintenance or real-time stats|
-|[db_runstats](views/db_runstats.sql)|Generate runstats commands|
 |[db_scalar_functions](views/db_scalar_functions.sql)|Lists all scalar functions in the database|
 |[db_schemas](views/db_schemas.sql)|Lists all schemas in the database|
 |[db_sequences](views/db_sequences.sql)|Lists all Sequences|
@@ -242,20 +244,20 @@
 |[db_table_quick_sparsity](views/db_table_quick_sparsity.sql)|Returns a simplistic estimate of how the size of each table compares to what you might expect given the column encoding rates|
 |[db_table_size](views/db_table_size.sql)|Returns an accurate size of each table using ADMIN_GET_TAB_INFO(). The view can be slow to return on large systems if you don't filter|
 |[db_table_skew](views/db_table_skew.sql)|Shows the data skew of database partitioned tables.|
+|[db_table_statistics](views/db_table_statistics.sql)|Shows table statistics and rows modified since last runstats|
+|[db_table_status](views/db_table_status.sql)|Shows if a table is in a non NORMAL status|
+|[db_tables](views/db_tables.sql)|Tables, Views, Nicknames, MQTs and other objects from the SYSCAT.TABLES catalog view |
 |[db_tablespace_activity](views/db_tablespace_activity.sql)|Tablespace activity metrics using same SQL as dsmtop tablespaces screen|
 |[db_tablespace_quick_size](views/db_tablespace_quick_size.sql)|Returns the size of each tablespaces that has been touched since the last Db2 restart|
 |[db_tablespace_quick_skew](views/db_tablespace_quick_skew.sql)|Shows any data skew at the tablespace level. Only shows data for tablespaces touched since the last Db2 restart|
 |[db_tablespace_reduce_progress](views/db_tablespace_reduce_progress.sql)|Reports of the progress of any background extent movement such as as initiated by ALTER TABLESPACE REDUE MAX|
 |[db_tablespaces](views/db_tablespaces.sql)|Lists tablespaces showing page size, max size (if set) etc|
-|[db_tables](views/db_tables.sql)|Tables, Views, Nicknames, MQTs and other objects from the SYSCAT.TABLES catalog view |
-|[db_table_statistics](views/db_table_statistics.sql)|Shows table statistics and rows modified since last runstats|
-|[db_table_status](views/db_table_status.sql)|Shows if a table is in a non NORMAL status|
-|[db_temporal_tables](views/db_temporal_tables.sql)|Lists all temporal tables |
 |[db_temp_space](views/db_temp_space.sql)|Shows current system and user temporary tablespace usage by user|
 |[db_temp_table_quick_ddl](views/db_temp_table_quick_ddl.sql)|Simple DDL generator for DB2 Declared Global Temp Tables|
 |[db_temp_tables](views/db_temp_tables.sql)|Lists user CREATEd and DECLAREd global temporary tables|
-|[db_thresholds](views/db_thresholds.sql)|WLM Thresholds |
+|[db_temporal_tables](views/db_temporal_tables.sql)|Lists all temporal tables |
 |[db_threshold_types](views/db_threshold_types.sql)|Lists all possible WLM threshold types|
+|[db_thresholds](views/db_thresholds.sql)|WLM Thresholds |
 |[db_uptime](views/db_uptime.sql)|Shows last time the database members were last restarted|
 |[db_user_workloads](views/db_user_workloads.sql)|Returns a count of activity by User and Workload|
 |[db_view_ddl](views/db_view_ddl.sql)|Returns the DDL used to create VIEWs|

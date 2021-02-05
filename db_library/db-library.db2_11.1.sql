@@ -29,7 +29,7 @@ If you do not have e.g. the EXPLAIN tables or ADMIN_MOVE_TABLE in SYSTOOLS one o
 SET SCHEMA           DB @  -- You can install in any schema you like. DB is not a bad one to choose, but up to you 
 SET PATH=SYSTEM PATH,DB @  -- change it in the path too, if you do change it
 
-CREATE OR REPLACE VARIABLE DB_VERSION DECIMAL(6,3) DEFAULT 1.0 @
+CREATE OR REPLACE VARIABLE DB_VERSION DECIMAL(6,3) DEFAULT 1.001 @
 
 
 CREATE OR REPLACE VARIABLE DB_DIAG_FROM_TIMESTAMP TIMESTAMP DEFAULT (TIMESTAMP(CURRENT_DATE))@
@@ -3282,8 +3282,8 @@ WITH T AS (
       || COLUMNS || CHR(10)                 -- Middle
       || CASE WHEN DDL_SPLIT_SEQ = MAX(DDL_SPLIT_SEQ) OVER( PARTITION BY T.TABSCHEMA, T.TABNAME)
          THEN
-                CASE WHEN T.TEMPORALTYPE IN ('A','B') OR SUBSTR(T.PROPERTY,29,1) = 'Y' THEN COALESCE(',   PERIOD BUSINESS_TIME ("' || BT.BEGINCOLNAME || '", "' || BT.ENDCOLNAME || '")' || CHR(10),'') END
-             || CASE WHEN T.TEMPORALTYPE IN ('S','B') OR SUBSTR(T.PROPERTY,29,1) = 'Y' THEN COALESCE(',   PERIOD SYSTEM_TIME ("'   || ST.BEGINCOLNAME || '", "' || ST.ENDCOLNAME || '")' || CHR(10),'') END
+                CASE WHEN T.TEMPORALTYPE IN ('A','B') OR SUBSTR(T.PROPERTY,29,1) = 'Y' THEN COALESCE(',   PERIOD BUSINESS_TIME ("' || BT.BEGINCOLNAME || '", "' || BT.ENDCOLNAME || '")' || CHR(10),'') ELSE '' END
+             || CASE WHEN T.TEMPORALTYPE IN ('S','B') OR SUBSTR(T.PROPERTY,29,1) = 'Y' THEN COALESCE(',   PERIOD SYSTEM_TIME ("'   || ST.BEGINCOLNAME || '", "' || ST.ENDCOLNAME || '")' || CHR(10),'') ELSE '' END
              || CASE WHEN                                SUBSTR(T.PROPERTY,29,1) = 'Y' THEN 'MAINTAINED BY USER' || CHR(10) ELSE '' END
              || CASE WHEN PK.TYPE = 'P' 
              THEN ',   '

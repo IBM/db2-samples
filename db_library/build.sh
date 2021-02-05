@@ -1,4 +1,4 @@
-#!/bin/bash
+#! /bin/bash
 
 # A simple bit of code to concatenate all the library views and other CREATEable things into a single "install" sql file
 #  also creates a version of the views for use against snapshot versions of SYSCAT, SYSIBMADM and the MON table functions
@@ -80,15 +80,17 @@ cd views
 for f in *.sql
 do
      t=${f%.sql}
+     t=$(echo ${t} | tr '/a-z/' '/A-Z/')
      c=$(tail -n +5 $f | head -1 | cut -b 4- | sed -re "s/'/''/")
-     echo "COMMENT ON TABLE ${t^^} IS '$c' @" >> ../comments.sql
+     echo "COMMENT ON TABLE ${t} IS '${c}' @" >> ../comments.sql
 done
 cd ../scalar_functions
 for f in *.sql
 do
      t=${f%.sql}
+     t=$(echo ${t} | tr '/a-z/' '/A-Z/')
      c=$(tail -n +5 $f | head -1 | cut -b 4- | sed -re "s/'/''/")
-     echo "COMMENT ON FUNCTION ${t^^} IS '$c' @" >> ../comments.sql
+     echo "COMMENT ON FUNCTION ${t} IS '${c}' @" >> ../comments.sql
 done
 cd ..
 echo "
@@ -105,8 +107,8 @@ rm  comments.sql
 # now cat dbx_procs such as dbx_uninstall
 
 # build a version of the views that will run against tables in the current schema named the same as the catalog views and mon functions
-cat $OUT                      | sed -re 's/((SYSCAT|SYSIBMADM|SYSTOOLS))\./\/*\1*\//ig' | sed -re 's/(TABLE\()(((MON)|(ADMIN))[A-Z\_]*)\s*(\(.*?\)?\))/\/*\1*\/\2\/*\6*\//ig' > ${OUT/.sql/}.snapshot.sql
-cat ${OUT/.sql/}.db2_11.1.sql | sed -re 's/((SYSCAT|SYSIBMADM|SYSTOOLS))\./\/*\1*\//ig' | sed -re 's/(TABLE\()(((MON)|(ADMIN))[A-Z\_]*)\s*(\(.*?\)?\))/\/*\1*\/\2\/*\6*\//ig' > ${OUT/.sql/}.snapshot.db2_11.1.sql
+cat $OUT                      | sed -re 's/((SYSCAT|SYSIBMADM|SYSTOOLS))\./\/*\1*\//ig' | sed -re 's/(TABLE\()(((MON)|(ADMIN))[A-Z\_]*)\s*(\(.*\)?\))/\/*\1*\/\2\/*\6*\//ig' > ${OUT/.sql/}.snapshot.sql
+cat ${OUT/.sql/}.db2_11.1.sql | sed -re 's/((SYSCAT|SYSIBMADM|SYSTOOLS))\./\/*\1*\//ig' | sed -re 's/(TABLE\()(((MON)|(ADMIN))[A-Z\_]*)\s*(\(.*\)?\))/\/*\1*\/\2\/*\6*\//ig' > ${OUT/.sql/}.snapshot.db2_11.1.sql
 
 ## override the couple of views that need to be coded differently to get OK performance from the snapshot tables
 for f in offline/*/*.sql
