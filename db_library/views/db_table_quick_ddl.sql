@@ -113,8 +113,8 @@ WITH T AS (
       || COLUMNS || CHR(10)                 -- Middle
       || CASE WHEN DDL_SPLIT_SEQ = MAX(DDL_SPLIT_SEQ) OVER( PARTITION BY T.TABSCHEMA, T.TABNAME)
          THEN
-                CASE WHEN T.TEMPORALTYPE IN ('A','B') OR SUBSTR(T.PROPERTY,29,1) = 'Y' THEN COALESCE(',   PERIOD BUSINESS_TIME ("' || BT.BEGINCOLNAME || '", "' || BT.ENDCOLNAME || '")' || CHR(10),'') END
-             || CASE WHEN T.TEMPORALTYPE IN ('S','B') OR SUBSTR(T.PROPERTY,29,1) = 'Y' THEN COALESCE(',   PERIOD SYSTEM_TIME ("'   || ST.BEGINCOLNAME || '", "' || ST.ENDCOLNAME || '")' || CHR(10),'') END
+                CASE WHEN T.TEMPORALTYPE IN ('A','B') OR SUBSTR(T.PROPERTY,29,1) = 'Y' THEN COALESCE(',   PERIOD BUSINESS_TIME ("' || BT.BEGINCOLNAME || '", "' || BT.ENDCOLNAME || '")' || CHR(10),'') ELSE '' END
+             || CASE WHEN T.TEMPORALTYPE IN ('S','B') OR SUBSTR(T.PROPERTY,29,1) = 'Y' THEN COALESCE(',   PERIOD SYSTEM_TIME ("'   || ST.BEGINCOLNAME || '", "' || ST.ENDCOLNAME || '")' || CHR(10),'') ELSE '' END
              || CASE WHEN                                SUBSTR(T.PROPERTY,29,1) = 'Y' THEN 'MAINTAINED BY USER' || CHR(10) ELSE '' END
              || CASE WHEN PK.TYPE = 'P' 
              THEN ',   '
