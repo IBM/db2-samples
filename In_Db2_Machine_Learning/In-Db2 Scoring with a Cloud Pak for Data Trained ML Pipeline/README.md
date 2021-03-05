@@ -57,4 +57,4 @@ Ensure that all the steps in [Prerequistes](#Prerequisites) have been completed.
 If running the notebook for the first time, uncomment cells `19` and `20` in the section `Initialization of Environment`. Also uncomment cell `22` in the section `Writing the UDF`.
 
 ## 2. Reference <a name="Reference"></a>
-You can watch a demo video of this capability [here](LINKTOVID)
+You can watch a demo video of this capability [here](https://video.ibm.com/recorded/129516812)
