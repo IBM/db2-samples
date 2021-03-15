@@ -100,7 +100,7 @@ db2start
 connect to <database_name>
 
 db2 "CREATE TABLE <table_schema>.<table_name> (
-client_id INT NOT NULL GENERATED ALWAYS AS IDENTITY (START WITH 1, INCREMENT BY 1, NO CACHE),
+client_id INT,
 first_name VARCHAR(30),
 last_name VARCHAR(30),
 age FLOAT,
@@ -115,14 +115,10 @@ num_dependants_count INT,
 household_income INT,
 income_lower FLOAT,
 income_upper FLOAT,
-household_buy_potential VARCHAR(30),
-PRIMARY KEY (client_id))
+household_buy_potential VARCHAR(30))
 ORGANIZE BY ROW";
 
-db2 "LOAD FROM "full_path_to_csv>" OF DEL insert into DATA.TPCDS_50K(first_name, last_name, age, gender, marital_status, 
-education, purchase_estimate, credit_rating, num_dependants, num_dependants_employed, num_dependants_count, 
-household_income, income_lower, income_upper, household_buy_potential)"
-
+db2 "IMPORT FROM 'TPCDS-50K.csv' OF DEL skipcount 1 insert into <table_schema>.<table_name>"
 ```
 
 ## 4. Notebook-specific requirements <a name="Notebook-specific"></a>
