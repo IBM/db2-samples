@@ -1,0 +1,1607 @@
+##########################################################################
+# Licensed Materials - Property of IBM                                   *
+# 5765-478                                                               *
+# (c) Copyright IBM Corporation 2000-2011.                               *
+# All rights reserved.                                                   *
+#                                                                        *
+# US Government Users Restricted Rights - Use, duplication or            *
+# disclosure restricted by GSA ADP Schedule Contract with                *
+# IBM Corporation.                                                       *
+#*************************************************************************
+#  Permission Notice                                                     *
+#                                                                        *
+#  Permission is granted to copy, use, modify, and merge this sample     *
+#  software into your applications and to permit others to do any of the *
+#  foregoing. You may further distribute this software for               *
+#  commercial purposes only as part of your application that adds        *
+#  significant value and function beyond that provided by these          *
+#  samples.                                                              *
+#  You must include this permission statement and retain the copyright   *
+#  notice in all copies and modified versions of this software.          *
+#                                                                        *
+#*************************************************************************
+#                                                                        *
+#  DISCLAIMER OF WARRANTIES                                              *
+#                                                                        *
+#  The sample software is provided to you by IBM to assist you in        *
+#  developing your applications. THIS SOFTWARE IS PROVIDED AS-IS,        *
+#  WITHOUT WARRANTY OF ANY KIND. IBM SHALL NOT BE LIABLE FOR ANY         *
+#  DAMAGES ARISING OUT OF YOUR USE OR THE USE BY ANY THIRD PARTY         *
+#  OF THE SAMPLE SOFTWARE EVEN IF IT HAS BEEN ADVISED OF THE POSSIBILITY *
+#  OF SUCH DAMAGES. IN ADDITION, IBM SHALL NOT BE LIABLE FOR ANY THIRD   *
+#  PARTY CLAIMS AGAINST YOU.                                             *
+#                                                                        *
+#*************************************************************************
+#                                                                        *
+#  WARNING                                                               *
+#                                                                        *
+#  This sample may change your database or database manager              *
+#  configuration. Execute the samples against a 'test' database only,    *
+#  such as the DB2 sa_bank database.                                     *
+#                                                                        *
+#*************************************************************************
+#  Component Name:    Db2 Spatial Analytics v11.5
+#
+#  Source File Name:  saBankDemoRunBankDemo
+#
+#  Version:           11.5.6+
+#
+#  Description:       This script creates a sample bank database,
+#  ------------       creates a sample tables, insert rows into tables,
+#                     spatially enables the database, sets up geocoder,
+#                     runs geocoder, imports spatial data.
+#  S Y N T A X:
+#  ------------
+#    saBankDemoRunBankDemo [-i | -n | -c | -b | -h] [-wh]  [<database_name>]
+#
+#        If database <databasename> does not exist it will be created.
+#        The default name that will be used is sa_bank.
+#	       The schema name is sa_demo (you cannot modify the schema name).
+# 
+#    Command options
+#
+#	   -i	Interactive mode: A description of each step is shown before
+#		    you are prompted to execute the step. Explains the story
+#		    board of the bank scenario and the spatial administrative
+#		    actions necessary to set up the database. After the database
+#		    is set up, you are prompted to perform several queries.
+#
+#	   -n	Non-interactive mode: Follows the same steps as the 
+#		    interactive mode but does not prompt you at each step.
+#		    This mode can be used to set up a database for visualization 
+#		    or for further spatial analysis with SQL.
+#
+#	   -c	Completion mode: All the demo steps run in non-interactive
+#		    mode. At the end, the script notifies you of success or
+#		    failure.
+#
+#	   -b	Basic mode: This mode is tutorial oriented, in which you
+#		    follow a written script to perform all the database setup
+#		    steps on the db2gse command-line processor (CLP) or Db2
+#		    Command Editor.
+#		    The database is spatially enabled and only non-spatial data is 
+#		    loaded. You perform the remaining steps.  You also construct
+#		    a series of spatial queries using the Db2 CLP or the 
+#		    Db2 Command Editor.
+#    
+#    -wh Configures the instance as a warehouse by setting DB2_WORKLOAD
+#        to ANALYTICS (UNIX/LINUX only currently.)
+#
+#*************************************************************************
+#
+#  Notes:
+#  ------
+# 0. Before proceeding, the following steps have been done in advance:
+#    - Db2 default instance has been created and configured as needed.
+#    - Start the database manager (with the db2start command).
+#    - DB2PATH environment variable points to the sqllib directory
+#    - The user ID under which this demo is invoked must have either SYSADM
+#      or DBADM authority.
+# 1. If you are going to create a new database or use an existing database
+#    certain database configuration parameters must be updated.
+#    The following parameters must be updated to at least the listed
+#    values:
+#      Parameter    min value CO description
+#      ------------ --------- -- -------------------------------------------
+#      APPLHEAPSZ      2048   no  various (also for enable_db)
+#      STMTHEAP        4096  yes  Various platforms raise "query too complex"
+#                                 warnings
+#      CO => Configurable Online
+#    If these parameters are not to the values listed above the demo will
+#    prompt the user if they would like the demo to update these values for
+#    the database.   NOTE, that some of the values are not online
+#    configurable which requires a db2stop and db2start for these values to
+#    take effect.
+# 2. This demo Creates buffer pool and temporary table space which requires
+#    the database manager to be stopped(db2stop) and started(db2start) for
+#    them to take effect.
+# 3. If you are running this demo for the second time make sure all the
+#    previous messages files in the ~/tmp/msg* are deleted.
+#
+#*************************************************************************
+#
+# Environment: Unix
+#
+#*************************************************************************
+#
+#  For more information about the Db2 Spatial Analytics Bank demo script,
+#  see the file: saBankDemoREADME.txt
+#
+#  For information on using Db2 Spatial Analytics, see the 
+#  https://www.ibm.com/docs/en/db2/11.5?topic=data-db2-spatial-analytics
+#  documentation.  
+#  In this Demo, this document is referred to simply as the [User's Guide].
+#
+#  For the latest information on Db2 refer to the Db2 website at
+#  https://www.ibm.com/analytics/db2.
+#
+##########################################################################
+
+#=========================================================================
+# Environment settings:
+#
+# This is a Korn Shell script. It can not be interpreted on all platforms
+# with a Bourne Shell interpreter. We will only proceed below this point
+# if ksh is found in /usr/bin or /bin for compatibility reasons.
+#
+# If only sh exists the script might still work. You might then try to
+# comment the lines below and run the script again.
+#========================================================================
+if [[ $PPID -eq $BANK_ID ]] ; then
+	exit $?
+fi
+
+export BANK_ID=$$
+
+if [[ -x $(which ksh) ]] ; then
+	$(which ksh) $0 $@
+else
+	echo "This script requires a Korn-Shell to run. Please make sure that 'ksh' is installed."
+	exit 1
+fi
+
+#=====================================================================
+#   Name:    create_db
+#   Purpose: Create Database for bank spatial sample
+# Input:
+#          $1 => mode
+#          $2 => db_name
+#=====================================================================
+function create_db {
+  # local function variables
+  typeset mode=$1
+  typeset db_name=$2
+
+  typeset result=''  # result of executing statement
+  typeset rc=''
+  typeset first='' # SQL error message number
+
+  # Init log file
+  outfile=~/tmp/create_db.out
+  rm -f $outfile 2>/dev/null
+
+  if [[ $mode = i ]] || [[ $mode = b ]]; then
+    echo "========================================================================"
+    echo "|> Create database" $db_name and introduction
+
+    echo "========================================================================"
+    echo " Welcome to Db2 Spatial Analytics Bank Demo!"
+    echo " "
+    echo " This demo will present the commands to create a banking database "
+    echo " and perform some basic spatial administration. "
+    echo " "
+    echo " During the demo you will be presented with the command and also "
+    echo " an explanation of the command and hints and tips."
+    echo " "
+    echo " The following is a list of places to find out more information "
+    echo " about Db2 Spatial Analytics:"
+    echo "   - For more information about this demo please refer to the "
+    echo "     readme saBankDemoREADME.txt.  "
+    echo "   - For more information about the commands used in this "
+    echo "     demo please refer to the documentation "
+    echo "     https://www.ibm.com/docs/en/db2/11.5?topic=data-db2-spatial-analytics."  
+    echo "     In the demo, we refer"
+    echo "     to this document simply as the [User's Guide]. "
+    echo " "
+    echo " This demo is a shell script and can be stopped at any time by "
+    echo " pressing Control-C."
+    echo  "------------------------------------------------------------------------"
+    echo "db2 create database" $db_name ".  Please wait ..."
+  fi
+
+  result=$(db2 create db $db_name)
+  rc=$?
+  echo "db2 create db $db_name" >>$outfile ; echo $result >>$outfile
+
+  first=`expr "$result" | cut -d" " -f1`
+
+  if  [[ $rc = 0 ]]  ; then
+  if [[ $mode = i ]] || [[ $mode = b ]]; then
+    echo $result
+    press_any_key_to_continue
+  fi
+  else
+    if [[ $mode = i ]] || [[ $mode = b ]]; then
+      echo "* Create database was not successful"
+      echo $result
+    fi
+    # Check if the database already exists
+    if [[ $first = SQL1005* ]]; then
+      if [[ $mode = i ]] || [[ $mode = b ]]; then
+        press_any_key_to_continue
+      fi
+    else # The error message is not 'database already exists'
+      return 1
+    fi
+  fi
+
+  if [[ $rc = 0 ]] || [[ $first = SQL1005* ]] ; then
+    return 0
+  else
+    return 1
+  fi
+} #//end of create_db function
+
+
+#=====================================================================
+#   Name:    update_cfg
+#   Purpose: Update database and database management configuration
+#            parameters necessary for the sample
+#
+#      Parameter    min value CO description
+#      ------------ --------- -- -------------------------------------------
+#      APPLHEAPSZ      2048   no  various and for enable_db
+#      STMTHEAP        4096  yes  Various platforms raise "query too complex"
+#                                 warnings
+#      CO => Configurable Online
+# << TO DO >>
+# 1) It might be good to add a force application all if the disconnect failed
+# 2) Add a refresh option
+# 3) Add all the samples to the saBankDemoSpatialSQL.db2
+#=====================================================================
+function update_cfg {
+  # Input Parameters
+  #          $1 => mode
+  #          $2 => db_name
+  # typeset declares local function variables
+  typeset mode=$1
+  typeset db_name=$2
+
+  #return codes of executing statements
+  typeset rc1=0 ; typeset rc2=0 ; typeset rc3=0
+  typeset rc4=0 ; typeset rc5=0
+  typeset rc_reset=0 ; rc_terminate=0
+  typeset ans=''
+
+  # Init log file
+  outfile=~/tmp/update_cfg.out
+  rm -f $outfile 2>/dev/null
+
+  if [[ $mode = i ]] || [[ $mode = b ]]; then
+    echo "========================================================================"
+    echo "|> Update Database configuration parameters"
+    echo "========================================================================"
+    echo " For this demo to operate correctly certain database configuration"
+    echo " parameters may need to be updated. The suggested values are:"
+    echo
+    echo " Parameter    min value CO reason"
+    echo " ------------ --------- -- -------------------------------------------"
+    echo " APPLHEAPSZ      2048   no  various SE commands, in particular enable_db"
+    echo " STMTHEAP        4096  yes  Various platforms raise \"query too complex\""
+    echo "                            warnings with some spatial queries"
+    echo " CO => Configurable Online"
+    echo
+    echo " Parameters that are NOT online configurable require all applications"
+    echo " to be disconnected from the database before they take effect."
+    echo
+    echo " This demo expects that you are the only one connected to this database"
+    echo " while this demo is running.  If you elected for this demo to create"
+    echo " the database, you will be the only user connected to the database."
+    echo
+    echo " For more information about the parameters above and tuning your database "
+    echo " please refer to the Db2 Performance Tuning Guide.  Please note that"
+    echo " the suggested parameters above are not a complete set of parameters"
+    echo " to be considering for tuning your spatial database nor are they"
+    echo " necessary the optimal values.  The optimal values can vary depending on"
+    echo " the database, application and hardware requirements, however the"
+    echo " values above are adequate for this demo."
+    echo
+    echo " To view your current database configuration parameters use the DB2"
+    echo " command: db2 get database configuration.  Details about this command"
+    echo " can be found in the Db2 Command Line Processor manual."
+    echo
+    echo " For more information about the required minimum configuration parameter"
+    echo " values for your spatial database refer to Chapter \"Setting up a "
+    echo " database\" in the User's Guide."
+    echo
+    echo " This next section of the demo will disconnect your id from the database"
+    echo " and update the database configuration variables to the values above."
+    echo
+    echo "------------------------------------------------------------------------"
+  fi
+
+  while :
+    do
+    if [[ $mode = i ]] || [[ $mode = b ]]; then
+      echo
+      echo "Do you want this script to update the database configuration parameters?"
+      echo "<> Answer y or n, then press RETURN:"
+      read ans
+    else
+      ans=y
+    fi
+    case "$ans" in
+    y)# The update commands for online configurable parameters below
+      # return 0 when successful, however setting the non-online
+      # configurable parameters returns 2 when successful because the
+      # user must disconnect all applications before the updated
+      # values take effect. To get all 0\'s, you have to first
+      # disconnect all applications before issuing update commands.
+      #
+      # The update command returns a 4 when a syntax error occurs.
+
+      if [[ $mode = i ]] || [[ $mode = b ]]; then
+        echo 'Updating database configuration parameters.  Please wait ...'
+      fi
+
+      log db2 connect reset
+      rc_reset=$?
+      log db2 terminate
+      rc_terminate=$?
+
+      log db2 "update db cfg for $db_name using APPLHEAPSZ 2048"
+      rc2=$?
+      log db2 "update db cfg for $db_name using STMTHEAP 4096"
+      rc5=$?
+
+      showlog_pause
+      break ;;
+
+    n) echo
+      echo "|| The database configuration parameters were not updated."
+      echo
+      break ;;
+
+    *) echo "${ans}? Please answer y or n."
+    esac
+  done
+
+  if [[ $rc2 = 0 ]] && \
+     [[ $rc5 = 0 ]] ; then
+    return 0
+  else
+    return 1
+  fi
+} #//end of update_cfg function
+
+
+#=====================================================================
+#   Name:    setup_db
+#   Purpose: Create tablespaces and bufferpools for demo
+#=====================================================================
+function setup_db {
+  # Input Parameters
+  #          $1 => mode
+  #          $2 => db_name
+  # typeset declares local function variables
+  typeset mode=$1
+  typeset db_name=$2
+
+  #return codes of executing statements
+  typeset rc_connect=0
+  typeset rc_create_32k_bp=0;   typeset rc_create_8k_bp=0
+  typeset rc_create_temp_ts=0 ; typeset rc_create_user_temp_ts=0
+  typeset rc_create_8k_ts=0 ;
+  typeset rc_grant1=0 ;         typeset rc_grant2=0
+  typeset rc_stop=0 ;           typeset rc_start=0
+  typeset rc_reset1=0 ;         typeset rc_reset2=0
+
+  typeset ans=''
+
+  # Init log file
+  outfile=~/tmp/setup_db.out
+  rm -f $outfile 2>/dev/null
+
+  if [[ $mode = i ]] || [[ $mode = b ]]; then
+    echo "========================================================================"
+    echo "|> Create bufferpools and tablespaces and grant public authority to"
+    echo "|> tablespaces."
+    echo "========================================================================"
+    echo " This is needed if the environment is not set to create a warehouse."
+    echo " In a warehouse environment the default database page size is 32k."
+    echo
+    echo " This part of the demo is going to create two buffer pools and two"
+    echo " tablespaces.  The default tablespace has a 4k page size and the demo"
+    echo " requires one 8k page size and two 32k page size tablespaces.  The 8k "
+    echo " page tablespace is for importing a shapefile with more columns than fit"
+    echo " on a 4k page size. The temporary table space is used for complex ad hoc"
+    echo " queries."
+    echo " The temporary tablespace uses a 32k page size."
+    echo
+    echo " Each tablespace must have an associated bufferpool.  Since the default"
+    echo " bufferpool is of a small 4k page, therefore I need to create two other"
+    echo " bufferpools for the 8k and 32k tablespaces."
+    echo
+    echo " When a new bufferpool is created is requires the database to be stopped"
+    echo " before it goes into affect.  Therefore, this next section will stop and"
+    echo " start the database manager."
+    echo
+    echo " This section also grants access to these new tablespaces to public, so"
+    echo " that anyone can create tables in these tablespaces."
+    echo
+    echo " For more information about bufferpools and tablespaces, please refer to"
+    echo " the Db2 SQL Reference."
+    echo "------------------------------------------------------------------------"
+  fi
+
+  while :
+    do
+    if [[ $mode = i ]] || [[ $mode = b ]]; then
+      echo
+      echo 'Do you want this script to create the bufferpools and tablespaces,'
+      echo ' which requires a stop and start of the database manager?'
+      echo '<> Answer y or n, then press RETURN: '
+      read ans
+    else
+      ans=y
+    fi
+    case "$ans" in
+    y) if [[ $mode = i ]] || [[ $mode = b ]]; then
+        echo 'Creating the bufferpools and tablespaces.  Please wait ...'
+      fi
+
+      log db2 CONNECT RESET
+      rc_reset1=$?
+      log db2 CONNECT TO $db_name
+      rc_connect=$?
+      log db2 CREATE BUFFERPOOL sa_bank_32k_bp SIZE 1024 PAGESIZE 32 K
+      rc_create_32k_bp=$?
+      log db2 CREATE BUFFERPOOL sa_bank_8k_bp SIZE 1024 PAGESIZE 8 K
+      rc_create_8k_bp=$?
+
+      log db2 "CREATE TEMPORARY TABLESPACE sa_bank_temp_ts \
+        PAGESIZE 32 K MANAGED BY SYSTEM  USING ('sa_bank_container_32k_tt') \
+        EXTENTSIZE 64 PREFETCHSIZE 32 BUFFERPOOL sa_bank_32k_bp"
+      rc_create_ts=$?
+
+      #log db2 "CREATE USER TEMPORARY TABLESPACE \
+      #  sa_bank_u_temp_ts \
+      #  PAGESIZE 32 K MANAGED BY SYSTEM  USING ('sa_bank_container_32k_utt') \
+      #  EXTENTSIZE 64 PREFETCHSIZE 32 BUFFERPOOL sa_bank_32k_bp"
+      #rc_create_user_ts=$?
+
+      log db2 "CREATE TABLESPACE sa_bank_8k_ts\
+        PAGESIZE 8 K MANAGED BY SYSTEM USING ('sa_bank_container_8k') \
+        EXTENTSIZE 16 PREFETCHSIZE 8 BUFFERPOOL sa_bank_8k_bp"
+      rc_create_8k_ts=$?
+
+      log db2 GRANT USE OF TABLESPACE sa_bank_u_temp_ts TO PUBLIC
+      rc_grant1=$?
+
+      log db2 GRANT USE OF TABLESPACE sa_bank_8k_ts TO PUBLIC
+      rc_grant2=$?
+
+      log db2 CONNECT RESET
+      rc_reset2=$?
+
+      log db2stop force
+      rc_stop=$?
+
+      log db2start
+      rc_start=$?
+
+      showlog_pause
+      break ;;
+    n) echo ; echo "|| The bufferpools and tablespaces were not created."
+      break ;;
+    *) echo ; echo "${ans}? Please answer y or n."
+    esac
+  done
+
+  if [[ $rc_create_8k_bp = 0 ]] && \
+     [[ $rc_create_temp_ts = 0 ]] && [[ $rc_create_user_temp_ts = 0 ]] && \
+     [[ $rc_create_8k_ts = 0 ]] && [[ $rc_grant1 = 0 ]] && [[ $rc_grant2 = 0 ]]
+  then
+    return 0
+  else
+    return 1
+  fi
+} #//end of setup_db function
+
+
+#=====================================================================
+#   Name:    enable_db
+#   Purpose: Spatially enable bank sample database
+#=====================================================================
+function enable_db {
+  # Input Parameters
+  #          $1 => mode
+  #          $2 => db_name
+  # typeset declares local function variables
+  typeset mode=$1
+  typeset db_name=$2
+  typeset rc_connect=''
+  typeset rc=''
+
+  # Init log file
+  outfile=~/tmp/enable_db.out
+  rm -f $outfile 2>/dev/null
+
+  if [[ $mode = i ]] || [[ $mode = b ]]; then
+    echo "========================================================================"
+    echo "|> Spatially enable database"
+    echo "========================================================================"
+    echo " Most of Db2's Spatial Analytics administration is handled by a set of "
+    echo " stored procedures.  User friendly mechanisms for calling these"
+    echo " stored procedures is provided via the command line tool db2se. "
+    echo " You will have access to these tools once Spatial Analytics is enabled."
+    echo " "
+    echo " The first step that must be performed on every database that you want to"
+    echo " store spatial data in is to spatially enable the database. Spatially "
+    echo " enabling your database creates the infrastructure to "
+    echo " perform all spatial tasks.  The spatially enabling step creates all of"
+    echo " the spatial types, some spatial routines, spatial administrative"
+    echo " stored procedures, and the spatial catalog."
+    echo " "
+    echo " For syntax help on using db2se, typing db2se -h will give you usage"
+    echo " options."
+    echo " "
+    echo  "------------------------------------------------------------------------"
+    echo " "
+    echo " Spatially enabling database" $db_name ". Please wait..."
+  fi
+
+  log db2 CONNECT TO $db_name
+  rc_connect=$?
+
+if [[ $rc_connect = 0 ]] ; then
+    # Successful connection - run the script
+    log db2 "CALL SYSPROC.SYSINSTALLOBJECTS('GEO', 'C', NULL, NULL)"
+    rc=$?
+    if [[ $rc = 0 ]] ; then
+      showlog_pause
+    else
+      echo "* Spatially enabling the database " $db_name " was not successful:"
+      showlog
+
+      # not successful
+      return 1
+    fi
+
+    # Make sure db2se will work
+    echo " Re-running a bind to make sure db2se works."
+    log db2 "bind $DB2PATH/bnd/@db2gse.lst"
+    rc=$?
+    if [[ $rc = 0 || $rc = 2 ]] ; then
+      showlog_pause
+    else
+      echo "* Binding db2se in database " $db_name " was not successful:"
+      showlog
+
+      # not successful
+      return 1
+    fi
+
+  else
+    echo "* Could not connect to " $db_name ":"
+    showlog
+
+    # not successful
+    return 1
+  fi
+
+  return 0
+} #//end of enable_db function
+
+
+#=====================================================================
+#   Name:    create_tables
+#   Purpose: Create tables
+#=====================================================================
+function create_tables {
+  # Input Parameters
+  #          $1 => mode
+  #          $2 => db_name
+  # typeset declares local function variables
+  typeset mode=$1
+  typeset db_name=$2
+  typeset rc_connect=''
+  typeset rc=''
+
+  # Init log file
+  outfile=~/tmp/create_tables.out
+  rm -f $outfile 2>/dev/null
+
+  if [[ $mode = i ]] || [[ $mode = b ]]; then
+    echo "========================================================================"
+    echo "|> Create tables for Banking Demo"
+    echo "========================================================================"
+    echo " The definition for the tables is located in saBankDemoDDL.db2."
+    echo " All the tables are created in the sa_demo schema."
+    echo " Name         Description"
+    echo " -----------  -----------------------------------------------------"
+    echo " Customers    Information about each customer"
+    echo " Branches     Information about each bank branch office"
+    echo " Accounts     Information about the customers checking & saving accounts"
+    echo " Transactions Information about each banking transaction a customer makes"
+    echo
+    echo "------------------------------------------------------------------------"
+    echo "db2 connect to" $db_name " Please wait ..."
+  fi
+
+  log db2 CONNECT TO $db_name
+  rc_connect=$?
+
+  if [[ $rc_connect = 0 ]] ; then
+    # Successful connection - run the script
+    log db2 -tvf $SCRIPTDIR/saBankDemoDDL.db2
+    rc=$?
+
+    if [[ $rc = 0 ]] ; then
+      showlog_pause
+    else
+      echo "* Create tables for Banking Demo not successful:"
+      showlog
+
+      # not successful
+      return 1
+    fi
+  else
+    echo "* Could not connect to " $db_name ":"
+    showlog
+
+    # not successful
+    return 1
+  fi
+
+  return 0
+} #//end of create_tables function
+
+
+
+#=====================================================================
+#   Name:    insert_data
+#   Purpose: Insert non-spatial data.
+#=====================================================================
+function insert_data {
+  # Input Parameters
+  #          $1 => mode
+  #          $2 => db_name
+  # typeset declares local function variables
+  typeset mode=$1
+  typeset db_name=$2
+  typeset rc=''
+  typeset rc_connect=''
+
+  # Init log file
+  outfile=~/tmp/insert_data.out
+  rm -f $outfile 2>/dev/null
+
+  if [[ $mode = i ]] || [[ $mode = b ]]; then
+    echo "========================================================================"
+    echo "|> Populate tables with records"
+    echo "========================================================================"
+    echo " This step is going to insert data into the previously created tables."
+    echo  "------------------------------------------------------------------------"
+    echo "db2 connect to" $db_name " Please wait ..."
+  fi
+
+  log db2 connect to $db_name
+  rc_connect=$?
+
+  if [[ $rc_connect = 0 ]] ; then
+    # Successful connection - run the script
+    log db2 -tvf $SCRIPTDIR/saBankDemoTableData.db2
+    rc=$?
+
+    if [[ $rc = 0 ]] ; then
+      showlog_pause
+    else
+      echo "* Populate tables not successful:"
+      showlog
+
+      # not successful
+      return 1
+    fi
+  else
+    echo "* Could not connect to " $db_name ":"
+    showlog
+
+    # not successful
+    return 1
+  fi
+
+  return 0
+} #//end of insert_data function
+
+
+
+#=====================================================================
+#   Name:    add_spatial_column
+#   Purpose: Alter tables and add spatial column
+#=====================================================================
+function add_spatial_column {
+  # Input Parameters
+  #          $1 => mode
+  #          $2 => db_name
+  # typeset declares local function variables
+  typeset mode=$1
+  typeset db_name=$2
+
+  typeset rc_connect=''
+  typeset rc_customers='';  typeset rc_branches=''
+
+  # Init log file
+  outfile=~/tmp/add_spatial_column.out
+  rm -f $outfile 2>/dev/null
+
+  if [[ $mode = i ]] || [[ $mode = b ]]; then
+    echo "========================================================================"
+    echo "|> Add spatial column to business tables"
+    echo "========================================================================"
+    echo " There are 13 spatial types that comply to the OGC and SQL/MM object"
+    echo " hierarchy.  The spatial types are all part of the SYSIBM schema. The"
+    echo " spatial types are of type BLOB(4M) that are created during"
+    echo " the spatial enable database step. These spatial types can be used just"
+    echo " like any other SQL data types."
+    echo
+    echo " In the following step, we are going to alter the customers and branches"
+    echo " tables and add a spatial column to store the location of customers and"
+    echo " branches."
+    echo
+    echo "------------------------------------------------------------------------"
+    echo
+    echo "Adding spatial columns to business tables. Please wait ..."
+  fi
+
+  log db2 connect to $db_name
+  rc_connect=$?
+
+  if [[ $rc_connect = 0 ]] ; then
+    # Successful connection
+    log db2 "ALTER TABLE sa_demo.customers ADD COLUMN location ST_Point"
+    rc_customers=$?
+
+    log db2 "ALTER TABLE sa_demo.branches ADD COLUMN location ST_Point"
+    rc_branches=$?
+
+    showlog_pause
+  else
+    echo "* Could not connect to " $db_name ":"
+    showlog
+    return 1
+  fi
+
+  if [[ $rc_customers = 0 ]] && [[ $rc_branches = 0 ]] ; then
+    return 0
+  else
+    return 1
+  fi
+} #//end of add_spatial_column function
+
+
+
+#=====================================================================
+#   Name:    check_srs
+#   Purpose: Checks if an appropriate spatial reference system exists
+#=====================================================================
+function check_srs {
+  # Input Parameters
+  #          $1 => mode
+  #          $2 => db_name
+  # typeset declares local function variables
+  typeset mode=$1
+  typeset db_name=$2
+  typeset rc_info='';  typeset rc_connect=''
+
+  # Init log file
+  outfile=~/tmp/check_srs.out
+  rm -f $outfile 2>/dev/null
+
+  if [[ $mode = i ]] || [[ $mode = b ]]; then
+    echo "========================================================================"
+    echo "|> Check spatial reference system"
+    echo "========================================================================"
+    echo " A spatial reference system defines the spatial domain and precision"
+    echo " of the spatial data being stored in a column.  The spatial domain "
+    echo " consists of the maximum possible spatial extent of your coordinate"
+    echo " values and the coordinate system associated with the spatial data."
+    echo
+    echo " The spatial extent is defined by X, Y, Z, and M offset values. The "
+    echo " coordinate system geo-references your data in space.  It defines the"
+    echo ' origin, units and possibly a projection used (only for projected'
+    echo ' coordinate systems).  For performance reasons, Db2 SA internally '
+    echo " stores all spatial data as positive integer values.  When you "
+    echo " define your spatial extent, you must consider your minimum and maximum "
+    echo ' X, Y (and Z, M) values, and provide offsets so that all your values'
+    echo " can be converted to positive numbers in the coordinate space.  The "
+    echo " conversions are only for internal purposes and handled automatically "
+    echo " once they are set."
+    echo
+    echo " db2se shape_info command can help you determine the spatial extent"
+    echo " of a shapefile and possibly the coordinate system if a *.prj file"
+    echo " exists."
+    echo
+    echo " The spatial precision for your data is defined by the X, Y, Z, and M "
+    echo " scale factors.  The spatial precision also factors into the spatial"
+    echo " extent.  The spatial precision is reversely proportional to the"
+    echo " spatial extent.  As the spatial precision goes up (you can "
+    echo " store more precise values) the size of your extent goes down (you"
+    echo " have a smaller extent).  Conversely, as spatial precision does down"
+    echo " your extent goes up.  Therefore, the spatial precision defines the"
+    echo " upper limit of your spatial extent, the max X, Y and Z (and M)."
+    echo
+    echo "For more information, please refer to the User's Guide chapter "
+    echo "\"Setting up spatial resources for a database\"."
+    echo
+    echo "The following are the commands associated with spatial systems:"
+    echo "  db2se create_cs [-h]"
+    echo "  db2se alter_cs [-h]"
+    echo "  db2se drop_cs [-h]"
+    echo "  db2se create_srs [-h]"
+    echo "  db2se alter_srs [-h]"
+    echo "  db2se drop_srs [-h]"
+    echo
+    echo "In this step we are going to use db2se shape_info to get information"
+    echo "about a shapefile and in particular determine if there is an "
+    echo "existing spatial reference system that can contain the spatial data."
+    echo "------------------------------------------------------------------------"
+    echo
+    echo "db2 connect to" $db_name ".  Please wait ..."
+  fi
+
+  log db2 connect to $db_name
+  rc_connect=$?
+
+  if [[ $rc_connect = 0 ]] ; then
+    # Successful connection
+
+    log db2se shape_info -fileName $SCRIPTDIR/../data/cityLimits -database $db_name -sa 1
+    rc_info=$?
+
+    showlog_pause
+  else
+    echo "* Could not connect to " $db_name ":"
+    showlog
+    return 1
+  fi
+
+  if [[ $rc_info = 0 ]] ; then
+    return 0
+  else
+    return 1
+  fi
+} #//end of check_srs function
+
+
+#=====================================================================
+#   Name:    populate_location
+#   Purpose: Setup geocoding and auto_gc for customers and branches table
+#=====================================================================
+function populate_location {
+  # Input Parameters
+  #          $1 => mode
+  #          $2 => db_name
+  # typeset declares local function variables
+  typeset mode=$1
+  typeset db_name=$2
+
+  typeset rc_register_gc1=0 ; typeset rc_auto_gc1=0
+  typeset rc_register_gc2=0 ; typeset rc_auto_gc2=0
+  typeset rc_cp_ref=0 ;       typeset rc_cp_loc=0
+
+  # Init log file
+  outfile=~/tmp/populate_location.out
+  rm -f $outfile 2>/dev/null
+  
+    echo "========================================================================"
+    echo "|>  Set location column from latitude and longitude values"
+    echo "========================================================================"
+
+  log db2 "update sa_demo.customers set location = st_point(longitude, latitude, 1)"
+  rc_auto_gc1=$?
+
+  log db2 "update sa_demo.branches set location = st_point(longitude, latitude, 1)"
+  rc_auto_gc2=$?
+
+  showlog_pause
+
+  if [[ $rc_auto_gc1  = 0 ]] && [[ $rc_auto_gc2  = 0 ]] ; then
+    return 0
+  else
+    return 1
+  fi
+} #//end of populate_location function
+
+
+#=====================================================================
+#   Name:    geo_queries
+#   Purpose: Basic spatial queries with customer and branch
+# 			 data
+#=====================================================================
+function geo_queries {
+  # Input Parameters
+  #          $1 => mode
+  #          $2 => db_name
+  # typeset declares local function variables
+  typeset mode=$1
+  typeset db_name=$2
+
+  typeset rc_connect=''; typeset rc_function_path=''
+  typeset rc_query1=''; typeset rc_query2=''; typeset rc_query3='';
+
+  # Init log file
+  outfile=~/tmp/geo_queries.out
+  rm -f $outfile 2>/dev/null
+
+  if [[ $mode = i ]] || [[ $mode = b ]]; then
+    echo "========================================================================"
+    echo "|>  Basic spatial queries with customer and branch data"
+    echo "========================================================================"
+    echo " In this step you will have a chance to perform a few basic spatial "
+    echo " queries."
+    echo
+    echo " All the spatial routines are built-in into SYSIBM or SYSPROC function path. "
+    echo "------------------------------------------------------------------------"
+    echo
+    echo "db2 connect to" $db_name " Please wait ..."
+  fi
+
+  log db2 connect to $db_name
+  rc_connect=$?
+
+  if [[ $mode = i ]] || [[ $mode = b ]]; then
+    typeset q3="db2 SELECT c.name AS cust_name, b.name AS branch_name, DECIMAL(st_distance(b.location, c.location, 'KILOMETER'), 6, 2) AS distance  FROM  sa_demo.branches b, sa_demo.customers c WHERE st_distance(b.location, c.location, 'KILOMETER') < 1  ORDER BY distance"
+
+    PS3='Basic Query? '
+    select choice in \
+      'describe branches table', \
+      'view branches location coordinates', \
+      'find branch customers within 1 kilometer of my branches' \
+      'continue demo'
+    do
+      case $REPLY in
+      1 ) db2 DESCRIBE TABLE sa_demo.branches ;;
+      2 ) db2 'SELECT name, VARCHAR(ST_AsText(location), 50) FROM sa_demo.branches' ;;
+      3 ) $q3 ;;
+      4 ) break ;;
+      * ) echo "Please select a number 1-4 or ENTER to see the menu" ;;
+      esac
+    done
+
+    press_any_key_to_continue
+  fi
+
+  return 0
+} #//end of geo_queries function
+
+
+#=====================================================================
+#   Name:    import_shapefiles
+#   Purpose: Template to use for the rest of the functions
+#=====================================================================
+function import_shapefiles {
+  # Input Parameters
+  #          $1 => mode
+  #          $2 => db_name
+  # typeset declares local function variables
+  typeset mode=$1
+  typeset db_name=$2
+
+  typeset rc_city='';    typeset rc_main='';    typeset rc_zip=''
+  typeset rc_census='';  typeset rc_sales=''
+
+  # Init temporary log file
+  outfile=~/tmp/import_shapefiles.tmp
+
+  # Init log file
+  outfile1=~/tmp/import_shapefiles.out
+  rm -f $outfile1 2>/dev/null
+
+  if [[ $mode = i ]] || [[ $mode = b ]]; then
+    echo "========================================================================"
+    echo "|> Import Reference and Demographic Census Shapefiles"
+    echo "========================================================================"
+    echo " Many data providers and GIS products can produce shapefiles.  Db2"
+    echo " provides a set of spatial data CD's with sample spatial data in "
+    echo " shapefile format."
+    echo
+    echo " In this step we will import a set of shapefiles.  The shapefiles "
+    echo " contain census demographic data and spatial background data.  The "
+    echo " spatial background data helps reference your data when viewing it on"
+    echo " a map."
+    echo
+    echo " When you import shapefile data you need to provide a spatial reference"
+    echo " system that the spatial data is going to belong to.  For this example"
+    echo " we are going to use spatial reference system NAD83_SRS_1.  "
+    echo
+    echo " When you spatial data via db2se you can also specify whether you want"
+    echo " Spatial Extender to look for the file on the client or server "
+    echo " filesystem via the createTableFlag option."
+    echo
+    echo " When you import shapefiles you can optionally create two other files"
+    echo " an exception and message file.  The message file contains a status "
+    echo " of the import process and provides information about how many shapes"
+    echo " were imported.  It also says whether a block of shapes failed.  If it"
+    echo " fails it writes the block of shapes out the exception file.  Note, "
+    echo " the block is defined by the commit scope and if within that block there"
+    echo " is one invalid shape the entire block is rejected. If this happens"
+    echo " import the exception file with a small commit scope to identify the "
+    echo " shape that is failing."
+    echo "------------------------------------------------------------------------"
+    echo " Please wait - this operation might take several minutes to complete."
+    echo
+  fi
+
+  file1=~/tmp/parcels
+  do_import cityLimits city_limits $file1 1 200 $db_name
+  rc_city=$?
+
+  file2=~/tmp/main_streets
+  do_import sjMainStreets sj_main_streets $file2 1 200 $db_name
+  rc_main=$?
+
+  file3=~/tmp/zip_codes
+  do_import sjZipCodes sj_zipcodes $file3 1 200 $db_name
+  rc_zip=$?
+
+  file4=~/tmp/census
+  do_import sjCensusBlocks sj_census_blocks $file4 1 200 $db_name
+  rc_census=$?
+
+  file5=~/tmp/sales
+  do_import salezones sales_regions $file5 0 200 $db_name
+  rc_sales=$?
+
+  if [[ $mode = i ]] || [[ $mode = b ]]; then
+    press_any_key_to_continue
+  fi
+
+  outfile=$outfile1
+
+  if [[ $rc_city = 0 ]] && [[ $rc_main = 0 ]] && [[ $rc_zip = 0 ]] && \
+     [[ $rc_census = 0 ]] && [[ $rc_sales = 0 ]]  ; then
+    return 0
+  else
+    return 1
+  fi
+} #//end of import_shapefiles function
+
+
+#=====================================================================
+# Name:    do_import  (called by imp_shape)
+# Purpose: Imports a shapefile and prints/logs the results.
+# Input:	$1 => shapefile name
+#			$2 => table name
+#			$3 => exception (.shp) and message (.msg) files name
+#			$4 => if 1 then an id_column with name SA_ROW_ID is created
+#					otherwise, no id_column
+#           $5 => commitScope
+#           $6 => db_name
+# Global vars:
+#			$outfile    => temporary log file
+#			$outfile1   => permanent log file
+#			$db_name    => database name
+# Returns:  return code of import command
+#=====================================================================
+function do_import {
+  typeset id_col=''; typeset rc=''; typeset line=''
+  typeset db_name=$6  
+
+  if [[ $4 = 1 ]]; then
+    id_col="-idColumn sa_row_id -idColumnIsIdentity 1"
+  fi
+  SHAPEDIR=$(cd $SCRIPTDIR; cd ..; cd data; echo $PWD)
+
+  # Prepare the command line
+  line="db2se import_shape $db_name -sa 1 -client 1"
+  line="$line -fileName $SHAPEDIR/$1"
+  line="$line -srsName NAD83_SRS_1 -tableSchema sa_demo"
+  line="$line -tableName $2"
+  line="$line -spatialcolumn geometry -createTableFlag 1 -commitScope $5"
+  line="$line $id_col"
+  line="$line -exceptionFile $3.shp"
+  line="$line -messagesFile $3.msg"
+
+  # Run import, then show and log results
+  rm -f $outfile $3.shp $3.msg 2>/dev/null
+  log2 $line
+  rc=$?
+
+  showlog
+
+  echo $line >>$outfile1
+  echo " " >>$outfile1
+  cat $outfile >>$outfile1 2>/dev/null
+  echo " " >>$outfile1
+
+  return $rc
+} #//end of do_import function
+
+
+#=====================================================================
+#   Name:    create_views
+#   Purpose: Template to use for the rest of the functions
+#=====================================================================
+function create_views {
+  # Input Parameters
+  #          $1 => mode
+  #          $2 => db_name
+  # typeset declares local function variables
+  typeset mode=$1
+  typeset db_name=$2
+
+  typeset rc_connect=1; typeset rc=1
+
+  # Init log file
+  outfile=~/tmp/create_views.out
+  rm -f $outfile 2>/dev/null
+
+  if [[ $mode = i ]] || [[ $mode = b ]]; then
+    echo "========================================================================"
+    echo "|> Create Views"
+    echo "========================================================================"
+    echo " This step is going to create a series of views that could be used "
+    echo " by a geobrowser to visualize the spatial analysis performed by the "
+    echo " query."
+    echo
+    echo " The views are defined in the file saBankDemoViewDDL.db2"
+    echo
+    echo " For more information about creating views refer to the Db2 SQL "
+    echo " reference book."
+    echo "------------------------------------------------------------------------"
+    echo
+    echo " Creating the views.  Please wait ..."
+  fi
+
+  log db2 connect to $db_name
+  rc_connect=$?
+
+  if [[ $rc_connect = 0 ]] ; then
+    # Successful connection
+    log db2 -tvf $SCRIPTDIR/../bank/saBankDemoViewDDL.db2
+    rc=$?
+
+    if [[ $rc = 0 ]] ; then
+      showlog_pause
+    else
+      echo "* Db2 Spatial View Creation not successful:"
+      showlog
+
+      # not successful
+      return 1
+    fi
+  else
+    echo "* Could not connect to " $db_name ":"
+    showlog
+
+    # not successful
+    return 1
+  fi
+
+  if [[ $rc = 0 ]] ; then
+    return 0
+  else
+    return 1
+  fi
+} #//end of create_views function
+
+
+#=====================================================================
+#   Name:    register_spatial_columns
+#   Purpose: Register the spatial columns created in tables and view
+#            by this demo.
+#=====================================================================
+function register_spatial_columns {
+# Input Parameters
+#          $1 => mode
+#          $2 => db_name
+
+  typeset mode=$1
+  typeset db_name=$2
+
+  typeset rc_register1=''; typeset rc_register2=''; typeset rc_register3='';
+  typeset rc_register4=''; typeset rc_register5=''; typeset rc_register6='';
+  typeset rc_register7='';
+
+  # Init log file
+  outfile=~/tmp/register_spatial_columns.out
+  rm -f $outfile 2>/dev/null
+
+  if [[ $mode = i ]] || [[ $mode = b ]]; then
+    echo "========================================================================"
+    echo "|> Register Spatial Columns"
+    echo "========================================================================"
+    echo " Spatial Analytics allows you to create a constraint on a spatial"
+    echo " column that enforces the constraint that all spatial data in the "
+    echo " column must belong to the same spatial reference system."
+    echo
+    echo " Many spatial visualization tools require that all the spatial data"
+    echo " in one column being visualized belong to the same spatial reference "
+    echo " system."
+    echo
+    echo " For more information about registering spatial columns refer to "
+    echo " chapter \"Setting up spatial columns\" in the User's Guide."
+    echo "------------------------------------------------------------------------"
+    echo
+    echo " Registering spatial columns.  Please wait ..."
+  fi
+
+  log db2se register_spatial_column $db_name -tableSchema SA_DEMO \
+           -tableName BRANCHES -columnName LOCATION -srsName NAD83_SRS_1 -sa 1
+  rc_register1=$?
+
+  log db2se register_spatial_column $db_name -tableSchema SA_DEMO \
+           -tableName CUSTOMERS -columnName LOCATION -srsName NAD83_SRS_1 -sa 1
+  rc_register2=$?
+
+  log db2se register_spatial_column $db_name -tableSchema SA_DEMO \
+           -tableName CITY_LIMITS -columnName GEOMETRY -srsName NAD83_SRS_1 -sa 1
+  rc_register3=$?
+
+  log db2se register_spatial_column $db_name -tableSchema SA_DEMO \
+           -tableName SALES_REGIONS -columnName GEOMETRY -srsName NAD83_SRS_1 -sa 1
+  rc_register4=$?
+
+  log db2se register_spatial_column $db_name -tableSchema SA_DEMO \
+           -tableName SJ_CENSUS_BLOCKS -columnName GEOMETRY -srsName NAD83_SRS_1 -sa 1
+  rc_register5=$?
+
+  log db2se register_spatial_column $db_name -tableSchema SA_DEMO \
+           -tableName SJ_MAIN_STREETS -columnName GEOMETRY -srsName NAD83_SRS_1 -sa 1
+  rc_register6=$?
+
+  log db2se register_spatial_column $db_name -tableSchema SA_DEMO \
+           -tableName SJ_ZIPCODES -columnName GEOMETRY -srsName NAD83_SRS_1 -sa 1
+  rc_register7=$?
+
+  showlog_pause
+
+  if [[ $rc_register1 = 0 ]] && [[ $rc_register2 = 0 ]] && \
+      [[ $rc_register3 = 0 ]] && [[ $rc_register4 = 0 ]] && \
+      [[ $rc_register5 = 0 ]] && [[ $rc_register6 = 0 ]] && \
+      [[ $rc_register7 = 0 ]] ; then
+    return 0
+  else
+    return 1
+  fi
+} #//end of register_spatial_columns function
+
+
+#=====================================================================
+#   Name:    press_any_key_to_continue
+#   Purpose: Pause before starting next part of demo
+#=====================================================================
+function press_any_key_to_continue {
+  # typeset declares local function variables
+  typeset ans=''
+  echo ; echo "<> Press RETURN to continue..."
+  read ans
+} #//end of press_any_key_to_continue function
+
+
+#=====================================================================
+# Name:    log
+# Purpose: Execute a command and append its output to the file
+#			indicated by $outfile
+# Input:
+#			$* => the command
+#=====================================================================
+function log {
+  echo "$*" >>$outfile
+  $* >>$outfile 2>&1
+  return $?
+}
+
+
+#=====================================================================
+# Name:    log2
+# Purpose: Echo a command to stdout immediately, then execute it and
+#			append its output to the file indicated by %log%
+# Input:
+#			$* => the command
+#=====================================================================
+function log2 {
+  if [[ $mode = i ]] || [[ $mode = b ]]; then
+    echo "$*"
+  fi
+  $* >>$outfile 2>&1
+  return $?
+}
+
+
+#=====================================================================
+# Name:    showlog
+# Purpose: If $mode is b or i, then sends the file specified by
+#			$outfile to the standard output -- no pause afterwards.
+# Input:
+#			$mode (must be b or i for the log to go to stdout)
+#=====================================================================
+function showlog {
+  if [[ $mode = i ]] || [[ $mode = b ]]; then
+    echo ; cat $outfile 2>/dev/null ; echo
+  fi
+}
+
+
+#=====================================================================
+# Name:    showlog_pause
+# Purpose: If $mode is b or i, then sends the file specified by
+#			$outfile to the standard output, then pauses.
+# Input:
+#			$mode (must be b or i for the log to go to stdout)
+#=====================================================================
+function showlog_pause {
+  if [[ $mode = i ]] || [[ $mode = b ]]; then
+    echo ; cat $outfile 2>/dev/null ; echo
+    press_any_key_to_continue
+  fi
+}
+
+
+#=====================================================================
+# Name:    loglog
+# Purpose: Appends a timestamp and current file $1 to main log file $2
+# Input:
+#			$1 => current file
+#			$2 => main log file
+#=====================================================================
+function loglog {
+  if [[ -n $2 ]] ; then
+    echo "##############################################################" >>$2
+    echo "`date` - $1" >>$2
+    echo "##############################################################" >>$2
+    cat $1 >>$2 2>/dev/null
+    echo " " >>$2
+  fi
+}
+
+
+#=====================================================================
+# Name:    usage
+# Purpose: Echoes on stdout a command help message.
+#=====================================================================
+function usage {
+  echo "Usage: saBankDemoRunBankDemo -i | -n | -c | -b | -h [-a] [<database_name>]"
+  echo "     -i  = interactive mode (the default mode)"
+  echo "     -n  = non-interactive mode: runs all the sample steps without"
+  echo "          prompting the user"
+  echo "     -c  = installation confirmation test"
+  echo "     -b  = basic mode: creates database, tables, and inserts non-spatial data"
+  echo "     -h  = help: prints this usage message"
+  echo "     -a = configure instance as warehouse (analytics)"
+  echo "     The default database name is sa_bank."
+  echo
+}
+
+
+#=====================================================================
+# Name:    scripterr
+# Purpose: Called whenever an error occurs
+#=====================================================================
+function scripterr {
+  # may do some cleanup here ...
+  if [[ $mode = c ]] ; then
+    echo "Db2 SA failed the confirmation test"
+  fi
+  exit 1
+}
+
+#=====================================================================
+# Name:    returncodes
+# Purpose: Called when we are done with everything
+#=====================================================================
+function returncodes {
+     echo "Function return codes:"
+     echo "create_db               : $rc_create_db"
+     echo "update_cfg              : $rc_update_cfg"
+     echo "setup_db                : $rc_setup_db"
+     echo "enable_db               : $rc_enable_db"
+     echo "create_tables           : $rc_create_tables"
+     echo "insert_data             : $rc_insert_data"
+     echo "add_spatial_column      : $rc_add_spatial_column"
+     echo "chk_srs                 : $rc_check_srs"
+     echo "populate_location       : $rc_populate_location"
+     echo "geo_queries             : $rc_geo_queries"
+     echo "import_shapefiles       : $rc_import_shapefiles"
+     echo "create_views            : $rc_create_views"
+     echo "register_spatial_columns: $rc_register_spatial_columns"
+     echo "Please check logfiles in ~/tmp/ for details."
+}
+
+#---------------------------------------------------------------------
+#   Main script
+#---------------------------------------------------------------------
+# Check environment
+# Check environment
+if [[ -z $DB2PATH ]] ; then
+  # Must have DB2PATH set
+  echo "Please set the DB2PATH environment variable to point to the"
+  echo "sqllib directory of your Db2 installation."
+  echo "Example: export DB2PATH=~/sqllib"
+  exit 1
+fi
+
+
+export SCRIPTDIR=$(cd $(dirname $0);echo $PWD)
+echo "Instance found in $DB2PATH"
+echo "Working from $SCRIPTDIR"
+
+# Handle options and arguments
+mode=0
+let number_of_options=0
+analytics=0
+
+while getopts ":incbha" opt; do
+  # counter keeps track how many options are specified
+  ((number_of_options= number_of_options + 1))
+
+  # set the correction more for the various options
+  case $opt in
+  i)  mode=i ;;
+  n)  mode=n ;;
+  c)  mode=c ;;
+  b)  mode=b ;;
+  a)  analytics=1 ;;
+  \?) usage
+      exit 1 ;;
+  *)  usage
+      exit 1 ;;
+  esac
+done
+shift $(($OPTIND - 1))
+
+if ((number_of_options == 0)); then
+  #Default mode is (i)nteractive
+  mode=i
+fi
+
+# Make sure that 1 or less arguments are specified
+if (($# > 1)); then
+  usage
+  echo "You can only specify one argument after the options, and you specified"
+  echo " " $# "arguments: " $@
+  exit 1
+fi
+
+# Set the first argument as the database name
+database_name=$1
+
+# If database_name is null then set it to default of se_bank
+database_name=${database_name:=sa_bank}
+
+
+#---------------------------------------------------------------------
+#   Start demo
+#---------------------------------------------------------------------
+rc_create_db=0; rc_update_cfg=0; rc_setup_db=0; rc_enable_db=0;
+rc_create_tables=0; rc_insert_data=0;  rc_add_spatial_column=0;
+rc_check_srs=0; rc_setup_geocoder=0; rc_run_geocoder=0;
+rc_geo_queries=0; rc_import_shapefiles=0;
+rc_create_views=0; rc_register_spatial_columns=0; rc_db2set=0
+
+
+# create the directory to write the output to
+mkdir -m 755 ~/tmp 2>/dev/null
+
+# Init and timestamp the log file
+logg=~/tmp/${database_name}.log
+rm -f $logg >/dev/null 2>&1
+echo "`date` - seBankDemoRunBankDemo starting..." >>$logg
+outfile=~/tmp/create_db.out
+
+# If warehouse instance was specified set registry.
+if [[ $analytics -eq 1 ]] ; then
+  echo "Setting up warehouse environment ..."
+  log db2set DB2_WORKLOAD=ANALYTICS
+  rc_db2set=$?
+  [[ $mode != c ]] && ([[ $rc_db2set -eq 0 ]] || scripterr)
+fi
+
+# start the database instance
+db2start
+
+# Create and configure the database, create tables and insert
+# non-spatial data
+create_db $mode $database_name ; rc_create_db=$?
+loglog $outfile $logg
+[[ $mode != c ]] && ([[ $rc_create_db -eq 0 ]] || scripterr)
+
+# we no longer need to update the configuration
+# update_cfg $mode $database_name ; rc_update_cfg=$?
+loglog $outfile $logg
+[[ $mode != c ]] && ([[ $rc_update_cfg -eq 0 ]] || scripterr)
+
+
+if [[ $analytics -eq 0 ]] ; then
+  setup_db  $mode $database_name ; rc_setup_db=$?
+  loglog $outfile $logg
+  [[ $mode != c ]] && ([[ $rc_setup_db -eq 0 ]] || scripterr)
+fi
+
+enable_db $mode $database_name ; rc_enable_db=$?
+loglog $outfile $logg
+[[ $mode != c ]] && ([[ $rc_enable_db -eq 0 ]] || scripterr)
+
+create_tables $mode $database_name ; rc_create_tables=$?
+loglog $outfile $logg
+[[ $mode != c ]] && ([[ $rc_create_tables -eq 0 ]] || scripterr)
+
+insert_data $mode $database_name ; rc_insert_data=$?
+loglog $outfile $logg
+[[ $mode != c ]] && ([[ $rc_insert_data -eq 0 ]] || scripterr)
+
+if [[ $mode = i ]] || [[ $mode = n ]] || [[ $mode = c ]]; then
+  add_spatial_column $mode $database_name ; rc_add_spatial_column=$?
+  loglog $outfile $logg
+  [[ $mode != c ]] && ([[ $rc_add_spatial_column -eq 0 ]] || scripterr)
+
+  check_srs $mode $database_name ; rc_check_srs=$?
+  loglog $outfile $logg
+  [[ $mode != c ]] && ([[ $rc_check_srs -eq 0 ]] || scripterr)
+
+  populate_location $mode $database_name ; rc_populate_location=$?
+  loglog $outfile $logg
+  [[ $mode != c ]] && ([[ $rc_populate_location -eq 0 ]] || scripterr)
+
+  if [[ $mode = i ]] ; then
+    # Run queries only in interactive mode
+    geo_queries $mode $database_name ; rc_geo_queries=$?
+    loglog $outfile $logg
+    [[ $mode != c ]] && ([[ $rc_geo_queries -eq 0 ]] || scripterr)
+  fi
+
+  typeset file1=''; typeset file2=''; typeset file3=''
+  typeset file4=''; typeset file5=''
+  import_shapefiles $mode $database_name ; rc_import_shapefiles=$?
+  loglog $outfile $logg
+  # copy msg and exp files to the main log
+  [[ -f ${file1}.msg ]] && loglog ${file1}.msg $logg
+  [[ -f ${file2}.msg ]] && loglog ${file2}.msg $logg
+  [[ -f ${file3}.msg ]] && loglog ${file3}.msg $logg
+  [[ -f ${file4}.msg ]] && loglog ${file4}.msg $logg
+  [[ -f ${file5}.msg ]] && loglog ${file5}.msg $logg
+  [[ $mode != c ]] && ([[ $rc_import_shapefiles -eq 0 ]] || scripterr)
+
+  create_views $mode $database_name ; rc_create_views=$?
+  loglog $outfile $logg
+  [[ $mode != c ]] && ([[ $rc_create_views -eq 0 ]] || scripterr)
+
+  register_spatial_columns $mode $database_name ; rc_register_spatial_columns=$?
+  loglog $outfile $logg
+  [[ $mode != c ]] && ([[ $rc_register_spatial_columns -eq 0 ]] || scripterr)
+fi
+
+if [[ $rc_create_db -eq 0 ]] && [[ $rc_update_cfg -eq 0 ]] && \
+     [[ $rc_setup_db -eq 0 ]] && [[ $rc_enable_db -eq 0 ]] && \
+     [[ $rc_create_tables -eq 0 ]] && [[ $rc_insert_data -eq 0 ]] && \
+     [[ $rc_add_spatial_column -eq 0 ]] && [[ $rc_check_srs -eq 0 ]] && \
+     [[ $rc_populate_location -eq 0 ]] && \
+     [[ $rc_geo_queries -eq 0 ]] && [[ $rc_import_shapefiles -eq 0 ]] && \
+     [[ $rc_create_views -eq 0 ]] && \
+     [[ $rc_register_spatial_columns -eq 0 ]] ; then
+
+     if [[ $mode = c ]] ; then
+	echo "Db2 Spatial Analytics ran the confirmation test successfully."
+	returncodes
+     else
+	echo "DB2 Spatial Analytics test has finished successfully."
+	returncodes
+     fi
+
+else
+
+     if [[ $mode = c ]] ; then
+	echo "Db2 Spatial Analytics failed the confirmation test."
+	returncodes
+     else
+	echo "Db2 Spatial Analytics terminated with errors."
+	returncodes
+     fi
+     exit 1
+fi
+exit 0
+
+#**********************************************************************
+#    End of Db2 Spatial Extender sample 'saBankDemoRunBankDemo'
+#**********************************************************************
