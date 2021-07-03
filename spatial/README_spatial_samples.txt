@@ -10,19 +10,24 @@ README file for Db2 Spatial Analytics Samples
 
 File: samples/spatial/README_spatial_samples.txt
 
-The Db2 Spatial Analytics samples consist of one demo program.
-  - One sample is based on banking (branches, customers, employees).
-    This banking demo is written in SQL scripts run by the command-line
-    processor (CLP).
+The Db2 Spatial Analytics samples consist of one demo program 
+and one jupyter notebook.
+  1. The demo program (bank) sample is based on banking (branches, customers, employees).
+     This banking demo is written in SQL scripts run by the command-line
+     processor (CLP).
+  2. The jupyter notebook (location) is based on using spatial data to find
+     a new location for company MYCO that is expanding.
+
 This file briefly introduces the demo and indicates where to look for
 further information.
 
+Note: as of Db2 V11.5.6 these samples are not part of a Db2 installation.
 
 = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = =
 The Banking Demo is implemented in SQL scripts that are run with the Db2
 command line processor. You can use the demo and scripts as a tutorial.
 The scripts and README file "saBankDemoREADME.txt" are located in the
-"bank" subdirectory (sqllib/extenders/samples/spatial/bank).
+"bank" subdirectory (samples/spatial/bank).
 The following excerpt from that file gives an introduction to the demo:
 *****************************************************************************
   Banking Customer Analysis Sample
@@ -59,3 +64,19 @@ After the Banking Demo runs, the complete record of its actions can be found
 in the file "sa_bank.log" which is in the "tmp", subdirectory under the home
 directory of the user who ran the demo.
 
+= = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = =
+The Location demo is implemented as Jupyter notebook along with a supporting 
+SQL script to load the data. 
+You can use the demo as tutorial into using Jupyter notebooks.
+The scripts and README file "README.txt" are located in the
+"location" subdirectory (samples/spatial/location).
+
+The demo is a Spatial Analytics Jupyter notebook version of the Spatial Extender demo found here:
+https://www.ibm.com/blogs/cloud-archive/2015/08/location-location-location/
+
+Files:
+samples/location/location_demo.ipynb - the Jupyter notebook
+samples/location/load_data.sql       - support script to create the data tables run from the notebook
+samples/location/README.txt          - a more detailed README
+samples/data/geo_county.zip          - GEO_COUNTY table dataset
+samples/data/geo_customer.zip        - GEO_CUSTOMER table dataset
