@@ -42,6 +42,3 @@ db2 "CREATE TABLE <table_schema>.<table_name>  (
                 
 db2 "IMPORT FROM TelcoCustomers.csv OF DEL skipcount 1 INSERT INTO <table.schema>.<table_name>"
 ```
-
-## Reference Video
-[Automated AI Model Development with IBM Cloud Pak for Data and Db2](LINK)
