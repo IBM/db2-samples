@@ -1,6 +1,3 @@
-# db2-ml
-api for running models in db2
-
 # Procedure for using db2 as a backend for model hosting
 
 DB2's Integrated Analytics System allows for an impressive amount of user defined extensions, which can be leveraged to allow db2 to serve as a model management and scoring engine. 
