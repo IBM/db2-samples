@@ -61,7 +61,7 @@ predict.run()
 
 ## Model Training
 
-We will first train a simple logistic regression model on the Iris data set. We will use joblib to pickle th
+We will first train a simple logistic regression model on the Iris data set. We will use joblib to pickle the
 resulting model, and write it as a b64encoded string
 
 ```
