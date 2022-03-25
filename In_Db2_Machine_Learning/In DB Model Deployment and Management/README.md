@@ -2,7 +2,7 @@
 
 DB2's Integrated Analytics System allows for an impressive amount of user defined extensions, which can be leveraged to allow db2 to serve as a model management and scoring engine. 
 We can store, manage, update and score models trained in scikit-learn and other python frameworks in DB2. We can also 
-run models trained in Lua, C, R C++. This document will demonstrate a python based example. 
+run models trained in Lua, C, R, or C++. This document will demonstrate a python based example. 
 
 # DB2 Configuration
 
