@@ -311,7 +311,7 @@ with open("linearmodel.b64", "wb") as file:
 ```
 
 `db2 "insert into models (name, model) values('iris_linear', 'gANjc2tsZWFybi5saW5lYXJfbW9kZWwuX2Jhc2UKTGluZWFyUmVncmVzc2lvbgpxACmBcQF9cQIoWA0AAABmaXRfaW50ZXJjZXB0cQOIWAkAAABub3JtYWxpemVxBFgKAAAAZGVwcmVjYXRlZHEFWAYAAABjb3B5X1hxBohYBgAAAG5fam9ic3EHTlgIAAAAcG9zaXRpdmVxCIlYDgAAAG5fZmVhdHVyZXNfaW5fcQlLBFgFAAAAY29lZl9xCmNqb2JsaWIubnVtcHlfcGlja2xlCk51bXB5QXJyYXlXcmFwcGVyCnELKYFxDH1xDShYCAAAAHN1YmNsYXNzcQ5jbnVtcHkKbmRhcnJheQpxD1gFAAAAc2hhcGVxEEsEhXERWAUAAABvcmRlcnESWAEAAABDcRNYBQAAAGR0eXBlcRRjbnVtcHkKZHR5cGUKcRVYAgAAAGY4cRaJiIdxF1JxGChLA1gBAAAAPHEZTk5OSv////9K/////0sAdHEaYlgKAAAAYWxsb3dfbW1hcHEbiHVi68nYrtylvL9Y8XhnTIWkv/rvMoE9RM0/5OPuKf5+4z9YCQAAAF9yZXNpZHVlc3EcY251bXB5LmNvcmUubXVsdGlhcnJheQpzY2FsYXIKcR1oGEMIKlAuk6nXG0BxHoZxH1JxIFgFAAAAcmFua19xIUsEWAkAAABzaW5ndWxhcl9xImgLKYFxI31xJChoDmgPaBBLBIVxJWgSaBNoFGgYaBuIdWLKEu4Blxk5QAwt5IF2DRhALIyCyzdPC0AlwUUfAif+P1gKAAAAaW50ZXJjZXB0X3EmaB1oGEMIfB3OhRPfxz9xJ4ZxKFJxKVgQAAAAX3NrbGVhcm5fdmVyc2lvbnEqWAUAAAAxLjAuMnErdWIu')`
-If the model we were registering tool a different number of inputs, we would need to register a new udf. Lets do that for the sake of demonstration, even though it is not technically necessary.
+If the model we were registering required a different number of inputs, we would need to register a new udf. Lets do that for the sake of demonstration, even though it is not technically necessary.
 
 ```
 CREATE FUNCTION iris_linear(varchar(1356), float, float, float, float) \
