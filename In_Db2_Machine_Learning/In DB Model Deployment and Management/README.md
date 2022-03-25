@@ -24,7 +24,7 @@ Update db2 to use the correct python path
 
 `db2 update dbm cfg using PYTHON_PATH $(which python)`
 
-Restart the database
+Restart the Db2 instance because PYTHON_PATH is not dynamically configurable.
 
 `db2 connect reset;`
 `db2stop`
