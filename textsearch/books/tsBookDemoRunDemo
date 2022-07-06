@@ -42,7 +42,7 @@
 #*************************************************************************
 #  Product Name:      Db2 Text Search
 #
-#  Source File Name:  tsDemoRun
+#  Source File Name:  tsBookDemoRunDemo
 #
 #  Version:           11.5
 #
@@ -51,17 +51,17 @@
 #                     insert rows into tables,
 #                     enables the database for text search.
 #                     Note: The script assumes that the instance was enabled
-#                     for text search using the db2icrt, db2iupdt or configTool.
+#                     for text search using the db2icrt, db2iupdt, or configTool.
 #                     The command to update the instance is given but must be
 #                     executed by the user as adds the TextSearch component
 #                     to the instance.
 #
 #  S Y N T A X:
 #  ------------
-#    tsDemoRun [-i | -n | -r | -b | -h]  [<database_name>]
+#    tsBookDemoRunDemo [-i | -n | -r | -b | -h]  [<database_name>]
 #
 #        If database <databasename> does not exist it will be created.
-#        The default name that will be used is the sample database.
+#        The default name that will be used is the SAMPLE database.
 #
 #  Notes:
 #  ------
@@ -117,7 +117,7 @@ else
   exit 1
 fi
 
-# Find path to this script. THis is needed later when calling companion scripts.
+# Find path to this script. This is needed later when calling companion scripts.
 SCRIPT=$(readlink -f "$0")
 # Absolute path for this script.
 SCRIPTPATH=$(dirname "$SCRIPT")
@@ -162,7 +162,7 @@ function create_db {
     echo " The following is a list of places to find out more information "
     echo " about Db2 Text Search:"
     echo "   - For more information about this demo please refer to the "
-    echo "     readme tsDemoREADME.txt.  "
+    echo "     readme tsBookDemoREADME.txt.  "
     echo "   - For more information about the commands used in this "
     echo "     demo please refer to the Db2 documentation."
     echo "   - If you have a question about using Db2 Text Search "
@@ -428,7 +428,7 @@ function create_tables {
 
   if [[ $rc_connect = 0 ]] ; then
     # Successful connection - run the create
-    log db2 -tvf $SCRIPTPATH/tsDemoDDL.db2
+    log db2 -tvf $SCRIPTPATH/tsBookDemoDDL.db2
     rc=$?
 
     if [[ $rc = 0 ]] ; then
@@ -485,7 +485,7 @@ function insert_data {
 
   if [[ $rc_connect = 0 ]] ; then
     # Successful connection - run the script
-    log db2 -tvf $SCRIPTPATH/tsDemoTableData.db2
+    log db2 -tvf $SCRIPTPATH/tsBookDemoTableData.db2
     rc=$?
 
     if [[ $rc = 0 ]] ; then
@@ -507,11 +507,11 @@ function insert_data {
 
   # Substitute the database name %DBNAME% in the template with the real
   # database name.
-  sed "s/%DBNAME%/$db_name/g" $SCRIPTPATH/tsDemoInsertLobsTemplate.cli > $SCRIPTPATH/tsDemoInsertLobs.cli
+  sed "s/%DBNAME%/$db_name/g" $SCRIPTPATH/tsBookDemoInsertLobsTemplate.cli > $SCRIPTPATH/tsBookDemoInsertLobs.cli
 
   if [[ $mode = i ]] || [[ $mode = b ]]; then
     # Load the two documents into the table using a CLI script.
-    db2cli < $SCRIPTPATH/tsDemoInsertLobs.cli | tee -a $outfile
+    db2cli < $SCRIPTPATH/tsBookDemoInsertLobs.cli | tee -a $outfile
     rc=$?
     if [[ $rc = 0 ]] ; then
       pause
@@ -522,7 +522,7 @@ function insert_data {
     fi
   elif [[ $mode = n ]]; then
     # Load the two documents into the table using a CLI script.
-    db2cli < $SCRIPTPATH/tsDemoInsertLobs.cli >> $outfile
+    db2cli < $SCRIPTPATH/tsBookDemoInsertLobs.cli >> $outfile
     rc=$?
     if [[ $rc != 0 ]] ; then
       echo "* Loading LOB data not successful:"
@@ -1140,7 +1140,7 @@ function loglog {
 # Purpose: Echoes on stdout a command help message.
 #=====================================================================
 function usage {
-  echo "Usage: tsDemoRunDemo -i [-r | -f] | -n [-r | -f] | -b [-r | -f] | -h | [<database_name>]"
+  echo "Usage: tsBookDemoRunDemo -i [-r | -f] | -n [-r | -f] | -b [-r | -f] | -h | [<database_name>]"
   echo "     -i = interactive mode (the default mode)"
   echo "     -n = non-interactive mode: runs all the sample steps without"
   echo "          prompting the user"
@@ -1286,7 +1286,7 @@ mkdir -m 755 ~/tmp 2>/dev/null
 # Init and timestamp the log file
 logg=~/tmp/${database_name}.log
 rm -f $logg >/dev/null 2>&1
-echo "`date` - tsDemoRunDemo starting..." >>$logg
+echo "`date` - tsBookDemoRunDemo starting..." >>$logg
 outfile=~/tmp/create_db.out
 
 # start the database instance
@@ -1355,5 +1355,5 @@ fi
 exit 0
 
 #**********************************************************************
-#    End of Db2 Text Search sample 'tsDemoRunDemo'
+#    End of Db2 Text Search sample 'tsBookDemoRunDemo'
 #**********************************************************************

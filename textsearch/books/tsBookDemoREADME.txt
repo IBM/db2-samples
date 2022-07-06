@@ -6,7 +6,7 @@
 *    ALL RIGHTS RESERVED.
 *
 
-File: samples/textsearch/README.txt
+File: samples/textsearch/books/tsBookDemoREADME.txt
 
 The Db2 Text Search sample consists of a script written in SQL that
 highlights the Text Search functionality.
@@ -36,4 +36,4 @@ the book with the title "Datenbanksysteme". For this book Theo Haerder is one of
 --------------------------------------------------------------------------------
 Notes:
 Prior to running the sample, the instance must be enabled for text search.
-The remaining enablement is taken care of by the script.
+The remaining enablement is taken care of by the tsBookDemoRunDemo script.
