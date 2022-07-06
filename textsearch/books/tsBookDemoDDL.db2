@@ -11,7 +11,7 @@
 --
 -- Product Name:     Db2 Text Search
 --
--- Source File Name: tsDemoDDL.db2
+-- Source File Name: tsBookDemoDDL.db2
 --
 -- Version:          Any
 --
