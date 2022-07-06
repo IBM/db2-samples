@@ -1,0 +1,48 @@
+#---------------------------------------------------------------------------
+#- Licensed Materials - Property of IBM
+#- Governed under the terms of the IBM Public License
+#-
+#- (C) COPYRIGHT International Business Machines Corp. 2022
+#- All Rights Reserved.
+#-
+#- US Government Users Restricted Rights - Use, duplication or
+#- disclosure restricted by GSA ADP Schedule Contract with IBM Corp.
+#---------------------------------------------------------------------------
+#-
+#- Product Name:     Db2 Text Search
+#-
+#- Source File Name: tsDemoInsertLobsTemplate.cli
+#-
+#- Version:          Any
+#-
+#- Description: Add LOB data to text search data.
+#-
+#- SQL STATEMENTS USED:
+#-         UPDATE
+#-
+#-
+#---------------------------------------------------------------------------
+
+opt echo on
+opt callerror on
+
+sqlallocenv 1
+sqlallocconnect 1 1
+sqlconnect 1 %DBNAME% -3
+
+sqlallocstmt 1 1
+getmem 1 14 sql_c_binary 2479595
+
+updatemem 14 sql_c_binary file FFT.pdf
+sqlprepare 1 "UPDATE TS_DEMO.BOOKS SET PDF = ? WHERE ISBN = '9780262032933'" -3
+sqlsetparam 1 1 sql_c_binary sql_blob 1369227 0 14
+sqlexecute 1
+
+updatemem 14 sql_c_binary file ACID.pdf
+sqlprepare 1 "UPDATE TS_DEMO.BOOKS SET PDF = ? WHERE ISBN = '3540421335'" -3
+sqlsetparam 1 1 sql_c_binary sql_blob 2479594 0 14
+sqlexecute 1
+
+sqlfreestmt 1 sql_close
+sqltransact 1 1 sql_commit
+killenv 1

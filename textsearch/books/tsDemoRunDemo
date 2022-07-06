@@ -1,0 +1,1359 @@
+##########################################################################
+# Licensed Materials - Property of IBM                                   *
+# 5765-478                                                               *
+# (c) Copyright IBM Corporation 2022.                                    *
+# All rights reserved.                                                   *
+#                                                                        *
+# US Government Users Restricted Rights - Use, duplication or            *
+# disclosure restricted by GSA ADP Schedule Contract with                *
+# IBM Corporation.                                                       *
+#*************************************************************************
+#  Permission Notice                                                     *
+#                                                                        *
+#  Permission is granted to copy, use, modify, and merge this sample     *
+#  software into your applications and to permit others to do any of the *
+#  foregoing. You may further distribute this software for               *
+#  commercial purposes only as part of your application that adds        *
+#  significant value and function beyond that provided by these          *
+#  samples.                                                              *
+#  You must include this permission statement and retain the copyright   *
+#  notice in all copies and modified versions of this software.          *
+#                                                                        *
+#*************************************************************************
+#                                                                        *
+#  DISCLAIMER OF WARRANTIES                                              *
+#                                                                        *
+#  The sample software is provided to you by IBM to assist you in        *
+#  developing your applications. THIS SOFTWARE IS PROVIDED AS-IS,        *
+#  WITHOUT WARRANTY OF ANY KIND. IBM SHALL NOT BE LIABLE FOR ANY         *
+#  DAMAGES ARISING OUT OF YOUR USE OR THE USE BY ANY THIRD PARTY         *
+#  OF THE SAMPLE SOFTWARE EVEN IF IT HAS BEEN ADVISED OF THE POSSIBILITY *
+#  OF SUCH DAMAGES. IN ADDITION, IBM SHALL NOT BE LIABLE FOR ANY THIRD   *
+#  PARTY CLAIMS AGAINST YOU.                                             *
+#                                                                        *
+#*************************************************************************
+#                                                                        *
+#  WARNING                                                               *
+#                                                                        *
+#  This sample may change your database or database manager              *
+#  configuration. Execute the samples against a 'test' database only,    *
+#  such as the Db2 sample database.                                      *
+#                                                                        *
+#*************************************************************************
+#  Product Name:      Db2 Text Search
+#
+#  Source File Name:  tsDemoRun
+#
+#  Version:           11.5
+#
+#  Description:       This script creates the sample database,
+#  ------------       creates a sample tables in schema TS_DEMO,
+#                     insert rows into tables,
+#                     enables the database for text search.
+#                     Note: The script assumes that the instance was enabled
+#                     for text search using the db2icrt, db2iupdt or configTool.
+#                     The command to update the instance is given but must be
+#                     executed by the user as adds the TextSearch component
+#                     to the instance.
+#
+#  S Y N T A X:
+#  ------------
+#    tsDemoRun [-i | -n | -r | -b | -h]  [<database_name>]
+#
+#        If database <databasename> does not exist it will be created.
+#        The default name that will be used is the sample database.
+#
+#  Notes:
+#  ------
+# Before proceeding, the following steps have been done in advance:
+#    - Db2 Text Search has been installed.
+#    - Db2 default instance has been created.
+#    - The default instance is enabled for Text Search.
+#    - Start the database manager (with the db2start command).
+#    - DB2PATH environment variable points to the sqllib directory
+#    - The user ID under which this demo is invoked must have either SYSADM
+#      or DBADM authority.
+#    - The text search server is stopped and started.
+#
+#    If the rich text filter has been installed for this Text Search server
+#    and you want to try the indexing of proprietary binary data then
+#    run the demo using the -r option for it to create the FORMAT INSO
+#    index on the PDF column of the BOOKS table.
+#*************************************************************************
+#
+# Environment: Unix
+#
+#*************************************************************************
+# Enabling an existing instance using the default port 55000:
+# db2iupdt <instance_name> -j "TEXT_SEARCH"
+
+# Creating a new instance including TextSearch using the default port 55000:
+# db2icrt -u <fenced_user> -j "TEXT_SEARCH" <instance_name>
+
+# Please refer to the command syntax in the documentation, if needed.
+# https://www.ibm.com/docs/en/db2/11.5?topic=commands-db2iupdt-update-instances
+# https://www.ibm.com/docs/en/db2/11.5?topic=commands-db2icrt-create-instance
+#*************************************************************************
+#=========================================================================
+# Environment settings:
+#
+# This is a Korn Shell script. It can not be interpreted on all platforms
+# with a Bourne Shell interpreter. We will only proceed below this point
+# if ksh is found in /usr/bin or /bin for compatibility reasons.
+#
+# If only sh exists the script might still work. You might then try to
+# comment the lines below and run the script again.
+#========================================================================
+if [[ $PPID -eq $TS_ID ]] ; then
+  exit $?
+fi
+
+export TS_ID=$$
+
+if [[ -x $(which ksh) ]] ; then
+  $(which ksh) $0 $@
+else
+  echo "This script requires a Korn-Shell to run. Please make sure that 'ksh' is installed."
+  exit 1
+fi
+
+# Find path to this script. THis is needed later when calling companion scripts.
+SCRIPT=$(readlink -f "$0")
+# Absolute path for this script.
+SCRIPTPATH=$(dirname "$SCRIPT")
+
+# Remember if TS was started by this script.
+TS_started=0
+
+#=====================================================================
+#   Name:    create_db
+#   Purpose: Create Database for bank spatial sample
+# Input:
+#          $1 => mode
+#          $2 => db_name
+#=====================================================================
+function create_db {
+  # local function variables
+  typeset mode=$1
+  typeset db_name=$2
+  typeset force=$3
+
+  typeset result=''  # result of executing statement
+  typeset rc=''
+  typeset first='' # SQL error message number
+
+  # Init log file
+  outfile=~/tmp/create_db.out
+  rm -f $outfile 2>/dev/null
+
+  if [[ $mode = i ]] || [[ $mode = b ]]; then
+    echo "========================================================================"
+    echo "|> Create database" $db_name and introduction
+
+    echo "========================================================================"
+    echo " Welcome to Db2 TextSearch Demo!"
+    echo " "
+    echo " This demo will present the commands to create text indexes in a "
+    echo " sample database and perform some basic text index administration. "
+    echo " "
+    echo " During the demo you will be presented with the command and also "
+    echo " an explanation of the command and hints and tips."
+    echo " "
+    echo " The following is a list of places to find out more information "
+    echo " about Db2 Text Search:"
+    echo "   - For more information about this demo please refer to the "
+    echo "     readme tsDemoREADME.txt.  "
+    echo "   - For more information about the commands used in this "
+    echo "     demo please refer to the Db2 documentation."
+    echo "   - If you have a question about using Db2 Text Search "
+    echo "     try Stackoverflow using the db2 or db2-luw tag."
+    echo " "
+    echo " This demo is a shell script and can be stopped at any time by "
+    echo " pressing Control-C."
+    echo " The log files can be found in $HOME/tmp."
+    echo  "------------------------------------------------------------------------"
+    echo "Creating database" $db_name ".  Please wait ..."
+  fi
+
+  if [[ $db_name -eq "sample" ]]; then
+    result=$(db2sampl)
+    echo "db2sampl" >>$outfile ; echo $result >>$outfile
+    first=`expr "$result" | grep SQL1005 | awk -e '{ print $1 }'`
+  else
+    result=$(db2 create db $db_name)
+    rc=$?
+    echo "db2 create db $db_name using codeset utf-8 territory us collate using identity pagesize 32 K" >>$outfile ; echo $result >>$outfile
+    first=`expr "$result" | cut -d" " -f1`
+  fi
+
+
+
+  if  [[ $rc = 0 ]]  ; then
+    if [[ $mode = i ]] || [[ $mode = b ]]; then
+      echo $result "\n"
+      press_any_key_to_continue
+    fi
+    else
+      if [[ $mode = i ]] || [[ $mode = b ]]; then
+        echo "* Create database was not successful"
+        echo $result
+      fi
+      # Check if the database already exists
+      if [[ $first = SQL1005* ]]; then
+        if [[ $mode = i ]] || [[ $mode = b ]]; then
+          press_any_key_to_continue
+        fi
+      else # The error message is not 'database already exists'
+        return 1
+      fi
+  fi
+
+  if [[ $rc = 0 ]] || [[ $first = SQL1005* ]] ; then
+    return 0
+  else
+    return 1
+  fi
+} #//end of create_db function
+
+
+#=====================================================================
+#   Name:    enable_db
+#   Purpose: enable bank sample database for text search
+#=====================================================================
+function enable_db {
+  # Input Parameters
+  #          $1 => mode
+  #          $2 => db_name
+  #          $3 => rt_mode
+  # typeset declares local function variables
+  typeset mode=$1
+  typeset db_name=$2
+  typeset rt_mode=$3
+  typeset rc=''
+
+  # Init log file
+  outfile=~/tmp/enable_db.out
+  rm -f $outfile 2>/dev/null
+
+  if [[ $mode = i ]] || [[ $mode = b ]]; then
+    echo "========================================================================"
+    echo "|> Enable database for text search"
+    echo "========================================================================"
+    echo " Most of Db2's Text Search administration is handled by a set of "
+    echo " stored procedures. Two user friendly mechanisms for calling these"
+    echo " stored procedures are provided via the command line tool db2ts. "
+    echo " You will have access to these tools once the Text Search is installed."
+    echo " "
+    echo " The first step that must be performed on every database that you want to"
+    echo " use text indexes is to enable the database for text search. "
+    echo " Enabling your database creates the infrastructure to "
+    echo " perform all text index related tasks. The enablement step creates all of"
+    echo " the text search administrative stored procedures and the text search catalog."
+    echo " "
+    echo " For more information about the db2ts command see"
+    echo " https://www.ibm.com/docs/en/db2/11.5?topic=SSEPGG_11.5.0/com.ibm.db2.luw.admin.ts.doc/doc/c_administrationcommands.html"
+    echo "------------------------------------------------------------------------"
+    echo " "
+    echo " Enabling database " $db_name " for text search. Please wait - this operation "
+    echo " might take several minutes to complete."
+  fi
+
+  log db2ts "enable database for text connect to $db_name"
+  rc=$?
+  if [[ $rc = 0 ]] ; then
+    showlog_pause
+  else
+    echo "* Enabling the database " $db_name " for text search was not successful:"
+    showlog
+
+    # not successful
+    return 1
+  fi
+
+  if [[ $rt_mode = y ]]; then
+    echo "In order to enable the rich text filter the Text Search server "
+    echo "must be stopped and started."
+    if  [[ $mode = i ]] || [[ $mode = b ]]; then
+      press_any_key_to_continue
+    fi
+
+    log ts_stop y
+    if [[ $rc != 0 ]] ; then
+      # not successful
+      return 1
+    fi
+
+    # Enable rich text
+    log richtextTool enable $DB2PATH
+    rc=$?
+    if [[ $rc = 0 ]] ; then
+      showlog_pause
+    else
+      echo "* Enabling the rich text filter was not successful:"
+      showlog
+
+      # not successful
+      return 1
+    fi
+
+    ts_start
+    rc=$?
+    if [[ $rc != 0 ]] ; then
+      # not successful
+      return 1
+    fi
+
+  fi
+
+  return 0
+} #//end of enable_db function
+
+
+#=====================================================================
+#   Name:    ts_start
+#   Purpose: start the text search server
+#=====================================================================
+function ts_start {
+  typeset rc=''
+  typeset outfile_prev=$outfile
+
+  # Init log file
+  outfile=~/tmp/ts_start.out
+  rm -f $outfile 2>/dev/null
+
+  echo "Attempting to start the Text Search server."
+
+  result=$(db2ts start for text)
+  rc=$?
+  echo "db2ts start for text" >>$outfile ; echo $result >>$outfile
+
+  first=`expr "$result" | grep CIE00204 | cut -d" " -f1`
+  if [[ $rc = 0 || $first = SQL20427* ]]; then
+    if [[ $mode = i ]] || [[ $mode = b ]]; then
+      echo "OK, continue"
+    fi
+    TS_started=1
+    # restore outfile
+    outfile=$outfile_prev
+  else
+    echo "Error starting Text Search server."
+    # restore outfile
+    outfile=$outfile_prev
+    return 1
+  fi
+
+  return 0
+}
+
+#=====================================================================
+#   Name:    ts_stop
+#   Purpose: stop the text search server
+#=====================================================================
+function ts_stop {
+  typeset force=$1
+  typeset rc=''
+  typeset outfile_prev=$outfile
+
+  # Init log file
+  outfile=~/tmp/ts_stop.out
+  rm -f $outfile 2>/dev/null
+
+  if [[ $TS_started = 1 || $force = y ]]; then
+    echo "Attempting to stop the Text Search server."
+    result=$(db2ts stop for text)
+    rc=$?
+    echo "db2ts stop for text" >>$outfile ; echo $result >>$outfile
+    first=`expr "$result" | grep CIE00205 | cut -d" " -f1`
+    if [[ $TS_started = 1 && $rc != 0 ]]; then
+      echo "Error stopping Text Search server."
+      # restore outfile
+      outfile=$outfile_prev
+      return 1
+    elif [[ $force = y && $rc != 0 && $first != SQL20427* ]]; then
+      echo "Error stopping Text Search server."
+      # restore outfile
+      outfile=$outfile_prev
+      return 1
+    elif [[ $rc != 0 ]]; then
+      echo "Error stopping Text Search server."
+      # restore outfile
+      outfile=$outfile_prev
+      return 1
+    fi
+
+  else
+    if [[ $mode = i ]] || [[ $mode = b ]]; then
+      echo "OK, continue"
+    fi
+  fi
+
+  # restore outfile
+  outfile=$outfile_prev
+  return 0
+}
+
+#=====================================================================
+#   Name:    create_tables
+#   Purpose: Create tables
+#=====================================================================
+function create_tables {
+  # Input Parameters
+  #          $1 => mode
+  #          $2 => db_name
+  # typeset declares local function variables
+  typeset mode=$1
+  typeset db_name=$2
+  typeset rc_connect=''
+  typeset rc=''
+
+  # Init log file
+  outfile=~/tmp/create_tables.out
+  rm -f $outfile 2>/dev/null
+
+  if [[ $mode = i ]] || [[ $mode = b ]]; then
+    echo "========================================================================"
+    echo "|> Create table(s) for the Text Search Demo"
+    echo "========================================================================"
+    echo " All the tables are created in the ts_demo schema."
+    echo " Name         Description"
+    echo " -----------  -----------------------------------------------------"
+    echo " Books        Information about each book"
+    echo
+    echo "------------------------------------------------------------------------"
+    echo "db2 connect to" $db_name " Please wait ..."
+  fi
+
+  log db2 CONNECT TO $db_name
+  rc_connect=$?
+
+  if [[ $rc_connect = 0 ]] ; then
+    # Successful connection - run the create
+    log db2 -tvf $SCRIPTPATH/tsDemoDDL.db2
+    rc=$?
+
+    if [[ $rc = 0 ]] ; then
+      showlog_pause
+    else
+      echo "* Create tables for Text Search Demo not successful:"
+      showlog
+
+      # not successful
+      return 1
+    fi
+  else
+    echo "* Could not connect to " $db_name ":"
+    showlog
+
+    # not successful
+    return 1
+  fi
+
+  return 0
+} #//end of create_tables function
+
+#=====================================================================
+#   Name:    insert_data
+#   Purpose: Insert non-spatial data.
+#=====================================================================
+function insert_data {
+  # Input Parameters
+  #          $1 => mode
+  #          $2 => db_name
+  # typeset declares local function variables
+  typeset mode=$1
+  typeset db_name=$2
+  typeset rc=''
+  typeset rc_connect=''
+
+  # Init log file
+  outfile=~/tmp/insert_data.out
+  rm -f $outfile 2>/dev/null
+
+  if [[ $mode = i ]] || [[ $mode = b ]]; then
+    echo "========================================================================"
+    echo "|> Populate tables with records"
+    echo "========================================================================"
+    echo " This step is going to insert data into the previously created tables."
+    echo " First, the non-LOB columns are populated followed by a small CLI"
+    echo " script that updates the BLOB column with the PDF documents."
+    echo "------------------------------------------------------------------------"
+    echo "db2 connect to" $db_name " Please wait ..."
+  fi
+
+  log db2 connect to $db_name
+  rc_connect=$?
+
+  if [[ $rc_connect = 0 ]] ; then
+    # Successful connection - run the script
+    log db2 -tvf $SCRIPTPATH/tsDemoTableData.db2
+    rc=$?
+
+    if [[ $rc = 0 ]] ; then
+      showlog_pause
+    else
+      echo "* Populate tables not successful:"
+      showlog
+
+      # not successful
+      return 1
+    fi
+  else
+    echo "* Could not connect to " $db_name ":"
+    showlog
+
+    # not successful
+    return 1
+  fi
+
+  # Substitute the database name %DBNAME% in the template with the real
+  # database name.
+  sed "s/%DBNAME%/$db_name/g" $SCRIPTPATH/tsDemoInsertLobsTemplate.cli > $SCRIPTPATH/tsDemoInsertLobs.cli
+
+  if [[ $mode = i ]] || [[ $mode = b ]]; then
+    # Load the two documents into the table using a CLI script.
+    db2cli < $SCRIPTPATH/tsDemoInsertLobs.cli | tee -a $outfile
+    rc=$?
+    if [[ $rc = 0 ]] ; then
+      pause
+    else
+      echo "* Loading LOB data not successful:"
+      # not successful
+      return 1
+    fi
+  elif [[ $mode = n ]]; then
+    # Load the two documents into the table using a CLI script.
+    db2cli < $SCRIPTPATH/tsDemoInsertLobs.cli >> $outfile
+    rc=$?
+    if [[ $rc != 0 ]] ; then
+      echo "* Loading LOB data not successful:"
+      # not successful
+      return 1
+    fi
+  fi
+
+
+
+  return 0
+} #//end of insert_data function
+
+
+#=====================================================================
+#   Name:    create_indexes
+#   Purpose: Create indexes
+#=====================================================================
+function create_indexes {
+  # Input Parameters
+  #          $1 => mode
+  #          $2 => db_name
+  #          $3 => rt_mode
+  # typeset declares local function variables
+  typeset mode=$1
+  typeset db_name=$2
+  typeset rt_mode=$3
+  typeset cmd=''
+  typeset rc=''
+
+  # Init log file
+  outfile=~/tmp/create_indexes.out
+  rm -f $outfile 2>/dev/null
+
+  if [[ $mode = i ]] || [[ $mode = b ]]; then
+    echo "========================================================================"
+    echo "|> Create text search indexes for the Text Search Demo"
+    echo "========================================================================"
+    echo " All the indexes are created in the ts_demo schema."
+    echo "------------------------------------------------------------------------"
+  fi
+
+  ts_start
+  rc=$?
+  if [[ $rc != 0 ]] ; then
+    # not successful
+    return 1
+  fi
+
+  log3 "db2ts create index ts_demo.book_isbn_idx for text on ts_demo.books(isbn) connect to $db_name"
+  rc=$?
+  if [[ $rc = 0 ]] && [[ $mode = i ]] ; then
+    pause
+  elif [[ $rc != 0 ]] ; then
+    echo "* Create book_isbn_idx for Text Search Demo not successful."
+    # not successful
+    return 1
+  fi
+
+  log3 "db2ts create index ts_demo.book_title_idx for text on ts_demo.books(title) connect to $db_name"
+  rc=$?
+  if [[ $rc = 0 ]] && [[ $mode = i ]] ; then
+    pause
+  elif [[ $rc != 0 ]] ; then
+    echo "* Create book_title_idx for Text Search Demo not successful."
+    # not successful
+    return 1
+  fi
+
+  log3 "db2ts create index ts_demo.book_authors_idx for text on ts_demo.books(authors) connect to $db_name"
+  rc=$?
+  if [[ $rc = 0 ]] && [[ $mode = i ]] ; then
+    pause
+  elif [[ $rc != 0 ]] ; then
+    echo "* Create book_authors_idx for Text Search Demo not successful."
+    # not successful
+    return 1
+  fi
+
+  log3 "db2ts create index ts_demo.book_publishers_idx for text on ts_demo.books(publishers) connect to $db_name"
+  rc=$?
+  if [[ $rc = 0 ]] && [[ $mode = i ]] ; then
+    pause
+  elif [[ $rc != 0 ]] ; then
+    echo "* Create book_publishers_idx for Text Search Demo not successful."
+    # not successful
+    return 1
+  fi
+
+  log3 "db2ts create index ts_demo.book_abstract_idx for text on ts_demo.books(abstract) connect to $db_name"
+  rc=$?
+  if [[ $rc = 0 ]] && [[ $mode = i ]] ; then
+    pause
+  elif [[ $rc != 0 ]] ; then
+    echo "* Create book_abstract_idx for Text Search Demo not successful."
+    # not successful
+    return 1
+  fi
+
+  if [[ $rt_mode = y ]]; then
+    log3 "db2ts create index ts_demo.book_pdf_idx for text on ts_demo.books(pdf) format inso  connect to $db_name"
+    rc=$?
+    if [[ $rc = 0 ]] && [[ $mode = i ]] ; then
+      pause
+    elif [[ $rc != 0 ]] ; then
+      echo "* Create book_pdf_idx for Text Search Demo not successful."
+      # not successful
+      return 1
+    fi
+  fi
+
+  log "db2ts create index ts_demo.book_book_idx for text on ts_demo.books(book) language AUTO connect to $db_name"
+  rc=$?
+  if [[ $rc = 0 ]] && [[ $mode = i ]] ; then
+    pause
+  elif [[ $rc != 0 ]] ; then
+    echo "* Create book_book_idx for Text Search Demo not successful."
+    # not successful
+    return 1
+  fi
+
+  return 0
+} #//end of create_indexes function
+
+
+#=====================================================================
+#   Name:    update_indexes
+#   Purpose: Update the text search indexes
+#=====================================================================
+function update_indexes {
+  # Input Parameters
+  #          $1 => mode
+  #          $2 => db_name
+  #          $3 => rt_mode
+  # typeset declares local function variables
+  typeset mode=$1
+  typeset db_name=$2
+  typeset rc_connect=''
+  typeset rc=''
+
+  # Init log file
+  outfile=~/tmp/update_indexes.out
+  rm -f $outfile 2>/dev/null
+
+  if [[ $mode = i ]] || [[ $mode = b ]]; then
+    echo "========================================================================"
+    echo "|> Update text search indexes for the Text Search Demo"
+    echo "========================================================================"
+    echo " All the indexes are updated and populated with the data."
+    echo "------------------------------------------------------------------------"
+  fi
+
+  log3 "db2ts update index ts_demo.book_isbn_idx for text connect to $db_name"
+  rc=$?
+  if [[ $rc = 0 ]] && [[ $mode = i ]] ; then
+    pause
+  elif [[ $rc != 0 ]] ; then
+    echo "* Update book_isbn_idx for Text Search Demo not successful."
+    # not successful
+    return 1
+  fi
+
+  log3 "db2ts update index ts_demo.book_title_idx for text connect to $db_name"
+  rc=$?
+  if [[ $rc = 0 ]] && [[ $mode = i ]]  ; then
+    pause
+  elif [[ $rc != 0 ]] ; then
+    echo "* Update book_title_idx for Text Search Demo not successful."
+    # not successful
+    return 1
+  fi
+
+  log3 "db2ts update index ts_demo.book_authors_idx for text connect to $db_name"
+  rc=$?
+  if [[ $rc = 0 ]] && [[ $mode = i ]]  ; then
+    pause
+  elif [[ $rc != 0 ]] ; then
+    echo "* Update book_authors_idx for Text Search Demo not successful:"
+    # not successful
+    return 1
+  fi
+
+  log3 "db2ts update index ts_demo.book_publishers_idx for text connect to $db_name"
+  rc=$?
+  if [[ $rc = 0 ]] ; then
+    pause
+  elif [[ $rc != 0 ]] ; then
+    echo "* Update book_publishers_idx for Text Search Demo not successful:"
+    # not successful
+    return 1
+  fi
+
+  log3 "db2ts update index ts_demo.book_abstract_idx for text connect to $db_name"
+  rc=$?
+  if [[ $rc = 0 ]] && [[ $mode = i ]]  ; then
+    pause
+  elif [[ $rc != 0 ]] ; then
+    echo "* Update book_abstract_idx for Text Search Demo not successful:"
+    # not successful
+    return 1
+  fi
+
+  if [[ $rt_mode = y ]]; then
+    log3 "db2ts update index ts_demo.book_pdf_idx for text connect to $db_name"
+    rc=$?
+    if [[ $rc = 0 ]] && [[ $mode = i ]]  ; then
+      pause
+    elif [[ $rc != 0 ]] ; then
+      echo "* Update book_pdf_idx for Text Search Demo not successful."
+      # not successful
+      return 1
+    fi
+  fi
+
+  log3 "db2ts update index ts_demo.book_book_idx for text connect to $db_name"
+  rc=$?
+  if [[ $rc = 0 ]] && [[ $mode = i ]]  ; then
+    pause
+  elif [[ $rc != 0 ]] ; then
+    echo "* Update book_book_idx for Text Search Demo not successful."
+    # not successful
+    return 1
+  fi
+
+  return 0
+} #//end of update_indexes function
+
+
+#=====================================================================
+#   Name:    run_all_ts_queries
+#   Purpose: Run all the demo queries
+#=====================================================================
+function run_all_ts_queries {
+  # Input Parameters
+  #          $1 => rt_mode
+  # typeset declares local function variables
+  typeset mode=$1
+  typeset db_name=$2
+  typeset rc_connect=''
+  typeset rc=''
+
+  # Init log file
+  outfile=~/tmp/run_all_ts_queries.out
+  rm -f $outfile 2>/dev/null
+
+  # Called from a function that already connected.
+
+  echo "---------------------------------------"
+  echo "Basic CONTAINS"
+  echo "---------------------------------------"
+  db2 -v "SELECT title FROM ts_demo.books WHERE CONTAINS(abstract, 'algorithms') = 1 AND year < 2022" 2>&1 | tee -a $outfile
+
+  echo "---------------------------------------"
+  echo "Basic CONTAINS with RESULTLIMIT"
+  echo "---------------------------------------"
+  db2 -v "SELECT SUBSTR(title, 1, 30) AS TITLE FROM ts_demo.books WHERE CONTAINS(abstract, 'book', 'RESULTLIMIT=1') = 1" 2>&1 | tee -a $outfile
+
+
+  echo "---------------------------------------"
+  echo "Basic XPATH"
+  echo "---------------------------------------"
+  db2 -v "SELECT SUBSTR(title, 1, 30) AS TITLE FROM ts_demo.books WHERE CONTAINS(book,'@xmlxp:''/book/title [. contains(\"Algorithms\")]''') = 1" 2>&1 | tee -a $outfile
+
+  echo "---------------------------------------"
+  echo "Basic XQUERY with XPATH"
+  echo "---------------------------------------"
+  db2 -v "xquery for \$i in db2-fn:xmlcolumn-contains ('TS_DEMO.BOOKS.BOOK', '@xmlxp:''/book/title [. contains(\"Algorithms\")]''') return \$i" 2>&1 | tee -a $outfile
+
+  if [[ $rt_mode = y ]]; then
+    echo "---------------------------------------"
+    echo "Basic Fuzzy search with rich text document using factor 0.9"
+    echo "---------------------------------------"
+    db2 -v "SELECT SUBSTR(title, 1, 30) AS TITLE FROM ts_demo.books WHERE CONTAINS (pdf, 'conpated~0.9') = 1" 2>&1 | tee -a $outfile
+
+    echo "---------------------------------------"
+    echo "Basic Fuzzy search with rich text document using factor 0.5"
+    echo "---------------------------------------"
+    db2 -v "SELECT SUBSTR(title, 1, 30) AS TITLE FROM ts_demo.books WHERE CONTAINS (pdf, 'conpated~0.5') = 1" 2>&1 | tee -a $outfile
+
+  else
+
+    echo "---------------------------------------"
+    echo "Basic Fuzzy search using factor 0.9"
+    echo "---------------------------------------"
+    db2 -v "SELECT SUBSTR(title, 1, 30) AS TITLE FROM ts_demo.books WHERE CONTAINS (abstract, 'conpated~0.9') = 1" 2>&1 | tee -a $outfile
+
+    echo "---------------------------------------"
+    echo "Basic Fuzzy search using factor 0.5"
+    echo "---------------------------------------"
+    db2 -v "SELECT SUBSTR(title, 1, 30) AS TITLE FROM ts_demo.books WHERE CONTAINS (abstract, 'conpated~0.5') = 1" 2>&1 | tee -a $outfile
+
+  fi
+
+  echo "---------------------------------------"
+  echo "Basic word distance search"
+  echo "---------------------------------------"
+  db2 -v "SELECT SUBSTR(title, 1, 30) AS TITLE FROM ts_demo.books WHERE CONTAINS (book, '\"algorithms explained\"~4') = 1" 2>&1 | tee -a $outfile
+
+  echo "---------------------------------------"
+  echo "Special character search"
+  echo "---------------------------------------"
+  db2 -v "SELECT SUBSTR(title, 1, 30) AS TITLE FROM ts_demo.books WHERE CONTAINS (book, 'presented.') = 1" 2>&1 | tee -a $outfile
+
+  echo "---------------------------------------"
+  echo "Basic SCORE"
+  echo "---------------------------------------"
+  db2 -v "SELECT SUBSTR(title, 1, 30) AS TITLE, INTEGER(SCORE (abstract, 'book') * 1000) AS RELEVANCE FROM ts_demo.books WHERE CONTAINS(abstract, 'book') = 1 ORDER BY RELEVANCE DESC" 2>&1 | tee -a $outfile
+
+  return 0
+} #// run_all_ts_queries
+
+#=====================================================================
+#   Name:    ts_queries
+#   Purpose: Run the demo queries
+#=====================================================================
+function ts_queries {
+  # Input Parameters
+  #          $1 => mode
+  #          $2 => db_name
+  #          $3 => rt_mode
+  # typeset declares local function variables
+  typeset mode=$1
+  typeset db_name=$2
+  typeset rt_mode=$3
+  typeset rc_connect=''
+  typeset rc=''
+
+  # Init log file
+  outfile=~/tmp/ts_queries.out
+  rm -f $outfile 2>/dev/null
+
+  if [[ $mode = i ]] || [[ $mode = b ]]; then
+    echo "========================================================================"
+    echo "|>  Text Search queries with book data"
+    echo "========================================================================"
+    echo " In this step you will have a chance to perform a few basic "
+    echo " text search queries using CONTAINS and SCORE."
+    echo
+    echo "------------------------------------------------------------------------"
+    echo
+    echo "db2 connect to" $db_name " Please wait ..."
+  fi
+
+  log db2 connect to $db_name
+  rc_connect=$?
+
+  showlog
+
+  if [[ $rc_connect = 0 ]] ; then
+
+    if [[ $mode = i ]] || [[ $mode = b ]]; then
+
+      PS3='Query? '
+      select choice in \
+        'run all queries' \
+        'Basic CONTAINS' \
+        'Basic CONTAINS w/ RESULTLIMIT' \
+        'Basic XPATH' \
+        'Basic XQUERY with XPATH' \
+        'Basic Fuzzy Search (two queries)' \
+        'Basic word distance search' \
+        'Basic special character search' \
+        'Basic SCORE' \
+        'finish demo'
+      do
+        case $REPLY in
+        1 ) run_all_ts_queries $rt_mode
+
+         ;;
+        2 )
+          echo "---------------------------------------"
+          echo "Basic CONTAINS"
+          echo "---------------------------------------"
+          db2 -v "SELECT title FROM ts_demo.books WHERE CONTAINS(abstract, 'algorithms') = 1 AND year < 2022" 2>&1 | tee -a $outfile
+
+         ;;
+        3 )
+          echo "---------------------------------------"
+          echo "Basic CONTAINS w/ RESULTLIMIT"
+          echo "---------------------------------------"
+          db2 -v "SELECT SUBSTR(title, 1, 30) AS TITLE FROM ts_demo.books WHERE CONTAINS(abstract, 'book', 'RESULTLIMIT=1') = 1" 2>&1 | tee -a $outfile
+
+         ;;
+        4 )
+          echo "---------------------------------------"
+          echo "Basic XPATH"
+          echo "---------------------------------------"
+          db2 -v "SELECT SUBSTR(title, 1, 30) AS TITLE FROM ts_demo.books WHERE CONTAINS(book,'@xmlxp:''/book/title [. contains(\"Algorithms\")]''') = 1" 2>&1 | tee -a $outfile
+
+         ;;
+        5 )
+          echo "---------------------------------------"
+          echo "Basic XQUERY with XPATH"
+          echo "---------------------------------------"
+          db2 -v "xquery for \$i in db2-fn:xmlcolumn-contains ('TS_DEMO.BOOKS.BOOK', '@xmlxp:''/book/title [. contains(\"Algorithms\")]''') return \$i" 2>&1 | tee -a $outfile
+
+         ;;
+        6 )
+          if [[ $rt_mode = y ]]; then
+            echo "---------------------------------------"
+            echo "Basic Fuzzy search with rich text document using factor 0.9"
+            echo "---------------------------------------"
+            db2 -v "SELECT SUBSTR(title, 1, 30) AS TITLE FROM ts_demo.books WHERE CONTAINS (pdf, 'conpated~0.9') = 1" 2>&1 | tee -a $outfile
+
+            echo "---------------------------------------"
+            echo "Basic Fuzzy search with rich text document using factor 0.5"
+            echo "---------------------------------------"
+            db2 -v "SELECT SUBSTR(title, 1, 30) AS TITLE FROM ts_demo.books WHERE CONTAINS (pdf, 'conpated~0.5') = 1" 2>&1 | tee -a $outfile
+
+          else
+
+            echo "---------------------------------------"
+            echo "Basic Fuzzy search using factor 0.9"
+            echo "---------------------------------------"
+            db2 -v "SELECT SUBSTR(title, 1, 30) AS TITLE FROM ts_demo.books WHERE CONTAINS (abstract, 'conpated~0.9') = 1" 2>&1 | tee -a $outfile
+
+            echo "---------------------------------------"
+            echo "Basic Fuzzy search using factor 0.5"
+            echo "---------------------------------------"
+            db2 -v "SELECT SUBSTR(title, 1, 30) AS TITLE FROM ts_demo.books WHERE CONTAINS (abstract, 'conpated~0.9') = 1" 2>&1 | tee -a $outfile
+          fi
+
+         ;;
+        7 )
+          echo "---------------------------------------"
+          echo "Basic word distance search"
+          echo "---------------------------------------"
+          db2 -v "SELECT SUBSTR(title, 1, 30) AS TITLE FROM ts_demo.books WHERE CONTAINS (book, '\"algorithms explained\"~4') = 1" 2>&1 | tee -a $outfile
+
+         ;;
+        8 )
+          echo "---------------------------------------"
+          echo "Basic special character search"
+          echo "---------------------------------------"
+          db2 -v "SELECT SUBSTR(title, 1, 30) AS TITLE FROM ts_demo.books WHERE CONTAINS (book, 'presented.') = 1" 2>&1 | tee -a $outfile
+
+         ;;
+        9 )
+          echo "---------------------------------------"
+          echo "Basic SCORE"
+          echo "---------------------------------------"
+          db2 -v "SELECT SUBSTR(title, 1, 30) AS TITLE, INTEGER(SCORE (abstract, 'book') * 1000) AS RELEVANCE FROM ts_demo.books WHERE CONTAINS(abstract, 'book') = 1 ORDER BY RELEVANCE DESC" 2>&1 | tee -a $outfile
+         ;;
+
+        10 ) break ;;
+        * ) echo "Please select a number 1-10 or ENTER to see the menu" ;;
+        esac
+      done
+
+      press_any_key_to_continue
+    fi
+
+  elif [[ $mode = n ]]; then
+    run_all_ts_queries $rt_mode
+  else
+    return 1
+  fi
+
+  return 0
+} #//end of ts_queries function
+
+function cleanup {
+  # Input Parameters
+  #          $1 => db_name
+  # typeset declares local function variables
+  typeset db_name=$1
+
+  # Init log file
+  outfile=~/tmp/cleanup.out
+  rm -f $outfile 2>/dev/null
+
+  log db2 connect to $db_name
+
+  # Make sure TS is up and running.
+  ts_start
+
+  # Cleanup
+  log db2ts "drop index ts_demo.book_isbn_idx for text connect to $db_name"
+  log db2ts "drop index ts_demo.book_title_idx for text connect to $db_name"
+
+  log db2ts "drop index ts_demo.book_authors_idx for text connect to $db_name"
+  log db2ts "drop index ts_demo.book_publishers_idx for text connect to $db_name"
+  log db2ts "drop index ts_demo.book_abstract_idx for text connect to $db_name"
+  log db2ts "drop index ts_demo.book_pdf_idx for text connect to $db_name"
+  log db2ts "drop index ts_demo.book_book_idx for text connect to $db_name"
+
+  log db2 "DROP TABLE TS_DEMO.BOOKS"
+
+  log db2ts "disable database for text connect to $db_name"
+
+  log richtextTool disable $DB2PATH
+  ts_stop
+
+  log db2 "connect reset"
+  log db2 "terminate"
+
+  return 0
+}
+
+
+#=====================================================================
+#   Name:    press_any_key_to_continue
+#   Purpose: Pause before starting next part of demo
+#=====================================================================
+function press_any_key_to_continue {
+  # typeset declares local function variables
+  typeset ans=''
+  echo ; echo "<> Press RETURN to continue..."
+  read ans
+} #//end of press_any_key_to_continue function
+
+
+#=====================================================================
+# Name:    log
+# Purpose: Execute a command and append its output to the file
+#			indicated by $outfile
+# Input:
+#			$* => the command
+#=====================================================================
+function log {
+  echo "$*" >>$outfile
+  $* >>$outfile 2>&1
+  return $?
+}
+
+
+#=====================================================================
+# Name:    log2
+# Purpose: Echo a command to stdout immediately, then execute it and
+#			append its output to the file indicated by %log%
+# Input:
+#			$* => the command
+#=====================================================================
+function log2 {
+  if [[ $mode = i ]] || [[ $mode = b ]]; then
+    echo "$*"
+  fi
+  $* >>$outfile 2>&1
+  return $?
+}
+
+#=====================================================================
+# Name:    log3
+# Purpose: Echo a command to stdout immediately, then execute it, print output
+#          to stdout and append its output to the file indicated by %log%
+# Input:
+#			$* => the command
+#=====================================================================
+function log3 {
+  echo "$*" | tee -a $outfile
+  $* 2>&1 | tee -a $outfile
+  return $?
+}
+
+#=====================================================================
+# Name:    showlog
+# Purpose: If $mode is b or i, then sends the file specified by
+#			$outfile to the standard output -- no pause afterwards.
+# Input:
+#			$mode (must be b or i for the log to go to stdout)
+#=====================================================================
+function showlog {
+  if [[ $mode = i ]] || [[ $mode = b ]]; then
+    echo ; cat $outfile 2>/dev/null ; echo
+  fi
+}
+
+
+#=====================================================================
+# Name:    showlog_pause
+# Purpose: If $mode is b or i, then sends the file specified by
+#			$outfile to the standard output, then pauses.
+# Input:
+#			$mode (must be b or i for the log to go to stdout)
+#=====================================================================
+function showlog_pause {
+  if [[ $mode = i ]] || [[ $mode = b ]]; then
+    echo ; cat $outfile 2>/dev/null ; echo
+    press_any_key_to_continue
+  fi
+}
+
+#=====================================================================
+# Name:    pause
+# Purpose: If $mode is b or i it pauses.
+# Input:
+#			$mode (must be b or i )
+#=====================================================================
+function pause {
+  if [[ $mode = i ]] || [[ $mode = b ]]; then
+    press_any_key_to_continue
+  fi
+}
+
+#=====================================================================
+# Name:    loglog
+# Purpose: Appends a timestamp and current file $1 to main log file $2
+# Input:
+#			$1 => current file
+#			$2 => main log file
+#=====================================================================
+function loglog {
+  if [[ -n $2 ]] ; then
+    echo "##############################################################" >>$2
+    echo "`date` - $1" >>$2
+    echo "##############################################################" >>$2
+    cat $1 >>$2 2>/dev/null
+    echo " " >>$2
+  fi
+}
+
+
+#=====================================================================
+# Name:    usage
+# Purpose: Echoes on stdout a command help message.
+#=====================================================================
+function usage {
+  echo "Usage: tsDemoRunDemo -i [-r | -f] | -n [-r | -f] | -b [-r | -f] | -h | [<database_name>]"
+  echo "     -i = interactive mode (the default mode)"
+  echo "     -n = non-interactive mode: runs all the sample steps without"
+  echo "          prompting the user"
+  echo "     -b = basic mode: creates database, tables, and inserts text search data"
+  echo "     -h = help: prints this usage message"
+  echo "     -r = [optional for i, n and b] rich text is enabled, use rich text index"
+  echo "     -f = [optional for i, n and b] force cleanup prior to start"
+  echo "     The default database name is sample."
+  echo
+}
+
+
+#=====================================================================
+# Name:    scripterr
+# Purpose: Called whenever an error occurs
+#=====================================================================
+function scripterr {
+  # may do some cleanup here ...
+  typeset db_name=$1
+  typeset location=$2
+
+  echo "Encountered an error. Removing text indexes, tables and disabling database ..."
+  echo "The log files can be found in $HOME/tmp."
+  echo "Please wait ..."
+
+  cleanup $db_name
+  exit 1
+}
+
+#=====================================================================
+# Name:    returncodes
+# Purpose: Called when we are done with everything
+#=====================================================================
+function returncodes {
+     echo "Function return codes:"
+     echo "create_db               : $rc_create_db"
+     echo "enable_db               : $rc_enable_db"
+     echo "create_tables           : $rc_create_tables"
+     echo "insert_data             : $rc_insert_data"
+     echo "create_indexes          : $rc_create_indexes"
+     echo "update_indexes          : $rc_update_indexes"
+     echo "ts_queries              : $rc_ts_queries"
+     echo "Please check logfiles in ~/tmp/ for details."
+}
+
+#---------------------------------------------------------------------
+#   Main script
+#---------------------------------------------------------------------
+# Check environment
+if [[ -z $DB2PATH ]] ; then
+  # Must have DB2PATH set
+  echo "Please set the DB2PATH environment variable to point to the"
+  echo "sqllib directory of your DB2 installation."
+  echo "Example: export DB2PATH=~/sqllib"
+  exit 1
+fi
+
+# Handle options and arguments
+mode=0
+rt_mode=n
+force=n
+let number_of_options=0
+
+while getopts ":inrbhf" opt; do
+  # counter keeps track how many options are specified
+  ((number_of_options= number_of_options + 1))
+
+  # if more than one option is specified print message and exit
+  if ((number_of_options > 3)); then
+    usage
+    echo "You can only specify a maximum of three options and you specified" $number_of_options "options."
+    exit 1
+  fi
+
+  # set the correction more for the various options
+  case $opt in
+  i)  if [[ $mode = 0 ]]; then
+        # Set only if main mode is not yet set.
+        mode=i
+      else
+        echo "One of -n or -b was already specified."
+        usage
+        exit 1
+      fi
+    ;;
+  n)  if [[ $mode = 0 ]]; then
+        # Set only if main mode is not yet set.
+        mode=n
+      else
+        echo "One of -i or -b was already specified."
+        usage
+        exit 1
+      fi
+   ;;
+  r)  rt_mode=y ;;
+  b)  if [[ $mode = 0 ]]; then
+       # Set only if main mode is not yet set.
+       mode=b
+      else
+        echo "One of -i or -n was already specified."
+        usage
+        exit 1
+      fi
+   ;;
+  f)  force=y ;;
+  \?) usage
+      exit 1 ;;
+  *)  usage
+      exit 1 ;;
+  esac
+done
+shift $(($OPTIND - 1))
+
+if [[ $mode = 0 ]]; then
+  #Default mode is (i)nteractive
+  mode=i
+fi
+
+# Make sure that 1 or less arguments are specified
+if (($# > 1)); then
+  usage
+  echo "You can only specify one argument after the options, and you specified"
+  echo " " $# "arguments: " $@
+  exit 1
+fi
+
+# Set the first argument as the database name
+database_name=$1
+
+# If database_name is null then set it to default of sample
+database_name=${database_name:=sample}
+
+#---------------------------------------------------------------------
+#   Start demo
+#---------------------------------------------------------------------
+rc_create_db=0; rc_update_cfg=0; rc_enable_db=0;
+rc_create_tables=0; rc_insert_data=0;  rc_create_indexes=0;
+rc_update_indexes=0; rc_ts_queries=0
+
+# create the directory to write the output to
+mkdir -m 755 ~/tmp 2>/dev/null
+
+# Init and timestamp the log file
+logg=~/tmp/${database_name}.log
+rm -f $logg >/dev/null 2>&1
+echo "`date` - tsDemoRunDemo starting..." >>$logg
+outfile=~/tmp/create_db.out
+
+# start the database instance
+db2start
+
+if [[ $force = y ]]; then
+  # Attempt some cleanup in case script was previously (successfully) run and
+  # artifacts still exist.
+  echo "Performing cleanup ... Please wait..."
+  cleanup $database_name
+  sleep 5
+fi
+
+# Create and configure the database, create tables and insert
+# text search data
+create_db $mode $database_name ; rc_create_db=$?
+loglog $outfile $logg
+[[ $rc_create_db -eq 0 ]] || scripterr $database_name
+
+enable_db $mode $database_name $rt_mode ; rc_enable_db=$?
+loglog $outfile $logg
+[[ $rc_enable_db -eq 0 ]] || scripterr $database_name
+
+create_tables $mode $database_name ; rc_create_tables=$?
+loglog $outfile $logg
+[[ $rc_create_tables -eq 0 ]] || scripterr $database_name
+
+insert_data $mode $database_name ; rc_insert_data=$?
+loglog $outfile $logg
+[[ $rc_insert_data -eq 0 ]] || scripterr $database_name
+
+if [[ $mode = i ]] || [[ $mode = n ]]; then
+  create_indexes $mode $database_name $rt_mode ; rc_create_indexes=$?
+  loglog $outfile $logg
+  [[ $rc_create_indexes -eq 0 ]] || scripterr $database_name
+
+  update_indexes $mode $database_name $rt_mode ; rc_update_indexes=$?
+  loglog $outfile $logg
+  [[ $rc_update_indexes -eq 0 ]] || scripterr $database_name
+
+  if [[ $mode = i ]] ; then
+    # Run queries only in interactive mode
+    ts_queries $mode $database_name $rt_mode ; rc_ts_queries=$?
+    loglog $outfile $logg
+    [[ $rc_ts_queries -eq 0 ]] || scripterr $database_name
+  elif [[ $mode = n ]]; then
+    run_all_ts_queries $mode $database_name $rt_mode ; rc_ts_queries=$?
+    loglog $outfile $logg
+    [[ $rc_ts_queries -eq 0 ]] || scripterr $database_name
+  fi
+fi
+
+if [[ $rc_create_db -eq 0 ]] && [[ $rc_enable_db -eq 0 ]] && \
+     [[ $rc_create_tables -eq 0 ]] && [[ $rc_insert_data -eq 0 ]] && \
+     [[ $rc_create_indexes -eq 0 ]] && [[ $rc_update_indexes -eq 0 ]] && \
+     [[ $rc_ts_queries -eq 0 ]] ; then
+
+     echo "Db2 Text Search test has finished successfully."
+     returncodes
+else
+
+     echo "Db2 Text Search terminated with errors."
+     returncodes
+     exit 1
+fi
+exit 0
+
+#**********************************************************************
+#    End of Db2 Text Search sample 'tsDemoRunDemo'
+#**********************************************************************
