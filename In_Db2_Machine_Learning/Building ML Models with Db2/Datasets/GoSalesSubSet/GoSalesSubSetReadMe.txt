@@ -1,0 +1,18 @@
+For loading the GoSalesSubSet.csv data you can take the following steps:
+
+
+db2start
+connect to <database_name>
+
+db2 "CREATE TABLE GOSALES.GOSALES_FULL (
+ID INTEGER NOT NULL,
+GENDER VARCHAR(3),
+AGE INTEGER,
+MARITAL_STATUS VARCHAR(30),
+PROFESSION VARCHAR(30),
+PURCHASE_AMOUNT DECIMAL(30, 5),
+PRIMARY KEY (ID))";
+
+db2 "IMPORT FROM \"<full_path_to_csv>\" OF DEL skipcount 1 INSERT INTO GOSALES.GOSALES_FULL(ID, GENDER, AGE, 
+MARITAL_STATUS, PROFESSION, PURCHASE_AMOUNT)"
+
