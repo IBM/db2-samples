@@ -23,7 +23,7 @@ PRIMARY KEY (ID))";
 db2 "IMPORT FROM \"<full_path_to_csv>\" OF DEL skipcount 1 INSERT INTO GOSALES.GOSALES_FULL(ID, GENDER, AGE,
 MARITAL_STATUS, PROFESSION, PURCHASE_AMOUNT)"
 
-*In the above SQL, repalce <database_name> with the actual name of your Db2 database. Also, replace <full_path_to_csv> with full path to the dataset you downloaded above.*
+**In the above SQL, repalce <database_name> with the actual name of your Db2 database. Also, replace <full_path_to_csv> with full path to the dataset you downloaded above.**
 
 3. From the current GitHub directory, download the following two files to the same folder from which you'll run your Jupyter Notebook:
 * [IDAX_LinReg_Db2Magic.ipynb](IDAX_LinReg_Db2Magic.ipynb)
