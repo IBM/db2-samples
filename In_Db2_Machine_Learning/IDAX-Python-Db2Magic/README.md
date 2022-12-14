@@ -24,7 +24,7 @@ db2 "IMPORT FROM \"<full_path_to_csv>\" OF DEL skipcount 1 INSERT INTO GOSALES.G
 MARITAL_STATUS, PROFESSION, PURCHASE_AMOUNT)"
 
 3. From the current GitHub directory, download the following two files to the same folder from which you'll run your Jupyter Notebook:
-* [Building an In-database Linear Regression Model using IDAX SPs of Db2.ipynb](Building an In-database Linear Regression Model using IDAX SPs of Db2.ipynb)
+* [IDAX_LinReg_Db2Magic.ipynb](IDAX_LinReg_Db2Magic.ipynb)
 * [db2-gosales.env](db2-gosales.env)
 
 db2-gosales.env provides Db2 connection information to the Python code in the Jupyter notebook (first file). This file has the following keys. Replace their values (right side of =) with values for your database connection.
