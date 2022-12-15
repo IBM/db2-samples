@@ -7,7 +7,6 @@ In this tutorial, you'll create a Linear Regression model in a Db2 database usin
 2. Download this [dataset](https://raw.githubusercontent.com/IBM/db2-samples/master/In_Db2_Machine_Learning/Building%20ML%20Models%20with%20Db2/Datasets/GoSalesSubSet/GoSalesSubSet.csv). Load this dataset into your Db2 database as per the following steps:
 into your Db2 database using the following steps:
 
-
 db2start
 connect to <database_name>
 
