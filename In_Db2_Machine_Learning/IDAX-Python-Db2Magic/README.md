@@ -1,6 +1,6 @@
 # Building a Linear Regression Model in a Db2 Database using Db2's built-in ML Stored Procedures
 ## IDE: Jupyter Notebook and its Db2 Magic Commands Extension
-In this tutorial, you'll create a Linear Regression model in a Db2 database using Db2's built-in ML stored procedures - in-database advanaced analytics (IDAX) stored procedures (SPs). For executing the SQL statements and the IDAX SPs, you'll use Jupyter Notebook and its Db2 extension [Db2 Magic Commands](https://ibm.github.io/db2-jupyter/). Db2 Magic Commands is a convenience solution to to embed SQL statements, then run them against a Db2 database, in Jupyter notebook.
+In this tutorial, you'll create a Linear Regression model in a Db2 database using Db2's built-in ML stored procedures - in-database advanaced analytics (IDAX) stored procedures (SPs). For executing the SQL statements and the IDAX SPs, you'll use Jupyter Notebook and its Db2 extension [Db2 Magic Commands](https://ibm.github.io/db2-jupyter/). Db2 Magic Commands is an IBM extension to Jupyter Notebook. Using this extension, one can embed and execute SQL statements in a Jupyter notebook without writing extraneous python code.
 
 ## Prerequisite
 1. Configure a Db2 database with IDAX feature as per these [here] steps.(https://www.ibm.com/docs/en/db2/11.5?topic=learning-prerequisites-machine-in-db2).
