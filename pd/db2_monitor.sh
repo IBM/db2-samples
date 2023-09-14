@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # sed -i 's/\x0D$//' script
-#-------------------------------------------------------------------------------
+#------------------------------------------------------------------------------
 # (C) COPYRIGHT International Business Machines Corp. 2004
 # All Rights Reserved
 #
