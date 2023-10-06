@@ -2,7 +2,7 @@
 # sed -i 's/\x0D$//' script
 
 #/*
-#Copyright <holder> All Rights Reserved.
+#Copyright IBM All Rights Reserved.
 #
 #SPDX-License-Identifier: Apache-2.0
 #*/
