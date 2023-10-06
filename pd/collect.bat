@@ -1,3 +1,11 @@
+::/*
+::Copyright <holder> All Rights Reserved.
+::
+::SPDX-License-Identifier: Apache-2.0
+::*/
+::
+::Signed-off-by: Bharat Goyal <bharat.goyal@ibm.com>
+
 @ECHO OFF
 
 ::USAGE: Collect.bat <DBNAME> <APPHDL> <ITERATION> <INTERVAL>
