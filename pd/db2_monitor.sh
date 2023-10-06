@@ -1,5 +1,14 @@
 #!/usr/bin/env bash
 # sed -i 's/\x0D$//' script
+
+#/*
+#Copyright <holder> All Rights Reserved.
+#
+#SPDX-License-Identifier: Apache-2.0
+#*/
+#
+#Signed-off-by: Bharat Goyal <bharat.goyal@ibm.com>
+
 #-------------------------------------------------------------------------------
 # (C) COPYRIGHT International Business Machines Corp. 2004
 # All Rights Reserved
