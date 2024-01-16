@@ -1,0 +1,89 @@
+/*****************************************************************************
+*
+*  IBM CONFIDENTIAL
+*  OCO SOURCE MATERIALS
+*
+*  COPYRIGHT:  P#2 P#1
+*              (C) COPYRIGHT IBM CORPORATION Y1, Y2
+*
+*  The source code for this program is not published or otherwise divested of
+*  its trade secrets, irrespective of what has been deposited with the U.S.
+*  Copyright Office.
+*
+*  Source File Name = src/base64.h           (%W%)
+*
+*  Descriptive Name = Header file for Base64 encoding code (base64.c)
+*
+*  Function:
+*
+*  Dependencies:
+*
+*  Restrictions:
+*
+*****************************************************************************/
+
+#ifndef _BASE64_H_
+#define _BASE64_H_
+#include <stdlib.h>
+#include <ctype.h>
+
+
+
+
+
+
+#define CODE_BOOK_SIZE 128
+
+static const char reverse_table_url_safe[CODE_BOOK_SIZE] = {
+   -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, 
+   -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1,
+   -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, 62, -1, -1,
+   52, 53, 54, 55, 56, 57, 58, 59, 60, 61, -1, -1, -1, -1, -1, -1,
+   -1,  0,  1,  2,  3,  4,  5,  6,  7,  8,  9, 10, 11, 12, 13, 14,
+   15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, -1, -1, -1, -1, 63,
+   -1, 26, 27, 28, 29, 30, 31, 32, 33, 34, 35, 36, 37, 38, 39, 40,
+   41, 42, 43, 44, 45, 46, 47, 48, 49, 50, 51, -1, -1, -1, -1, -1
+};
+
+size_t base64_decode(const char *in, size_t in_len, unsigned char **out);
+
+/* for url safe decoding per RFC 4648 sectoin 5 */
+static const char reverse_table_url_safe_file[CODE_BOOK_SIZE] = {
+    127, 127, 127, 127, 127, 127, 127, 127, 127, 127,
+    127, 127, 127, 127, 127, 127, 127, 127, 127, 127,
+    127, 127, 127, 127, 127, 127, 127, 127, 127, 127,
+    127, 127, 127, 127, 127, 127, 127, 127, 127, 127,
+    127, 127, 127,  62, 127, 127, 127,  63,  52,  53,
+     54,  55,  56,  57,  58,  59,  60,  61, 127, 127,
+    127,  64, 127, 127, 127,   0,   1,   2,   3,   4,
+      5,   6,   7,   8,   9,  10,  11,  12,  13,  14,
+     15,  16,  17,  18,  19,  20,  21,  22,  23,  24,
+     25, 127, 127, 127, 127, 127, 127,  26,  27,  28,
+     29,  30,  31,  32,  33,  34,  35,  36,  37,  38,
+     39,  40,  41,  42,  43,  44,  45,  46,  47,  48,
+     49,  50,  51, 127, 127, 127, 127, 127
+};
+
+static const char b64_table[] = {
+  'A', 'B', 'C', 'D', 'E', 'F', 'G', 'H',
+  'I', 'J', 'K', 'L', 'M', 'N', 'O', 'P',
+  'Q', 'R', 'S', 'T', 'U', 'V', 'W', 'X',
+  'Y', 'Z', 'a', 'b', 'c', 'd', 'e', 'f',
+  'g', 'h', 'i', 'j', 'k', 'l', 'm', 'n',
+  'o', 'p', 'q', 'r', 's', 't', 'u', 'v',
+  'w', 'x', 'y', 'z', '0', '1', '2', '3',
+  '4', '5', '6', '7', '8', '9', '+', '/'
+};
+
+
+
+// Encode
+int openLDAP_b64_encode(	u_char const *src,	size_t srclength,	char *target,	size_t targsize);
+
+
+// Decode
+int openLDAP_b64_decode(	char const *src,	u_char *target, 	size_t targsize);
+
+
+
+#endif
