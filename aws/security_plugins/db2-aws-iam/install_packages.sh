@@ -3,9 +3,9 @@ set -exou
 OPENSSL_VER=$1
 
 sudo yum install -y which make gcc-c++ perl json-c-devel libcurl-devel openldap-devel git sudo cmake3
+ARCH=$(uname -r)
 if [[ $OPENSSL_VER == 3 ]];
 then
-    ARCH=$(uname -r)
     if [[ "$ARCH" =~ "amzn2023" ]] ; then
         sudo yum install -y openssl openssl-devel openssl-libs
     elif [[ "$ARCH" =~ "el8" ]]; then
@@ -14,7 +14,13 @@ then
     sudo rm -f /usr/lib64/libcrypto.so
     sudo ln -s /usr/lib64/libcrypto.so.3 /usr/lib64/libcrypto.so
 else
-    sudo yum install -y openssl openssl-devel openssl-libs
+    if [[ "$ARCH" =~ "amzn2.x86_64" ]]; then
+	sudo yum install -y openssl11 openssl11-devel openssl11-libs
+        sudo rm -f /usr/lib64/libcrypto.so
+        sudo ln -s /usr/lib64/libcrypto.so.1.1 /usr/lib64/libcrypto.so
+    elif [[ "$ARCH" =~ "el8" ]]; then
+    	sudo yum install -y openssl openssl-devel openssl-libs
+    fi
 fi
 
 if [[ ! -e /usr/lib64/libldap.so.2 ]]; then
