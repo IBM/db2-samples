@@ -10,17 +10,23 @@ CPPLIBS := -lstdc++
 
 CXXFLAGS := -D_GLIBCXX_USE_CXX11_ABI=0
 
-INCLUDES := -I$(DB2_HOME)/include -I../gss -I../common -I/usr/include
-OSSL_LIBS_PATH := -L/usr/lib64
+INCLUDES := -I$(DB2_HOME)/include -I../gss -I../common -I/usr/include -I$(CUSTOM_YUM_PREFIX)/usr/include/openssl11
+OSSL_LIBS_PATH := -L/usr/lib64 -L$(CUSTOM_YUM_PREFIX)/usr/lib64/openssl11
+
 ifeq ($(OPENSSL_VER), 3)
     INCLUDES := -I$(DB2_HOME)/include -I../gss -I../common -I/usr/include -I/usr/include/openssl3
+endif
+
+OSSL_MACRO :=
+ifeq ($(shell expr $(INSTALLED_OPENSSL) \>= 110), 1)
+        OSSL_MACRO := -DOPENSSL_1_1_0
 endif
 
 CFLAGS := $(INCLUDES) -L$(DB2_HOME)/lib -L../obj -g -fpic -fno-strict-aliasing \
           -DSQLUNIX \
           -D_GLIBCXX_USE_CXX11_ABI=0 \
           -D_REENTRANT \
-          -DOPENSSL_1_1_0 \
+          $(OSSL_MACRO) \
           -DCRYPT_OPENSSL_SUPPORTED
 
 SCFLAGS := -I./$(DB2_HOME)/include -I./../gss -L$(DB2_HOME)/lib -L.. -fpic -fno-strict-aliasing 

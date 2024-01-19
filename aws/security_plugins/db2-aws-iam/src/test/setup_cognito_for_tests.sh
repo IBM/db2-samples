@@ -19,6 +19,7 @@ Delete_Pool()
 Run_Command()
 {
 	command=$1
+	echo "Command to be executed: $1"
 	case $command in
 		CREATE_USERPOOL)
 			command_to_execute="aws cognito-idp create-user-pool --pool-name "UnitTestPool1" --username-attributes="email""
@@ -64,16 +65,21 @@ Setup_Cognito()
 	PASSWD=$1
 
 	RESULT=$(Run_Command "CREATE_USERPOOL")
+	echo $RESULT
 	USERPOOLID=$(echo "$RESULT" | python -c 'import json,sys;obj=json.load(sys.stdin);print(obj["UserPool"]["Id"])')
 	echo "Created User pool"
+	echo "export USERPOOLID=\"$USERPOOLID\"" > env.sh
+	sleep 10
 
 	RESULT=$(Run_Command "CREATE_CLIENT")
 	CLIENTID=$(echo "$RESULT" | python -c 'import json,sys;obj=json.load(sys.stdin);print(obj["UserPoolClient"]["ClientId"])')
 	echo "Created client"
+	echo "export CLIENTID=\"$CLIENTID\"" >> env.sh
 
 	RESULT=$(Run_Command "CREATE_USER")
 	USERNAME_GENERATED=$(echo "$RESULT" | python -c 'import json,sys;obj=json.load(sys.stdin);print(obj["User"]["Username"])')
 	echo "Created user"
+	echo "export USERNAME_GENERATED=\"$USERNAME_GENERATED\"" >> env.sh
 
 	RESULT=$(Run_Command "SET_USERPASSWORD")
 	echo "Set Password for user"
@@ -82,10 +88,6 @@ Setup_Cognito()
 	echo "Created Groups"
 
 	RESULT=$(Run_Command "ADDUSER_TO_GROUPS")
-
-	echo "export USERPOOLID=\"$USERPOOLID\"" > env.sh
-	echo "export CLIENTID=\"$CLIENTID\"" >> env.sh
-	echo "export USERNAME_GENERATED=\"$USERNAME_GENERATED\"" >> env.sh
 
 	touch $AWS_USERPOOL_CFG_ENV
 	json_data="{ \"UserPools\" : { \"ID\" : \"$USERPOOLID\", \"Name\": \"UnitTestPool1\" } }"

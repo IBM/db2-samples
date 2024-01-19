@@ -28,17 +28,24 @@ CXXFLAGS := -D_GLIBCXX_USE_CXX11_ABI=0
 
 INCLUDES := -I$(DB2_HOME)/include -I.
 OSSL_LIBS_PATH := -L/usr/lib64
+
 ifeq ($(OPENSSL_VER), 3)
     INCLUDES := -I$(DB2_HOME)/include -I. -I/usr/include/openssl3
     OSSL_LIBS_PATH := -L/usr/lib64
 endif
 
+OSSL_MACRO :=
+ifeq ($(shell expr $(INSTALLED_OPENSSL) \>= 110), 1)
+	OSSL_MACRO := -DOPENSSL_1_1_0
+endif     
+
 CFLAGS := $(INCLUDES) -g -fpic -fno-strict-aliasing \
           -DSQLUNIX \
           -D_GLIBCXX_USE_CXX11_ABI=0 \
           -D_REENTRANT \
-          -DOPENSSL_1_1_0 \
+          $(OSSL_MACRO) \
           -DCRYPT_OPENSSL_SUPPORTED
+
 
 GSSAPI_CLIENT_SRC := AWSIAMauthclient.c AWSIAMauthcommon.c AWSIAMtrace.c base64.c hash.c crypt_blowfish.c
 GSSAPI_CLIENT_OBJ := $(addprefix $(OBJDIR)/,$(notdir $(GSSAPI_CLIENT_SRC:.c=.o)))
