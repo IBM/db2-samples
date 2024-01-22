@@ -26,6 +26,8 @@ sh build_aws_sdk.sh $OPENSSL_VER
 3. Build the plugin
 
 ```shell
+export INSTALLED_OPENSSL=$(openssl version | awk '{print $2}' | sed -e 's/[a-z]-*.*//' | awk -F. '{ print $1$2$3 }')
+export INSTALLED_JSON_C=$(yum info installed json-c | grep Version | sed -e 's/Version\s*: //g' | awk -F. '{ print $1$2$3 }')
 make
 ```
 
@@ -63,6 +65,8 @@ exit
 docker exec -ti mydb2 bash -c "su - db2inst1"
 declare -x DB2_HOME="${HOME}/sqllib"
 cd /mnt/db2-aws-iam
+export INSTALLED_OPENSSL=$(openssl version | awk '{print $2}' | sed -e 's/[a-z]-*.*//' | awk -F. '{ print $1$2$3 }')
+export INSTALLED_JSON_C=$(yum info installed json-c | grep Version | sed -e 's/Version\s*: //g' | awk -F. '{ print $1$2$3 }')
 make
 ```
 
