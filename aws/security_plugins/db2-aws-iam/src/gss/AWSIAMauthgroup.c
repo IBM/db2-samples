@@ -54,6 +54,7 @@
 #include "utils.h"
 
 db2secLogMessage *db2LogFunc = NULL;
+#define JSON_READ_ERROR "Error reading json objects from %s"
 
 /* Types used to manage the linked list of groups that
  * is build during the group lookup process.
@@ -219,10 +220,17 @@ SQL_API_RC SQL_API_FN FindGroups(const char *authID,
    {
    // Check for system user
    // open the user registry file
+      char json_err[256];
       parsed_json = json_object_from_file(DB2OC_USER_REGISTRY_FILE);
+
       for(int retries = 0; retries < 5 && parsed_json == NULL; retries++)
-      {      
-         UsersJsonErrorMsg("FindGroups", errorMessage, errorMessageLength, json_util_get_last_err());
+      {
+#ifdef JSON_C_0_13
+         json_err = json_util_get_last_err();
+#else
+         snprintf(json_err, sizeof(json_err), JSON_READ_ERROR , DB2OC_USER_REGISTRY_FILE);
+#endif
+         UsersJsonErrorMsg("FindGroups", errorMessage, errorMessageLength, json_err);
          db2LogFunc(DB2SEC_LOG_ERROR, *errorMessage, *errorMessageLength);
          free(*errorMessage);
          *errorMessage = NULL;
@@ -234,7 +242,12 @@ SQL_API_RC SQL_API_FN FindGroups(const char *authID,
 
       if(parsed_json == NULL)
       {
-         UsersJsonErrorMsg("FindGroups", errorMessage, errorMessageLength, json_util_get_last_err());
+#ifdef JSON_C_0_13
+         json_err = json_util_get_last_err();
+#else
+         snprintf(json_err, sizeof(json_err), JSON_READ_ERROR , DB2OC_USER_REGISTRY_FILE);
+#endif
+         UsersJsonErrorMsg("FindGroups", errorMessage, errorMessageLength, json_err);
          rc = DB2SEC_PLUGIN_BADUSER;
          DumpUsersJson(DB2OC_USER_REGISTRY_FILE, db2LogFunc);
          goto exit;

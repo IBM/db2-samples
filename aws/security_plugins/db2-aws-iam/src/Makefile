@@ -36,14 +36,20 @@ endif
 
 OSSL_MACRO :=
 ifeq ($(shell expr $(INSTALLED_OPENSSL) \>= 110), 1)
-	OSSL_MACRO := -DOPENSSL_1_1_0
+    OSSL_MACRO := -DOPENSSL_1_1_0
 endif     
+
+JSON_MACRO :=
+ifeq ($(shell expr $(INSTALLED_JSON_C) \>= 0130), 1)
+    JSON_MACRO := -DJSON_C_0_13
+endif
 
 CFLAGS := $(INCLUDES) -g -fpic -fno-strict-aliasing \
           -DSQLUNIX \
           -D_GLIBCXX_USE_CXX11_ABI=0 \
           -D_REENTRANT \
           $(OSSL_MACRO) \
+          $(JSON_MACRO) \
           -DCRYPT_OPENSSL_SUPPORTED
 
 

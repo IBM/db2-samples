@@ -19,7 +19,6 @@ Delete_Pool()
 Run_Command()
 {
 	command=$1
-	echo "Command to be executed: $1"
 	case $command in
 		CREATE_USERPOOL)
 			command_to_execute="aws cognito-idp create-user-pool --pool-name "UnitTestPool1" --username-attributes="email""
@@ -47,7 +46,6 @@ Run_Command()
 			echo "Unknown command"
 			exit 1
 		esac
-
 	command_output=$($command_to_execute 2>&1)
 	command_exit_code=$?
 	if  [[ "$command_exit_code" -ne 0 ]]; then
@@ -63,13 +61,10 @@ Run_Command()
 Setup_Cognito()
 {
 	PASSWD=$1
-
 	RESULT=$(Run_Command "CREATE_USERPOOL")
-	echo $RESULT
 	USERPOOLID=$(echo "$RESULT" | python -c 'import json,sys;obj=json.load(sys.stdin);print(obj["UserPool"]["Id"])')
 	echo "Created User pool"
 	echo "export USERPOOLID=\"$USERPOOLID\"" > env.sh
-	sleep 10
 
 	RESULT=$(Run_Command "CREATE_CLIENT")
 	CLIENTID=$(echo "$RESULT" | python -c 'import json,sys;obj=json.load(sys.stdin);print(obj["UserPoolClient"]["ClientId"])')
@@ -91,7 +86,7 @@ Setup_Cognito()
 
 	touch $AWS_USERPOOL_CFG_ENV
 	json_data="{ \"UserPools\" : { \"ID\" : \"$USERPOOLID\", \"Name\": \"UnitTestPool1\" } }"
-	echo $json_data > $AWS_USERPOOL_CFG_ENV
+	echo $json_data > $DB2_HOME$AWS_USERPOOL_CFG_ENV
 
 
 	#Now generate the token for the user
