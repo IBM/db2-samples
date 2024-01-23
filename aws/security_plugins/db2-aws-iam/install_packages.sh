@@ -17,24 +17,6 @@ else
     sudo yum install -y openssl openssl-devel openssl-libs
 fi
 
-if [[ "$ARCH" =~ "amzn2.x86_64" ]]; then
-
-    # Remove json-c if the plugin is being built on Amazon Linux 2
-    sudo yum remove -y json-c
-
-    # Build a newer version of json-c from source
-    git clone https://github.com/json-c/json-c -b json-c-0.13.1-20180305
-    cd json-c/
-    sudo yum install automake autoconf libtool
-    sh autogen.sh
-    ./configure
-    make
-    sudo make install
-    cd ..
-    rm -rf json-c
-
-fi
-
 if [[ ! -e /usr/lib64/libldap.so.2 ]]; then
     sudo ln -s "/usr/lib64/libldap.so" /usr/lib64/libldap.so.2
 fi

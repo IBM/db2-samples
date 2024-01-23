@@ -15,7 +15,7 @@ unzip awscliv2.zip
 sudo ./aws/install
 ```
 
-2. Install python package
+2. Install python package, if not already present. Tests are tested with python 2.7 as well as 3.11.
 
 ```shell
 sudo yum install python3.11

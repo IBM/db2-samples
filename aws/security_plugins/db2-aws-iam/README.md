@@ -31,6 +31,8 @@ export INSTALLED_JSON_C=$(yum info installed json-c | grep Version | sed -e 's/V
 make
 ```
 
+There is also a script `build.sh` in the current directory which does all the above steps in one go.
+
 ### Build steps for container build
 
 1. Create the build container
