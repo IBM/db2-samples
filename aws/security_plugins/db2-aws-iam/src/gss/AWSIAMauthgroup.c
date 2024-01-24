@@ -46,7 +46,6 @@
 #include <db2secPlugin.h>
 #include "AWSIAMauth.h"
 #include "AWSIAMauthfile.h"
-#include "../common/hash.h"
 #include "../common/AWSIAMtrace.h"
 #include "iam.h"
 #include "AWSUserGroupInfo.h"

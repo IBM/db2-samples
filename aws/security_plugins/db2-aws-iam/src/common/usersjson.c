@@ -1,6 +1,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include "usersjson.h"
+#include "../gss/utils.h"
 
 /*******************************************************************************
 *

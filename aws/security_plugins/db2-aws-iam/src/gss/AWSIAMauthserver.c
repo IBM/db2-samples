@@ -46,7 +46,6 @@
 #include "iam.h"
 #include "jwt.h"
 #include "AWSIAMauthfile.h"
-#include "../common/hash.h"
 #include "../common/AWSIAMtrace.h"
 #include "AWSUserPoolInfo.h"
 #include "utils.h"

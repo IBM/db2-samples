@@ -5,7 +5,6 @@
 #include "AWSIAMauthfile.h"
 #include "AWSIAMauth.h"
 #include "AWSIAMtrace.h"
-#include "../common/hash.h"
 #include "../common/AWSIAMtrace.h"
 
 void stringToLower(char *s)

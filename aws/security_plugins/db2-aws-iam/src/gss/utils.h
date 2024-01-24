@@ -31,6 +31,12 @@
 
 #define AWS_USERPOOL_CFG_ENV              
 #define AWS_USERPOOL_DEFAULTCFGFILE              "security64/plugin/cfg/cognito_userpools.json"
+#define DB2OC_USER_REGISTRY_FILE "/mnt/blumeta0/db2_config/users.json"
+#define DB2OC_USER_REGISTRY_ERROR_FILE "/mnt/blumeta0/db2_config/users.json.debug"
+
+void stringToUpper(char *s);
+
+void stringToLower(char *s);
 
 #ifdef  __cplusplus
 extern "C" {

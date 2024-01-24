@@ -5,7 +5,6 @@
 #include "db2secPlugin.h"
 #include "../gss/AWSIAMauthfile.h"
 #include "AWSIAMtrace.h"
-#include "hash.h"
 
 #ifdef __cplusplus
 extern "C" {

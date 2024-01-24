@@ -22,13 +22,37 @@
 *  Restrictions:
 *
 ***********************************************************************/
-#include <cstring>
 #include <stdio.h>
 #include "db2secPlugin.h"
 #include <json-c/json.h>
+#include <stdbool.h>
 #include "../common/AWSIAMtrace.h"
 #include "utils.h"
 #include "AWSIAMauth.h"
+
+void stringToLower(char *s)
+{
+    int i=0;
+    while(s[i]!='\0')
+    {
+        if(s[i]>='A' && s[i]<='Z'){
+            s[i]=s[i]+32;
+        }
+        ++i;
+    }
+}
+
+void stringToUpper(char *s)
+{
+    int i=0;
+    while(s[i]!='\0')
+    {
+        if(s[i]>='a' && s[i]<='z'){
+            s[i]=s[i]-32;
+        }
+        ++i;
+    }
+}
 
 
 const char* read_userpool_from_cfg()

@@ -56,19 +56,19 @@ CFLAGS := $(INCLUDES) -g -fpic -fno-strict-aliasing \
           -DCRYPT_OPENSSL_SUPPORTED
 
 
-GSSAPI_CLIENT_SRC := AWSIAMauthclient.c AWSIAMauthcommon.c AWSIAMtrace.c base64.c hash.c crypt_blowfish.c
+GSSAPI_CLIENT_SRC := AWSIAMauthclient.c AWSIAMauthcommon.c AWSIAMtrace.c base64.c
 GSSAPI_CLIENT_OBJ := $(addprefix $(OBJDIR)/,$(notdir $(GSSAPI_CLIENT_SRC:.c=.o)))
 
-GSSAPI_SERVER_SRC := AWSIAMauthserver.c AWSIAMauthcommon.c jwt.c jwk.c base64.c AWSIAMtrace.c hash.c crypt_blowfish.c
+GSSAPI_SERVER_SRC := AWSIAMauthserver.c AWSIAMauthcommon.c jwt.c jwk.c base64.c AWSIAMtrace.c utils.c
 GSSAPI_SERVER_OBJ := $(addprefix $(OBJDIR)/,$(notdir $(GSSAPI_SERVER_SRC:.c=.o)))
 
-GSSAPI_SERVER_SRC2 := AWSUserPoolInfo.cpp iam.cpp utils.cpp AWSSDKRAII.cpp
+GSSAPI_SERVER_SRC2 := AWSUserPoolInfo.cpp iam.cpp AWSSDKRAII.cpp
 GSSAPI_SERVER_OBJ2 := $(addprefix $(OBJDIR)/,$(notdir $(GSSAPI_SERVER_SRC2:.cpp=.o)))
 
-GROUP_SRC := AWSIAMauthgroup.c AWSIAMauthcommon.c AWSIAMtrace.c jwt.c jwk.c base64.c usersjson.c hash.c crypt_blowfish.c
+GROUP_SRC := AWSIAMauthgroup.c AWSIAMauthcommon.c AWSIAMtrace.c jwt.c jwk.c base64.c usersjson.c utils.c
 GROUP_OBJ := $(addprefix $(OBJDIR)/,$(notdir $(GROUP_SRC:.c=.o)))
 
-GROUP_SRC2 := utils.cpp AWSUserGroupInfo.cpp AWSSDKRAII.cpp
+GROUP_SRC2 := AWSUserGroupInfo.cpp AWSSDKRAII.cpp
 GROUP_OBJ2 := $(addprefix $(OBJDIR)/,$(notdir $(GROUP_SRC2:.cpp=.o)))
 
 
@@ -122,9 +122,6 @@ $(OBJDIR)/%.o: gss/%.c gss/%.h
 $(OBJDIR)/iam.o: gss/iam.cpp gss/iam.h
 	$(CC) $(CFLAGS) $(CXXFLAGS) -c $< -o $@
 
-$(OBJDIR)/utils.o: gss/utils.cpp gss/utils.h
-	$(CC) $(CFLAGS) $(CXXFLAGS) -c $< -o $@
-
 $(OBJDIR)/AWSUserGroupInfo.o: gss/AWSUserGroupInfo.cpp gss/AWSUserGroupInfo.h
 	$(CXX) $(CFLAGS) $(CXXFLAGS) -I/usr/local/include $(CPPLIBS) $(AWS_SDK_LIBS) -c $< -o $@
  
@@ -133,9 +130,6 @@ $(OBJDIR)/AWSUserPoolInfo.o: gss/AWSUserPoolInfo.cpp gss/AWSUserPoolInfo.h
 
 $(OBJDIR)/AWSSDKRAII.o: gss/AWSSDKRAII.cpp gss/AWSSDKRAII.h
 	$(CXX) $(CFLAGS) $(CXXFLAGS) -I/usr/local/include $(CPPLIBS) $(AWS_SDK_LIBS) -c $< -o $@
-
-$(OBJDIR)/crypt_blowfish.o: crypt_blowfish.c crypt_blowfish.h
-	$(CC) $(CFLAGS) -c $< -o $@
 
 $(OBJDIR)/AWSIAMauthgroup.o: gss/AWSIAMauthgroup.c
 	$(CC) $(CFLAGS) -z defs -c $< -o $@ 
