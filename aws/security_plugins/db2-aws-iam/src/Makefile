@@ -14,6 +14,9 @@ GROUP_MODULE := $(PLUGINDIR)/group/$(PRINCIPAL_NAME)group.so
 AWS_SDK_LIBS := -L/usr/local/lib64 -laws-cpp-sdk-core -laws-cpp-sdk-cognito-idp -Wl,-rpath,/opt/ibm/db2/V11.5/lib64
 CPPLIBS := -lstdc++
 
+export INSTALLED_OPENSSL := $(shell openssl version | awk '{print $2}' | sed -e 's/[a-z]-*.*//' | awk -F. '{ print $1$2$3 }')
+export INSTALLED_JSON_C := $(shell yum info installed json-c | grep Version | sed -e 's/Version\s*: //g' | awk -F. '{ print $1$2$3 }')
+
 _dummy := $(shell mkdir -p $(OBJDIR))
 _dummy := $(shell mkdir -p $(OUTPUTDIR))
 _dummy := $(shell mkdir -p $(PLUGINDIR)/server)

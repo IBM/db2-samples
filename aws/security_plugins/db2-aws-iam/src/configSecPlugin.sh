@@ -22,7 +22,7 @@ else
     db2 update dbm cfg using AUTHENTICATION GSSPLUGIN
     db2 update dbm cfg using srvcon_auth GSS_SERVER_ENCRYPT
     db2 update dbm cfg using group_plugin ${PRINCIPAL_NAME}group
-    db2 update dbm cfg using sysadm_group NULL
+    #db2 update dbm cfg using sysadm_group NULL
     db2set DB2AUTH=OSAUTHDB,ALLOW_LOCAL_FALLBACK,PLUGIN_AUTO_RELOAD
 fi
 

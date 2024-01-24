@@ -317,7 +317,6 @@ SQL_API_RC SQL_API_FN GenerateInitialCredUserPassword
   char *localErrorMsg = NULL;
   char oneNullByte[] = {'\0'};
 
-
   IAM_TRACE_ENTRY("GenerateInitialCredUserPassword");
 
   if (newpasswordLen > 0)
@@ -545,118 +544,6 @@ malloc_fail:
   goto exit;
 }
 
-/*
- * GenerateInitialCredApiKey
- */
-SQL_API_RC SQL_API_FN GenerateInitialCredApiKey
-(
-  const char *apikey,
-  db2int32 apikeyLen,
-  const char *apikeyspace,
-  db2int32 apikeyspaceLen,
-  db2int32 apikeyspaceType,
-  const char *dbname,
-  db2int32 dbnameLen,
-  gss_cred_id_t *pGSSCredHandle,
-  void **ppInitInfo,
-  char **errorMsg,
-  db2int32 *errorMsgLen
-)
-{
-  int rc = DB2SEC_PLUGIN_OK;
-  CRED_T *pCred;
-  char *localErrorMsg = NULL;
-  char oneNullByte[] = {'\0'};
-  const char *userid;
-  db2int32 useridLen;
-  IAM_TRACE_ENTRY("GenerateInitialCredApiKey");
-
-  if (!pGSSCredHandle)
-  {
-  	localErrorMsg = "GenerateInitialCredApiKey: pGSSCredHandle == NULL";
-    rc = DB2SEC_PLUGIN_UNKNOWNERROR;
-    goto exit;
-  }
-
-  /* Check lengths */
-  if (apikeyLen > TOKEN_MAX_AUTH_TOKEN_LEN)
-  {
-    rc = DB2SEC_PLUGIN_BADPWD;
-    localErrorMsg = "GenerateInitialCredApiKey: access token too long";
-    goto exit;
-  }
-
-  pCred = (CRED_T *)malloc(sizeof(CRED_T));
-  if (pCred == NULL)
-  {
-    goto malloc_fail;
-  }
-  memset(pCred, '\0', sizeof(CRED_T));
-
-  /* Deal with NULL userids and passwords by using a one-byte
-   * string containing only a NULL.  We flow this to the server
-   * and let it decide.
-   */
-
-  pCred->authtype = DB2SEC_AUTH_APIKEY;
-
-  //pCred->useridLen = 0;
-  //pCred->userid = NULL;
-  userid = oneNullByte;
-  useridLen = 1;
-  pCred->useridLen = useridLen;
-  pCred->userid = (char *)malloc(useridLen);
-  if (pCred->userid == NULL)
-  {
-    goto malloc_fail;
-  }
-  memcpy(pCred->userid, userid, useridLen);
-
-  pCred->authtokenLen = apikeyLen;
-  pCred->authtoken = (char *)malloc(apikeyLen);
-  if (pCred->authtoken == NULL)
-  {
-    goto malloc_fail;
-  }
-  memcpy(pCred->authtoken, apikey, apikeyLen);
-
-  *pGSSCredHandle = (gss_cred_id_t)pCred;
-
-exit:
-
-  /* No init info */
-  if (ppInitInfo != NULL)
-  {
-    *ppInitInfo = NULL;
-  }
-
-  if (localErrorMsg != NULL)
-  {
-    *errorMsg = localErrorMsg;
-    *errorMsgLen = strlen(localErrorMsg);
-  }
-  else
-  {
-    *errorMsg = NULL;
-    *errorMsgLen = 0;
-  }
-  IAM_TRACE_EXIT("GenerateInitialCredApiKey",rc);
-
-  return(rc);
-
-malloc_fail:
-  if (pCred != NULL)
-  {
-    if (pCred->authtoken != NULL) free(pCred->authtoken);
-    if (pCred->userid != NULL) free(pCred->userid);
-    free(pCred);
-  }
-
-  localErrorMsg = "GenerateInitialCredApiKey: malloc failed";
-  rc = DB2SEC_PLUGIN_NOMEM;
-
-  goto exit;
-}
 
 /******************************************************************************
 *
@@ -689,7 +576,7 @@ SQL_API_RC SQL_API_FN ProcessServerPrincipalName
   int rc = DB2SEC_PLUGIN_OK;
   NAME_T *pName;
   IAM_TRACE_ENTRY("ProcessServerPrincipalName");
-
+  
   /* No error messages */
   *errorMsg = NULL;
   *errorMsgLen = 0;
@@ -861,7 +748,7 @@ OM_uint32 SQL_API_FN gss_init_sec_context
   char *errMsg = NULL;
   int length;
   IAM_TRACE_ENTRY("gss_init_sec_context");
-
+  
   /* Check for unsupported options */
   if (context_handle == NULL)
   {
@@ -1140,7 +1027,6 @@ SQL_API_RC SQL_API_FN db2secClientAuthPluginInit
   pFPs->db2secGetDefaultLoginContext = GetDefaultLoginContext;
   pFPs->db2secGenerateInitialCred = GenerateInitialCredUserPassword;
   pFPs->db2secGenerateInitialCredAccessToken = GenerateInitialCredAccessToken;
-  pFPs->db2secGenerateInitialCredApiKey = GenerateInitialCredApiKey;
   pFPs->db2secProcessServerPrincipalName = ProcessServerPrincipalName;
   pFPs->db2secFreeToken = FreeToken;
   pFPs->db2secFreeInitInfo = FreeInitInfo;

@@ -7,7 +7,7 @@ if [[ -f ./env.sh ]]; then
     		aws cognito-idp delete-user-pool --user-pool-id "$USERPOOLID"
 	fi
 	if [[ -f $AWS_USERPOOL_CFG_ENV ]]; then
-    		rm -f $AWS_USERPOOL_CFG_ENV
+    		rm -f $DB2_HOME$AWS_USERPOOL_CFG_ENV
 	fi
     	rm -f ./env.sh
 fi
