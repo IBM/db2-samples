@@ -104,8 +104,6 @@ static int addGroupToList(groupListHead  *head,
       rc = DB2SEC_PLUGIN_NOMEM;
    }
 
-exit:
-   IAM_TRACE_EXIT("addGroupToList", rc);
    return(rc);
 }
 
@@ -132,7 +130,6 @@ static void freeList(groupListHead  *head)
       head->first = NULL;
    }
 
-exit:
    IAM_TRACE_EXIT("freeList", 0);
    return;
 }
@@ -190,7 +187,6 @@ SQL_API_RC SQL_API_FN FindGroups(const char *authID,
    memset(&grpList2, 0, sizeof(grpList2));
    if (authIDLength > DB2SEC_MAX_AUTHID_LENGTH)
    {
-      char    dumpMsg[256] ="";
       strncpy(local_authid, authID, DB2SEC_MAX_AUTHID_LENGTH);
       local_authid[DB2SEC_MAX_AUTHID_LENGTH] = '\0';
       snprintf(dumpMsg, sizeof(dumpMsg), "FindGroups: "
@@ -298,7 +294,6 @@ SQL_API_RC SQL_API_FN FindGroups(const char *authID,
                rc = addGroupToList(&grpList2, gname); 
                if (rc != DB2SEC_PLUGIN_OK)
                {
-                  char    dumpMsg[256] ="";
                   snprintf(dumpMsg, sizeof(dumpMsg),
                            "FindGroups: addGroupToList "
                            "rc=%d for group '%s'\n", rc, gname);
@@ -507,7 +502,6 @@ SQL_API_RC SQL_API_FN db2secGroupPluginInit(db2int32 version,
    IAM_TRACE_ENTRY("db2secGroupPluginInit");
    int rc = DB2SEC_PLUGIN_OK;
    db2secGroupFunction_1  *p;
-   char message[1025];
 
    *errorMessage = NULL;
    *errorMessageLength = 0;
@@ -523,7 +517,6 @@ SQL_API_RC SQL_API_FN db2secGroupPluginInit(db2int32 version,
 
    db2LogFunc = msgFunc;
 
-exit:
    IAM_TRACE_EXIT("db2secGroupPluginInit", rc);
    if (*errorMessage != NULL)
    {

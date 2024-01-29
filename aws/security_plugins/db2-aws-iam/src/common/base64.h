@@ -76,14 +76,4 @@ static const char b64_table[] = {
 };
 
 
-
-// Encode
-int openLDAP_b64_encode(	u_char const *src,	size_t srclength,	char *target,	size_t targsize);
-
-
-// Decode
-int openLDAP_b64_decode(	char const *src,	u_char *target, 	size_t targsize);
-
-
-
 #endif

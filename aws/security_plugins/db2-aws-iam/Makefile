@@ -23,7 +23,7 @@ remove:
 
 .PHONY: test
 test:
-	$(MAKE) -C src test
+	$(MAKE) -C src/test
 
 .PHONY: tail
 tail:

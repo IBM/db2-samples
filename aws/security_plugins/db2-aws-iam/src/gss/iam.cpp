@@ -153,7 +153,7 @@ OM_uint32 verify_access_token(const char *authtoken, size_t authtokenLen, char**
     
     usernameFieldInJWT = (char*) malloc(sizeof(char) * 10 );
     strcpy(usernameFieldInJWT, "username");
-    usernameFieldInJWT[10] = '\0';
+    usernameFieldInJWT[9] = '\0';
   }
   
   issLen = get_string_element_from_jwt(jwt_obj, "iss", &iss, DB2SEC_MAX_USERID_LENGTH);

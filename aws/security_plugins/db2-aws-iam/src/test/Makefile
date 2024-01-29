@@ -29,7 +29,7 @@ ifeq ($(shell expr $(INSTALLED_JSON_C) \>= 0130), 1)
         JSON_MACRO := -DJSON_C_0_13
 endif
 
-CFLAGS := $(INCLUDES) -L$(DB2_HOME)/lib -L../obj -g -fpic -fno-strict-aliasing \
+CFLAGS := $(INCLUDES) -L$(DB2_HOME)/lib -L../obj -g -fpic -fno-strict-aliasing -Werror \
           -DSQLUNIX \
           -D_GLIBCXX_USE_CXX11_ABI=0 \
           -D_REENTRANT \

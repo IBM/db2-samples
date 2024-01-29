@@ -233,7 +233,6 @@ OM_uint32 SQL_API_FN gss_release_buffer
 )
 {
   OM_uint32 rc = GSS_S_COMPLETE;
-  NAME_T *pName;
   IAM_TRACE_ENTRY("gss_release_buffer");
 
   if( (buffer != NULL) &&

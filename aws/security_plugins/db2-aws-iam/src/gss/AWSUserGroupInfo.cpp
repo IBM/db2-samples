@@ -112,7 +112,7 @@ OM_uint32 DoesAWSGroupExist(const char* groupName, const char* userpoolID)
             
         if (!outcome.IsSuccess())
         {
-            db2Log( DB2SEC_LOG_ERROR, "No such group in the user pool: %s ");
+            db2Log( DB2SEC_LOG_ERROR, "No such group in the user pool: %s ", userpoolID);
             ret = RETCODE_AWS_NO_USER_ATTRI;
         }
     }

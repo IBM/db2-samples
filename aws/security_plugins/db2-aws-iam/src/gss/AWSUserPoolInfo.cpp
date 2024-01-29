@@ -103,7 +103,7 @@ OM_uint32 DoesAWSUserExist(const char *username, const char* userpoolID)
       
         if (!outcome.IsSuccess())
         {
-            db2Log(DB2SEC_LOG_ERROR, "No such user in the user pool: %s");
+            db2Log(DB2SEC_LOG_ERROR, "No such user in the user pool: %s", userpoolID);
             ret = RETCODE_AWS_NO_USER_ATTRI;
         }
     }
