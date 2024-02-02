@@ -1,26 +1,31 @@
-/**********************************************************************
-*
-*  IBM CONFIDENTIAL
-*  OCO SOURCE MATERIALS
-*
-*  COPYRIGHT:  P#2 P#1
-*              (C) COPYRIGHT IBM CORPORATION 2023
-*
-*  The source code for this program is not published or otherwise divested of
-*  its trade secrets, irrespective of what has been deposited with the U.S.
-*  Copyright Office.
-*
-*  Source File Name = src/test/unit_jwt.cpp          (%W%)
-*
-*  Descriptive Name = Unit test to verify JWT validation
-*
-*  Function:
-*
-*  Dependencies:
-*
-*  Restrictions:
-*
-***********************************************************************/
+/********************************************************************************************
+** Licensed Materials - Property of IBM
+**
+** Governed under the terms of the International
+** License Agreement for Non-Warranted Sample Code.
+**
+** (C) COPYRIGHT International Business Machines Corp. 2024
+** All Rights Reserved.
+**
+** US Government Users Restricted Rights - Use, duplication or
+** disclosure restricted by GSA ADP Schedule Contract with IBM Corp.
+**
+**********************************************************************************************
+**
+**  Source File Name = src/test/unit_jwt.cpp          (%W%)
+**
+**  Descriptive Name = Unit test to verify JWT validation
+**
+**  Function: This file contains unit tests that verifies the JWT token - its signature, header
+**           and all the claims.
+**
+**  Dependencies:
+**
+**  Restrictions: Should be run on a system which has either AWS developer credentials configured or 
+**                a role with proper permissions attached to it. Refer the README.md at path
+**                "db2-samples/aws/security_plugins/db2-aws-iam"
+**
+*********************************************************************************************/
 
 #include <cstring>
 #include <assert.h>
@@ -82,7 +87,7 @@ TEST_CASE("JWT is verified", "[jwt]") {
 		size_t issLen = get_string_element_from_jwt(jwt_obj, "iss", &iss, DB2SEC_MAX_USERID_LENGTH);
 		REQUIRE(issLen != 0);
 		REQUIRE(iss != NULL);
-		ret = verify_jwt_header(jwt, strlen(jwt), iss, NULL);
+		ret = verify_jwt_header_and_signature(jwt, strlen(jwt), iss, NULL);
 		REQUIRE(ret == 0);
 	}
 

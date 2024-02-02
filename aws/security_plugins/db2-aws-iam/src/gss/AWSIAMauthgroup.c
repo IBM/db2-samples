@@ -1,36 +1,35 @@
-/*******************************************************************************
-*
-*  IBM CONFIDENTIAL
-*  OCO SOURCE MATERIALS
-*
-*  COPYRIGHT:  P#2 P#1
-*              (C) COPYRIGHT IBM CORPORATION 2023, 2024
-*
-*  The source code for this program is not published or otherwise divested of
-*  its trade secrets, irrespective of what has been deposited with the U.S.
-*  Copyright Office.
-*
-*  Source File Name = src/gss/AWSIAMauthgroup.c
-*
-*  Descriptive Name = Plugin that queries AWS cognito for user groups and users.json for system's users
-*
-*  Function: Implements functions required by Db2 group plugin architeture
-*            This plugin is meant to be used with AWS IAM security plugin.
-*
-*            With AWS IAM security plugin in place, the authentication will be
-*            done against IAM, and not through the OS. Assuming the
-*            authentication is successful, the next step is to determine
-*            authorization. For AWS IAM user, all the groups must be collected from AWS cognito.
-*            The collected group names are aggregated to
-*            form the full list. In case of OS based authentication, users.json 
-*            will be looked at to get the groups of default system user like db2inst1.
-*
-*
-*  Dependencies: None
-*
-*  Restrictions: None
-*
-*
+/****************************************************************************
+** Licensed Materials - Property of IBM
+**
+** Governed under the terms of the International
+** License Agreement for Non-Warranted Sample Code.
+**
+** (C) COPYRIGHT International Business Machines Corp. 2024
+** All Rights Reserved.
+**
+** US Government Users Restricted Rights - Use, duplication or
+** disclosure restricted by GSA ADP Schedule Contract with IBM Corp.
+**
+******************************************************************************
+**
+**  Source File Name = src/gss/AWSIAMauthgroup.c
+**
+**  Descriptive Name = Plugin that queries AWS cognito for user groups and users.json for system's users
+**
+**  Function: Implements functions required by Db2 group plugin architeture
+**            This plugin is meant to be used with AWS IAM security plugin.
+**
+**            With AWS IAM security plugin in place, the authentication will be
+**            done against IAM, and not through the OS. Assuming the
+**            authentication is successful, the next step is to determine
+**            authorization. For AWS IAM user, all the groups must be collected from AWS cognito.
+**            The collected group names are aggregated to
+**            form the full list. In case of OS based authentication, users.json 
+**            will be looked at to get the groups of default system user like db2inst1.
+**
+**
+**
+**
 *******************************************************************************/
 
 #include <sqlenv.h>

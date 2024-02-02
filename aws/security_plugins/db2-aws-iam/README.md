@@ -1,11 +1,14 @@
 ## Build instructions
 
-One can build the plugin in a docker container as well as on host.
+One can build the plugin in a docker container or a baremetal with Linux RHEL 8, or AWS EC2  instance created from Amazon Linux 2. 
+
 
 ### Pre-requisites
-Db2 server or client must be installed.
+Db2 server or client must be installed on the build system.
 
-### Build steps for non-container (directly on host)
+Note: As of now, neither Db2 nor this plugin supports AWS EC2 created from Amazon Linux 2023.
+
+### Build steps for non-container (or AWS EC2)
 
 To build plugin on a host system like EC2, go to db2-aws-iam directory
 
@@ -73,9 +76,10 @@ Once the build is successful, the plugin libraries will be generated at `src/bui
 
 ## Deploying the plugin
 
-The system where the plugin is deployed can be a different system than the build system.
+The system where the plugin is deployed can be a different system than the build system. 
 
-If the plugin is to be deployed on AWS EC2, follow the step below. Otherwise this step can be skipped.  
+If the plugin is to be deployed on AWS EC2, follow the step below. Otherwise, this step can be skipped and instead AWS developer credentials should be set on a container or host.
+
 1. Create a role with below set of policies and attach that role to the EC2 instance. Replace {USERPOOL_ARN} with the arn of the user pool.
 
 ```shell
@@ -103,28 +107,19 @@ Note: If the plugin is deployed on a local Db2 container, the container needs to
 
 3. Copy the AWS libraries
 
-In case the build and deployment are done on different systems, one needs to copy following AWS libraries too to deployment system.
-Also, note that this step is to be done with root privileges, may it be on EC2 or a Db2 container.
+Plugin needs AWS Cognito library which is not available in the Db2 installation. 
+Hence, one needs to copy the built Cognito library to Db2 installation directory.
 
 For e.g.
 ```shell
 docker exec -ti mydb2 bash
-sudo cp /usr/local/lib64/libaws-cpp-sdk-transfer.so /opt/ibm/db2/V11.5/lib64/awssdk/RHEL/8.1/
-sudo cp /usr/local/lib64/libaws-cpp-sdk-core.so /opt/ibm/db2/V11.5/lib64/awssdk/RHEL/8.1/
 sudo cp /usr/local/lib64/libaws-cpp-sdk-cognito-idp.so /opt/ibm/db2/V11.5/lib64/awssdk/RHEL/8.1/
-sudo cp /usr/local/lib64/libaws-cpp-sdk-cognito-identity.so /opt/ibm/db2/V11.5/lib64/awssdk/RHEL/8.1/
-sudo cp /usr/local/lib64/libaws-cpp-sdk-s3.so /opt/ibm/db2/V11.5/lib64/awssdk/RHEL/8.1/
 ```
 
-Create symlinks for above libraries in /opt/ibm/db2/V11.5/lib64/
+Create symlinks for above library in /opt/ibm/db2/V11.5/lib64/
 ```shell
 cd /opt/ibm/db2/V11.5/lib64
-sudo ln -s awssdk/RHEL/8.1/libaws-cpp-sdk-transfer.so libaws-cpp-sdk-transfer.so
-sudo ln -s awssdk/RHEL/8.1/libaws-cpp-sdk-core.so libaws-cpp-sdk-core.so
 sudo ln -s awssdk/RHEL/8.1/libaws-cpp-sdk-cognito-idp.so libaws-cpp-sdk-cognito-idp.so
-sudo ln -s awssdk/RHEL/8.1/libaws-cpp-sdk-cognito-identity.so libaws-cpp-sdk-cognito-identity.so
-sudo ln -s awssdk/RHEL/8.1/libaws-cpp-sdk-s3.so libaws-cpp-sdk-s3.so
-sudo ln -s awssdk/RHEL/8.1/libaws-cpp-sdk-kinesis.so libaws-cpp-sdk-kinesis.so
 ```
 
 4. Copy the plugin libraries and update the Db2 configuration to enable the plugin

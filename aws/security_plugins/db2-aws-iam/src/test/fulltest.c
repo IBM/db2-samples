@@ -1,3 +1,31 @@
+/**************************************************************************************************
+** Licensed Materials - Property of IBM
+**
+** Governed under the terms of the International
+** License Agreement for Non-Warranted Sample Code.
+**
+** (C) COPYRIGHT International Business Machines Corp. 2024
+** All Rights Reserved.
+**
+** US Government Users Restricted Rights - Use, duplication or
+** disclosure restricted by GSA ADP Schedule Contract with IBM Corp.
+**
+*****************************************************************************************************
+**
+**  Source File Name = src/test/fulltest.c         (%W%)
+**
+**  Descriptive Name = Token validation flow
+**
+**  Function: This file contains test to verify entire flow of token validation and username retrieval if
+**            the token is valid.
+**
+**  Dependencies:
+**
+**  Restrictions: Should be run on a system which has either AWS developer credentials configured or 
+**                a role with proper permissions attached to it. Refer the README.md at path
+**                "db2-samples/aws/security_plugins/db2-aws-iam"
+*
+******************************************************************************************************/
 #include <stdio.h>
 #include "../common/base64.h"
 #include "iam.h"

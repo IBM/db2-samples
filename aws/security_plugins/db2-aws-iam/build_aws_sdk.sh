@@ -21,7 +21,7 @@ fi
 
 rm -rf aws-sdk-cpp
 
-git clone https://github.com/aws/aws-sdk-cpp -b 1.9.217
+git clone https://github.com/aws/aws-sdk-cpp -b 1.9.247
 cd aws-sdk-cpp
 git submodule update --init --recursive
 mkdir build
@@ -38,3 +38,6 @@ cmake .. -D_GLIBCXX_USE_CXX11_ABI=0 -DCMAKE_CXX_FLAGS="$CXX_FLAGS" $OPENSSL_FLAG
 make clean && make
 
 sudo make install
+cd ../..
+
+rm -rf aws-sdk-cpp

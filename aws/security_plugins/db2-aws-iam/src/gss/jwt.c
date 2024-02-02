@@ -1,25 +1,25 @@
-/*****************************************************************************
-*
-*  IBM CONFIDENTIAL
-*  OCO SOURCE MATERIALS
-*
-*  COPYRIGHT:  P#2 P#1
-*              (C) COPYRIGHT IBM CORPORATION 2023, 2024
-*
-*  The source code for this program is not published or otherwise divested of
-*  its trade secrets, irrespective of what has been deposited with the U.S.
-*  Copyright Office.
-*
-*  Source File Name = src/gss/jwt.c           (%W%)
-*
-*  Descriptive Name = JSON Web Token operation code
-*
-*  Function: Retrieve JSON Web Token element by specifying the element name
-*
-*  Dependencies:
-*
-*  Restrictions:
-*
+/****************************************************************************
+** Licensed Materials - Property of IBM
+**
+** Governed under the terms of the International
+** License Agreement for Non-Warranted Sample Code.
+**
+** (C) COPYRIGHT International Business Machines Corp. 2024
+** All Rights Reserved.
+**
+** US Government Users Restricted Rights - Use, duplication or
+** disclosure restricted by GSA ADP Schedule Contract with IBM Corp.
+**
+**********************************************************************************
+**
+**  Source File Name = src/gss/jwt.c           (%W%)
+**
+**  Descriptive Name = JSON Web Token operation code
+**
+**  Function: This code contains functions that retrieves various types of data from given json object.
+              It also has functions that validates header and signature of the JWT.
+**
+**
 *****************************************************************************/
 
 
@@ -296,7 +296,7 @@ exit:
 
 /******************************************************************************
 *
-*  Function Name     = verify_jwt_header
+*  Function Name     = verify_jwt_header_and_signature
 *
 *  Descriptive Name  = Validate JWT header format and its signature
 *
@@ -315,7 +315,7 @@ exit:
 *  Error Return      = JWK_EXP_ERR, JWK_MOD_ERR, JWT_BIGNUM_ERR, etc.
 *
 ******************************************************************************/
-OM_uint32 verify_jwt_header(const char *jwt, size_t jwt_len, char* iss, db2secLogMessage *logFunc)
+OM_uint32 verify_jwt_header_and_signature(const char *jwt, size_t jwt_len, char* iss, db2secLogMessage *logFunc)
 {
   unsigned char *mod_bytes = NULL, *exp_bytes = NULL;
   size_t mod_len = 0, exp_len = 0;
@@ -350,7 +350,7 @@ OM_uint32 verify_jwt_header(const char *jwt, size_t jwt_len, char* iss, db2secLo
   if( !keyExists )
   {
     rc = JWK_EXP_ERR;
-    db2Log( DB2SEC_LOG_ERROR, "verify_jwt_header: encryption exponent e not found in jwk");
+    db2Log( DB2SEC_LOG_ERROR, "verify_jwt_header_and_signature: encryption exponent e not found in jwk");
     goto exit;
   }
 
@@ -358,7 +358,7 @@ OM_uint32 verify_jwt_header(const char *jwt, size_t jwt_len, char* iss, db2secLo
   if( !keyExists )
   {
     rc = JWK_MOD_ERR;
-    db2Log( DB2SEC_LOG_ERROR, "verify_jwt_header: modulus component n not found in jwk");
+    db2Log( DB2SEC_LOG_ERROR, "verify_jwt_header_and_signature: modulus component n not found in jwk");
     goto exit;
   }
 
@@ -368,7 +368,7 @@ OM_uint32 verify_jwt_header(const char *jwt, size_t jwt_len, char* iss, db2secLo
   if (mod_len == 0)
   {
     rc = JWK_MOD_ERR;
-    db2Log( DB2SEC_LOG_ERROR, "verify_jwt_header: Error in modulus component of jwk, mod_len is 0");
+    db2Log( DB2SEC_LOG_ERROR, "verify_jwt_header_and_signature: Error in modulus component of jwk, mod_len is 0");
     goto exit;
   }
   exp_len = base64_decode(json_object_get_string(exp_obj),
@@ -377,21 +377,21 @@ OM_uint32 verify_jwt_header(const char *jwt, size_t jwt_len, char* iss, db2secLo
   if (exp_len == 0)
   {
     rc = JWK_EXP_ERR;
-    db2Log( DB2SEC_LOG_ERROR, "verify_jwt_header: Error in encryption exponent of jwk, exp_len is 0");
+    db2Log( DB2SEC_LOG_ERROR, "verify_jwt_header_and_signature: Error in encryption exponent of jwk, exp_len is 0");
     goto exit;
   }
 
   if ( !BN_bin2bn(mod_bytes, mod_len, mod_bn) ) 
   {
     rc = JWT_BIGNUM_ERR;
-    db2Log( DB2SEC_LOG_ERROR, "verify_jwt_header: BIGNUM conversion failed for mod_len");
+    db2Log( DB2SEC_LOG_ERROR, "verify_jwt_header_and_signature: BIGNUM conversion failed for mod_len");
     goto exit;
   }
 
   if ( !BN_bin2bn(exp_bytes, exp_len, exp_bn) ) 
   {
     rc = JWT_BIGNUM_ERR;
-    db2Log( DB2SEC_LOG_ERROR, "verify_jwt_header: BIGNUM conversion failed for exp_len");
+    db2Log( DB2SEC_LOG_ERROR, "verify_jwt_header_and_signature: BIGNUM conversion failed for exp_len");
     goto exit;  
   }
 
@@ -421,7 +421,7 @@ exit:
 
   if( rc != 0 )
   {
-    db2Log( DB2SEC_LOG_ERROR, "verify_jwt_header: Fail to get public key, rc = %d\n", rc );
+    db2Log( DB2SEC_LOG_ERROR, "verify_jwt_header_and_signature: Fail to get public key, rc = %d\n", rc );
   }
   return rc;
 }

@@ -1,36 +1,39 @@
-/*******************************************************************************
-*
-*  IBM CONFIDENTIAL
-*  OCO SOURCE MATERIALS
-*
-*  COPYRIGHT:  P#2 P#1
-*              (C) COPYRIGHT IBM CORPORATION 2023, 2024
-*
-*  The source code for this program is not published or otherwise divested of
-*  its trade secrets, irrespective of what has been deposited with the U.S.
-*  Copyright Office.
-*
-*  Source File Name = src/gss/AWSIAMauthserver.c
-*
-*  Descriptive Name = Server side plugin that validates the AWS cognito user with accesstoken
-*
-*  Function: Implements functions required by Db2 server plugin architeture
-*            This plugin is meant to be used with AWS IAM security plugin.
-*
-*            With AWS IAM security plugin in place, when the AWS user uses an access token
-*            retrieved from AWS cognito for Db2 authentication, this plugin will validate all the 
-*            parameters from the provided JWT token and allows user to connect to Db2 only if the token
-*            passes all the validity checks. 
-*
-*
-*  Dependencies: User should be part of the Cognito userpool which is configured in a config file named 
-*                ~/sqllib/security64/plugin/cfg/cognito_userpools.json. This is the default file location.
-*                One can override this location with the means of environment variable AWS_USERPOOL_CFG_ENV.
-*
-*  Restrictions: The config file mentioned above supports only one userpool, which means user authenticating 
-*                to Db2 can be part of only configured userpool. 
-*
-*
+/****************************************************************************
+** Licensed Materials - Property of IBM
+**
+** Governed under the terms of the International
+** License Agreement for Non-Warranted Sample Code.
+**
+** (C) COPYRIGHT International Business Machines Corp. 2024
+** All Rights Reserved.
+**
+** US Government Users Restricted Rights - Use, duplication or
+** disclosure restricted by GSA ADP Schedule Contract with IBM Corp.
+**
+**********************************************************************************
+**
+**
+**  Source File Name = src/gss/AWSIAMauthserver.c
+**
+**  Descriptive Name = Server side plugin that validates the AWS cognito user with accesstoken
+**
+**  Function: Implements functions required by Db2 server plugin architeture
+**            This plugin is meant to be used with AWS IAM security plugin.
+**
+**            With AWS IAM security plugin in place, when the AWS user uses an access token
+**            retrieved from AWS cognito for Db2 authentication, this plugin will validate all the 
+**            parameters from the provided JWT token and allows user to connect to Db2 only if the token
+**            passes all the validity checks. 
+**
+**
+**  Dependencies: User should be part of the Cognito userpool which is configured in a config file named 
+**                ~/sqllib/security64/plugin/cfg/cognito_userpools.json. This is the default file location.
+**                One can override this location with the means of environment variable AWS_USERPOOL_CFG_ENV.
+**
+**  Restrictions: The config file mentioned above supports only one userpool, which means user authenticating 
+**                to Db2 can be part of only configured userpool. 
+**
+**
 *******************************************************************************/
 
 #include <assert.h>

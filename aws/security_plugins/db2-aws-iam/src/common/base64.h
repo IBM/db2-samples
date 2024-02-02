@@ -1,25 +1,27 @@
-/*****************************************************************************
-*
-*  IBM CONFIDENTIAL
-*  OCO SOURCE MATERIALS
-*
-*  COPYRIGHT:  P#2 P#1
-*              (C) COPYRIGHT IBM CORPORATION Y1, Y2
-*
-*  The source code for this program is not published or otherwise divested of
-*  its trade secrets, irrespective of what has been deposited with the U.S.
-*  Copyright Office.
-*
-*  Source File Name = src/base64.h           (%W%)
-*
-*  Descriptive Name = Header file for Base64 encoding code (base64.c)
-*
-*  Function:
-*
-*  Dependencies:
-*
-*  Restrictions:
-*
+/****************************************************************************
+** Licensed Materials - Property of IBM
+**
+** Governed under the terms of the International
+** License Agreement for Non-Warranted Sample Code.
+**
+** (C) COPYRIGHT International Business Machines Corp. 2024
+** All Rights Reserved.
+**
+** US Government Users Restricted Rights - Use, duplication or
+** disclosure restricted by GSA ADP Schedule Contract with IBM Corp.
+**
+**********************************************************************************
+**
+**  Source File Name = src/base64.h           (%W%)
+**
+**  Descriptive Name = Header file for Base64 encoding code (base64.h)
+**
+**  Function:
+**
+**  Dependencies:
+**
+**  Restrictions:
+**
 *****************************************************************************/
 
 #ifndef _BASE64_H_
