@@ -1,3 +1,28 @@
+/****************************************************************************
+** Licensed Materials - Property of IBM
+**
+** Governed under the terms of the International
+** License Agreement for Non-Warranted Sample Code.
+**
+** (C) COPYRIGHT International Business Machines Corp. 2024
+** All Rights Reserved.
+**
+** US Government Users Restricted Rights - Use, duplication or
+** disclosure restricted by GSA ADP Schedule Contract with IBM Corp.
+**
+**********************************************************************************
+**
+**  Source File Name = src/common/usersjson.h           (%W%)
+**
+**  Descriptive Name = Header file for Code that handles users.json file (usersjson.h)
+**
+**  Function:
+**
+**  Dependencies:
+**
+**  Restrictions:
+**
+*****************************************************************************/
 #include <stdio.h>
 #include <stdlib.h>
 #include <json-c/json.h>

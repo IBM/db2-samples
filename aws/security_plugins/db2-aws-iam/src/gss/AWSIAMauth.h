@@ -4,7 +4,7 @@
 ** Governed under the terms of the International
 ** License Agreement for Non-Warranted Sample Code.
 **
-** (C) COPYRIGHT International Business Machines Corp. 2006
+** (C) COPYRIGHT International Business Machines Corp. 2024
 ** All Rights Reserved.
 **
 ** US Government Users Restricted Rights - Use, duplication or
