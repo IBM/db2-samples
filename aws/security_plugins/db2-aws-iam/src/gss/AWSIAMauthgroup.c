@@ -220,7 +220,7 @@ SQL_API_RC SQL_API_FN FindGroups(const char *authID,
       for(int retries = 0; retries < 5 && parsed_json == NULL; retries++)
       {
 #ifdef JSON_C_0_13
-         char* json_e = json_util_get_last_err();
+         const char* json_e = json_util_get_last_err();
          strcpy(json_err, json_e);
 #else
          snprintf(json_err, sizeof(json_err), JSON_READ_ERROR , DB2OC_USER_REGISTRY_FILE);
@@ -238,7 +238,7 @@ SQL_API_RC SQL_API_FN FindGroups(const char *authID,
       if(parsed_json == NULL)
       {
 #ifdef JSON_C_0_13
-         char* json_e = json_util_get_last_err();
+         const char* json_e = json_util_get_last_err();
          strcpy(json_err, json_e);
 #else
          snprintf(json_err, sizeof(json_err), JSON_READ_ERROR , DB2OC_USER_REGISTRY_FILE);

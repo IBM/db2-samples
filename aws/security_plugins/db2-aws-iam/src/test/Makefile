@@ -7,8 +7,6 @@ GROUP_MODULE := $(PRINCIPAL_NAME)group.so
 
 AWS_SDK_LIBS := -L/usr/local/lib64 -laws-cpp-sdk-core -laws-cpp-sdk-cognito-idp -Wl,-rpath,/usr/local/lib64
 CPPLIBS := -lstdc++
-export INSTALLED_OPENSSL := $(shell openssl version | awk '{print $2}' | sed -e 's/[a-z]-*.*//' | awk -F. '{ print $1$2$3 }')
-export INSTALLED_JSON_C := $(shell yum info installed json-c | grep Version | sed -e 's/Version\s*: //g' | awk -F. '{ print $1$2$3 }')
 
 CXXFLAGS := -D_GLIBCXX_USE_CXX11_ABI=0
 
@@ -19,14 +17,22 @@ ifeq ($(OPENSSL_VER), 3)
     INCLUDES := -I$(DB2_HOME)/include -I../gss -I../common -I/usr/include -I/usr/include/openssl3
 endif
 
+# Check the installed version of openssl and json_c and according set the macro
+INSTALLED_OPENSSL := $(shell yum info installed openssl | grep Version | sed -e 's/Version\s*:\s*//g' | sed -e 's/[a-z]-*.*//' | sed -e 's/\.//g')
+INSTALLED_JSON_C := $(shell yum info installed json-c | grep Version | sed -e 's/Version\s*:\s*//g' | sed -e 's/\.//g')
+$(info INSTALLED_OPENSSL is $(INSTALLED_OPENSSL))
+$(info INSTALLED_JSON_C is $(INSTALLED_JSON_C))
+
 OSSL_MACRO :=
-ifeq ($(shell expr $(INSTALLED_OPENSSL) \>= 110), 1)
-        OSSL_MACRO := -DOPENSSL_1_1_0
+VER_GT_110 = $(shell echo $(INSTALLED_OPENSSL)\>=110 | bc )
+ifeq ($(VER_GT_110), 1)
+OSSL_MACRO += -DOPENSSL_1_1_0
 endif
 
 JSON_MACRO :=
-ifeq ($(shell expr $(INSTALLED_JSON_C) \>= 0130), 1)
-        JSON_MACRO := -DJSON_C_0_13
+VER_GT_0_13 = $(shell echo $(INSTALLED_JSON_C)\>=0130 | bc )
+ifeq ($(VER_GT_0_13), 1)
+JSON_MACRO += -DJSON_C_0_13
 endif
 
 CFLAGS := $(INCLUDES) -L$(DB2_HOME)/lib -L../obj -g -fpic -fno-strict-aliasing -Werror \
