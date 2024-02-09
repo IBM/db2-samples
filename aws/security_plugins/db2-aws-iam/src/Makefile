@@ -37,8 +37,6 @@ _dummy := $(shell mkdir -p $(OUTPUTDIR))
 _dummy := $(shell mkdir -p $(PLUGINDIR)/server)
 _dummy := $(shell mkdir -p $(PLUGINDIR)/client)
 _dummy := $(shell mkdir -p $(PLUGINDIR)/group)
-#_dummy := $(shell chown -R bin:bin $(PLUGINDIR))
-
 
 .DEFAULT_GOAL := all
 
@@ -165,24 +163,6 @@ remove:
 tail:
 	tailf ~/sqllib/db2dump/db2diag.log  | grep AWSIAMauth
 
-
-$(TEST_DIR)/unit_apikey.o: $(TEST_DIR)/unit_apikey.cpp
-	g++ $(CFLAGS)  $(LIBS) -c -o $@ $<
-
-
-# Command line example
-$(TEST_DIR)/unit-main.o: $(TEST_DIR)/unit_main.cpp
-	g++ $(CFLAGS)  $(LIBS) -c -o $@ $<
-
-
-$(TEST_DIR)/unit_test_apikey: $(TEST_DIR)/unit-main.o $(TEST_DIR)/unit_apikey.o
-	g++ $(CFLAGS)  $(LIBS) -o $@ $(TEST_DIR)/unit-main.o $(TEST_DIR)/unit_apikey.o  ${GSSAPI_SERVER_MODULE}
-
-unit_test: $(UNIT_TEST)
-	./test/$(UNIT_TEST)
-
-$(UNIT_TEST): $(UNIT_OBJ) $(GSSAPI_OBJ)
-	$(CXX) -g $(CFLAGS) $^ $(LIBS) -o $@
 
 .PHONY: cleanum
 DB2PATH = $(HOME)/sqllib
