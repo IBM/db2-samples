@@ -61,3 +61,16 @@ source ./env.sh
 ./teardown_cognito.sh
 ```
 
+# Full Test of Token Validation
+There is a test file written `fulltest.c` which tests the entire flow of token validation as it is done in server side AWS IAM plugin.
+
+This test can be individually built and run as follows -
+
+```shell
+make fullTest
+./fullTest $ACCESSTOKEN
+```
+
+where `ACCESSTOKEN` is the ID/access token retrieved from AWS Cognito for a user who is part of userpool.
+
+Note: Any change done in the token validation function `validate_auth_info` in server side plugin (`AWSIAMauthserver.c`) should be made in fulltest.c file too.

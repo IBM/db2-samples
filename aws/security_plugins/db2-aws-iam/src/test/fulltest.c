@@ -112,10 +112,15 @@ int main(int argc, char* argv[])
     goto finish;
   }
 
-  if( rc == RETCODE_OK ) {
+  if( rc == GSS_S_COMPLETE ) {
+    if(strlen(useridtocheck) > 0 && strcmp(useridtocheck, userInToken) != 0)
+    {
+      db2Log( DB2SEC_LOG_ERROR, "validate_auth_info: Provided username doesn't match with the username from access token" );
+      goto finish;
+    }
     goto success;
   } 
-  else if ( rc != RETCODE_OK ) 
+  else
   {
     db2Log( DB2SEC_LOG_ERROR, "validate_auth_info: Fail to authorize user from %s with auth type (%s)", szIPAddress, authTypeToString[authtype] );
     goto finish;
