@@ -1,0 +1,72 @@
+# Steps for setting up your database for this Python UDF exercise
+1. Create the following 2 tables in your database. 
+
+__FLIGHTS_TRAIN__
+
+```sql
+CREATE TABLE "FLIGHTS_TRAIN"  (
+		  "YEAR" INTEGER , 
+		  "QUARTER" INTEGER , 
+		  "MONTH" INTEGER , 
+		  "DAYOFMONTH" INTEGER , 
+		  "DAYOFWEEK" INTEGER , 
+		  "UNIQUECARRIER" VARCHAR(50 OCTETS) , 
+		  "ORIGIN" VARCHAR(50 OCTETS) , 
+		  "DEST" VARCHAR(50 OCTETS) , 
+		  "CRSDEPTIME" INTEGER , 
+		  "DEPTIME" INTEGER , 
+		  "DEPDELAY" REAL , 
+		  "DEPDEL15" REAL , 
+		  "TAXIOUT" INTEGER , 
+		  "WHEELSOFF" INTEGER , 
+		  "CRSARRTIME" INTEGER , 
+		  "CRSELAPSEDTIME" INTEGER , 
+		  "AIRTIME" INTEGER , 
+		  "DISTANCEGROUP" INTEGER , 
+		  "FLIGHTSTATUS" INTEGER )   
+		 IN "USERSPACE1"  
+		 ORGANIZE BY COLUMN; 
+```
+
+__FLIGHTS_TEST__
+```sql
+CREATE TABLE "FLIGHTS_TEST"  (
+		  "YEAR" INTEGER , 
+		  "QUARTER" INTEGER , 
+		  "MONTH" INTEGER , 
+		  "DAYOFMONTH" INTEGER , 
+		  "DAYOFWEEK" INTEGER , 
+		  "UNIQUECARRIER" VARCHAR(50 OCTETS) , 
+		  "ORIGIN" VARCHAR(50 OCTETS) , 
+		  "DEST" VARCHAR(50 OCTETS) , 
+		  "CRSDEPTIME" INTEGER , 
+		  "DEPTIME" INTEGER , 
+		  "DEPDELAY" REAL , 
+		  "DEPDEL15" REAL , 
+		  "TAXIOUT" INTEGER , 
+		  "WHEELSOFF" INTEGER , 
+		  "CRSARRTIME" INTEGER , 
+		  "CRSELAPSEDTIME" INTEGER , 
+		  "AIRTIME" INTEGER , 
+		  "DISTANCEGROUP" INTEGER , 
+		  "FLIGHTSTATUS" INTEGER )   
+		 IN "USERSPACE1"  
+		 ORGANIZE BY COLUMN; 
+```
+
+2. Load data into these tables as follows:
+
+__Loading into FLIGHTS_TRAIN__
+```sql
+db2 "LOAD FROM FLIGHTS_TRAIN.del OF DEL INSERT INTO FLIGHTS_TRAIN"
+```
+
+__Loading into FLIGHTS_TEST__
+```sql
+db2 "LOAD FROM FLIGHTS_TEST.del OF DEL INSERT INTO FLIGHTS_TEST"
+```
+
+3. Enable python udf feature in Db2:
+```shell
+db2 update dbm cfg using python_path /usr/bin/python3
+```
