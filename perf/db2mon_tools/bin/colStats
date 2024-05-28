@@ -1,0 +1,1036 @@
+# -*-CPerl-*-
+# vim: ft=perl autoindent shiftwidth=4
+eval 'exec `env PATH=${PATH}:${TJWHTOOLS_INSTALL_ROOT}/bin which runPerl` -auto -test "exit (log(~0 + 1)/log(2) <=32)" -- $0 ${1+"$@"}'
+    if 0;
+# The test clause above checks that we are running at least 64bit perl.
+
+# Version Description
+#
+# 1.00    Initial release
+# 1.01
+# 1.02    Add SQL-like predicates
+# 1.10    Insert data into database
+# 1.11    Single aggregated table for multiple input sources
+#         Split headers on underscores for more compact text tables
+#         Time-based conversions
+#         Smarter charts
+# 1.12    Override table caption
+#         Combine tables
+# 1.13    Add protected columns for differential tables (specific or automatic)
+#         Single table mode (smart enough to handle most cases)
+#         Clean out empty or all zero columns
+# 1.14    Calculated (i.e. expression) columns
+#         Copied (and renamed) columns to have both timestamps and deltas
+#         Describe table
+# 1.15    Chart width and height
+# 1.16    Limit number of rows
+
+use strict;
+use warnings;
+use Getopt::Long;
+use File::Basename qw(basename);
+use TJWH::Basic qw(csvToArray stripWhitespace);
+use TJWH::BasicStats;
+use TJWH::FileTable;
+use TJWH::CalculatedTable;
+use TJWH::DifferentialTable;
+use TJWH::SubtractTable qw(
+                              getProtectedColumns
+                              removeEmptyColumnsProtect
+                         );
+use TJWH::TableStat;
+use TJWH::Table;
+use TJWH::TableUtils qw(shortenCaption removeEmptyColumns);
+use TJWH::TableFilter qw(tableFilter tablePredicate tableFilterSubroutine);
+use TJWH::TablePivot;
+use TJWH::TableIterator qw(searchAndReplace combineTables);
+use TJWH::Table::Convert;
+use TJWH::TableGroup;
+
+# Allow the data to be written into a database
+my $useDBT;
+BEGIN {
+    $useDBT = eval { require TJWH::DBTable };
+    my $loud;
+    if ($loud)
+    {
+        warn "TJWH::DBTable not functional - DB2 and DBD::DB2 driver must be available - check your perl installation\n"
+            unless $useDBT;
+    }
+}
+
+use Data::Dumper;
+
+my $skip = 0;
+my $full;
+my $type = "text";
+
+my $help;
+my $verbose;
+my $debug;
+
+my $describe;   # Describe table
+
+my $header;
+my $hmatch;     # Headers match this regex
+my $match;      # Only lines matching this will be processed
+my $hnames;     # Manually specify the header names, rather than extract them
+my $exclude;    # Lines matching this will be discarded
+my $evaluate;   # Only lines that evaluate this expression to true will be processed
+my $predicate;  # SQL-like predicate based on table column names
+my $multiline;  # Split header names on underscores
+my @copies;     # Copy-and-rename existing columns (to have time stamps and deltas)
+my @expressions; # key = <expression> array for calculated columns
+
+my $hexConvert; # Convert any columns with hex values to decimal
+my $siConvert;  # Convert any columns with SI units to the numerical base
+                # (1k -> 1000)
+my $iecConvert; # Convert any columns with IEC units to the numerical base
+                # (1K -> 1024)
+my ($epochConvert, $timestampConvert); # Time-based conversions
+
+my $ignoreColumnString;
+my ($show, $hide);
+my $differential; # Produce a table of line-by-line differences
+my $protect;      # Specify a list of columns to protect in differential mode
+                  # (or auto)
+my $pivot;
+my $spivot;
+my $aggregateFn; # Function to aggregate table over.
+my $quiet;
+my $search;
+my $replace;
+my $separator = qw(\s+);
+my $sortColumns;
+my $precision;
+
+my $limit;      # equivalent to FETCH FIRST N ROWS ONLY
+
+my $single;     # Single table output (where sane)
+my $clean;      # Remove empty columns
+my $printable;  # Remove any non-printable characters from the table
+my $groupBy;    # Aggregate using this set of columns
+my $caption;    # Provide caption, rather then use filename
+my $shorten;    # Shorten filename, using list of matchers
+my @smatch;
+
+# Chart options
+my ($chart, $xAxisString, $yAxesString);
+my ($width, $height) = (1200, 600);
+my $xrange;
+my $yrange;
+my $style = "linespoints";
+
+my $aggColumnName = "AggFilename";
+
+# Database controls
+my ($database, $user, $pwfile, $password, $dbtable);
+
+my $result = GetOptions
+    (
+     # Data collection and interpretation
+     'skip=s'      => \$skip,
+     'header=s'    => \$header,
+     'hmatch=s'    => \$hmatch,
+     'hnames=s'    => \$hnames,
+     'match=s'     => \$match,
+     'exclude=s'   => \$exclude,
+     'evaluate=s'  => \$evaluate,
+     'predicate=s' => \$predicate,
+     'separator=s' => \$separator,
+     'precision=i' => \$precision,
+     'ignore=s'    => \$ignoreColumnString,
+     'differential' => \$differential,
+     'protect=s'   => \$protect,
+     'limit=i'     => \$limit,
+     'show=s'      => \$show,
+     'hide=s'      => \$hide,
+     'describe'    => \$describe,
+     # Transpose
+     'pivot'       => \$pivot,
+     'spivot'      => \$spivot,
+     # Organize
+     'sort=s'      => \$sortColumns,
+     'group=s'     => \$groupBy,
+     'aggregate=s' => \$aggregateFn,
+     'single'      => \$single,
+     # Output control
+     'caption=s'   => \$caption, # use this instead of filename
+     'shorten'     => \$shorten, # Shorten caption (possibly using smatch)
+     'smatch=s'    => \@smatch, # Shorten matchers (to pick out interesting things)
+     'quiet'       => \$quiet, # Show no intermediate tables
+     'full'        => \$full, # Show ALL the data
+     'multiline'   => \$multiline,
+     # Conversions
+     'search=s'    => \$search,
+     'replace=s'   => \$replace,
+     'hex=s'       => \$hexConvert,
+     'si=s'        => \$siConvert,
+     'iec=s'       => \$iecConvert,
+     'timestamp=s' => \$timestampConvert,
+     'epoch=s'     => \$epochConvert,
+     'clean'       => \$clean,
+     'printable'   => \$printable,
+     # Calculations and copies
+     'calculate=s' => \@expressions,
+     'copy=s'      => \@copies,
+     # Chart options
+     'chart=s'     => \$chart,
+     'xaxis=s'     => \$xAxisString,
+     'yaxis=s'     => \$yAxesString,
+     'yaxes=s'     => \$yAxesString,
+     'xrange=s'    => \$xrange,
+     'yrange=s'    => \$yrange,
+     'style=s'     => \$style,
+     'width=i'     => \$width,
+     'height=i'    => \$height,
+     # Database controls
+     'database=s' => \$database,
+     'user=s'     => \$user,
+     'password=s' => \$password,
+     'pwfile=s'   => \$pwfile,
+     'dbtable=s'  => \$dbtable,
+     # Generic
+     'type=s'      => \$type, # Table type
+     'verbose'     => \$verbose,
+     'debug'       => \$debug,
+     'help'        => \$help,
+    ) or do
+    {
+        print "Did not understand one or more options:\n".
+            "Remaining arguments:\n  ".
+                (join "\n  ", @ARGV)."\n";
+        };
+if (defined $help)
+{
+    system("perldoc -t $0");
+    exit 0;
+}
+
+if ($debug)
+{
+    $TJWH::FileTable::debug = $debug;
+    $TJWH::TableStat::debug = $debug;
+    $TJWH::Table::debug = $debug;
+    $IXF::File::debug = $debug;
+}
+if ($verbose)
+{
+    $TJWH::FileTable::verbose = $verbose;
+    $TJWH::TableStat::verbose = $verbose;
+    $TJWH::Table::verbose = $verbose;
+}
+
+if (defined $database)
+{
+    die "Database access not available\n" unless $useDBT;
+    unless (defined $dbtable)
+    {
+        die "No dbtable specified for database insert into $database\n";
+        exit -1;
+    }
+}
+else
+{
+    if (defined $dbtable)
+    {
+        die "No database defined for target table $dbtable\n";
+    }
+}
+# Enable shorten automatically if any smatch entries are supplied
+$shorten = 1 if @smatch;
+
+# Protect does nothing if we are not in diff or clean mode, so don't allow it
+if ($protect)
+{
+    die "-protect does nothing unless you use -differential or -clean.\n" unless $differential or $clean;
+}
+
+# Whatever is left should be files to read
+my @files = @ARGV;
+if (scalar @files == 0)
+{
+    # If nothing was left, assume we were supposed to read STDIN
+    print "Reading from STDIN\n";
+    push @files, "-";
+}
+
+my $aggTable;
+my $manyTables;
+my @tableOrder;
+foreach my $file (@files)
+{
+    my $table;
+    # Special formats need special handlers
+    if ($file =~ m/\.(csv|ixf)(\.(gz|bz2|xz|Z))?$/i)
+    {
+        my ($filetype, $compress) = ($1, $2);
+        $table = readTableFromCSV($file) if $filetype =~ m/csv/i;
+        $table = readTableFromIXF($file) if $filetype =~ m/ixf/i;
+        if ($match)
+        {
+            $table = tableFilterSubroutine
+                ($table,
+                 sub {
+                     my ($arrayRef) = @_;
+                     return 1 if grep { m/$match/ } grep { defined $_ } @$arrayRef;
+                 },
+                );
+        }
+        if ($exclude)
+        {
+            $table = tableFilterSubroutine
+                ($table,
+                 sub {
+                     my ($arrayRef) = @_;
+                     return if grep { m/$exclude/ } grep { defined $_ } @$arrayRef;
+                     return 1;
+                 },
+                );
+        }
+
+        if ($search)
+        {
+            $replace = "" unless defined $replace;
+            $table = searchAndReplace($table, $search, $replace);
+        }
+
+        if ($printable)
+        {
+            # Remove any characters that are not in the :print: set
+            $table = searchAndReplace($table, qr/[^[:print:]]/, "");
+        }
+    }
+    else
+    # Column or character separated data can be handled here
+    {
+        my $dataHandler = new TJWH::FileTable($file,
+                                              $separator,
+                                              $header,
+                                              $hmatch,
+                                              $skip,
+                                              $match,
+                                              $exclude,
+                                              $evaluate );
+        $dataHandler->hnames(csvToArray $hnames) if $hnames;
+        $dataHandler->search($search) if defined $search;
+        $dataHandler->replace($replace) if defined $replace;
+        $table = $dataHandler->readData;
+    }
+
+    # If we are asked to convert kilo or kibi to base numbers... or basic hex
+    # .. or time strings to time stamps or epoch
+    if (defined $iecConvert or
+        defined $siConvert or
+        defined $hexConvert or
+        defined $epochConvert or
+        defined $timestampConvert)
+    {
+        $table = new TJWH::Table::Convert($table);
+        map { $table->convertSIUnits($_) } csvToArray $siConvert
+            if defined $siConvert;
+        map { $table->convertIECUnits($_) } csvToArray $iecConvert
+            if defined $iecConvert;
+        map { $table->convertHex($_) } csvToArray $hexConvert
+            if defined $hexConvert;
+        map { $table->convertToEpoch($_) }
+            grep { $_ ne $aggColumnName } csvToArray $epochConvert if defined $epochConvert;
+        map { $table->convertToTimestamp($_) }
+            grep { $_ ne $aggColumnName } csvToArray $timestampConvert if defined $timestampConvert;
+    }
+
+    # Handle post-read filters
+    if ($evaluate or $predicate or $describe)
+    {
+        $table->autoFormat; # We need type information
+        $table = tableFilter($table, $evaluate) if $evaluate;
+        $table = tablePredicate($table, $predicate) if $predicate;
+    }
+
+    # Apply the "limit" on rows once we have applied all the filters
+    if (defined $limit and $limit > 0)
+    {
+        $table->truncateTable($limit);
+    }
+
+    # Describe the formatting if requested.
+    if ($describe)
+    {
+        $table->describe->qPrint($type);
+        print "\n" if $type =~ m/^(text|org|fit)/;
+    }
+
+    # Remove information we aren't interested in.
+    if (defined $ignoreColumnString)
+    {
+        foreach my $ignore (csvToArray($ignoreColumnString))
+        {
+            $table->deleteColumn($ignore);
+        }
+    }
+
+    # We could have nothing left here. Quit early.
+    unless ($table->numberOfColumns and $table->numberOfRows)
+    {
+        if ($verbose)
+        {
+            warn "Table ".$table->caption." has no rows\n" unless $table->numberOfRows;
+            warn "Table ".$table->caption." has no columns\n" unless $table->numberOfColumns;
+        }
+        next;
+    }
+
+    # Copy-and-rename columns, done before diffentials
+    if (@copies)
+    {
+        my $ct = new TJWH::CalculatedTable;
+        $ct->source($table);
+        $ct->title($table->caption);
+
+        # We add the original table column names so we build a table that
+        # includes all the original data.
+        foreach my $n ($table->columnNames)
+        {
+            my $calc = new TJWH::Calculation;
+            $calc->name($n);
+            $calc->expression($n);
+            $ct->addCalculation($calc);
+        }
+
+        foreach my $e (@copies)
+        {
+            # new_name = <expression>
+            # The docs list this just for copying columns - I've left this
+            # generic to see what other uses I can come up.
+            if ($e =~ m/^\s*([^=]+)=\s*(.*)\s*$/)
+            {
+                my ($name, $ex) = ($1, $2);
+                $name = stripWhitespace($name);
+                my $calc = new TJWH::Calculation;
+                $calc->name($name);
+                $calc->expression($ex);
+                $ct->addCalculation($calc);
+            }
+        }
+        $table = $ct->generateReport;
+        $table->autoFormat;
+    }
+
+    # Clean out any information we are not interested in
+    if (defined $show or defined $hide)
+    {
+        for (my $i = $table->numberOfColumns - 1; $i >= 0; $i--)
+        {
+            my $name = $table->columnName($i);
+            if (defined $show and $name !~ m/$show/) {
+                $table->deleteColumn($i);
+            }
+            elsif (defined $hide and $name =~ m/$hide/) {
+                $table->deleteColumn($i);
+            }
+        }
+    }
+    $table->caption($caption);
+
+    # Make sense of the data if we need to ...
+    $table->autoFormat if $full or $chart or $aggregateFn or scalar @expressions;
+    if (defined $sortColumns)
+    {
+        foreach my $name (csvToArray $sortColumns)
+        {
+            next unless $table->existsColumnName($name);
+            $table->sortTable($name);
+        }
+    }
+
+    # At this point, with only one regular table, if we are asked to put the
+    # data into a database table, do it now
+    if ($database)
+    {
+        my $dbt = dclone $table;
+        bless $dbt, 'TJWH::DBTable';
+        # Set the credentials
+        $dbt->user($user);
+        $dbt->password($password);
+        $dbt->pwfile($pwfile);
+
+        # Now try the connection
+        if ($dbt->database($database))
+        {
+            # It worked - try the insert
+            my $rows = $dbt->insert($dbtable);
+            if (defined $rows)
+            {
+                print "Inserted $rows rows into $dbtable\n";
+            } else
+            {
+                print "Warning: failed to insert data into $dbtable\n";
+            }
+        }
+    }
+
+    # If we are in normal mode, we only need process this one table. For group
+    # by, break the table up into smaller tables as dictated by the columns
+    # listed in the groupBy variable
+    my @results = ($table);
+    if ($groupBy)
+    {
+        @results = groupByColumnName($table, csvToArray $groupBy);
+    }
+
+    foreach my $resTable (@results)
+    {
+        shortenCaption($resTable, \@smatch) if $shorten;
+
+        if ($differential)
+        {
+            my $dt = new TJWH::DifferentialTable;
+            $dt->keep('current');
+
+            # Ensure we have sane column formats before attempting to process them
+            $dt->table($resTable);
+            if ($protect)
+            {
+                my @cols;
+                if ($protect eq 'auto') {
+                    @cols = getProtectedColumns($resTable->caption);
+                } else {
+                    @cols = csvToArray($protect);
+                }
+                $dt->ignore(grep {
+                    $resTable->existsColumnName($_)
+                }@cols);
+            }
+            $resTable = $dt->differential;
+        }
+
+        # Apply calculations if we have any, done after differentials
+        if (@expressions)
+        {
+            my $ct = new TJWH::CalculatedTable;
+            $ct->source($resTable);
+            $ct->title($resTable->caption);
+            # We add the original table column names so we build a table that
+            # includes all the original data.
+            foreach my $e ($resTable->columnNames, @expressions)
+            {
+                if ($e =~ m/([^=]+)\s*=\s*(.*)/)
+                {
+                    my ($name, $ex) = ($1, $2);
+                    my $calc = new TJWH::Calculation;
+                    $calc->name($name);
+                    $calc->expression($ex);
+                    $ct->addCalculation($calc);
+                }
+                else
+                {
+                    # If it doesn't look like a key = expression set, just use it
+                    # as is.
+                    my $calc = new TJWH::Calculation;
+                    $calc->name($e);
+                    $calc->expression($e);
+                    $ct->addCalculation($calc);
+                }
+            }
+            $resTable = $ct->generateReport;
+            $resTable->autoFormat;
+        }
+
+        if ($full)
+        {
+            if ($multiline)
+            {
+                foreach my $h ($resTable->headers)
+                {
+                    $h->{name} =~ s/_+/ /g;
+                }
+                $resTable->multi(1);
+            }
+
+            # Reapply the sort
+            if (defined $sortColumns)
+            {
+                foreach my $name (csvToArray $sortColumns)
+                {
+                    next unless $resTable->existsColumnName($name);
+                    $resTable->sortTable($name);
+                }
+            }
+
+            if ($pivot)
+            {
+                my $p = new TJWH::TablePivot;
+                my $t = $p->pivot($resTable);
+                printOrStore($t);
+            } else {
+                printOrStore($resTable);
+            }
+            print "\n" if $type =~ m/^(text|org|fit)/ and not $single; # Make the display neater
+            print "Formats for columns:\n  ".(join "\n  ", $resTable->columnFormats)."\n" if $debug;
+        }
+
+        print "Calculating Statistics for ".scalar $resTable->rows." rows\n" if $verbose;
+        my $stats = tableStat($resTable);
+        if (defined $precision and $precision >= 0)
+        {
+            print "Precision is $precision\n";
+            $stats->columnFormats("%-12s",
+                                  "%8d",
+                                  "%8.${precision}f",
+                                  "%8.${precision}f",
+                                  "%8.${precision}f",
+                                  "%8.${precision}f",
+                                  "%8.${precision}f",
+                                  "%8.${precision}f");
+            $stats->autoWidth;
+        }
+
+        if ($aggregateFn)
+        {
+            unless ($aggTable)
+            {
+                $aggTable = new TJWH::Table;
+                $aggColumnName = "Agg:$aggregateFn";
+                $aggTable->columnNames($aggColumnName, $resTable->columnNames);
+            }
+            my @row = ($resTable->caption);
+            for (my $index = 0; $index < $resTable->numberOfColumns; $index++)
+            {
+                # This used to be all formatted out as one joined string of
+                # numbers, but now we have more statistics options for
+                # strings, we need to be more careful.
+                my @data = $resTable->getColumn($index);
+                push @row, eval "$aggregateFn(".'@data )';
+            }
+            $aggTable->appendRow(@row);
+        }
+
+        unless ($quiet)
+        {
+            print "Printing Table\n" if $verbose;
+            if ($spivot)
+            {
+                my $p = new TJWH::TablePivot;
+                $p->headers(setHeadersFromColumns($stats, "Column"));
+                my $t = $p->pivot($stats);
+                printOrStore($t);
+            }
+            else
+            {
+                $stats->type($type);
+                printOrStore($stats);
+            }
+        }
+        if ($chart and $xAxisString ne $aggColumnName)
+        {
+            if ($groupBy)
+            {
+                if ($resTable->caption =~ m/grouped by (.*)/)
+                {
+                    my $gr = $1;
+                    $gr =~ s/['"]//g;
+                    my @pieces = split /, /, $gr;
+                    my $extra = join "_", @pieces;
+                    quickChart($resTable, $resTable->caption, $extra);
+                } else
+                {
+                   quickChart($resTable, $file, basename $file);
+                }
+            } else
+            {
+                quickChart($resTable, $file, basename $file);
+            }
+        }
+    }
+}
+
+if ($aggTable)
+{
+    if (defined $epochConvert or
+        defined $timestampConvert)
+    {
+        $aggTable = new TJWH::Table::Convert($aggTable);
+        if (defined $epochConvert)
+        {
+            foreach (grep { $_ eq $aggColumnName } csvToArray $epochConvert)
+            {
+                $aggTable->convertToEpoch($_);
+                $aggTable->columnName($aggColumnName, "Epoch");
+                $xAxisString = "Epoch" if $xAxisString eq $aggColumnName;
+            }
+        }
+        if (defined $timestampConvert)
+        {
+            foreach (grep { $_ eq $aggColumnName } csvToArray $timestampConvert)
+            {
+                $aggTable->convertToTimestamp($_);
+                $aggTable->columnName($aggColumnName, "Timestamp");
+                $xAxisString = "Timestamp" if $xAxisString eq $aggColumnName;
+            }
+        }
+    }
+
+    if ($multiline)
+    {
+        foreach my $h ($aggTable->headers)
+        {
+            $h->{name} =~ s/_+/ /g;
+        }
+        $aggTable->multi(1);
+    }
+
+    if (defined $sortColumns)
+    {
+        foreach my $name (csvToArray $sortColumns)
+        {
+            next unless $aggTable->existsColumnName($name);
+            $aggTable->sortTable($name);
+        }
+    }
+
+    quickChart($aggTable, "Aggregate Function $aggregateFn", "agg$aggregateFn") if $chart;
+    $aggTable->autoFormat;
+    printOrStore($aggTable);
+}
+
+if ($single)
+{
+    # The keys are the columns names in each set of tables
+    foreach my $key (@tableOrder)
+    {
+        my $t = combineTables(@{ $manyTables->{$key} });
+
+        # Reapply the sort on the result
+        if (defined $sortColumns)
+        {
+            foreach my $name (csvToArray $sortColumns)
+            {
+                next unless $t->existsColumnName($name);
+                $t->sortTable($name);
+            }
+        }
+        cleanAndPrint($t);
+        print "\n" if $type =~ m/^(text|org|fit)/; # Make the display neater
+    }
+}
+
+exit;
+
+sub quickChart
+{
+    my ($table, $title, $extra) = @_;
+
+    # Default to png and then go from the suffix if it looks sane
+    my ($prefix, $suffix) = ($chart, "png");
+    if ($chart =~ m/^(.*)\.(png|gif|jpg|svg|eps)$/i)
+    {
+        ($prefix, $suffix) = ($1, $2);
+    }
+
+    # Apply any ranges to the table so that the plot picks them up
+    $table->xrange($xrange);
+    $table->yrange($yrange);
+
+    # Add chart width and height info if provided
+    $table->{info}->{chartWidth} = $width;
+    $table->{info}->{chartHeight} = $height;
+
+    my $target = "$prefix".($extra ? "-$extra" :"").".$suffix";
+    my $counter = 0;
+    while (-f "$target")
+    {
+        $target = "$prefix".($extra ? "-$extra" :"")."-$counter.$suffix";
+        $counter++;
+    }
+
+    my $xAxis = $table->getColumnIndex($xAxisString);
+    my @yAxes = map { $table->getColumnIndex($_) } csvToArray($yAxesString);
+
+    $table->plotChart($title,
+                      $target,
+                      $style,
+                      $table->columnName($xAxis),
+                      $table->columnName($yAxes[0]),
+                      $xAxis, @yAxes);
+    if (-f "$target")
+    {
+        print "Chart $target created successfully for ".
+            $table->caption. "\n";
+    }
+    return;
+}
+
+sub printOrStore {
+    my ($table) = @_;
+
+    if ($single)
+    {
+        my $key = join "---", $table->columnNames;
+        push @tableOrder, $key unless defined $manyTables->{$key};
+        push @{ $manyTables->{$key} }, $table;
+    } else
+    {
+        cleanAndPrint($table);
+    }
+    return;
+}
+
+sub cleanAndPrint
+{
+    my ($table) = @_;
+
+    # Clean tables before printing - if we do this earlier, we can remove
+    # columns from groups and not be able to rejoin them on.
+    removeEmptyColumnsProtect($table, $protect) if $clean;
+    $table->qPrint($type);
+    return;
+}
+
+__END__
+
+=pod
+
+=head1 NAME
+
+colStats
+
+=head1 SYNOPSIS
+
+colStats <options> file1
+
+Show the statistics for columns in a file.
+
+=head1 OPTIONS
+
+=over
+
+=item -help
+
+Display this help and exit;
+
+=item -skip N
+
+Skip this number of rows before starting the statistics
+
+=item -header N
+
+Use the contents of this line to name the columns.
+
+=item -hnames <comma-separated list of column names>
+
+Manually name the columns.
+
+=item -hmatch <regex>
+
+Use this regular expression to find the line for the headers.
+
+=item -ignore <header1[,... headerN]>
+
+Comma-separated list of headers to ignore. These can be the appropriate
+strings or the column index (starting at zero).
+
+=item -show <regular expression>
+
+Only show columns which match this regular expression.
+
+=item -hide <regular expression>
+
+Hide columns which match this regular expression.
+
+=item -match <regex>
+
+Only include rows which include this regular expression.
+
+=item -exclude <regex>
+
+Exclude rows which include this regular expression.
+
+=item -search <regular expression>
+
+Any strings matching this regular expression will be replaced with the replace
+string. By default, the replace string is empty.
+
+=item -replace <string>
+
+Any place where the search matches the line will be replaced by this string.
+
+=item -copy <new_colunn_name = existing_column_name>
+
+Add a new column to the data, copying the data over from the existing column.
+
+=item -calculate <new_colunn_name = expression>
+
+Add a new column to the data, where the contents are determined by the
+expression given acting on the current row. Useful for duplicating data,
+calculating ratios or differences between columns, etc. Multiple -calculate
+expressions can be given at once.
+
+=item -differential
+
+Subtract each line from the previous line, creating a new table which is one
+row shorter than the previous. String types are automatically "protected",
+showing on the later value.
+
+=item -protect <comma separated list>
+
+Do not subtract these columns when creating a differential table. The special
+value 'auto' will look at the file name and use the protect map for the appropriate
+MON_GET_* functions.
+
+=item -evaluate <expression>
+
+Only include rows that evaluate the expression as true. These are perl
+expressions, and may reference the following variables:
+
+=over
+
+=item $row
+
+Scalar reference to array of values for each row. e.g. $row->[0] =~ m/HOST/
+would result in a table of rows where the first column contains the string
+HOST.
+
+=item @values
+
+Array of values for each row. e.g. "$values[2] > 3.0" would result in a table
+where the third column is greater than 3.0.
+
+=item $rh
+
+Scalar reference to a row hash for each row. If you have a column called
+'HOSTNAME', the value can be obtained by $rh->{HOSTNAME}.
+
+=item $ti
+
+Scalar reference to TJWH::TableIterator instance. Useful for row numbers
+($ti->rowIndex).
+
+=back
+
+=item -predicate <expression>
+
+Only include rows that evaluate the predicate as true. You should use column
+names as they appear in the full table.
+
+e.g. if your table has column names 'STOCKNAME' and 'COUNT', you could write
+'STOCKNAME =~ m/WHISKY/i and COUNT > 0'.
+
+=item -separator <regex>
+
+Use this regular expression to distinguish between columns. Defaults to
+whitespace-separated.
+
+=item -si <comma-separated list of columns>
+
+Some values may have SI suffices, making statistics fiddly. This option takes
+a list of column indices or names to convert from SI to numerical values. SI
+values are all powers of 10.
+
+=item -iec <comma-separated list of columns>
+
+Some values may have IEC suffices, making statistics fiddly. This option takes
+a list of column indices or names to convert from IEC to numerical values. SI
+values are all powers of 2.
+
+=item -hex <comma-separated list of columns>
+
+Convert the specified columns from hexadecimal to decimal. Does not require 0x
+suffix or specific case - so using it on a value of '10' will return 16.
+
+=item -epoch <comma-separated list of columns>
+
+Convert any timestamp found in the column to a epoch time (seconds since 1970).
+
+=item -timestamp <comma-separated list of columns>
+
+Convert any timestamp found in the column to a standard timestamp (useful for
+timestamped files where you want to chart using the filename as the x-axis.
+
+=item -type <table output type>
+
+Choose one of text, wiki, wikisort or csv. The default type is text output.
+
+=item -full
+
+Show the table of values as well as the statistics.
+
+=item -clean
+
+Remove columns from the results where all the entries are zero, empty strings
+or undefined.
+
+=item -pivot
+
+Transpose columns and rows when printing the full table.
+
+=item -spivot
+
+Transpose columns and rows when printing the statistics table.
+
+=item -groupby <comma-separated column names>
+
+Similar to the SQL 'GROUP BY' clause, aggregates the input table into groups
+specified by the appropriate column name or names. Unlike the SQL variant,
+this does NOT force a sort on these columns.
+
+=item -aggregate <function>
+
+Produce a table of the input sources aggregated using this function. This
+can be used in conjunction with -groupby to aggregate parts of each input
+source.
+
+=item -caption <text>
+
+Specify a caption for the table, rather than use the originating filename.
+
+=item -quiet
+
+Don't print the statistics tables (all other actions will still be done).
+
+=item -multiline
+
+Replace all underscores in the headers with spaces and use multi-line
+headers. This helps pack more columns onto the screen.
+
+=item -sort <comma separated list of column names>
+
+Sort the tables by the given columns names.
+
+=item -chart <filename>
+
+Generate a chart from the numbers found in the table.
+
+=item -xaxis <column name or number>
+
+Specify the column used for the x-axis in the chart. The numbers are
+zero-indexed, so the first column is 0, the second is 1, etc.
+
+=item -yaxis <column names and numbers>
+
+Column name or number for the y-axis data sets. See -xaxis.
+
+=item -yaxes <column names and numbers>
+
+Comma-separated list of column names or numbers for the y-axis data sets.
+
+=item -style <gnuplot chart style>
+
+The default is "linespoints". Other choices include "dots", "lines",
+"points". See the Gnuplot documentation for the complete list.
+
+=item -verbose
+
+Show more output.
+
+=back
+
+If you have any suggestions about new functionality for this tool or
+experience bugs, please contact Toby Haynes (thaynes@ca.ibm.com)
+
+[[Category: Charts]]
+[[Category: Performance]]
+[[Category: Statistics]]
+[[Category: Tools written by Toby Haynes]]
+[[Category: Tools]]
+
+=cut

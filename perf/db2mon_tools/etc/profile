@@ -1,0 +1,38 @@
+# db2mon profile
+#
+# This should be sourced from ~/.bashrc or ~/.kshrc
+
+# Environment variables that need to be set
+# TJWHTOOLS_INSTALL_ROOT should be an absolute path to the db2mon_tools
+export TJWHTOOLS_INSTALL_ROOT=$HOME/db2-samples/perf/db2mon_tools
+   
+# Perl needs more than the default data segment size on many systems.
+# Use at least this size and more if possible.
+
+# ulimit -d 200000
+
+# Optional Environment variables
+# ------------------------------------------------------------------------
+# KEEP_GNUPLOT_SCRIPTS=1 will keep the gnuplot data and scripts used for charts after the graphic is created.
+# By default, this is not set.
+#
+# export KEEP_GNUPLOT_SCRIPTS=
+
+# ------------------------------------------------------------------------
+# RUNPERL_OPTIONS passes additional option arguments to the perl executable
+# before running the test. This is rarely needed and should be left unset
+# for almost all scenarios.
+#
+# export RUNPERL_OPTIONS=
+
+# ========================================================================
+# Do not alter code below this line
+# 
+if [ -d "$TJWHTOOLS_INSTALL_ROOT" ]; then
+    export PATH="${PATH}:${TJWHTOOLS_INSTALL_PATH}/bin"
+    export PERL5LIB="${PERL5LIB}:${TJWHTOOLS_INSTALL_PATH}/perllib"
+else
+    # Warn (on STDERR) if this is not set
+    echo "ERROR: TJWHTOOLS_INSTALL_PATH is set to $TJWHTOOLS_INSTALL_ROOT but is not a directory" 2>&
+fi
+

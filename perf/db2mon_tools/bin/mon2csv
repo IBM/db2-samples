@@ -1,0 +1,162 @@
+# -*-CPerl-*-
+# vim: ft=perl autoindent shiftwidth=4
+eval 'exec `env PATH=${PATH}:${TJWHTOOLS_INSTALL_ROOT}/bin which runPerl` -auto -test "exit (log(~0 +1)/log(2) <=32)" -- $0 ${1+"$@"}'
+    if 0;
+# Date       | Updates
+# -----------+-------------------------------------------------------------
+# 2023-09-08 | Add -empty option to remove empty columns from the output
+
+# Start here
+
+use strict;
+use warnings;
+use File::Basename qw(basename);
+use File::Path qw(mkpath);
+use TJWH::Basic qw(executeCommand);
+use TJWH::JobControl qw(simultaneousSubroutines);
+use Data::Dumper;
+use Getopt::Long;
+use Carp;
+
+my $prefix = 'db2mon';
+my $empty;
+my $dirname;
+my $fullname;
+my $help;
+my $verbose;
+my $debug;
+my $results = GetOptions('prefix=s' => \$prefix,
+                         'empty'    => \$empty,
+                         'dirname'  => \$dirname,
+                         'fullname' => \$fullname,
+                         'help'     => \$help,
+                         'verbose'  => \$verbose,
+                         'debug'    => \$debug,
+                        )
+    or do {
+        print "Unprocessed arguments:\n  ".
+            (join "\n  ", @ARGV)."\n";
+        print "Error: an unexpected option was specified - please read the help\n";
+        exit 1;
+};
+if ($help)
+{
+    system ("perldoc -t $0");
+    exit 0;
+}
+
+my @files = grep { -f $_ } @ARGV;
+
+# Avoid race conditions below by making the path up here.
+if ($prefix =~ m#(.*)/[^/]+$#)
+{
+    my $rootDir = $1;
+    unless (-d $rootDir)
+    {
+        mkpath $rootDir;
+        unless (-d $rootDir)
+        {
+            die "Can't create directory $rootDir\n";
+        }
+    }
+}
+
+# Add the extra options to refine the resulting table names for the Caption column
+my @options;
+push @options, "-usedir" if $dirname;
+push @options, "-fullname" if $fullname;
+push @options, "-usebase" unless @options;
+
+# Remove empty columns
+push @options, "-empty" if $empty;
+
+my $rc = 0;
+my @tasks;
+push @tasks,
+    sub {
+        # Search and replace || -> _concat_ to avoid breaking org tables, now implemented via -sanity option.
+        $rc = executeCommand("extractSelects -prematch ==== -type org -single ".
+                             (join " ", @options).
+                             " -multi -output $prefix -sanity ".
+                             (join " ", @files));
+        warn "Org-mode reports failed with rc=$rc\n" if $rc;
+    },
+    sub {
+        # timestamp calculations now handled by -addtime option
+        $rc = executeCommand("extractSelects -prematch ==== -type csv -single ".
+                             (join " ", @options).
+                             " -multi -output $prefix -addtime ".
+                             (join " ", @files));
+        warn "CSV reports failed with rc=$rc\n" if $rc;
+    };
+simultaneousSubroutines(@tasks);
+
+exit;
+
+
+__END__
+
+
+=pod
+
+=head1 NAME
+
+mon2csv - convert many db2mon reports to multiple reports in csv (and org) formats.
+
+=head1 AUTHOR
+
+Toby Haynes - email: C<< <thaynes@ca.ibm.com> >>
+
+=head1 SYNOPSIS
+
+mon2csv <options> report1.out report2.out [ ... reportN.out ]
+
+=head1 OPTIONS
+
+=over
+
+=item -prefix <name>
+
+All reports start with this prefix. By default it is set to db2mon. Reports
+are named according to the description above the table found in the db2mon
+reports.
+
+=item -empty
+
+Remove empty columns from the resulting report tables. Can be useful for
+concentrating on the most important values (but may mislead if you are not
+aware of what has vanished).
+
+=item -dirname
+
+Use the directory name that holds the db2mon report, rather than just the base file name.
+
+=item -fullname
+
+Use the full path in the output, rather than just the base file name.
+
+=item -help
+
+Display this help and exit.
+
+=item -verbose
+
+Be more verbose.
+
+=item -debug
+
+Display debugging information
+
+=back
+
+=head1 DESCRIPTION
+
+Quickly consume many db2mon reports and collate the information.
+
+If you have any suggestions about new functionality for this tool or
+experience bugs, please contact Toby Haynes (thaynes@ca.ibm.com)
+
+[[Category: Tools]]
+[[Category: Tools written by Toby Haynes]]
+
+=cut
