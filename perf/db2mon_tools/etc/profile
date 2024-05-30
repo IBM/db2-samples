@@ -3,8 +3,8 @@
 # This should be sourced from ~/.bashrc or ~/.kshrc
 
 # Environment variables that need to be set
-# TJWHTOOLS_INSTALL_ROOT should be an absolute path to the db2mon_tools
-export TJWHTOOLS_INSTALL_ROOT=$HOME/db2-samples/perf/db2mon_tools
+# DB2MONTOOLS_INSTALL_ROOT should be an absolute path to the db2mon_tools
+export DB2MONTOOLS_INSTALL_ROOT=$HOME/db2-samples/perf/db2mon_tools
 
 # Perl needs more than the default data segment size on many systems.
 # Use at least this size and more if possible.
@@ -28,11 +28,11 @@ export TJWHTOOLS_INSTALL_ROOT=$HOME/db2-samples/perf/db2mon_tools
 # ========================================================================
 # Do not alter code below this line
 #
-if [ -d "${TJWHTOOLS_INSTALL_ROOT}" ]; then
-    export PATH="${PATH}:${TJWHTOOLS_INSTALL_ROOT}/bin"
-    export PERL5LIB="${PERL5LIB}:${TJWHTOOLS_INSTALL_ROOT}/perllib"
+if [ -d "${DB2MONTOOLS_INSTALL_ROOT}" ]; then
+    export PATH="${PATH}:${DB2MONTOOLS_INSTALL_ROOT}/bin"
+    export PERL5LIB="${PERL5LIB}:${DB2MONTOOLS_INSTALL_ROOT}/perllib"
 else
     # Warn (on STDERR) if this is not set
-    >&2 echo "ERROR: TJWHTOOLS_INSTALL_ROOT is set to ${TJWHTOOLS_INSTALL_ROOT} but is not a directory"
+    >&2 echo "ERROR: DB2MONTOOLS_INSTALL_ROOT is set to ${DB2MONTOOLS_INSTALL_ROOT} but is not a directory"
 fi
 

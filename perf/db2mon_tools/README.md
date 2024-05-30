@@ -6,7 +6,7 @@ The db2mon reports provide extensive insights into the database activity for a s
 
 ## Setup
 
-To simplify the configuration of the `PATH` and `PERL5LIB` environment variables, examine and if needed correct the `TJWHTOOLS_INSTALL_ROOT` in the `db2mon_tools/etc/profile` file.
+To simplify the configuration of the `PATH` and `PERL5LIB` environment variables, examine and if needed correct the `DB2MONTOOLS_INSTALL_ROOT` in the `db2mon_tools/etc/profile` file.
 
 e.g. if the db2-samples git repository was unpacked in `$HOME/db2-samples` using 
  
@@ -15,7 +15,7 @@ e.g. if the db2-samples git repository was unpacked in `$HOME/db2-samples` using
  
 then `db2mon_tools/etc/profile` should have the following directory setting.
 
-    export TJWHTOOLS_INSTALL_ROOT=$HOME/db2-samples/perf/db2mon_tools
+    export DB2MONTOOLS_INSTALL_ROOT=$HOME/db2-samples/perf/db2mon_tools
 
 This should be added to the appropriate shell initialization script - e.g.
 
@@ -62,7 +62,7 @@ Rather than export CSV files to a spreadsheet on another system, `colStat` can p
 
 This is a perl bootstrap utility, which examines the script provided to the utility and tests the perl executables to determine a functional perl installation. It performs automatic and additional specific tests to ensure certain features and capabilities exist (such as 64-bit perl) before running the script with the "successful" perl executable. If no perl executable passes the tests, an error is printed to STDOUT.
 
-The other scripts in this directory use this utility transparently when executed. `runPerl` must be found in the PATH environment variable or the `TJWHTOOLS_INSTALL_ROOT` environment variable must be set to the directory
+The other scripts in this directory use this utility transparently when executed. `runPerl` must be found in the PATH environment variable or the `DB2MONTOOLS_INSTALL_ROOT` environment variable must be set to the directory
 
 ## Examples
 

@@ -4,7 +4,7 @@
 #
 # SPDX-License-Identifier: Apache-2.0
 #
-eval 'exec `env PATH=${PATH}:${TJWHTOOLS_INSTALL_ROOT}/bin which runPerl` -auto -test "exit (log(~0 + 1)/log(2) <=32)" -- $0 ${1+"$@"}'
+eval 'exec `env PATH=${PATH}:${DB2MONTOOLS_INSTALL_ROOT}/bin which runPerl` -auto -test "exit (log(~0 + 1)/log(2) <=32)" -- $0 ${1+"$@"}'
     if 0;
 # The test clause above checks that we are running at least 64bit perl.
 

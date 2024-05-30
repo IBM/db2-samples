@@ -232,15 +232,15 @@ sub executeCommand
         {
             $execute = "$transport $options $host -l $user ".
                 "'test -e ~/.profile && . ~/.profile; ".
-                    "export PATH=\${PATH}:$ENV{TJWHTOOLS_INSTALL_ROOT}/bin:".
-                        "$ENV{TJWHTOOLS_INSTALL_ROOT}/bin; $command'";
+                    "export PATH=\${PATH}:$ENV{DB2MONTOOLS_INSTALL_ROOT}/bin:".
+                        "$ENV{DB2MONTOOLS_INSTALL_ROOT}/bin; $command'";
         }
         else
         {
             $execute = "$transport $options $host ".
                 "'test -e ~/.profile && . ~/.profile; ".
-                    "export PATH=\${PATH}:$ENV{TJWHTOOLS_INSTALL_ROOT}/bin:".
-                        "$ENV{TJWHTOOLS_INSTALL_ROOT}/bin; $command'";
+                    "export PATH=\${PATH}:$ENV{DB2MONTOOLS_INSTALL_ROOT}/bin:".
+                        "$ENV{DB2MONTOOLS_INSTALL_ROOT}/bin; $command'";
         }
     }
     print "=> $execute\n" if $verbose;
@@ -281,14 +281,14 @@ sub executeCommandWithOutput
         if ($user)
         {
             $execute = "$transport $host -l $user ".
-                "'export PATH=\${PATH}:$ENV{TJWHTOOLS_INSTALL_ROOT}/bin:".
-                    "$ENV{TJWHTOOLS_INSTALL_ROOT}/bin; $command'";
+                "'export PATH=\${PATH}:$ENV{DB2MONTOOLS_INSTALL_ROOT}/bin:".
+                    "$ENV{DB2MONTOOLS_INSTALL_ROOT}/bin; $command'";
         }
         else
         {
             $execute = "$transport $host ".
-                "'export PATH=\${PATH}:$ENV{TJWHTOOLS_INSTALL_ROOT}/bin:".
-                    "$ENV{TJWHTOOLS_INSTALL_ROOT}/bin; $command'";
+                "'export PATH=\${PATH}:$ENV{DB2MONTOOLS_INSTALL_ROOT}/bin:".
+                    "$ENV{DB2MONTOOLS_INSTALL_ROOT}/bin; $command'";
         }
     }
     print "=> $execute\n" if $verbose;
