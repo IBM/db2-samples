@@ -1,5 +1,9 @@
 : # -*-CPerl-*-
 # vim: ft=perl autoindent shiftwidth=4
+# (c) Copyright IBM Corp. 2024 All rights reserved.
+#
+# SPDX-License-Identifier: Apache-2.0
+#
 eval 'exec perl -w -S $0 ${1+"$@"}'
     if 0;
 
