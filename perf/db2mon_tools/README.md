@@ -16,6 +16,12 @@ e.g. if the db2-samples git repository was unpacked in `$HOME/db2-samples` using
 then `db2mon_tools/etc/profile` should have the following directory setting.
 
     export DB2MONTOOLS_INSTALL_ROOT=$HOME/db2-samples/perf/db2mon_tools
+    
+Once this is correctly set, the required environment variables can be set by sourcing the provided profile:
+
+    . $HOME/db2-samples/perf/db2mon_tools/etc/profile
+
+This will add the executable paths to PATH and update PERL5LIB to include the location of the perl modules.
 
 This should be added to the appropriate shell initialization script - e.g.
 
