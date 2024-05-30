@@ -1,4 +1,8 @@
 # -*- cperl -*-
+# (c) Copyright IBM Corp. 2024 All rights reserved.
+#
+# SPDX-License-Identifier: Apache-2.0
+#
 #
 # Utilities for controlling tasks, often asynchronously.
 #

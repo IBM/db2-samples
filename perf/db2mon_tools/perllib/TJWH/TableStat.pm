@@ -1,4 +1,8 @@
 # -*- cperl -*-
+# (c) Copyright IBM Corp. 2024 All rights reserved.
+#
+# SPDX-License-Identifier: Apache-2.0
+#
 #
 # Take a table (TJWH::Table) and produce a new table with stats for the
 # all the columns

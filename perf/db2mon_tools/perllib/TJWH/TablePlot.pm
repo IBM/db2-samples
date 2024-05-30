@@ -1,4 +1,8 @@
 # -*- cperl -*-
+# (c) Copyright IBM Corp. 2024 All rights reserved.
+#
+# SPDX-License-Identifier: Apache-2.0
+#
 
 # This is equivalent to the plotChart method in TJWH::Table, except we are
 # aiming to produce the Gnuplot output directly, rather than use Chart::Graph::Gnuplot

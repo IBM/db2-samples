@@ -1,4 +1,8 @@
 # -*- cperl -*-
+# (c) Copyright IBM Corp. 2024 All rights reserved.
+#
+# SPDX-License-Identifier: Apache-2.0
+#
 #
 # These are manipulation routines to take one table and create a new one.
 #

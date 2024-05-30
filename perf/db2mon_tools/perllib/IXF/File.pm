@@ -4,6 +4,8 @@
 ## (C) COPYRIGHT International Business Machines Corp. 2014, 2015
 ## All Rights Reserved.
 ##
+## SPDX-License-Identifier: Apache-2.0
+##
 ## US Government Users Restricted Rights - Use, duplication or
 ## disclosure restricted by GSA ADP Schedule Contract with IBM Corp.
 ##############################################################################

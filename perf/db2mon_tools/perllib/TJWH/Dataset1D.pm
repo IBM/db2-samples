@@ -1,4 +1,8 @@
 # -*- cperl -*-
+# (c) Copyright IBM Corp. 2024 All rights reserved.
+#
+# SPDX-License-Identifier: Apache-2.0
+#
 
 # Represent one dimension of a Gnuplot dataset
 
