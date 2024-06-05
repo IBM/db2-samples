@@ -1,0 +1,297 @@
+# -*-CPerl-*-
+# vim: ft=perl autoindent shiftwidth=4
+# (c) Copyright IBM Corp. 2024 All rights reserved.
+#
+# SPDX-License-Identifier: Apache-2.0
+#
+eval 'exec `env PATH=${PATH}:${DB2MONTOOLS_INSTALL_ROOT}/bin which runPerl` -auto -- $0 ${1+"$@"}'
+    if 0;
+# Version  Description
+#
+# 1.04     Automatically sanitize the output to avoid problems later (like org mode with || sql statements)
+# 1.05     Option to remove empty columns
+
+# Start here
+
+use strict;
+use warnings;
+use TJWH::MultiSelect;
+use TJWH::TableIterator qw(combineTablesMatchCaption);
+use TJWH::TableUtils qw(removeEmptyColumns);
+use Data::Dumper;
+use Getopt::Long;
+use Carp;
+
+my ($cmatch, $prematch);
+my ($include, $exclude);
+my $multiline;
+my $usebase;
+my $usedir;
+my $fullname;
+my $single;
+my $format;
+my $output;
+my $sanity;
+my $addtime;
+my $empty;
+my $type = "text";
+
+my $help;
+my $verbose;
+my $debug;
+
+my $results = GetOptions(
+                         'cmatch=s'   => \$cmatch,
+                         'prematch=s' => \$prematch,
+                         'multiline'  => \$multiline,
+                         'usebase!'   => \$usebase,
+                         'usedir'     => \$usedir,
+                         'fullname'   => \$fullname,
+                         'include=s'  => \$include,
+                         'exclude=s'  => \$exclude,
+                         'single'     => \$single,
+                         'output=s'   => \$output,
+                         'sanity'     => \$sanity,
+                         'empty'      => \$empty,
+                         'addtime'    => \$addtime,
+                         'format'     => \$format,
+                         'type=s'     => \$type,
+                         'help'       => \$help,
+                         'verbose'    => \$verbose,
+                         'debug'      => \$debug,
+                        )
+    or do {
+        print "Unprocessed arguments:\n  ".
+            (join "\n  ", @ARGV)."\n";
+        print "Error: an unexpected option was specified - please read the help\n";
+        exit 1;
+    };
+if ($help)
+{
+    system ("perldoc -t $0");
+    exit 0;
+}
+
+$TJWH::MultiSelect::debug = $debug;
+$TJWH::MultiSelect::verbose = $verbose;
+
+# If we have multiple files and no choice for usebase/usedir/fullname has been made, set usebase
+# automatically.
+unless (defined $usebase or defined $usedir or defined $fullname)
+{
+    $usebase = $#ARGV; # single file will map to zero
+}
+
+my $singleMap;
+foreach my $filename (@ARGV)
+{
+    unless (-f $filename or $filename eq '-')
+    {
+        print "Skipping $filename\n";
+        next;
+    }
+    my $ms = new TJWH::MultiSelect;
+    $ms->cmatch($cmatch);
+    $ms->prematch($prematch);
+
+    $ms->usebase($usebase);   # Name by base name
+    $ms->usedir($usedir);     # Name by directory
+    $ms->fullname($fullname); # Name using specified filename
+
+    $ms->filename($filename);
+    if ($ms->parse)
+    {
+        foreach my $table ($ms->tables)
+        {
+            next if $include and $table->caption !~ m/$include/;
+            next if $exclude and $table->caption =~ m/$exclude/;
+            if ($multiline)
+            {
+                foreach my $h ($table->headers)
+                {
+                    $h->{name} =~ s/_+/ /g;
+                }
+                $table->multi(1);
+            }
+            $table->type($type);
+            $table->autoFormat if $format;
+            $table->sanity if $sanity;
+            if ($addtime and $table->info)
+            {
+                my $hashref = $table->info;
+                if ($hashref->{latest})
+                {
+                    $table->insertColumnCalculate
+                        (0, 'Timestamp', '%-26s',
+                         sub { return $hashref->{latest} });
+                }
+            }
+
+            if ($single)
+            {
+                my $signature = join '#^#', $table->columnNames;
+                push @{ $singleMap->{$signature} }, $table;
+            }
+            else
+            {
+                removeEmptyColumns($table) if $empty;
+                if ($output)
+                {
+                    my $newoutput = $table->caption;
+                    $newoutput =~ s#[ :/]+#_#g;
+                    $table->output("$output-${newoutput}.$type");
+                }
+                $table->qPrint($type);
+            }
+        }
+    }
+}
+
+if ($singleMap)
+{
+    foreach my $signature (sort keys %{ $singleMap })
+    {
+        my $report = combineTablesMatchCaption
+            (qr/^\s*(.*\S+)\s*:\s*([^:]+)$/,
+             @{ $singleMap->{$signature} });
+        print "="x72 . "\n\n" if $type eq 'text';
+        my $caption = $report->caption;
+        $caption =~ s#[/:; ]+#_#g;
+        $report->output("${output}-${caption}.$type") if $output;
+        if ($addtime)
+        {
+            $report->deleteColumn('Caption');
+        }
+        removeEmptyColumns($report) if $empty;
+        $report->qPrint($type);
+    }
+}
+
+exit;
+
+
+__END__
+
+
+=pod
+
+=head1 NAME
+
+extractSelects - find and reprint the select statement output in one or more files.
+
+=head1 AUTHOR
+
+Toby Haynes - email: C<< <thaynes@ca.ibm.com> >>
+
+=head1 SYNOPSIS
+
+extractSelects <options> file1 [ ... fileN ]
+
+=head1 OPTIONS
+
+=over
+
+=item -cmatch <regular expression>
+
+Automatically set table captions based on lines which match this expression.
+
+=item -prematch <regular expression>
+
+Automatically set table captions based on the previous line where the current
+line matches this expression. Useful where the table caption is formatted as:
+
+=over
+
+=item ------------------------------------
+
+=item Some title which should be a caption
+
+=back
+
+=back
+
+=item -include <regular expression>
+
+Only display tables where the caption name matches this expression.
+
+=item -exclude <regular expression>
+
+Do not display tables where the caption name matches this expression.
+
+=item -usebase
+
+Include the base name for the filename in the caption. Automatically on if you
+specify more than one filename. You should definitely set this if there are
+multiple queries of the same type in the same file.
+
+This option can be disabled using -nousebase.
+
+=item -usedir
+
+Include the directory name for the filename in the caption.
+
+=item -fullname
+
+Include the full name for the filename in the caption. Useful when the
+basename is not unique.
+
+=item -empty
+
+Remove empty columns from the resulting tables.
+
+=item -single
+
+Collate equivalent tables into on single table, distinguished by the original caption.
+
+=item -output <filename prefix>
+
+Write all output (per table) to filenames of the form:
+
+=over
+
+=item <prefix>-<caption>.<type>
+
+=back
+
+=item -format
+
+Automatically detect formatting for the data.
+
+=item -multiline
+
+Replace all underscores in the headers with spaces and use multi-line
+headers. This helps pack more columns onto the screen.
+
+=item -type <table formatting>
+
+Sets the way that the tables are formatted and printed. Choose from 'text', 'csv',
+'org', 'html', 'wiki' and 'wikisort'.
+
+=item -help
+
+Display this help and exit.
+
+=item -verbose
+
+Be more verbose.
+
+=item -debug
+
+Display debugging information
+
+=back
+
+=head1 DESCRIPTION
+
+Quickly analyse the output from one or more select statements output.
+
+If you have any suggestions about new functionality for this tool or
+experience bugs, please contact Toby Haynes (thaynes@ca.ibm.com)
+
+[[Category: Workflow Assistance Tools]]
+[[Category: Database Tools]]
+[[Category: SQL]]
+[[Category: Tools]]
+[[Category: Tools written by Toby Haynes]]
+
+=cut
