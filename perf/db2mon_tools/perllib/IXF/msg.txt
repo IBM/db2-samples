@@ -1,0 +1,5 @@
+SQL3196N  The input file was not found.
+
+SQL3110N  The utility has completed processing.  "0" rows were read from the 
+input file.
+

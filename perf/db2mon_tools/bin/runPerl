@@ -1,0 +1,515 @@
+: # -*-CPerl-*-
+# vim: ft=perl autoindent shiftwidth=4
+# (c) Copyright IBM Corp. 2024 All rights reserved.
+#
+# SPDX-License-Identifier: Apache-2.0
+#
+eval 'exec perl -w -S $0 ${1+"$@"}'
+    if 0;
+
+use strict;
+use warnings;
+use Getopt::Long;
+# Do NOT pull in unnecessary modules. Keep this one independent.
+
+my $automatic;
+my $ftest;
+my $moduleString;
+my $test;
+my $version;
+
+my $help;
+my $verbose;
+my $debug;
+
+my $results = GetOptions(
+                         'auto'      => \$automatic,
+                         'ftest=s'   => \$ftest,
+                         'modules=s' => \$moduleString,
+                         'test=s'    => \$test,
+                         'version=s' => \$version,
+                         'help'      => \$help,
+                         'verbose'   => \$verbose,
+                         'debug'     => \$debug,
+                        )
+    or do {
+        print "Unexpected option - please read the help\n";
+        exit 1;
+};
+if ($help)
+{
+    system ("perldoc -t $0");
+    exit 0;
+}
+
+my @modules = ();
+if (defined $moduleString)
+{
+    # Strip whitespace
+    $moduleString =~ s/\s//g;
+    @modules = split /,/, $moduleString;
+}
+
+my $testScript;
+END {
+    # Clean up
+    unlink $testScript if defined $testScript and -f $testScript and not $debug;
+};
+
+# Main
+{
+    my $executable;
+    my ($command, @rest);
+    if (@ARGV)
+    {
+        ($command, @rest) = @ARGV;
+        unless (-f $command)
+        {
+            my $pathCommand = `which $command`;
+            chomp $pathCommand;
+            $command = $pathCommand if $pathCommand;
+        }
+
+        print "$command\n  ".(join "\n  ", @rest)."\n" if $verbose;
+        print "Command to execute: $command @rest\n" if $verbose;
+    }
+    my %errors;
+
+ PATH:
+    foreach my $path (split /:/, $ENV{'PATH'})
+    {
+        $path =~ s#/$##g;
+
+        # We want to choose perl executables from latest to oldest:
+        # - ./perl5.16.2
+        # - ./perl5.10.1
+        # - ./perl5.10.0
+        # - ./perl5.8.7
+        # - ./perl5.8.6
+        # - ./perl5.6.0
+        # - ./perl5.6
+        # - ./perl5.005
+        # - ./perl5
+    VERSION:
+        foreach my $testExecutable ("$path/perl",
+                                    reverse sort {
+                                        my $aExe = $a;
+                                        my $bExe = $b;
+                                        $aExe =~ s#(.*)perl5\.##g;
+                                        $bExe =~ s#(.*)perl5\.##g;
+                                        if ($aExe =~ m/^\d+\.?\d*$/ and
+                                           $bExe =~ m/^\d+\.?\d*$/)
+                                        {
+                                            return ($aExe <=> $bExe or $a cmp $b);
+                                        }
+                                        return $a cmp $b;
+                                    } glob "$path/perl5*")
+        {
+            next unless -f $testExecutable;
+            next unless -x $testExecutable;
+
+            # Try and run it
+            open TESTME, "$testExecutable -e 'print \"Hello World\\n\"' 2>&1 | ";
+            my $line = <TESTME>;
+            chomp $line;
+            close TESTME;
+            unless ($line =~ m/Hello World/)
+            {
+                print "Could not run Hello World using $testExecutable\n".
+                    "Got: \"$line\"\n" if $verbose;
+                next VERSION;
+            }
+            print "$testExecutable is operational\n" if $verbose;
+
+            # Check Perl Version number
+            if ($version)
+            {
+                my $command = "$testExecutable -e 'print \$];' 2>&1";
+                my $testVersion = `$command`;
+                chomp $testVersion;
+                print "$command reports perl version $testVersion\n" if $verbose;
+                if ($version > $testVersion)
+                {
+                    print "$testExecutable version $testVersion is earlier than required version $version\n" if $verbose;
+                    next VERSION;
+                }
+            }
+
+            # Check available modules
+            foreach my $module (@modules)
+            {
+                print "$testExecutable: Checking for module $module\n" if $verbose;
+                my $rc = executeCommand("$testExecutable -e 'use $module'");
+                if ($rc)
+                {
+                    print "Module $module can't be run by $testExecutable\n" if $verbose;
+                    next VERSION;
+                }
+            }
+
+            # Check test clause
+            if ($test)
+            {
+                my $rc = executeCommand("$testExecutable -e '$test'");
+                if ($rc)
+                {
+                    print "Test clause $test can't be run by $testExecutable\n" if $verbose;
+                    next VERSION;
+                }
+            }
+
+            # Check test script
+            if ($ftest)
+            {
+                my $rc = executeCommand("$testExecutable $ftest");
+                if ($rc)
+                {
+                    print "Test script $ftest can't be run by $testExecutable\n" if $verbose;
+                    next VERSION;
+                }
+            }
+
+            # Create test script based on use/require from the real script
+            if ($automatic)
+            {
+                $testScript = createTestScript($command) unless defined $testScript;
+                if (defined $testScript)
+                {
+                    my ($rc, $output) = executeScript($testExecutable, $testScript);
+                    if ($rc != 0)
+                    {
+                        print "Automatic tests with $testExecutable failed with $rc\n" if $verbose;
+                        die "testScript $testScript can NOT be named - under any circumstances\n"
+                            if $testScript eq "-" or $testScript =~ m/^-/;
+                        system "cat $testScript" if $verbose and $debug;
+                        $errors{$rc}->{$output}++;
+                        next VERSION;
+                    }
+                }
+            }
+
+            $executable = $testExecutable;
+            print "Using $executable\n" if $verbose;
+            last PATH;
+        }
+    }
+
+    if (defined $command)
+    {
+        if (defined $executable)
+        {
+            my $arguments = "";
+            if (@rest)
+            {
+                foreach my $fragment (@rest)
+                {
+                    # If this is NOT an option, then quote it up
+                    if ($fragment !~ m/^[-+]/)
+                    {
+                        # We have to detect some command shell properties
+                        # because shell expansion will NOT be done on these
+                        # after quoting.
+                        $fragment =~ s/~/$ENV{'HOME'}/g;
+                        # If we have single quotes in the string, use double
+                        # quotes on the outer
+                        if ($fragment =~ m/[']/)
+                        {
+                            $fragment = qq{"$fragment"};
+                        }
+                        else
+                        {
+                            $fragment = "'$fragment'";
+                        }
+                    }
+                }
+                $arguments = join " ", @rest;
+            }
+
+            my $perlOpts = (defined $ENV{'RUNPERL_OPTIONS'} ? $ENV{'RUNPERL_OPTIONS'} : "" );
+            my $finalCommand = "$executable $perlOpts $command $arguments";
+            print "==> About to execute:\n$finalCommand\n" if $verbose;
+            my $rc = system "$finalCommand";
+            if ($rc != 0)
+            {
+                if ($rc == -1)
+                {
+                    print "Failed to execute $finalCommand\n";
+                }
+                elsif ($rc & 127)
+                {
+                    printf "$finalCommand died with signal %d, %s coredump\n",
+                        ($rc & 127),  ($rc & 128) ? 'with' : 'without';
+                }
+                else
+                {
+                    print "==> $finalCommand returned rc=".($rc >> 8)."\n";
+                }
+                exit $rc >> 8;
+            }
+        }
+        else
+        {
+            print "$command can't be run - there are no perl executables available that provide the requested features\n\n";
+            foreach my $rc (keys %errors)
+            {
+                print "Got rc=$rc with output:\n".
+                    (join "\n", keys %{ $errors{$rc} })."\n";
+            }
+
+            if (defined $testScript and -f $testScript and $verbose)
+            {
+                print "Example testscript:\n";
+                print "--8<------8<------8<------8<----\n";
+                open FILE, $testScript or die "Can't read $testScript: $!\n";
+                while (<FILE>)
+                {
+                    print $_;
+                }
+                close FILE;
+                print "--8<------8<------8<------8<----\n";
+            }
+            if (@modules)
+            {
+                print "Example module test:\n";
+                print "--8<------8<------8<------8<----\n";
+                foreach my $module (@modules)
+                {
+                    print "use $module;\n";
+                }
+                print "exit;\n";
+                print "--8<------8<------8<------8<----\n";
+            }
+            if ($test)
+            {
+                print "Example test:\n";
+                print "--8<------8<------8<------8<----\n";
+                foreach my $module (@modules)
+                {
+                    print "$test\n";
+                }
+                print "exit;\n";
+                print "--8<------8<------8<------8<----\n";
+            }
+
+            exit -2;
+        }
+    }
+    else
+    {
+        # Remember that the last line should contain the perl executable
+        if (defined $executable)
+        {
+            print "$executable\n";
+        }
+        else
+        {
+            # We didn't find one, so the last line is EMPTY.
+            print "No valid version of perl found\n\n";
+            exit -1;
+        }
+    }
+}
+exit 0;
+
+# Start of subroutines
+
+sub createTestScript
+{
+    my ($script) = @_;
+    if (defined $script)
+    {
+        my @testScript;
+        open FILE, $script or die "Can't open $script for read: $!\n";
+        while (my $line = <FILE>)
+        {
+            if ($line =~ m/^\s*((use|require)\s.*;)/)
+            {
+                push @testScript, "$1\n";
+            }
+            elsif ($line =~ m/^\s*(use\s+[a-zA-Z].*)$/)
+            {
+                push @testScript, $line;
+                while ($line !~ m/;/)
+                {
+                    $line = <FILE>;
+                    push @testScript, $line;
+                }
+            }
+        }
+        close FILE;
+        my $rseed = rand;
+
+        my $tmpFile = "/tmp/runPerl-auto-$rseed-".time.".tmp";
+        open TMP, ">$tmpFile" or die "Can't write to $tmpFile: $!\n";
+        foreach (@testScript)
+        {
+            print TMP $_;
+        }
+        close TMP;
+
+        # We've seen some strange cases of incomplete scripts, so lets do a
+        # file system sync here.
+        system "sync";
+
+        return $tmpFile;
+    }
+    return;
+}
+
+sub executeScript
+{
+    my ($perlExe, $testScript) = @_;
+    die "No such $perlExe\n" unless -x $perlExe;
+
+    print "About to execute $testScript\n" if $verbose;
+    my ($rc, $output) = executeCommandWithOutput("$perlExe $testScript");
+    print "Execute $testScript return $rc\n" if $verbose;
+    print "Output:\n$output\n" if $debug;
+    return ($rc, $output);
+}
+
+sub executeCommand
+{
+    my ($command, @rest) = @_;
+    $command .= join " ", @rest;
+
+    print "runPerl DEBUG: Attempting to run $command\n" if $debug;
+    open CMD, "$command 2>&1 |" or die "Can't execute $command: $!\n";
+    while (<CMD>)
+    {
+        print $_ if $debug;
+    }
+    close CMD;
+    my $rc = $?;
+    print "runPerl DEBUG: $command returned $rc\n" if $debug;
+    return $rc;
+}
+
+sub executeCommandWithOutput
+{
+    my ($command, @rest) = @_;
+    $command .= join " ", @rest;
+
+    print "runPerl DEBUG: Attempting to run $command\n" if $debug;
+    my @output;
+    open CMD, "$command 2>&1 |" or die "Can't execute $command: $!\n";
+    while (<CMD>)
+    {
+        push @output, $_;
+    }
+    close CMD;
+    my $rc = $?;
+    print "runPerl DEBUG: $command returned $rc\n" if $debug;
+    return ($rc, (join "", @output));
+}
+
+
+__END__
+
+=pod
+
+=head1 NAME
+
+runPerl <options> [perl script or command]
+
+=head1 AUTHOR
+
+Toby Haynes - email: C<< <thaynes@ca.ibm.com> >>
+
+=head1 SYNOPSIS
+
+Find a version of perl with specific capabilities.
+
+=head1 OPTIONS
+
+=over
+
+=item -version <decimal number>
+
+Find a perl executable with at least this version. This is a straight
+arithmetic test against $] - the perl special variable for the version.
+
+=over
+
+=item perl 5.8.8
+
+$] == 5.008008
+
+=item perl 5.8.6
+
+$] == 5.008006
+
+=item perl5.16.2
+
+$] == 5.016002
+
+=back
+
+=item -modules <module1[, ... moduleN]>
+
+Comma-separated list of modules to find.
+
+=item -automatic
+
+The perl script is inspected and the dependent modules are built into a
+separate script and tested. Once the test script is operational, then the
+provided perl script is run. If you want to see the contents of the perl
+script built, use the verbose option. If you use the debug option, the test
+script will be left in /tmp.
+
+=item -test <test clause>
+
+Find a version of perl that can successfully run this clause. If it exits with
+0, this perl executable will be chosen. Any other return code will examine
+further perl executables.
+
+=item -ftest <script name>
+
+Like the test option, this runs a small script. If the script exits with 0,
+this perl executable will be chosen. Any other return code will examine
+further perl executables.
+
+=item -help
+
+Display this help and exit.
+
+=item -verbose
+
+Be more verbose.
+
+=item -debug
+
+Display debugging information
+
+=back
+
+=head1 DESCRIPTION
+
+This perl script is intended to bootstrap other perl programs that need
+certain modules. It walks the PATH environment variable, taking the first perl
+executable that fulfills the requirements and using that to call the perl
+script. If no script is supplied, then the full path to the Perl executable
+found is printed as the last line of output.
+
+If multiple requirements are given, then all requirements must be satisifed. For example:
+
+   runPerl -version 5.008 -test 'use Storable; retrieve "$ENV{HOME}/.runNumber-cache";' runNumber
+
+then a perl 5.8.x executable must be found which is capable of retrieving the
+given storable object.
+
+Additionally, any PERL options specified in RUNPERL_OPTIONS will be passed on
+to the final execution of the command. This allows starting perl profilers,
+tracers and similar into a complicated environment where you would not
+normally be able to inject such options.
+
+If you have any suggestions about new functionality for this tool or
+experience bugs, please contact Toby Haynes (thaynes@ca.ibm.com)
+
+[[Category: Development Environment]]
+[[Category: Perl]]
+[[Category: Tools]]
+[[Category: Tools written by Toby Haynes]]
+
+=cut
+
