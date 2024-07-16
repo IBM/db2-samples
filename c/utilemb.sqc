@@ -64,9 +64,9 @@
 #include "utilemb.h"
 
 EXEC SQL BEGIN DECLARE SECTION;
-  char dbAlias[15];
-  char user[129];
-  char pswd[15];
+  char util_dbAlias[15];
+  char util_user[129];
+  char util_pswd[256];
 EXEC SQL END DECLARE SECTION;
 
 void TransRollback()
@@ -89,32 +89,32 @@ int DbConn(char paramDbAlias[], char paramUser[], char paramPswd[])
   struct sqlca sqlca;
   int rc = 0;
 
-  strcpy(dbAlias, paramDbAlias);
-  strcpy(user, paramUser);
-  strcpy(pswd, paramPswd);
+  strcpy(util_dbAlias, paramDbAlias);
+  strcpy(util_user, paramUser);
+  strcpy(util_pswd, paramPswd);
 
-  printf("\n  Connecting to '%s' database...\n", dbAlias);
+  printf("\n  Connecting to '%s' database...\n", util_dbAlias);
   if (strlen(user) == 0)
   {
-    EXEC SQL CONNECT TO :dbAlias;
+    EXEC SQL CONNECT TO :util_dbAlias;
     EMB_SQL_CHECK("CONNECT");
   }
   else
   {
-    EXEC SQL CONNECT TO :dbAlias USER :user USING :pswd;
+    EXEC SQL CONNECT TO :util_dbAlias USER :util_user USING :util_pswd;
     EMB_SQL_CHECK("CONNECT");
   }
-  printf("  Connected to '%s' database.\n", dbAlias);
+  printf("  Connected to '%s' database.\n", util_dbAlias);
 
   return 0;
 } /* DbConn */
 
-int DbDisconn(char *dbAlias)
+int DbDisconn(char *util_dbAlias)
 {
   struct sqlca sqlca;
   int rc = 0;
 
-  printf("\n  Disconnecting from '%s' database...\n", dbAlias);
+  printf("\n  Disconnecting from '%s' database...\n", util_dbAlias);
 
   /* Commit all non-committed transactions to release database locks */
   EXEC SQL COMMIT;
@@ -123,7 +123,7 @@ int DbDisconn(char *dbAlias)
   EXEC SQL CONNECT RESET;
   EMB_SQL_CHECK("CONNECT RESET");
 
-  printf("  Disconnected from '%s' database.\n", dbAlias);
+  printf("  Disconnected from '%s' database.\n", util_dbAlias);
 
   return 0;
 } /* DbDisconn */
