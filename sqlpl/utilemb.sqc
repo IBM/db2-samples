@@ -20,11 +20,12 @@
 **
 ** SOURCE FILE NAME: utilemb.sqc
 **
-** SAMPLE: Checks for and prints to the screen SQL warnings and errors
+** SAMPLE: Error-checking utility for embedded SQL samples in C
 **
 **         This utility file is compiled and linked in as an object module 
 **         with embedded SQL sample programs by the supplied makefile and 
-**         build files.
+**         build files. It checks for and prints to the screen SQL warnings 
+**         and errors.
 **
 ** SQL STATEMENTS USED:
 **         BEGIN DECLARE SECTION
@@ -41,8 +42,8 @@
 **
 ** For more information on the sample programs, see the README file.
 **
-** For information on creating SQL procedures and developing C applications,
-** see the Application Development Guide.
+** For information on developing C applications, see the Application
+** Development Guide.
 **
 ** For information on using SQL statements, see the SQL Reference.
 **
@@ -63,9 +64,9 @@
 #include "utilemb.h"
 
 EXEC SQL BEGIN DECLARE SECTION;
-  char dbAlias[15];
-  char user[129];
-  char pswd[15];
+  char util_dbAlias[15];
+  char util_user[129];
+  char util_pswd[15];
 EXEC SQL END DECLARE SECTION;
 
 void TransRollback()
@@ -88,32 +89,32 @@ int DbConn(char paramDbAlias[], char paramUser[], char paramPswd[])
   struct sqlca sqlca;
   int rc = 0;
 
-  strcpy(dbAlias, paramDbAlias);
-  strcpy(user, paramUser);
-  strcpy(pswd, paramPswd);
+  strcpy(util_dbAlias, paramDbAlias);
+  strcpy(util_user, paramUser);
+  strcpy(util_pswd, paramPswd);
 
-  printf("\n  Connecting to '%s' database...\n", dbAlias);
-  if (strlen(user) == 0)
+  printf("\n  Connecting to '%s' database...\n", util_dbAlias);
+  if (strlen(util_user) == 0)
   {
-    EXEC SQL CONNECT TO :dbAlias;
+    EXEC SQL CONNECT TO :util_dbAlias;
     EMB_SQL_CHECK("CONNECT");
   }
   else
   {
-    EXEC SQL CONNECT TO :dbAlias USER :user USING :pswd;
+    EXEC SQL CONNECT TO :util_dbAlias USER :util_user USING :util_pswd;
     EMB_SQL_CHECK("CONNECT");
   }
-  printf("  Connected to '%s' database.\n", dbAlias);
+  printf("  Connected to '%s' database.\n", util_dbAlias);
 
   return 0;
 } /* DbConn */
 
-int DbDisconn(char *dbAlias)
+int DbDisconn(char *util_dbAlias)
 {
   struct sqlca sqlca;
   int rc = 0;
 
-  printf("\n  Disconnecting from '%s' database...\n", dbAlias);
+  printf("\n  Disconnecting from '%s' database...\n", util_dbAlias);
 
   /* Commit all non-committed transactions to release database locks */
   EXEC SQL COMMIT;
@@ -122,7 +123,7 @@ int DbDisconn(char *dbAlias)
   EXEC SQL CONNECT RESET;
   EMB_SQL_CHECK("CONNECT RESET");
 
-  printf("  Disconnected from '%s' database.\n", dbAlias);
+  printf("  Disconnected from '%s' database.\n", util_dbAlias);
 
   return 0;
 } /* DbDisconn */
