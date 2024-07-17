@@ -94,7 +94,7 @@ int DbConn(char paramDbAlias[], char paramUser[], char paramPswd[])
   strcpy(util_pswd, paramPswd);
 
   printf("\n  Connecting to '%s' database...\n", util_dbAlias);
-  if (strlen(user) == 0)
+  if (strlen(util_user) == 0)
   {
     EXEC SQL CONNECT TO :util_dbAlias;
     EMB_SQL_CHECK("CONNECT");
