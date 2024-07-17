@@ -66,7 +66,7 @@
 EXEC SQL BEGIN DECLARE SECTION;
   char util_dbAlias[15];
   char util_user[129];
-  char util_pswd[15];
+  char util_pswd[256];
 EXEC SQL END DECLARE SECTION;
 
 void TransRollback()
