@@ -80,7 +80,7 @@ int SalaryHistoryTbDrop(void);
 EXEC SQL BEGIN DECLARE SECTION;
   char dbAlias[15];
   char user[15];
-  char pswd[15];
+  char pswd[256];
   short id;
   char name[10];
   short dept;

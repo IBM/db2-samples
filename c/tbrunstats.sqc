@@ -64,7 +64,7 @@ int SchemaNameGet(void); /* support function */
 EXEC SQL BEGIN DECLARE SECTION;
   char dbAlias[15];
   char user[129];
-  char pswd[15];
+  char pswd[256];
   char tableName[129];
   char schemaName[129];
 EXEC SQL END DECLARE SECTION;

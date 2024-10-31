@@ -1,5 +1,5 @@
 /****************************************************************************
-** (c) Copyright IBM Corp. 2007 All rights reserved.
+** (c) Copyright IBM Corp. 2007, 2019 All rights reserved.
 ** 
 ** The following sample of source code ("Sample") is owned by International 
 ** Business Machines Corporation or one of its subsidiaries ("IBM") and is 
@@ -28,6 +28,7 @@
 **         sqluvqdp -- Quiesce Table Spaces for Table
 **         db2Load -- Load
 **         db2LoadQuery -- Load Query
+           db2Ingest -- Ingest
 **
 ** SQL STATEMENTS USED:
 **         PREPARE
@@ -66,6 +67,7 @@
 int DataExport(char *);
 int TbImport(char *);
 int TbLoad(char *);
+int TbIngest(char *);
 int TbLoadQuery(void);
 
 /* support function */
@@ -110,6 +112,7 @@ int main(int argc, char *argv[])
 
   rc = DataExport(dataFileName);
   rc = TbImport(dataFileName);
+  rc = TbIngest(dataFileName);
   rc = TbLoad(dataFileName);
   rc = TbLoadQuery();
 
@@ -182,7 +185,7 @@ int NewTableDisplay(void)
   printf("    DEPTNUMB DEPTNAME      \n");
   printf("    -------- --------------\n");
 
-  strcpy(strStmt, "SELECT * FROM newtable");
+  strcpy(strStmt, "SELECT * FROM newtable ORDER BY DEPTNUMB");
 
   EXEC SQL PREPARE stmt FROM :strStmt;
   EMB_SQL_CHECK("statement -- prepare");
@@ -488,6 +491,7 @@ int TbLoad(char *dataFileName)
 
   /* free memory allocated */
   free(pAction);
+  free(mediaList.target.location);
 
   /* display load info */
   printf("\n  Load info.\n");
@@ -579,3 +583,141 @@ int TbLoadQuery(void)
   return 0;
 } /* TbLoadQuery */
 
+int TbIngest(char *dataFileName)
+{
+   int rc = 0;
+   struct db2IngestStruct m_ingestStruct = {0};
+   struct db2IngestOut m_ingestInfoOut = {0};
+   struct sqlu_media_list mediaList = {0};
+   struct db2IngestFormat m_format = {0};
+   struct db2IngestCfgList iCfgList = {0};
+   struct sqlca sqlca = {0};
+
+   char localMsgFileName[128] = {'\0'};
+   char localFileType[128] = {'\0'};
+   char sqlStatement[256] = {'\0'};
+
+   db2Char db2CharFileType;
+   db2Char db2CharMsgFileName;
+   db2Char db2CharSqlStatement;
+
+   printf("\n-----------------------------------------------------------");
+   printf("\nUSE THE DB2 API:\n");
+   printf("  db2Ingest -- Ingest\n");
+   printf("TO IMPORT DATA USING INGEST UTILITY TO A TABLE.\n");
+
+   /* create new table */
+   printf("\n  CREATE TABLE newtable(deptnumb SMALLINT NOT NULL,");
+   printf("\n                        deptname VARCHAR(14))\n");
+
+   EXEC SQL CREATE TABLE newtable(deptnumb SMALLINT NOT NULL,
+                                  deptname VARCHAR(14));
+   EMB_SQL_CHECK("new table -- create");
+
+   /**************************************************************/
+   /**********Initialize m_ingestStruct***************************/
+   /**************************************************************/
+
+   /* Pointer to the structure containing the ingest configuration parameters. */
+   iCfgList.iNumCfgParams = 0;
+   iCfgList.piCfgParam = NULL;
+   m_ingestStruct.piCfgList = &iCfgList;
+
+   /* Specifies the input sources. For this utility, set sqlu_media_list media type member to SQLU_CLIENT_LOCATION. */
+   mediaList.media_type = SQLU_CLIENT_LOCATION;
+   mediaList.sessions = 1;
+   mediaList.target.location =
+     (struct sqlu_location_entry *)malloc(sizeof(struct sqlu_location_entry) *
+                                         mediaList.sessions);
+   strcpy(mediaList.target.location->location_entry, dataFileName);
+   m_ingestStruct.piSourceList = &mediaList;
+
+   /* Pointer to the structure containing information about the input format. This parameter cannot be NULL.
+      We are using default configuration in this sample*/
+   m_format.piFieldDefn = NULL;
+   strncpy(localFileType,SQL_DEL,sizeof(localFileType));
+   db2CharFileType.pioData = localFileType;
+   db2CharFileType.iLength = strlen(localFileType);
+   m_format.piFileType = &db2CharFileType;
+   m_format.iRecordLength = 0;
+   m_format.iNumFields = 0;
+   m_format.iCodepage = 0;
+   m_format.iImplicitlyHidden = DB2INGEST_IMPLICIT_HID_DEFAULT;
+   m_format.iDelimiter = 0;
+   m_ingestStruct.piFormat = &m_format;
+
+   /* Pointer to the ingest output structure. */
+   m_ingestStruct.poIngestInfoOut = &m_ingestInfoOut;
+
+   /* Pointer to the dump file name. If there is no dump file, set this parameter to NULL. */
+   m_ingestStruct.piDumpFile = NULL;
+
+   /* Pointer to the name of the exception table. If there is no exception table, specify NULL or the empty string (""). */
+   m_ingestStruct.piExceptTableName = NULL;
+
+   /* Pointer to the messages file name. A message file name must be specified. */
+   strcpy(localMsgFileName, "tbingest.MSG");
+   db2CharMsgFileName.pioData = localMsgFileName;
+   db2CharMsgFileName.iLength = strlen(localMsgFileName);
+   m_ingestStruct.piMsgFileName = &db2CharMsgFileName;
+
+   /* Pointer to the job ID. For the default job ID, this parameter should be set to NULL. */
+   m_ingestStruct.piJobId = NULL;
+
+   /* Pointer to the SQL statement. This parameter cannot be NULL. */
+   strcpy(sqlStatement, "INSERT INTO newtable");
+   db2CharSqlStatement.pioData = sqlStatement;
+   db2CharSqlStatement.iLength = strlen(sqlStatement);
+   m_ingestStruct.piSqlStatement = &db2CharSqlStatement;
+
+   /* Specifies that the Ingest utility is to stop after the warning count number has reached.
+      0 is the default value, if the number is 0, the INGEST command continues regardless of the number of warnings and errors. The range is 0 - 2,147,483,647 (max 32-bit signed integer) */
+   m_ingestStruct.iWarningcount = 0;
+
+   /* Specifies the Restart option if the Ingest utility fails before completing. */
+   m_ingestStruct.iRestartMode = DB2INGEST_RESTART_OFF;
+
+   printf("\n  Ingest table.\n");
+   printf("    client source file name : %s\n", dataFileName);
+   printf("    action                  : %s\n", sqlStatement);
+   printf("    client message file name: %s\n", localMsgFileName);
+
+   // Call the new Ingest API.
+   rc = db2Ingest(db2Version1110,
+                  &m_ingestStruct,
+                  &sqlca);
+   // DB2_API_CHECK("table -- ingest");
+   // Commenting out DB2_API_CHECK for cli ingest since
+   // a successful INGEST (no error, no warning) currently
+   // returns SQL2980I with a timestamp, and causes DB2_API_CHECK()
+   // to fail because the timestamp changes every time.
+   // Since we select from the table to verify the correct data is ingested
+   // into the table, we can just skip the DB2_API_CHECK() to avoid the "false alarm".
+
+   /* free memory allocated */
+   free(mediaList.target.location);
+
+   /* display ingest info */
+   printf("\n  Ingest info.\n");
+   printf("    rows read     : %d\n", (int)m_ingestInfoOut.oRowsRead);
+   printf("    rows skipped  : %d\n", (int)m_ingestInfoOut.oRowsSkipped);
+   printf("    rows inserted : %d\n", (int)m_ingestInfoOut.oRowsInserted);
+   printf("    rows updated  : %d\n", (int)m_ingestInfoOut.oRowsUpdated);
+   printf("    rows deleted  : %d\n", (int)m_ingestInfoOut.oRowsDeleted);
+   printf("    rows merged   : %d\n", (int)m_ingestInfoOut.oRowsMerged);
+   printf("    rows rejected : %d\n", (int)m_ingestInfoOut.oRowsRejected);
+   printf("    Num Errors    : %d\n", (int)m_ingestInfoOut.oNumErrors);
+   printf("    Num Warning   : %d\n", (int)m_ingestInfoOut.oNumWarnings);
+   printf("    Max Msg Severity   : %d\n", (int)m_ingestInfoOut.oMaxMsgSeverity);
+
+   /* display content of the new table */
+   NewTableDisplay();
+
+   /* drop new table */
+   printf("\n  DROP TABLE newtable\n");
+
+   EXEC SQL DROP TABLE newtable;
+   EMB_SQL_CHECK("new table -- drop");
+
+   return 0;
+}

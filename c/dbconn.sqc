@@ -67,7 +67,7 @@ int main(int argc, char *argv[])
   EXEC SQL BEGIN DECLARE SECTION;
     char dbAlias[15];
     char user[128 + 1];
-    char pswd[15];
+    char pswd[256];
   EXEC SQL END DECLARE SECTION;
 
   /* check the command line arguments */
