@@ -23,27 +23,80 @@
 ** SAMPLE: How to read database log files with a database connection
 **         for compressed and uncompressed tables
 **
-**         Note:
-**           You must be initially disconnected from the sample database
-**           to run this program. To ensure you are, enter 'db2 connect
-**           reset' on the command line prior to running dblogconn. 
+**         dblogconn performs workload using the following API calls and SQL
+**         statements to demonstrate how the db2ReadLog API can read the
+**         generated log records:
 **
-** DB2 API USED:
-**         db2CfgSet -- Set Configuration
-**         db2ReadLog -- Asynchronous Read Log
-**         db2Reorg -- Reorganize a Table or Index
-**         sqle_deactivate_db -- Deactivate database
-**
-** SQL STATEMENTS USED:
+**         db2Reorg
 **         ALTER TABLE
 **         COMMIT
 **         INSERT
 **         UPDATE
 **         DELETE
 **         ROLLBACK
-**         CONNECT RESET 
+**
+**         dblogconn is a self-contained package operating on the Db2 sample db.
+**         The db2ReadLog API is only supported on recoverable databases, so
+**         dblogconn first changes the sample db from circular to archive
+**         logging, which includes a backup to make the changes take effect.
+**
+**         Note:
+**           You must be initially disconnected from the sample database
+**           to run this program. To ensure you are, enter 'db2 connect
+**           reset' on the command line prior to running dblogconn.
 **
 ** OUTPUT FILE: dblogconn.out (available in the online documentation)
+**
+** COMPILE & USAGE INSTRUCTIONS:
+**
+**         1. Set DB2PATH to path to sqllib (e.g. $HOME/sqllib).
+**
+**         2. dblogconn is composed of the files:
+**
+**            dblogconn.sqc
+**            utilemb.sqc
+**            utilemb.h
+**            utilapi.h
+**            utilrecov.c
+**            utilapi.c
+**
+**            Copy the above files from $DB2PATH/samples/c to another folder,
+**            e.g. $HOME/dblogconn-sample.
+**
+**            The remaining steps are to be done within the folder containing
+**            these files.
+**
+**         2. Create the db2sampl sample database, connect to it,
+**            and precompile + bind dblogconn.sqc & utilemb.sqc:
+**
+**            db2sampl
+**            db2 connect to sample
+**            db2 precompile dblogconn.sqc bindfile
+**            db2 precompile utilemb.sqc bindfile
+**            db2 bind dblogconn.bnd
+**            db2 bind utilemb.bnd
+**            db2 connect reset
+**
+**            There will now be dblogconn.c & utilemb.c files.
+**
+**         3. Compile dblogconn.c & utilemb.c to produce object files.
+**
+**            cc -I$DB2PATH/include -c dblogconn.c
+**            cc -I$DB2PATH/include -c utilemb.c
+**
+**            There will now be dblogconn.o & utilemb.o files.
+**
+**         4. Link the object files and db2 libraries to create the dblogconn
+**            sample app.
+**
+**            cc -o dblogconn dblogconn.o utilemb.o -L$DB2PATH/lib -ldb2
+**
+**            There will now be a dblogconn executable.
+**
+**         5. Run the sample program without a connection to the sample db.
+**
+**            ./dblogconn
+**
 *****************************************************************************
 **
 ** For detailed information about database backup and database recovery, see
@@ -548,7 +601,7 @@ int db2ReadLogAPICall(char dbAlias[],
     {
        if (readLogInfo.logRecsWritten > 0)
        {
-          // Display the log buffer
+          /* Display the log buffer */
           rc = LogBufferDisplay(logBuffer, readLogInfo.logRecsWritten, 1);
           CHECKRC(rc, "LogBufferDisplay");
        }
