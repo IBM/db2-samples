@@ -13,7 +13,6 @@
 
 
 use Getopt::Long;
-use Env qw(DB2_HOME HOME);
 use strict;
 use File::Temp;
 use Cwd;
@@ -30,7 +29,7 @@ my $syntax = "Usage: $0 [OPTION]... srcfile\n" .
     "\t--user username\t\tDB2 username (defaults to current user)\n" .
 
     "\t--pw password\t\tDB2 password must be specified for --user\n" .
-    
+
     "\t--db database\t\tDB2 database\n" .
 
     "\t--schema schema\t\tDB2 schema (defaults to current username)\n" .
@@ -42,7 +41,7 @@ my $syntax = "Usage: $0 [OPTION]... srcfile\n" .
 
     "\nCompile options:\n" .
 
-    "\tsrcfile\t\t\tSource CPP or R file. The CPP file is\n" .
+    "\tsrcfile\t\t\tSource CPP or R or PYTHON file. The CPP file is\n" .
     "${ind}compiled and linked into a shared object\n" .
 
     "\t--compile\t\tCompiles the source file, but does not link\n" .
@@ -65,7 +64,7 @@ my $syntax = "Usage: $0 [OPTION]... srcfile\n" .
     "\nGeneral registration options:\n" .
 
     "\t--language\t\tSpecify language for the routine\n" .
-    "${ind}CPP or R\n" .
+    "${ind}CPP or R or PYTHON\n" .
 
     "\t--nzdefaults\t\tApply Netezza defaults DETERMINISTIC,\n" .
     "${ind}FENCED and RETURNS NULL ON NULL INPUT.\n" .
@@ -82,7 +81,7 @@ my $syntax = "Usage: $0 [OPTION]... srcfile\n" .
     "\t--class class\t\tClass name for function\n" .
     "${ind}Applicable only for CPP routines\n" .
 
-    "\t--unfenced\t\tUnFenced mode. Not applicable for language R\n" .
+    "\t--unfenced\t\tUnFenced mode. Not applicable for language R and PYTHON\n" .
 
     "\t--fenced\t\tFenced mode (default)\n" .
 
@@ -143,7 +142,7 @@ my $syntax = "Usage: $0 [OPTION]... srcfile\n" .
 
 GetOptions \%option, "user=s", "pw=s", "db=s", "schema=s", "copyout=s",
                      "h", "help",
-                     "compile", "g", "print-compiler", "o=s", 
+                     "compile", "g", "print-compiler", "o=s",
                      "args=s", "objs=s@",
                      "language=s", "nzdefaults", "sig=s", "return=s",
                      "class=s", "unfenced", "fenced", "threadsafe",
@@ -170,7 +169,7 @@ my $authclause=""; # Authentication clause in CONNECT statement
 my $db=""; # From --db option, specifies the DB
 my $schema=""; # From --schema option, specifies the SCHEMA
 my $copyout = ""; #From --copyout option, specifies where to copy the object file
-my $base = $DB2_HOME || "$HOME/sqllib"; # DB2 instance location
+my $base = $ENV{'DB2_HOME'} || "$ENV{'HOME'}/sqllib"; # DB2 instance location
 my $justcompile = 0;  # Just compile option. Turned on by --compile option.
 my $dbg = "";  # Debug options. Turned on by -g option.
 my $inc; # Include directory based on $base
@@ -181,7 +180,7 @@ my(@objs); # From --objs option, specifies input object files when doing link on
 my($compargs) = ""; # From the --args option, used to specify additional compiler arguments when compiling/linking
 my($warn) = 4 * 1024; # Theshold size after which to warn for nucleus stack size
 my($error) = 60 * 1024; # Theshold size after which to error for nucleus stack size
-my $detclause = " DETERMINISTIC "; # From --nondet option, specifies whether to register a UDF as not deterministic
+my $detclause = " DETERMINISTIC NO EXTERNAL ACTION "; # From --nondet option, specifies whether to register a UDF as not deterministic
 my($parallelclause) = " ALLOW PARALLEL "; # whether function invocation can be parallelized
 my $nullclause = " RETURNS NULL ON NULL INPUT ";
 my $print_compiler = 0; #From the --print-compiler option, specifies whether to print the compiler name
@@ -224,7 +223,7 @@ sub parse_options ()
     if ($option{schema}) { $schema=$option{schema}; }
     if ($option{compile}) { $justcompile=1; $compile=0; }
     if ($option{g}) { $dbg="-g3 -ggdb"; }
-    if ($option{nondet}) { $detclause =  " NOT DETERMINISTIC "; }
+    if ($option{nondet}) { $detclause =  " NOT DETERMINISTIC  EXTERNAL ACTION "; }
     if ($option{noparallel}) { $parallelclause =  " DISALLOW PARALLEL "; }
     if ($option{nullcall}) { $nullclause =" CALLED ON NULL INPUT "; }
     # Always process --nonullcall after --state processing
@@ -243,9 +242,9 @@ sub parse_options ()
 
     &validate_general_options();
 
-    if ($language eq "R")
+    if ($language eq "R" || $language eq "PYTHON")
     {
-        &validate_r_options();
+        &validate_nzae_options();
     }
     else
     {
@@ -274,9 +273,9 @@ sub validate_general_options
         die "ERROR: extra text on command line - may be badly formed options\n";
     }
 
-    if(!$language || ($language ne "CPP" && $language ne "R"))
+    if(!$language || ($language ne "CPP" && $language ne "R" && $language ne "PYTHON"))
     {
-        die "ERROR: Specify --language with \"CPP\" or \"R\" values\n";
+        die "ERROR: Specify --language with \"CPP\" or \"R\"  or \"PYTHON\" values\n";
     }
 
     if ( $register)
@@ -401,7 +400,7 @@ sub validate_cpp_options
     $largs="$dbg -m64 -fpic -shared -Wl,-rpath,$base/lib64 -L$base/lib64 -ldb2 -lpthread";
 }
 
-sub validate_r_options
+sub validate_nzae_options
 {
     if ($justcompile         # --compile
         || $dbg              # -g
@@ -411,9 +410,9 @@ sub validate_r_options
         || @objs             # --objs
         || $class            # --class
         || $unfenced         # --unfenced
-        || $threadsafe)      # --threadsafe 
+        || $threadsafe)      # --threadsafe
     {
-        die "ERROR: Cannot specify --compile, -g, --print-compiler, -o, --args, --objs, --class, --unfenced, --threadsafe with language R\n";
+        die "ERROR: Cannot specify --compile, -g, --print-compiler, -o, --args, --objs, --class, --unfenced, --threadsafe with language R or PYTHON\n";
     }
     $compile = 0;
     $outfile = shift @ARGV;
@@ -502,7 +501,7 @@ sub checkClass
 sub linkObjects
 {
     &runCommand("linking",
-                "$CC $largs $compargs -o $outfile @objs");
+                "$CC @objs $largs $compargs -o $outfile");
 }
 
 sub justcompile()
@@ -515,7 +514,7 @@ sub compile()
 {
     &justcompile();
     &runCommand("linking",
-                "$CC $largs $compargs -o $outfile $outobjfile");
+                "$CC $outobjfile $largs $compargs -o $outfile");
     &checkClass($outfile);
 }
 
