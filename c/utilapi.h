@@ -70,7 +70,7 @@ extern "C" {
 #endif
 
 #define USERID_SZ 128
-#define PSWD_SZ 14
+#define PSWD_SZ 255
 
 #if (defined(DB2NT))
 #define PATH_SEP "\\"

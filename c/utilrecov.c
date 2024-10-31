@@ -73,10 +73,37 @@
 
 #define ADD_BYTES 2
 
+#define TID_LENGTH 6
+
+/* This is the transaction identifier. */
+union SQLU_TID
+{
+   unsigned char tid[TID_LENGTH];
+   sqluint16     tidword[3];
+};
+
+/* The LogRecordHeader struct below is explained in the "Log record header"
+   section of the Db2 Knowledge Center.
+
+   Certain types of log records will contain more data within their headers.
+   This struct represents the basic 40 bytes of data that all log record
+   headers contain. */
+typedef struct LogRecordHeader
+{
+   sqluint32 recordSize;
+   sqluint16 recordType;
+   sqluint16 recordFlag;
+   sqluint64 recordLSN; /* db2LSN */
+   sqluint64 recordLFS;
+   sqluint64 backPointerLSO; /* LSO of previous log record in this transaction */
+   union SQLU_TID recordTID;
+   sqluint16 logstreamID;
+} LogRecordHeader;
+
 /* support function called by DbLogRecordsForCurrentConnectionRead() */
 int LogBufferDisplay( char *, sqluint32, int );
-int LogRecordDisplay( char *, sqluint32, sqluint16, sqluint16 );
-int SimpleLogRecordDisplay( sqluint16, sqluint16, char *, sqluint32 );
+int LogRecordDisplay( char *, LogRecordHeader * );
+int SimpleLogRecordDisplay( LogRecordHeader *, char *, sqluint32 );
 int ComplexLogRecordDisplay( sqluint16, sqluint16, char *, sqluint32,
                             sqluint8, char *, sqluint32 );
 int LogSubRecordDisplay( char *, sqluint16 );
@@ -367,15 +394,12 @@ int DbBackup(char            dbAlias[],
 /* Displays the log buffer                                                 */
 /***************************************************************************/
 int LogBufferDisplay( char *logBuffer,
-                      sqluint32 numLogRecords, int conn )  
+                      sqluint32 numLogRecords, int conn )
 {
   int       rc = 0;
   sqluint32 logRecordNb = 0;
-  sqluint32 recordSize = 0;
-  sqluint16 recordType = 0;
-  sqluint16 recordFlag = 0;
   char *recordBuffer = NULL;
-  int headerSize = 0;                                              
+  int headerSize = 0;
 
   if (logBuffer == NULL)
   {
@@ -394,47 +418,61 @@ int LogBufferDisplay( char *logBuffer,
   /* If there is no connection to the database or if the iFilterOption
      is OFF, the 8-byte LRI 'db2LRI' is prefixed to the log records.
      If there is a connection to the database and the iFilterOption is
-     ON, the db2ReadLogFilterData structure will be prefixed to all 
-     log records returned by the db2ReadLog API ( for compressed and 
+     ON, the db2ReadLogFilterData structure will be prefixed to all
+     log records returned by the db2ReadLog API ( for compressed and
      uncompressed data ) */
 
-  if (conn == 0)                                                  
+  if (conn == 0)
   {
     headerSize = sizeof(db2Uint64);
   }
   else
   {
     headerSize = sizeof(db2ReadLogFilterData);
-  }                                                               
+  }
   recordBuffer = logBuffer;
 
   for (logRecordNb = 0; logRecordNb < numLogRecords; logRecordNb++)
   {
-    if (conn == 1)                                             
+    if (conn == 1)
     {
       db2ReadLogFilterData  *filterData = (db2ReadLogFilterData *)recordBuffer;
       printf("\nRLOG_FILTERDATA:\n");
       printf("    recordLRIPart1: %llu\n", filterData->recordLRIType1.part1);
       printf("    recordLRIPart2: %016llX\n", filterData->recordLRIType1.part2);
       printf("    realLogRecLen: %lu\n", filterData->realLogRecLen );
-      printf("    sqlcode: %d\n", filterData->sqlcode ); 
-      
+      printf("    sqlcode: %d\n", filterData->sqlcode );
     }
-    
-    recordBuffer += headerSize;                                    
 
-    recordSize = *(sqluint32 *) (recordBuffer);
-    recordType = *(sqluint16 *) (recordBuffer + sizeof(sqluint32));
-    recordFlag = *(sqluint16 *) (recordBuffer + sizeof(sqluint32) +
-                 sizeof(sqluint16));
+    recordBuffer += headerSize;
 
-    printf("    recordSize: %lu\n", recordSize );
-    printf("    recordType: %04llX\n", recordType );
-    printf("    recordFlag: %04llX\n", recordFlag );
-    rc = LogRecordDisplay(recordBuffer, recordSize, recordType, recordFlag);
+    /* Populate a LogRecordHeader struct with the log record header data. */
+    LogRecordHeader *lrh = (LogRecordHeader *)recordBuffer;
+
+    printf("\n    LOG_RECORD_HEADER:\n");
+    printf("    recordSize: %lu\n", lrh->recordSize );
+    printf("    recordType: %04llX\n", lrh->recordType );
+    printf("    recordFlag: %04llX\n", lrh->recordFlag );
+    printf("    recordLSN: %u\n", lrh->recordLSN );
+    printf("    recordLFS: %u\n", lrh->recordLFS );
+    printf("    backPointerLSO: %u\n", lrh->backPointerLSO );
+
+    printf("    recordTID: " );
+    int i;
+    for (i = 0; i < TID_LENGTH; i++)
+    {
+       printf("%X", lrh->recordTID.tid[i] );
+    }
+    printf("\n");
+
+    printf("    logstreamID: %u\n", lrh->logstreamID );
+
+    rc = LogRecordDisplay(recordBuffer,
+                          lrh);
+
     CHECKRC(rc, "LogRecordDisplay");
 
-    recordBuffer += recordSize;                                  
+    recordBuffer += lrh->recordSize;
   }
 
   return 0;
@@ -444,10 +482,8 @@ int LogBufferDisplay( char *logBuffer,
 /* LogRecordDisplay                                                        */
 /* Displays the log records                                                */
 /***************************************************************************/
-int LogRecordDisplay( char      *recordBuffer,
-                      sqluint32 recordSize,
-                      sqluint16 recordType,
-                      sqluint16 recordFlag )
+int LogRecordDisplay( char            *recordBuffer,
+                      LogRecordHeader *lrh )
 {
   int       rc = 0;
   sqluint32 logManagerLogRecordHeaderSize = 0;
@@ -459,27 +495,26 @@ int LogRecordDisplay( char      *recordBuffer,
 
   /* Determine the log manager log record header size. */
 
-  logManagerLogRecordHeaderSize = 40; 
+  logManagerLogRecordHeaderSize = 40;
 
-  if (recordType == 0x0043)
+  if (lrh->recordType == 0x0043)
   {            /* compensation */
-    logManagerLogRecordHeaderSize += sizeof(db2Uint64) * 2;              
+    logManagerLogRecordHeaderSize += sizeof(db2Uint64) * 2;
 
-    if (recordFlag & 0x0002)
+    if (lrh->recordFlag & 0x0002)
     {          /* propagatable */
-      logManagerLogRecordHeaderSize += sizeof(db2Uint64);           
+      logManagerLogRecordHeaderSize += sizeof(db2Uint64);
     }
   }
 
-  switch (recordType)
+  switch (lrh->recordType)
   {
     case 0x008A: /* Local Pending List */
     case 0x0084: /* Normal Commit */
     case 0x0041: /* Normal Abort */
       recordDataBuffer = recordBuffer + logManagerLogRecordHeaderSize;
-      recordDataSize = recordSize - logManagerLogRecordHeaderSize;
-      rc = SimpleLogRecordDisplay( recordType,
-                                   recordFlag,
+      recordDataSize = lrh->recordSize - logManagerLogRecordHeaderSize;
+      rc = SimpleLogRecordDisplay( lrh,
                                    recordDataBuffer,
                                    recordDataSize );
       CHECKRC(rc, "SimpleLogRecordDisplay");
@@ -495,17 +530,17 @@ int LogRecordDisplay( char      *recordBuffer,
               break;
          default:
              printf( "    Unknown complex log record: %lu %c %u\n",
-                     recordSize, recordType, componentIdentifier );
+                     lrh->recordSize, lrh->recordType, componentIdentifier );
              return 1;
       }
       recordDataBuffer = recordBuffer +
                          logManagerLogRecordHeaderSize +
                          recordHeaderSize;
-      recordDataSize = recordSize -
+      recordDataSize = lrh->recordSize -
                        logManagerLogRecordHeaderSize -
                        recordHeaderSize;
-      rc = ComplexLogRecordDisplay( recordType,
-                                    recordFlag,
+      rc = ComplexLogRecordDisplay( lrh->recordType,
+                                    lrh->recordFlag,
                                     recordHeaderBuffer,
                                     recordHeaderSize,
                                     componentIdentifier,
@@ -515,7 +550,7 @@ int LogRecordDisplay( char      *recordBuffer,
       break;
     default:
       printf( "    Unknown log record: %lu \"%c\"\n",
-              recordSize, (char)recordType );
+              lrh->recordSize, (char)(lrh->recordType) );
       break;
   }
 
@@ -526,17 +561,16 @@ int LogRecordDisplay( char      *recordBuffer,
 /* SimpleLogRecordDisplay                                                  */
 /* Prints the minimum details of the log record                            */
 /***************************************************************************/
-int SimpleLogRecordDisplay( sqluint16 recordType,
-                            sqluint16 recordFlag,
-                            char      *recordDataBuffer,
-                            sqluint32 recordDataSize)
+int SimpleLogRecordDisplay( LogRecordHeader *lrh,
+                            char            *recordDataBuffer,
+                            sqluint32       recordDataSize)
 {
   int       rc = 0;
   sqluint32 timeTransactionCommited = 0;
   sqluint16 authIdLen = 0;
   char      *authId = NULL;
 
-  switch (recordType)
+  switch (lrh->recordType)
   {
     case 138:
       printf("\n    Record type: Local pending list\n");
@@ -586,7 +620,7 @@ int SimpleLogRecordDisplay( sqluint16 recordType,
       break;
     default:
       printf( "    Unknown simple log record: %d %lu\n",
-              recordType, recordDataSize);
+              lrh->recordType, recordDataSize);
       break;
   }
 
