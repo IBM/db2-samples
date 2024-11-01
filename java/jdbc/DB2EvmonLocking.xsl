@@ -671,6 +671,24 @@
       </xsl:call-template>
 
       <!-- ========================================================== -->
+      <!-- Print Tenant ID                                            -->
+      <!-- ========================================================== -->
+      <xsl:call-template name="print_row">
+        <xsl:with-param name="attribute" select="string('Tenant ID')" />
+        <xsl:with-param name="reqvalue"  select="string($nodes[$pos1]/lm:db2_app_details/lm:tenant_id/text())" />
+        <xsl:with-param name="ownvalue"  select="string($nodes[$pos2]/lm:db2_app_details/lm:tenant_id/text())" />
+      </xsl:call-template>
+
+      <!-- ========================================================== -->
+      <!-- Print Tenant name                                          -->
+      <!-- ========================================================== -->
+      <xsl:call-template name="print_row">
+        <xsl:with-param name="attribute" select="string('Tenant Name')" />
+        <xsl:with-param name="reqvalue"  select="string($nodes[$pos1]/lm:db2_app_details/lm:tenant_name/text())" />
+        <xsl:with-param name="ownvalue"  select="string($nodes[$pos2]/lm:db2_app_details/lm:tenant_name/text())" />
+      </xsl:call-template>
+
+      <!-- ========================================================== -->
       <!-- Print Workload ID                                          -->
       <!-- ========================================================== -->
       <xsl:call-template name="print_row">
