@@ -282,7 +282,7 @@ static int EscapeDnAsSearchFilter( const char*  dn,
 
    const int dnLen = strlen(dn);
 
-   len = snprintf(dumpMsg, sizeof(dumpMsg), 
+   len = snprintf(dumpMsg, sizeof(dumpMsg),
                   "LDAP EscapeDnAsSearchFilter:\n"
                   "input dn='%s'",
                   dn );
@@ -1069,13 +1069,13 @@ SQL_API_RC SQL_API_FN DoesGroupExist(const char  *groupID,
    int     rc = DB2SEC_PLUGIN_OK;
    int     filterLength = 0;
    LDAP   *ld = NULL;
-   char   *errmsg = NULL;
+   const char *errmsg = NULL;
    char    local_group[DB2SEC_MAX_AUTHID_LENGTH + 1];
    char    dumpMsg[MAX_ERROR_MSG_SIZE];
 
    *errorMessage = NULL;
    *errorMessageLength = 0;
-    
+
    if (groupID == NULL || groupIDlength <= 0)
    {
       snprintf(dumpMsg, sizeof(dumpMsg),
@@ -1117,8 +1117,6 @@ SQL_API_RC SQL_API_FN DoesGroupExist(const char  *groupID,
                           FALSE,
                           NULL);
 
-   errmsg = NULL;
-
    switch (rc)
    {
       case GET_ATTRIB_OK:
@@ -1130,16 +1128,16 @@ SQL_API_RC SQL_API_FN DoesGroupExist(const char  *groupID,
          rc = DB2SEC_PLUGIN_INVALIDUSERORGROUP;
          break;
       case GET_ATTRIB_LDAPERR:
-         errmsg = (char*)"LDAP error searching for AUTHID";
+         errmsg = "LDAP error searching for AUTHID";
          rc = DB2SEC_PLUGIN_UNKNOWNERROR;
          break;
       case GET_ATTRIB_NOMEM:
-         errmsg = (char*)"out of memory while searching for AUTHID";
+         errmsg = "out of memory while searching for AUTHID";
          rc = DB2SEC_PLUGIN_NOMEM;
          break;
       case GET_ATTRIB_BADINPUT:
       default:
-         errmsg = (char*)"Internal error while searching for AUTHID";
+         errmsg = "Internal error while searching for AUTHID";
          rc = DB2SEC_PLUGIN_UNKNOWNERROR;
          break;
    }

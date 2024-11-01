@@ -27,6 +27,7 @@
 ****************************************************************************/
 
 #include "IBMLDAPutils.h"
+#include "ossfeat.h"
 
 /* rebindGetCreds
  *
@@ -98,7 +99,7 @@ int initLDAP(LDAP  **ld,
       {
          rc = ldap_set_option(*ld, LDAP_OPT_SSL_SECURITY_PROTOCOL,
                               pCfg->securityProtocol == SECURITY_PROTOCOL_ALL?
-                                   LDAP_SECURITY_PROTOCOL_ALL : LDAP_SECURITY_PROTOCOL_TLSV12);
+                                   LDAP_SECURITY_PROTOCOL_OLD_ALL : LDAP_SECURITY_PROTOCOL_TLSV12);
          if (rc != LDAP_SUCCESS)
          {
             snprintf(dumpMsg, MAX_ERROR_MSG_SIZE,
@@ -111,6 +112,52 @@ int initLDAP(LDAP  **ld,
             goto exit;
          }
 
+      }
+      else
+      {
+         rc = ldap_set_option(*ld, LDAP_OPT_SSL_SECURITY_PROTOCOL, LDAP_SECURITY_PROTOCOL_DB2_DEFAULT); 
+
+         if (rc != LDAP_SUCCESS)
+         {
+            snprintf(dumpMsg, MAX_ERROR_MSG_SIZE,
+                     "InitLDAP: failed setting security_protocol opt to %s\nrc=%d (%s)",
+                     LDAP_SECURITY_PROTOCOL_DB2_DEFAULT,
+                     rc, ldap_err2string(rc));
+            *errorMsg = strdup(dumpMsg);
+            rc = DB2SEC_PLUGIN_UNKNOWNERROR;
+            goto exit;
+         }
+      }
+
+      // If STRICT fips mode has been configured, turn off TLS_RSA_* ciphers
+      // to prevent compatibility issues with LDAP servers that do not
+      // have RSA restrictions. In addition, turn off TLS 1.1 and 1.0
+      // since the only supported ciphers are TLS_RSA_*
+      if (FIPS_MODE_STRICT == pCfg->fipsMode)
+      {
+         rc = ldap_set_option(*ld, LDAP_OPT_SSL_SECURITY_PROTOCOL,
+                              TLS_DEFAULT_STRICT_FIPS_VERSION_STRING);
+         if (rc != LDAP_SUCCESS)
+         {
+            snprintf(dumpMsg, MAX_ERROR_MSG_SIZE,
+                     "InitLDAP: failed setting LDAP_OPT_SSL_SECURITY_PROTOCOL in strict FIPS mode\nrc=%d (%s)",
+                     rc, ldap_err2string(rc));
+            *errorMsg = strdup(dumpMsg);
+            rc = DB2SEC_PLUGIN_UNKNOWNERROR;
+            goto exit;
+         }
+
+         rc = ldap_set_option(*ld, LDAP_OPT_SSL_CIPHER_EX,
+                              TLS_DEFAULT_STRICT_FIPS_CIPHERS_STRING);
+         if (rc != LDAP_SUCCESS)
+         {
+            snprintf(dumpMsg, MAX_ERROR_MSG_SIZE,
+                     "InitLDAP: failed setting LDAP_OPT_SSL_CIPHER_EX in strict FIPS mode\nrc=%d (%s)",
+                     rc, ldap_err2string(rc));
+            *errorMsg = strdup(dumpMsg);
+            rc = DB2SEC_PLUGIN_UNKNOWNERROR;
+            goto exit;
+         }
       }
    }
    else
@@ -291,19 +338,21 @@ int db2ldapInitSSL(pluginConfig_t *cfg, char **errorMessage)
          }
       }
 
-      if (cfg->isFipsOn)
+      /* Set FIPS mode */
+#if defined OSS_HAVE_FIPS
+      rc = ldap_ssl_set_fips_mode_np(cfg->fipsMode);
+#else
+      rc = ldap_ssl_set_fips_mode_np(FIPS_MODE_OFF);
+#endif
+
+      if ( rc != LDAP_SUCCESS )
       {
-         /* Set FIPS mode ON */
-         rc = ldap_ssl_set_fips_mode_np(1);
-         if ( rc != LDAP_SUCCESS )
-         {
-            snprintf(dumpMsg, MAX_ERROR_MSG_SIZE, "db2ldapInitSSL: "
-                     "ldap_ssl_set_fips_mode_np failed, rc=%d (%s)",
-                     rc, ldap_err2string(rc));
-            *errorMessage = strdup(dumpMsg);
-            rc = DB2SEC_PLUGIN_UNKNOWNERROR;
-            goto exit;
-         }
+         snprintf(dumpMsg, MAX_ERROR_MSG_SIZE, "db2ldapInitSSL: "
+                  "ldap_ssl_set_fips_mode_np failed, rc=%d (%s)",
+                  rc, ldap_err2string(rc));
+         *errorMessage = strdup(dumpMsg);
+         rc = DB2SEC_PLUGIN_UNKNOWNERROR;
+         goto exit;
       }
 
       rc = ldap_ssl_client_init(keyfile,
@@ -844,6 +893,13 @@ SQL_API_RC SQL_API_FN CheckPassword(const char *userID,
    char      local_passwd[DB2SEC_MAX_PASSWORD_LENGTH + 1];
    char      dumpMsg[MAX_ERROR_MSG_SIZE];
 
+   struct berval ** serverCreds = NULL;
+   LDAPControl ** bindControls = NULL;
+   LDAPControl ** returnedControls = NULL;
+   int controlres = 0;
+   int controlerr = 0;
+   int controlwarn = 0;
+
    pluginConfig_t  *pCfg = db2ldapGetConfigDataPtr();
 
    *errorMessage = NULL;
@@ -942,7 +998,33 @@ SQL_API_RC SQL_API_FN CheckPassword(const char *userID,
    rc = initLDAP(&ld_auth, FALSE, errorMessage);
    if (rc != DB2SEC_PLUGIN_OK) goto exit;
 
-   rc = ldap_simple_bind_s(ld_auth, userDN, local_passwd);
+   if(pCfg->isSaslBindOn)
+   {
+      struct berval saslPasswd = {'\0'};
+
+      // password passed in to ldap_sasl_bind
+      saslPasswd.bv_len = strlen(local_passwd);
+      saslPasswd.bv_val = local_passwd;
+
+      // password policy
+      rc = ldap_add_control(LDAP_PWDPOLICY_CONTROL_OID, 0 , NULL, LDAP_OPT_OFF, &bindControls);
+
+      if( rc != LDAP_SUCCESS )
+      {
+         snprintf(dumpMsg, sizeof(dumpMsg), "LDAP CheckPassword:\n"
+                  "unexpected LDAP error adding password policy control \nldaprc=%d (%s)",
+                  rc, ldap_err2string(rc));
+         *errorMessage = strdup(dumpMsg);
+         rc = DB2SEC_PLUGIN_UNKNOWNERROR;
+         goto exit;
+      }
+
+      rc = ldap_sasl_bind_s(ld_auth, userDN, LDAP_SASL_SIMPLE, &saslPasswd, bindControls, NULL, serverCreds);
+   }
+   else
+   {
+      rc = ldap_simple_bind_s(ld_auth, userDN, local_passwd);
+   }
 #ifdef DB2LDAP_DEBUG
    snprintf(dumpMsg, sizeof(dumpMsg), "LDAP CheckPassword:\n"
             "bind rc=%d with '%s' / '%s'", rc, userDN, local_passwd);
@@ -967,6 +1049,50 @@ SQL_API_RC SQL_API_FN CheckPassword(const char *userID,
          rc = DB2SEC_PLUGIN_UNKNOWNERROR;
       }
       goto exit;
+   }
+
+   if(pCfg->isSaslBindOn)
+   {
+      // Bind was successful, and we are in SASL bind mode.
+      // Get the returned controls so we can check if the password was expired 
+      rc = ldap_get_bind_controls( ld_auth, &returnedControls );
+
+      if( rc != LDAP_SUCCESS )
+      {
+         snprintf(dumpMsg, sizeof(dumpMsg), "LDAP CheckPassword:\n"
+                  "unexpected error retrieving LDAP controls \nldaprc=%d (%s)",
+                  rc, ldap_err2string(rc));
+         *errorMessage = strdup(dumpMsg);
+         rc = DB2SEC_PLUGIN_UNKNOWNERROR;
+         goto exit;
+      }
+
+      // If controls were returned, attempt to parse them for the password policy
+      if( returnedControls != NULL )
+      {
+         ldap_parse_pwdpolicy_response(returnedControls, &controlerr, &controlwarn, &controlres);
+
+         if( controlerr != LDAP_SUCCESS )
+         {
+            switch( controlerr )
+            {
+               case LDAP_CHANGE_AFTER_RESET:
+               case LDAP_PASSWORD_EXPIRED:
+                  rc = DB2SEC_PLUGIN_PWD_EXPIRED;
+                  break;
+               case LDAP_ACCOUNT_LOCKED:
+                  rc = DB2SEC_PLUGIN_USER_SUSPENDED;
+                  break;
+               default:
+                  snprintf(dumpMsg, sizeof(dumpMsg), "LDAP CheckPassword:\n"
+                           "unexpected password policy response for user '%s'\ncontrolerr=%d (%s)",
+                           userDN, controlerr, ldap_pwdpolicy_err2string(controlerr));
+                  *errorMessage = strdup(dumpMsg);
+                  rc = DB2SEC_PLUGIN_UNKNOWNERROR;
+            }
+            goto exit;
+         }
+      }
    }
 
    /* Unbind the LDAP handle used for authentication. */
@@ -1024,6 +1150,9 @@ exit:
 
    if (ld      != NULL)  ldap_unbind_s(ld);
    if (ld_auth != NULL)  ldap_unbind_s(ld_auth);
+   if (returnedControls != NULL) ldap_controls_free(returnedControls);
+   if (bindControls != NULL) ldap_controls_free(bindControls);
+   if (serverCreds != NULL) ber_bvfree(*serverCreds);
 
    return(rc);
 }
