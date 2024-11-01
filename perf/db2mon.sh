@@ -10,10 +10,11 @@ export DB2OPTIONS=
 if [ -z "$dbName" ]
 then
    echo Specify a database to connect to!
-   echo Usage:
-   echo   db2mon.sh <DBNAME> [interval]
    echo
-   echo If no interval is specified, the default delay will be used
+   echo "Usage: db2mon.sh <dbname> [interval]"
+   echo
+   echo If no interval is specified, the default delay will be used.
+   echo An interval of zero allows the user to control when collection ends.
    exit 1
 fi
 
@@ -21,6 +22,8 @@ if [ -n "$monitorTime" ]; then
   if [ $monitorTime -eq $monitorTime 2> /dev/null ]; then
     if [ $monitorTime -gt 0 ]; then
       echo Monitoring interval set to $monitorTime seconds
+    elif [ $monitorTime -eq 0 ]; then
+      echo Monitoring interval set to zero - press enter to end monitoring interval
     else
       echo Error: Monitoring interval $monitorTime is negative - only positive intervals are supported
       exit -1
