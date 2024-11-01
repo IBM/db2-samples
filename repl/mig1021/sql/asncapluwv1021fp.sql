@@ -30,3 +30,4 @@
 --
 --***********************************************************
 
+ALTER TABLE !CAPSCHEMA!.IBMSNAP_CAPPARMS ADD COLUMN TRANS_COMMIT_MODE INT;

@@ -29,3 +29,7 @@
 --     environment
 --
 --********************************************************************/
+
+UPDATE !APPSCHEMA!.IBMQREP_APPLYPARMS SET CONTROL_TABLES_LEVEL = '1140.106';
+UPDATE !APPSCHEMA!.IBMQREP_APPLYPARMS SET CURRENT_LEVEL = '1140.106';
+
