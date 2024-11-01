@@ -239,13 +239,13 @@ SQL_API_RC SQL_API_FN DoesAuthIDExist(const char  *authID,
    int     rc = DB2SEC_PLUGIN_OK;
    int     filterLength = 0;
    LDAP   *ld = NULL;
-   char   *errmsg = NULL;
+   const char *errmsg = NULL;
    char    localAuthID[DB2SEC_MAX_AUTHID_LENGTH + 1];
    char    dumpMsg[MAX_ERROR_MSG_SIZE];
 
    *errorMessage = NULL;
    *errorMessageLength = 0;
-    
+
    if (authID == NULL || authIDLength <= 0)
    {
       snprintf(dumpMsg, sizeof(dumpMsg),
@@ -287,8 +287,6 @@ SQL_API_RC SQL_API_FN DoesAuthIDExist(const char  *authID,
                           FALSE,
                           NULL);
 
-   errmsg = NULL;
-
    switch (rc)
    {
       case GET_ATTRIB_OK:
@@ -300,16 +298,16 @@ SQL_API_RC SQL_API_FN DoesAuthIDExist(const char  *authID,
          rc = DB2SEC_PLUGIN_INVALIDUSERORGROUP;
          break;
       case GET_ATTRIB_LDAPERR:
-         errmsg = (char*)"LDAP error searching for AUTHID";
+         errmsg = "LDAP error searching for AUTHID";
          rc = DB2SEC_PLUGIN_UNKNOWNERROR;
          break;
       case GET_ATTRIB_NOMEM:
-         errmsg = (char*)"out of memory while searching for AUTHID";
+         errmsg = "out of memory while searching for AUTHID";
          rc = DB2SEC_PLUGIN_NOMEM;
          break;
       case GET_ATTRIB_BADINPUT:
       default:
-         errmsg = (char*)"Internal error while searching for AUTHID";
+         errmsg = "Internal error while searching for AUTHID";
          rc = DB2SEC_PLUGIN_UNKNOWNERROR;
          break;
    }
