@@ -259,6 +259,15 @@
   <xsl:text>Sort Shared Heap Top                   : </xsl:text>
     <xsl:value-of select="um:sort_shrheap_top/text()" />
   <xsl:text>&#10;</xsl:text>
+  <xsl:text>Session Priority                       : </xsl:text>
+    <xsl:value-of select="um:session_priority/text()" />
+  <xsl:text>&#10;</xsl:text>
+  <xsl:text>Tenant Name                            : </xsl:text>
+    <xsl:value-of select="um:tenant_name/text()" />
+  <xsl:text>&#10;</xsl:text>
+  <xsl:text>Tenant Id                              : </xsl:text>
+    <xsl:value-of select="um:tenant_id/text()" />
+  <xsl:text>&#10;</xsl:text>
   <!-- ========================================================== -->
   <!-- Print out the UOW metrics details                          -->
   <!-- Metrics that are not part of the document, are             -->
@@ -1053,6 +1062,39 @@
   <xsl:text>&#10;</xsl:text>
   <xsl:text>POOL_COL_CACHING_TIER_L_READS               : </xsl:text>
     <xsl:value-of select="um:system_metrics/um:pool_col_caching_tier_l_reads/text()" />
+  <xsl:text>&#10;</xsl:text>
+  <xsl:text>POOL_TEMP_DATA_CACHING_TIER_L_READS              : </xsl:text>
+    <xsl:value-of select="um:system_metrics/um:pool_temp_data_caching_tier_l_reads/text()" />
+  <xsl:text>&#10;</xsl:text>
+  <xsl:text>POOL_TEMP_INDEX_CACHING_TIER_L_READS             : </xsl:text>
+    <xsl:value-of select="um:system_metrics/um:pool_temp_index_caching_tier_l_reads/text()" />
+  <xsl:text>&#10;</xsl:text>
+  <xsl:text>POOL_TEMP_XDA_CACHING_TIER_L_READS               : </xsl:text>
+    <xsl:value-of select="um:system_metrics/um:pool_temp_xda_caching_tier_l_reads/text()" />
+  <xsl:text>&#10;</xsl:text>
+  <xsl:text>POOL_TEMP_COL_CACHING_TIER_L_READS               : </xsl:text>
+    <xsl:value-of select="um:system_metrics/um:pool_temp_col_caching_tier_l_reads/text()" />
+  <xsl:text>&#10;</xsl:text>
+  <xsl:text>POOL_TEMP_DATA_CACHING_TIER_PAGES_FOUND              : </xsl:text>
+    <xsl:value-of select="um:system_metrics/um:pool_temp_data_caching_tier_pages_found/text()" />
+  <xsl:text>&#10;</xsl:text>
+  <xsl:text>POOL_TEMP_INDEX_CACHING_TIER_PAGES_FOUND             : </xsl:text>
+    <xsl:value-of select="um:system_metrics/um:pool_temp_index_caching_tier_pages_found/text()" />
+  <xsl:text>&#10;</xsl:text>
+  <xsl:text>POOL_TEMP_XDA_CACHING_TIER_PAGES_FOUND               : </xsl:text>
+    <xsl:value-of select="um:system_metrics/um:pool_temp_xda_caching_tier_pages_found/text()" />
+  <xsl:text>&#10;</xsl:text>
+  <xsl:text>POOL_TEMP_COL_CACHING_TIER_PAGES_FOUND               : </xsl:text>
+    <xsl:value-of select="um:system_metrics/um:pool_temp_col_caching_tier_pages_found/text()" />
+  <xsl:text>&#10;</xsl:text>
+  <xsl:text>CACHING_TIER_DIRECT_READS             : </xsl:text>
+    <xsl:value-of select="um:system_metrics/um:caching_tier_direct_reads/text()" />
+  <xsl:text>&#10;</xsl:text>
+  <xsl:text>CACHING_TIER_DIRECT_READ_TIME               : </xsl:text>
+    <xsl:value-of select="um:system_metrics/um:caching_tier_direct_read_time/text()" />
+  <xsl:text>&#10;</xsl:text>
+  <xsl:text>CACHING_TIER_DIRECT_READ_REQS               : </xsl:text>
+    <xsl:value-of select="um:system_metrics/um:caching_tier_direct_read_reqs/text()" />
   <xsl:text>&#10;</xsl:text>
   <xsl:text>POOL_DATA_CACHING_TIER_PAGE_WRITES          : </xsl:text>
     <xsl:value-of select="um:system_metrics/um:pool_data_caching_tier_page_writes/text()" />
