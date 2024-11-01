@@ -46,6 +46,8 @@
 #include <stdlib.h>
 #include <string.h>
 
+#include "ossstring.h"
+
 #define MAXLINE 255
 
 char line[MAXLINE];
@@ -181,9 +183,9 @@ int main(int argc, char *args[])
       }
    else
       {
-      sprintf(f1, "%s", args[1]);
+      ossSnprintf(f1, sizeof(f1), "%s", args[1]);
       if (argc == 3)
-         strcpy(pwdfile, args[2]);
+         ossStrNCopy(pwdfile, args[2], sizeof(pwdfile));
       else
          strcpy(pwdfile, "asnpwd.aut");
       if ((fp1 = fopen(f1, "r")) == NULL)

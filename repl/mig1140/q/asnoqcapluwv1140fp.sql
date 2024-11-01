@@ -26,4 +26,5 @@
 --
 --********************************************************************/
 
+ALTER TABLE !CAPSCHEMA!.IBMQREP_CAPMON MODIFY CURRENT_MEMORY NUMBER(19);
 

@@ -23,3 +23,5 @@
 --
 --
 --********************************************************************/
+
+ALTER TABLE !SCHEMA!.IBMSNAP_MONSERVERS ADD CONNECTION_URL VARCHAR(300) DEFAULT NULL;
