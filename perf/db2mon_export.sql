@@ -24,9 +24,9 @@ echo  This script was generated                              ;
 echo                                                         ;
 echo    by db2mon.pl version 1.2.0                           ;
 echo                                                         ;
-echo    for DB2 version 11.1                                 ;
+echo    for DB2 version 11.5                                 ;
 echo                                                         ;
-echo    on Tue Nov  6 17:55:45 2018                          ;
+echo    on Thu May 20 13:48:56 2021                          ;
 echo                                                         ;
 echo    with 30 seconds pause between collections  ;
 echo    in db2mon.sql and db2mon_export.sql                  ;
@@ -55,7 +55,7 @@ echo ***************************** ;
 echo Checking db2mon prerequisites ;
 echo ***************************** ;
 echo                               ;
-with
+with /* IBM_DB2MON */
 utemp_check as ( 
   select count(*) utemp_count from syscat.tablespaces where datatype = 'U' ),
 config_check as (
@@ -85,32 +85,33 @@ from
     ( 'MON_OBJ_METRICS correct? ', case when obj_value in ('BASE','EXTENDED') then 'OK (currently ' || rtrim(obj_value) || ')' 
        else '******** Needs to be BASE or EXTENDED to get full data collection' end ) ) as t(prereq,msg);
 
-select cast(substr(current schema,1,24) as varchar(24)) as current_schema from sysibm.sysdummy1;
+/* IBM_DB2MON */ select cast(substr(current schema,1,24) as varchar(24)) as current_schema from sysibm.sysdummy1;
 
-export to db_get_cfg_start.ixf of ixf select current timestamp ts, t.* from table (db_get_cfg( -2) ) t with UR;
+export to db_get_cfg_start.ixf of ixf select /* IBM_DB2MON */ current timestamp ts, t.* from table (db_get_cfg( -2) ) t with UR;
 export to dbmcfg_start.ixf of ixf select current timestamp ts, t.* from sysibmadm.dbmcfg t with UR;
 export to env_cf_sys_resources_start.ixf of ixf select current timestamp ts, t.* from sysibmadm.env_cf_sys_resources t with UR;
-export to env_get_reg_variables_start.ixf of ixf select current timestamp ts, t.* from table (env_get_reg_variables( -2) ) t with UR;
-export to env_get_system_resources_start.ixf of ixf select current timestamp ts, t.* from table (sysproc.env_get_system_resources( ) ) t with UR;
+export to env_get_reg_variables_start.ixf of ixf select /* IBM_DB2MON */ current timestamp ts, t.* from table (env_get_reg_variables( -2) ) t with UR;
+export to env_get_system_resources_start.ixf of ixf select /* IBM_DB2MON */ current timestamp ts, t.* from table (sysproc.env_get_system_resources( ) ) t with UR;
 export to env_inst_info_start.ixf of ixf select current timestamp ts, t.* from sysibmadm.env_inst_info t with UR;
-export to mon_get_bufferpool_start.ixf of ixf select current timestamp ts, t.* from table (mon_get_bufferpool( null, -2) ) t with UR;
-export to mon_get_cf_start.ixf of ixf select current timestamp ts, t.* from table (mon_get_cf( null) ) t with UR;
-export to mon_get_cf_cmd_start.ixf of ixf select current timestamp ts, t.* from table (mon_get_cf_cmd( null) ) t with UR;
-export to mon_get_cf_wait_time_start.ixf of ixf select current timestamp ts, t.* from table (mon_get_cf_wait_time( -2) ) t with UR;
-export to mon_get_connection_start.ixf of ixf select current timestamp ts, t.* from table (mon_get_connection( null, -2) ) t with UR;
-export to mon_get_extended_latch_wait_start.ixf of ixf select current timestamp ts, t.* from table (mon_get_extended_latch_wait( -2) ) t with UR;
-export to mon_get_group_bufferpool_start.ixf of ixf select current timestamp ts, t.* from table (mon_get_group_bufferpool( -2) ) t with UR;
-export to mon_get_memory_pool_start.ixf of ixf select current timestamp ts, t.* from table (mon_get_memory_pool( 'database', null, -2) ) t with UR;
-export to mon_get_memory_set_start.ixf of ixf select current timestamp ts, t.* from table (mon_get_memory_set( null, null, -2) ) t with UR;
-export to mon_get_page_access_info_start.ixf of ixf select current timestamp ts, t.* from table (mon_get_page_access_info( null, null, -2) ) t with UR;
-export to mon_get_pkg_cache_stmt_start.ixf of ixf select current timestamp ts, t.* from table (mon_get_pkg_cache_stmt( null, null, null, -2) ) t where stmt_text not like 'CALL dbms_alert.sleep%' order by coord_stmt_exec_time desc with UR;
-export to mon_get_serverlist_start.ixf of ixf select current timestamp ts, t.* from table (mon_get_serverlist( -2) ) t with UR;
-export to mon_get_table_start.ixf of ixf select current timestamp ts, t.* from table (mon_get_table( null, null, -2) ) t with UR;
-export to mon_get_tablespace_start.ixf of ixf select current timestamp ts, t.* from table (mon_get_tablespace( null, -2) ) t with UR;
-export to mon_get_transaction_log_start.ixf of ixf select current timestamp ts, t.* from table (mon_get_transaction_log( -2) ) t with UR;
-export to mon_get_utility_start.ixf of ixf select current timestamp ts, t.* from table (mon_get_utility( -2) ) t with UR;
-export to mon_get_workload_start.ixf of ixf select current timestamp ts, t.* from table (mon_get_workload( null, -2) ) t with UR;
-export to mon_current_sql_plus_start.ixf of ixf with 
+export to mon_get_bufferpool_start.ixf of ixf select /* IBM_DB2MON */ current timestamp ts, t.* from table (mon_get_bufferpool( null, -2) ) t with UR;
+export to mon_get_cf_start.ixf of ixf select /* IBM_DB2MON */ current timestamp ts, t.* from table (mon_get_cf( null) ) t with UR;
+export to mon_get_cf_cmd_start.ixf of ixf select /* IBM_DB2MON */ current timestamp ts, t.* from table (mon_get_cf_cmd( null) ) t with UR;
+export to mon_get_cf_wait_time_start.ixf of ixf select /* IBM_DB2MON */ current timestamp ts, t.* from table (mon_get_cf_wait_time( -2) ) t with UR;
+export to mon_get_connection_start.ixf of ixf select /* IBM_DB2MON */ current timestamp ts, t.* from table (mon_get_connection( null, -2) ) t with UR;
+export to mon_get_extended_latch_wait_start.ixf of ixf select /* IBM_DB2MON */ current timestamp ts, t.* from table (mon_get_extended_latch_wait( -2) ) t with UR;
+export to mon_get_group_bufferpool_start.ixf of ixf select /* IBM_DB2MON */ current timestamp ts, t.* from table (mon_get_group_bufferpool( -2) ) t with UR;
+export to mon_get_index_start.ixf of ixf select /* IBM_DB2MON */ current timestamp ts, t.* from table (mon_get_index( null, null, -2) ) t with UR;
+export to mon_get_memory_pool_start.ixf of ixf select /* IBM_DB2MON */ current timestamp ts, t.* from table (mon_get_memory_pool( 'database', null, -2) ) t with UR;
+export to mon_get_memory_set_start.ixf of ixf select /* IBM_DB2MON */ current timestamp ts, t.* from table (mon_get_memory_set( null, null, -2) ) t with UR;
+export to mon_get_page_access_info_start.ixf of ixf select /* IBM_DB2MON */ current timestamp ts, t.* from table (mon_get_page_access_info( null, null, -2) ) t with UR;
+export to mon_get_pkg_cache_stmt_start.ixf of ixf select /* IBM_DB2MON */ current timestamp ts, t.* from table (mon_get_pkg_cache_stmt( null, null, null, -2) ) t where stmt_text not like 'CALL dbms_alert.sleep%' and stmt_text not like '%/* IBM_DB2MON */%' with UR;
+export to mon_get_serverlist_start.ixf of ixf select /* IBM_DB2MON */ current timestamp ts, t.* from table (mon_get_serverlist( -2) ) t with UR;
+export to mon_get_table_start.ixf of ixf select /* IBM_DB2MON */ current timestamp ts, t.* from table (mon_get_table( null, null, -2) ) t with UR;
+export to mon_get_tablespace_start.ixf of ixf select /* IBM_DB2MON */ current timestamp ts, t.* from table (mon_get_tablespace( null, -2) ) t where tbsp_used_pages > 1000 with UR;
+export to mon_get_transaction_log_start.ixf of ixf select /* IBM_DB2MON */ current timestamp ts, t.* from table (mon_get_transaction_log( -2) ) t with UR;
+export to mon_get_utility_start.ixf of ixf select /* IBM_DB2MON */ current timestamp ts, t.* from table (mon_get_utility( -2) ) t with UR;
+export to mon_get_workload_start.ixf of ixf select /* IBM_DB2MON */ current timestamp ts, t.* from table (mon_get_workload( null, -2) ) t with UR;
+export to mon_current_sql_plus_start.ixf of ixf with /* IBM_DB2MON */
   mga ( ts, count,
 coord_member,application_handle,uow_id,activity_id,executable_id,package_name,section_number,active_sorts,active_sorts_top,active_sort_consumers,active_sort_consumers_top,sort_shrheap_allocated,sort_shrheap_top,post_threshold_sorts,post_shrthreshold_sorts,post_threshold_hash_joins,post_shrthreshold_hash_joins,post_threshold_hash_grpbys,post_threshold_olap_funcs,total_act_time,total_act_wait_time,lock_wait_time,pool_read_time,direct_read_time,direct_write_time,fcm_recv_wait_time,fcm_send_wait_time,total_extended_latch_wait_time,log_disk_wait_time,cf_wait_time,reclaim_wait_time,spacemappage_reclaim_wait_time) as (
     select current timestamp, count(*),       coord_member,application_handle,uow_id,activity_id,
@@ -125,9 +126,11 @@ where
   mcs.application_handle = mga.application_handle and 
   mcs.coord_member = mga.coord_member and 
   mcs.uow_id = mga.uow_id and 
-  mcs.activity_id = mga.activity_id
- with UR;
-export to mon_get_locks_start.ixf of ixf select
+  mcs.activity_id = mga.activity_id and 
+  mcs.stmt_text not like '%/* IBM_DB2MON */%' with UR;
+export to mon_get_locks_start.ixf of ixf 
+   select
+   /* IBM_DB2MON */
    distinct
    member,
    application_handle,
@@ -139,32 +142,33 @@ export to mon_get_locks_start.ixf of ixf select
    tab_file_id
 from
    table ( mon_get_locks(null,-2) ) with UR;
-call dbms_alert.sleep(30);
-select current timestamp as monitor_end_time from sysibm.sysdummy1;
-export to db_get_cfg_end.ixf of ixf select current timestamp ts, t.* from table (db_get_cfg( -2) ) t with UR;
+/* IBM_DB2MON */ call dbms_alert.sleep(30);
+/* IBM_DB2MON */ select current timestamp as monitor_end_time from sysibm.sysdummy1;
+export to db_get_cfg_end.ixf of ixf select /* IBM_DB2MON */ current timestamp ts, t.* from table (db_get_cfg( -2) ) t with UR;
 export to dbmcfg_end.ixf of ixf select current timestamp ts, t.* from sysibmadm.dbmcfg t with UR;
 export to env_cf_sys_resources_end.ixf of ixf select current timestamp ts, t.* from sysibmadm.env_cf_sys_resources t with UR;
-export to env_get_reg_variables_end.ixf of ixf select current timestamp ts, t.* from table (env_get_reg_variables( -2) ) t with UR;
-export to env_get_system_resources_end.ixf of ixf select current timestamp ts, t.* from table (sysproc.env_get_system_resources( ) ) t with UR;
+export to env_get_reg_variables_end.ixf of ixf select /* IBM_DB2MON */ current timestamp ts, t.* from table (env_get_reg_variables( -2) ) t with UR;
+export to env_get_system_resources_end.ixf of ixf select /* IBM_DB2MON */ current timestamp ts, t.* from table (sysproc.env_get_system_resources( ) ) t with UR;
 export to env_inst_info_end.ixf of ixf select current timestamp ts, t.* from sysibmadm.env_inst_info t with UR;
-export to mon_get_bufferpool_end.ixf of ixf select current timestamp ts, t.* from table (mon_get_bufferpool( null, -2) ) t with UR;
-export to mon_get_cf_end.ixf of ixf select current timestamp ts, t.* from table (mon_get_cf( null) ) t with UR;
-export to mon_get_cf_cmd_end.ixf of ixf select current timestamp ts, t.* from table (mon_get_cf_cmd( null) ) t with UR;
-export to mon_get_cf_wait_time_end.ixf of ixf select current timestamp ts, t.* from table (mon_get_cf_wait_time( -2) ) t with UR;
-export to mon_get_connection_end.ixf of ixf select current timestamp ts, t.* from table (mon_get_connection( null, -2) ) t with UR;
-export to mon_get_extended_latch_wait_end.ixf of ixf select current timestamp ts, t.* from table (mon_get_extended_latch_wait( -2) ) t with UR;
-export to mon_get_group_bufferpool_end.ixf of ixf select current timestamp ts, t.* from table (mon_get_group_bufferpool( -2) ) t with UR;
-export to mon_get_memory_pool_end.ixf of ixf select current timestamp ts, t.* from table (mon_get_memory_pool( 'database', null, -2) ) t with UR;
-export to mon_get_memory_set_end.ixf of ixf select current timestamp ts, t.* from table (mon_get_memory_set( null, null, -2) ) t with UR;
-export to mon_get_page_access_info_end.ixf of ixf select current timestamp ts, t.* from table (mon_get_page_access_info( null, null, -2) ) t with UR;
-export to mon_get_pkg_cache_stmt_end.ixf of ixf select current timestamp ts, t.* from table (mon_get_pkg_cache_stmt( null, null, null, -2) ) t where stmt_text not like 'CALL dbms_alert.sleep%' order by coord_stmt_exec_time desc with UR;
-export to mon_get_serverlist_end.ixf of ixf select current timestamp ts, t.* from table (mon_get_serverlist( -2) ) t with UR;
-export to mon_get_table_end.ixf of ixf select current timestamp ts, t.* from table (mon_get_table( null, null, -2) ) t with UR;
-export to mon_get_tablespace_end.ixf of ixf select current timestamp ts, t.* from table (mon_get_tablespace( null, -2) ) t with UR;
-export to mon_get_transaction_log_end.ixf of ixf select current timestamp ts, t.* from table (mon_get_transaction_log( -2) ) t with UR;
-export to mon_get_utility_end.ixf of ixf select current timestamp ts, t.* from table (mon_get_utility( -2) ) t with UR;
-export to mon_get_workload_end.ixf of ixf select current timestamp ts, t.* from table (mon_get_workload( null, -2) ) t with UR;
-export to mon_current_sql_plus_end.ixf of ixf with 
+export to mon_get_bufferpool_end.ixf of ixf select /* IBM_DB2MON */ current timestamp ts, t.* from table (mon_get_bufferpool( null, -2) ) t with UR;
+export to mon_get_cf_end.ixf of ixf select /* IBM_DB2MON */ current timestamp ts, t.* from table (mon_get_cf( null) ) t with UR;
+export to mon_get_cf_cmd_end.ixf of ixf select /* IBM_DB2MON */ current timestamp ts, t.* from table (mon_get_cf_cmd( null) ) t with UR;
+export to mon_get_cf_wait_time_end.ixf of ixf select /* IBM_DB2MON */ current timestamp ts, t.* from table (mon_get_cf_wait_time( -2) ) t with UR;
+export to mon_get_connection_end.ixf of ixf select /* IBM_DB2MON */ current timestamp ts, t.* from table (mon_get_connection( null, -2) ) t with UR;
+export to mon_get_extended_latch_wait_end.ixf of ixf select /* IBM_DB2MON */ current timestamp ts, t.* from table (mon_get_extended_latch_wait( -2) ) t with UR;
+export to mon_get_group_bufferpool_end.ixf of ixf select /* IBM_DB2MON */ current timestamp ts, t.* from table (mon_get_group_bufferpool( -2) ) t with UR;
+export to mon_get_index_end.ixf of ixf select /* IBM_DB2MON */ current timestamp ts, t.* from table (mon_get_index( null, null, -2) ) t with UR;
+export to mon_get_memory_pool_end.ixf of ixf select /* IBM_DB2MON */ current timestamp ts, t.* from table (mon_get_memory_pool( 'database', null, -2) ) t with UR;
+export to mon_get_memory_set_end.ixf of ixf select /* IBM_DB2MON */ current timestamp ts, t.* from table (mon_get_memory_set( null, null, -2) ) t with UR;
+export to mon_get_page_access_info_end.ixf of ixf select /* IBM_DB2MON */ current timestamp ts, t.* from table (mon_get_page_access_info( null, null, -2) ) t with UR;
+export to mon_get_pkg_cache_stmt_end.ixf of ixf select /* IBM_DB2MON */ current timestamp ts, t.* from table (mon_get_pkg_cache_stmt( null, null, null, -2) ) t where stmt_text not like 'CALL dbms_alert.sleep%' and stmt_text not like '%/* IBM_DB2MON */%' with UR;
+export to mon_get_serverlist_end.ixf of ixf select /* IBM_DB2MON */ current timestamp ts, t.* from table (mon_get_serverlist( -2) ) t with UR;
+export to mon_get_table_end.ixf of ixf select /* IBM_DB2MON */ current timestamp ts, t.* from table (mon_get_table( null, null, -2) ) t with UR;
+export to mon_get_tablespace_end.ixf of ixf select /* IBM_DB2MON */ current timestamp ts, t.* from table (mon_get_tablespace( null, -2) ) t where tbsp_used_pages > 1000 with UR;
+export to mon_get_transaction_log_end.ixf of ixf select /* IBM_DB2MON */ current timestamp ts, t.* from table (mon_get_transaction_log( -2) ) t with UR;
+export to mon_get_utility_end.ixf of ixf select /* IBM_DB2MON */ current timestamp ts, t.* from table (mon_get_utility( -2) ) t with UR;
+export to mon_get_workload_end.ixf of ixf select /* IBM_DB2MON */ current timestamp ts, t.* from table (mon_get_workload( null, -2) ) t with UR;
+export to mon_current_sql_plus_end.ixf of ixf with /* IBM_DB2MON */
   mga ( ts, count,
 coord_member,application_handle,uow_id,activity_id,executable_id,package_name,section_number,active_sorts,active_sorts_top,active_sort_consumers,active_sort_consumers_top,sort_shrheap_allocated,sort_shrheap_top,post_threshold_sorts,post_shrthreshold_sorts,post_threshold_hash_joins,post_shrthreshold_hash_joins,post_threshold_hash_grpbys,post_threshold_olap_funcs,total_act_time,total_act_wait_time,lock_wait_time,pool_read_time,direct_read_time,direct_write_time,fcm_recv_wait_time,fcm_send_wait_time,total_extended_latch_wait_time,log_disk_wait_time,cf_wait_time,reclaim_wait_time,spacemappage_reclaim_wait_time) as (
     select current timestamp, count(*),       coord_member,application_handle,uow_id,activity_id,
@@ -179,9 +183,11 @@ where
   mcs.application_handle = mga.application_handle and 
   mcs.coord_member = mga.coord_member and 
   mcs.uow_id = mga.uow_id and 
-  mcs.activity_id = mga.activity_id
- with UR;
-export to mon_get_locks_end.ixf of ixf select
+  mcs.activity_id = mga.activity_id and 
+  mcs.stmt_text not like '%/* IBM_DB2MON */%' with UR;
+export to mon_get_locks_end.ixf of ixf 
+   select
+   /* IBM_DB2MON */
    distinct
    member,
    application_handle,
@@ -194,6 +200,7 @@ export to mon_get_locks_end.ixf of ixf select
 from
    table ( mon_get_locks(null,-2) ) with UR;
 export to syscat_tables.ixf of ixf select * from syscat.tables with UR;
+export to syscat_indexes.ixf of ixf select * from syscat.indexes with UR;
 export to syscat_tablespaces.ixf of ixf select * from syscat.tablespaces with UR;
 export to syscat_bufferpools.ixf of ixf select * from syscat.bufferpools with UR;
 export to syscat_sequences.ixf of ixf select * from syscat.sequences with UR;
