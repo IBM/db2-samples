@@ -182,9 +182,10 @@ int db2ldapReadConfig(pluginConfig_t *cfg,
    cfg->nestedGroups    = -1;
    cfg->isSSL           = -1;
    cfg->debug           = -1;
-   cfg->isFipsOn        = -1;
+   cfg->fipsMode        = -1;
    cfg->followReferrals = -1;
    cfg->securityProtocol = -1;
+   cfg->isSaslBindOn    = -1;
 
    linenum = 0;
    while (1)
@@ -328,7 +329,37 @@ int db2ldapReadConfig(pluginConfig_t *cfg,
       }
       else if (strcasecmp(key, CFGKEY_FIPS_MODE) == 0)
       {
-         ProcessKeyBool(cfg->isFipsOn);
+         if (cfg->fipsMode != -1)
+         {
+            snprintf(dumpMsg, sizeof(dumpMsg), "db2ldapReadConfig: "
+                     "duplicate key value for %s on line %d of %s",
+                     key, linenum, cfgfn);
+            *errorMessage = strdup(dumpMsg);
+            rc = DB2SEC_PLUGIN_BAD_INPUT_PARAMETERS;
+            goto exit;
+         }
+
+         if (strcasecmp(value, FIPS_MODE_STR_ON) == 0)
+         {
+            cfg->fipsMode = FIPS_MODE_ON;
+         }
+         else if (strcasecmp(value, FIPS_MODE_STR_OFF) == 0)
+         {
+            cfg->fipsMode = FIPS_MODE_OFF;
+         }
+         else if (strcasecmp(value, FIPS_MODE_STR_STRICT) == 0)
+         {
+            cfg->fipsMode = FIPS_MODE_STRICT;
+         }
+         else
+         {
+            snprintf(dumpMsg, sizeof(dumpMsg), "db2ldapReadConfig: "
+                     "bad value '%s' for key '%s' on line %d of %s",
+                     value, key, linenum, cfgfn);
+            *errorMessage = strdup(dumpMsg);
+            rc = DB2SEC_PLUGIN_BAD_INPUT_PARAMETERS;
+            goto exit;
+         }
       }
       else if (strcasecmp(key, CFGKEY_SECURITY_PROTOCOL) == 0)
       {
@@ -363,6 +394,10 @@ int db2ldapReadConfig(pluginConfig_t *cfg,
       else if (strcasecmp(key, CFGKEY_SSL_EXTN_SIGALG) == 0)
       {
          ProcessKeyVal(cfg->sslExtnSigAlg, CFG_MAX_EXTN_SIGALG);
+      }
+      else if (strcasecmp(key, CFGKEY_SASL_BIND) == 0)
+      {
+         ProcessKeyBool(cfg->isSaslBindOn);
       }
       else
       {
@@ -418,8 +453,9 @@ int db2ldapReadConfig(pluginConfig_t *cfg,
    if (-1 == cfg->nestedGroups   ) cfg->nestedGroups    = FALSE;
    if (-1 == cfg->isSSL          ) cfg->isSSL           = FALSE;
    if (-1 == cfg->debug          ) cfg->debug           = FALSE;
-   if (-1 == cfg->isFipsOn       ) cfg->isFipsOn        = TRUE;
+   if (-1 == cfg->fipsMode       ) cfg->fipsMode        = FIPS_MODE_ON;
    if (-1 == cfg->followReferrals) cfg->followReferrals = TRUE;
+   if (-1 == cfg->isSaslBindOn   ) cfg->isSaslBindOn    = FALSE;
 
 exit:
    if (fp != NULL) fclose(fp);

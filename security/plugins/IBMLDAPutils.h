@@ -69,7 +69,7 @@
 
 #define DB2LDAP_ESCAPE_CHAR     '\\'
 
-#define MAX_ERROR_MSG_SIZE      2048
+#define MAX_ERROR_MSG_SIZE      3048
 #define MAX_FILTER_LENGTH       2048
 
 #define DB2LDAP_MAX_DN_SIZE     1024
@@ -131,6 +131,7 @@
 #define CFGKEY_FIPS_MODE                "FIPS_MODE"
 #define CFGKEY_SECURITY_PROTOCOL        "SECURITY_PROTOCOL"
 #define CFGKEY_SSL_EXTN_SIGALG          "SSL_EXTN_SIGALG"
+#define CFGKEY_SASL_BIND                "SASL_BIND"
 
 #define GROUP_METHOD_STR_USER_ATTR      "USER_ATTRIBUTE"
 #define GROUP_METHOD_STR_SEARCH_BY_DN   "SEARCH_BY_DN"
@@ -141,6 +142,40 @@
 #define SECURITY_PROTOCOL_STR_TLS12     "TLSV12"
 #define SECURITY_PROTOCOL_ALL       1
 #define SECURITY_PROTOCOL_TLS12     2
+
+#define FIPS_MODE_STR_OFF    "FALSE"
+#define FIPS_MODE_STR_STRICT "STRICT"
+#define FIPS_MODE_STR_ON     "TRUE"
+
+#define FIPS_MODE_OFF 0
+#define FIPS_MODE_STRICT 1
+#define FIPS_MODE_ON 2
+
+// ISVD 10.0.1 changed the default set of TLS versions,
+// and added support for TLS 1.3. To provide equivalent
+// behaviour to ISDS 6.4 and to prevent issues when
+// customers apply fixpacks, we will use the old values
+// for the LDAP_SECURITY_PROTOCOL constants
+#define LDAP_SECURITY_PROTOCOL_OLD_ALL "SSLV3,TLS10,TLS11,TLS12"
+
+// TLS 1.1 and lower are insecure, so Db2 will enable only
+// TLS 1.2 by default unless explicitly configured by the customer
+#define LDAP_SECURITY_PROTOCOL_DB2_DEFAULT "TLS12"
+
+// Defaults when "strict FIPS" mode is enabled
+#define TLS_DEFAULT_STRICT_FIPS_VERSION_STRING LDAP_SECURITY_PROTOCOL_TLSV12
+#define TLS_DEFAULT_STRICT_FIPS_CIPHERS_STRING "TLS_ECDHE_RSA_WITH_AES_256_GCM_SHA384,"\
+                                               "TLS_ECDHE_ECDSA_WITH_AES_256_GCM_SHA384,"\
+                                               "TLS_ECDHE_RSA_WITH_AES_256_CBC_SHA384,"\
+                                               "TLS_ECDHE_ECDSA_WITH_AES_256_CBC_SHA384,"\
+                                               "TLS_ECDHE_RSA_WITH_AES_256_CBC_SHA,"\
+                                               "TLS_ECDHE_ECDSA_WITH_AES_256_CBC_SHA,"\
+                                               "TLS_ECDHE_RSA_WITH_AES_128_GCM_SHA256,"\
+                                               "TLS_ECDHE_ECDSA_WITH_AES_128_GCM_SHA256,"\
+                                               "TLS_ECDHE_RSA_WITH_AES_128_CBC_SHA256,"\
+                                               "TLS_ECDHE_ECDSA_WITH_AES_128_CBC_SHA256,"\
+                                               "TLS_ECDHE_RSA_WITH_AES_128_CBC_SHA,"\
+                                               "TLS_ECDHE_ECDSA_WITH_AES_128_CBC_SHA"
 
 //  The Supported signature hash extensions are:
 //    GSK_TLS_SIGALG_RSA_WITH_SHA224
@@ -168,8 +203,9 @@ typedef struct
     int  isSSL;
     int  followReferrals;
     int  debug;
-    int  isFipsOn;
+    int  fipsMode;
     int  securityProtocol;
+    int  isSaslBindOn;
 
     char ldapHost[CFG_MAX_HOST_SIZE+1];
 
