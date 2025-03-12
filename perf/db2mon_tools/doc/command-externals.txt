@@ -1,0 +1,9 @@
+External commands required by db2mon-tools
+  /usr/bin/cat
+  /usr/bin/date
+  /usr/bin/gnuplot
+  /usr/bin/kill
+  /usr/bin/perldoc
+  /usr/bin/ps
+  /usr/bin/sync
+  /usr/bin/uname

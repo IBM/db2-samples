@@ -24,9 +24,9 @@ echo  This script was generated                              ;
 echo                                                         ;
 echo    by db2mon.pl version 1.2.0                           ;
 echo                                                         ;
-echo    for DB2 version 11.1                                 ;
+echo    for DB2 version 11.5                                 ;
 echo                                                         ;
-echo    on Tue Nov  6 17:55:45 2018                          ;
+echo    on Thu May 20 13:48:56 2021                          ;
 echo                                                         ;
 echo    with 30 seconds pause between collections  ;
 echo    in db2mon.sql and db2mon_export.sql                  ;
@@ -53,7 +53,7 @@ echo                                                         ;
 echo ********************************************************;
 echo                                                         ;
 
-select cast(substr(current schema,1,24) as varchar(24)) as current_schema from sysibm.sysdummy1;
+/* IBM_DB2MON */ select cast(substr(current schema,1,24) as varchar(24)) as current_schema from sysibm.sysdummy1;
 
 --#SET TERMINATOR @
 
@@ -371,8 +371,8 @@ BEGIN
 
           set stmt_str = concat(stmt_str,
             ' union all select ' ||
-            '(select (((JULIAN_DAY(min(A.ts))-JULIAN_DAY(min(B.ts)))*24 + (HOUR(min(A.ts))-HOUR(min(B.ts))))*60 + (MINUTE(min(A.ts))-MINUTE(min(B.ts))))*60 + (SECOND(min(A.ts))-SECOND(min(B.ts))) from ' ||
-            base_table_name || '_end A, ' || base_table_name || '_start B) ,' ||
+            '(select (((JULIAN_DAY(A.MIN_TS)-JULIAN_DAY(B.MIN_TS))*24 + (HOUR(A.MIN_TS)-HOUR(B.MIN_TS)))*60 + (MINUTE(A.MIN_TS)-MINUTE(B.MIN_TS)))*60 + (SECOND(A.MIN_TS)-SECOND(B.MIN_TS)) ' ||
+            'from (select min(A.ts) as MIN_TS from ' || base_table_name || '_end A) A, (select min(B.ts) as MIN_TS from ' || base_table_name || '_start B) B),' ||
             'A.* from ' || concat( base_table_name,concat('_end A where not exists ',
             concat( '(select ', concat( b_keycolumn[1], concat( ' from ', concat( base_table_name,'_start B ')))))));
 
@@ -465,6 +465,9 @@ create index idx_mon_get_extended_latch_wait_start on mon_get_extended_latch_wai
 drop table mon_get_group_bufferpool_start;
 import from mon_get_group_bufferpool_start.ixf of ixf modified by forcecreate create into mon_get_group_bufferpool_start;
 create index idx_mon_get_group_bufferpool_start on mon_get_group_bufferpool_start (member);
+drop table mon_get_index_start;
+import from mon_get_index_start.ixf of ixf modified by forcecreate create into mon_get_index_start;
+create index idx_mon_get_index_start on mon_get_index_start (member, tabschema, tabname, iid, data_partition_id);
 drop table mon_get_memory_pool_start;
 import from mon_get_memory_pool_start.ixf of ixf modified by forcecreate create into mon_get_memory_pool_start;
 create index idx_mon_get_memory_pool_start on mon_get_memory_pool_start (member);
@@ -491,6 +494,7 @@ import from mon_get_transaction_log_start.ixf of ixf modified by forcecreate cre
 create index idx_mon_get_transaction_log_start on mon_get_transaction_log_start (member);
 drop table mon_get_utility_start;
 import from mon_get_utility_start.ixf of ixf modified by forcecreate create into mon_get_utility_start;
+create index idx_mon_get_utility_start on mon_get_utility_start (member, coord_member);
 drop table mon_get_workload_start;
 import from mon_get_workload_start.ixf of ixf modified by forcecreate create into mon_get_workload_start;
 create index idx_mon_get_workload_start on mon_get_workload_start (member, workload_name);
@@ -536,6 +540,9 @@ create index idx_mon_get_extended_latch_wait_end on mon_get_extended_latch_wait_
 drop table mon_get_group_bufferpool_end;
 import from mon_get_group_bufferpool_end.ixf of ixf modified by forcecreate create into mon_get_group_bufferpool_end;
 create index idx_mon_get_group_bufferpool_end on mon_get_group_bufferpool_end (member);
+drop table mon_get_index_end;
+import from mon_get_index_end.ixf of ixf modified by forcecreate create into mon_get_index_end;
+create index idx_mon_get_index_end on mon_get_index_end (member, tabschema, tabname, iid, data_partition_id);
 drop table mon_get_memory_pool_end;
 import from mon_get_memory_pool_end.ixf of ixf modified by forcecreate create into mon_get_memory_pool_end;
 create index idx_mon_get_memory_pool_end on mon_get_memory_pool_end (member);
@@ -562,12 +569,16 @@ import from mon_get_transaction_log_end.ixf of ixf modified by forcecreate creat
 create index idx_mon_get_transaction_log_end on mon_get_transaction_log_end (member);
 drop table mon_get_utility_end;
 import from mon_get_utility_end.ixf of ixf modified by forcecreate create into mon_get_utility_end;
+create index idx_mon_get_utility_end on mon_get_utility_end (member, coord_member);
 drop table mon_get_workload_end;
 import from mon_get_workload_end.ixf of ixf modified by forcecreate create into mon_get_workload_end;
 create index idx_mon_get_workload_end on mon_get_workload_end (member, workload_name);
 drop table syscat_tables;
 import from syscat_tables.ixf of ixf modified by forcecreate create into syscat_tables;
 create index idx_syscat_tables on syscat_tables (tbspaceid,tableid);
+drop table syscat_indexes;
+import from syscat_indexes.ixf of ixf modified by forcecreate create into syscat_indexes;
+create index idx_syscat_indexes on syscat_indexes (tabschema, tabname, iid);
 drop table syscat_tablespaces;
 import from syscat_tablespaces.ixf of ixf modified by forcecreate create into syscat_tablespaces;
 create index idx_syscat_tablespaces on syscat_tablespaces (tbspaceid);
@@ -576,31 +587,33 @@ import from syscat_bufferpools.ixf of ixf modified by forcecreate create into sy
 create index idx_syscat_bufferpools on syscat_bufferpools (bufferpoolid);
 drop table syscat_sequences;
 import from syscat_sequences.ixf of ixf modified by forcecreate create into syscat_sequences;
-call db2mon.diff_quiet_drop( 'table env_get_system_resources_diff' );
-call db2mon.diff('env_get_system_resources','member','os_name,host_name,os_version,os_release,cpu_total,cpu_online,cpu_configured,cpu_speed,cpu_hmt_degree,memory_total,memory_free,cpu_load_short,cpu_load_medium,cpu_load_long,cpu_usage_total');
-call db2mon.diff_quiet_drop( 'table mon_get_bufferpool_diff' );
-call db2mon.diff('mon_get_bufferpool','member,bp_name','bp_cur_buffsz,automatic');
-call db2mon.diff_quiet_drop( 'table mon_get_cf_cmd_diff' );
-call db2mon.diff('mon_get_cf_cmd','hostname,id,cf_cmd_name','');
-call db2mon.diff_quiet_drop( 'table mon_get_cf_wait_time_diff' );
-call db2mon.diff('mon_get_cf_wait_time','member,hostname,id,cf_cmd_name','');
-call db2mon.diff_quiet_drop( 'table mon_get_connection_diff' );
-call db2mon.diff('mon_get_connection','member,application_name,application_handle,client_applname','connection_reusability_status,reusability_status_reason');
-call db2mon.diff_quiet_drop( 'table mon_get_extended_latch_wait_diff' );
-call db2mon.diff('mon_get_extended_latch_wait','member,latch_name','');
-call db2mon.diff_quiet_drop( 'table mon_get_group_bufferpool_diff' );
-call db2mon.diff('mon_get_group_bufferpool','member','');
-call db2mon.diff_quiet_drop( 'table mon_get_page_access_info_diff' );
-call db2mon.diff('mon_get_page_access_info','member,tabschema,tabname,objtype,data_partition_id,iid','');
-call db2mon.diff_quiet_drop( 'table mon_get_pkg_cache_stmt_diff' );
-call db2mon.diff('mon_get_pkg_cache_stmt','member,planid,executable_id','package_name,stmt_text,stmtid,semantic_env_id,active_sorts_top,sort_heap_top,sort_shrheap_top');
-create index idx_mon_get_pkg_cache_stmt_diff on mon_get_pkg_cache_stmt_diff (member, planid, executable_id);
-call db2mon.diff_quiet_drop( 'table mon_get_table_diff' );
-call db2mon.diff('mon_get_table','member,tabname,tabschema,data_partition_id,tbsp_id,tab_file_id','data_sharing_state_change_time,data_sharing_state');
-create index idx_mon_get_table_diff on mon_get_table_diff (member, tabname, tabschema, data_partition_id, tbsp_id, tab_file_id);
-call db2mon.diff_quiet_drop( 'table mon_get_tablespace_diff' );
-call db2mon.diff('mon_get_tablespace','member,tbsp_name','tbsp_page_size,tbsp_id,tbsp_extent_size,tbsp_prefetch_size,fs_caching');
-call db2mon.diff_quiet_drop( 'table mon_get_transaction_log_diff' );
-call db2mon.diff('mon_get_transaction_log','member','');
-call db2mon.diff_quiet_drop( 'table mon_get_workload_diff' );
-call db2mon.diff('mon_get_workload','member,workload_name','sort_shrheap_allocated');
+/* IBM_DB2MON */ call db2mon.diff_quiet_drop( 'table env_get_system_resources_diff' );
+/* IBM_DB2MON */ call db2mon.diff('env_get_system_resources','member','os_name,host_name,os_version,os_release,cpu_total,cpu_online,cpu_configured,cpu_speed,cpu_hmt_degree,memory_total,memory_free,cpu_load_short,cpu_load_medium,cpu_load_long,cpu_usage_total');
+/* IBM_DB2MON */ call db2mon.diff_quiet_drop( 'table mon_get_bufferpool_diff' );
+/* IBM_DB2MON */ call db2mon.diff('mon_get_bufferpool','member,bp_name','bp_cur_buffsz,automatic');
+/* IBM_DB2MON */ call db2mon.diff_quiet_drop( 'table mon_get_cf_cmd_diff' );
+/* IBM_DB2MON */ call db2mon.diff('mon_get_cf_cmd','hostname,id,cf_cmd_name','');
+/* IBM_DB2MON */ call db2mon.diff_quiet_drop( 'table mon_get_cf_wait_time_diff' );
+/* IBM_DB2MON */ call db2mon.diff('mon_get_cf_wait_time','member,hostname,id,cf_cmd_name','');
+/* IBM_DB2MON */ call db2mon.diff_quiet_drop( 'table mon_get_connection_diff' );
+/* IBM_DB2MON */ call db2mon.diff('mon_get_connection','member,application_name,application_handle,client_applname','connection_reusability_status,reusability_status_reason');
+/* IBM_DB2MON */ call db2mon.diff_quiet_drop( 'table mon_get_extended_latch_wait_diff' );
+/* IBM_DB2MON */ call db2mon.diff('mon_get_extended_latch_wait','member,latch_name','');
+/* IBM_DB2MON */ call db2mon.diff_quiet_drop( 'table mon_get_group_bufferpool_diff' );
+/* IBM_DB2MON */ call db2mon.diff('mon_get_group_bufferpool','member','');
+/* IBM_DB2MON */ call db2mon.diff_quiet_drop( 'table mon_get_index_diff' );
+/* IBM_DB2MON */ call db2mon.diff('mon_get_index','member,tabschema,tabname,iid,data_partition_id','');
+/* IBM_DB2MON */ call db2mon.diff_quiet_drop( 'table mon_get_page_access_info_diff' );
+/* IBM_DB2MON */ call db2mon.diff('mon_get_page_access_info','member,tabschema,tabname,objtype,data_partition_id,iid','');
+/* IBM_DB2MON */ call db2mon.diff_quiet_drop( 'table mon_get_pkg_cache_stmt_diff' );
+/* IBM_DB2MON */ call db2mon.diff('mon_get_pkg_cache_stmt','member,planid,executable_id','package_name,stmt_text,effective_isolation,stmtid,semantic_env_id,active_sorts_top,sort_heap_top,sort_shrheap_top');
+/* IBM_DB2MON */ create index idx_mon_get_pkg_cache_stmt_diff on mon_get_pkg_cache_stmt_diff (member, planid, executable_id);
+/* IBM_DB2MON */ call db2mon.diff_quiet_drop( 'table mon_get_table_diff' );
+/* IBM_DB2MON */ call db2mon.diff('mon_get_table','member,tabname,tabschema,data_partition_id,tbsp_id,tab_file_id','data_sharing_state_change_time,data_sharing_state');
+/* IBM_DB2MON */ create index idx_mon_get_table_diff on mon_get_table_diff (member, tabname, tabschema, data_partition_id, tbsp_id, tab_file_id);
+/* IBM_DB2MON */ call db2mon.diff_quiet_drop( 'table mon_get_tablespace_diff' );
+/* IBM_DB2MON */ call db2mon.diff('mon_get_tablespace','member,tbsp_name','tbsp_page_size,tbsp_id,tbsp_extent_size,tbsp_prefetch_size,fs_caching');
+/* IBM_DB2MON */ call db2mon.diff_quiet_drop( 'table mon_get_transaction_log_diff' );
+/* IBM_DB2MON */ call db2mon.diff('mon_get_transaction_log','member','');
+/* IBM_DB2MON */ call db2mon.diff_quiet_drop( 'table mon_get_workload_diff' );
+/* IBM_DB2MON */ call db2mon.diff('mon_get_workload','member,workload_name','sort_shrheap_allocated');

@@ -1,1 +1,1 @@
-call dbms_alert.sleep(30);
+/* IBM_DB2MON */ call dbms_alert.sleep(30);

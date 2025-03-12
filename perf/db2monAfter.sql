@@ -1,30 +1,31 @@
-select current timestamp as monitor_end_time from sysibm.sysdummy1;
-insert into session.db_get_cfg_end select current timestamp,member, name, value, value_flags from table (db_get_cfg( -2) );
-insert into session.dbmcfg_end select current timestamp,name, value, value_flags from sysibmadm.dbmcfg;
-insert into session.env_cf_sys_resources_end select current timestamp,id, name, value, unit from sysibmadm.env_cf_sys_resources;
-insert into session.env_get_reg_variables_end select current timestamp,member, reg_var_name, reg_var_value, level from table (env_get_reg_variables( -2) );
-insert into session.env_get_system_resources_end select current timestamp,member, os_name, host_name, os_version, os_release, cpu_total, cpu_online, cpu_configured, cpu_speed, cpu_hmt_degree, memory_total, memory_free, cpu_load_short, cpu_load_medium, cpu_load_long, cpu_usage_total, swap_pages_in, swap_pages_out from table (sysproc.env_get_system_resources( ) );
-insert into session.env_inst_info_end select current timestamp,inst_name, num_dbpartitions, service_level, bld_level, ptf, num_members from sysibmadm.env_inst_info;
-insert into session.mon_get_bufferpool_end select current timestamp,member, bp_name, bp_cur_buffsz, automatic, pool_read_time, pool_data_l_reads, pool_data_p_reads, pool_async_read_time, pool_async_data_reads, pool_async_index_reads, pool_async_xda_reads, pool_data_writes, pool_async_data_writes, pool_data_lbp_pages_found, pool_async_data_lbp_pages_found, pool_temp_data_l_reads, pool_temp_data_p_reads, pool_index_lbp_pages_found, pool_async_index_lbp_pages_found, pool_temp_index_l_reads, pool_temp_index_p_reads, pool_write_time, pool_async_write_time, pool_index_l_reads, pool_index_p_reads, pool_index_writes, pool_async_index_writes, pool_xda_l_reads, pool_temp_xda_l_reads, pool_xda_p_reads, pool_temp_xda_p_reads, pool_xda_writes, pool_async_xda_writes, pool_data_gbp_l_reads, pool_data_gbp_p_reads, pool_index_gbp_l_reads, pool_index_gbp_p_reads, pool_data_gbp_invalid_pages, pool_async_data_gbp_invalid_pages, pool_index_gbp_invalid_pages, pool_async_index_gbp_invalid_pages, pool_col_l_reads, pool_col_p_reads, pool_async_col_reads, pool_col_writes, pool_async_col_writes, pool_col_lbp_pages_found, pool_async_col_lbp_pages_found, pool_temp_col_l_reads, pool_temp_col_p_reads from table (mon_get_bufferpool( null, -2) );
-insert into session.mon_get_cf_end select current timestamp,id, host_name, current_cf_mem_size, configured_cf_mem_size, current_cf_gbp_size, configured_cf_gbp_size, target_cf_gbp_size, current_cf_lock_size, configured_cf_lock_size, target_cf_lock_size, current_cf_sca_size, configured_cf_sca_size, target_cf_sca_size from table (mon_get_cf( null) );
-insert into session.mon_get_cf_cmd_end select current timestamp,hostname, id, cf_cmd_name, total_cf_requests, total_cf_cmd_time_micro from table (mon_get_cf_cmd( null) );
-insert into session.mon_get_cf_wait_time_end select current timestamp,member, hostname, id, cf_cmd_name, total_cf_requests, total_cf_wait_time_micro from table (mon_get_cf_wait_time( -2) );
-insert into session.mon_get_connection_end select current timestamp,member, application_name, application_handle, client_applname, connection_reusability_status, reusability_status_reason, client_idle_wait_time, total_rqst_time, rqsts_completed_total, total_wait_time, lock_wait_time, log_disk_wait_time, fcm_recv_wait_time, fcm_send_wait_time, pool_write_time, pool_read_time, direct_write_time, direct_read_time, total_section_sort_time, total_commit_time, total_runstats_time, total_reorg_time, total_load_time, total_app_commits, total_app_rollbacks, deadlocks, rows_modified, rows_read, rows_returned, total_sorts, total_reorgs, total_loads, total_runstats, pool_data_l_reads, pool_data_p_reads, pool_index_l_reads, pool_index_p_reads, cf_wait_time, reclaim_wait_time, total_extended_latch_wait_time, prefetch_wait_time, diaglog_write_wait_time, log_buffer_wait_time, lock_wait_time_global, pool_col_l_reads, pool_col_p_reads from table (mon_get_connection( null, -2) );
-insert into session.mon_get_extended_latch_wait_end select current timestamp,member, latch_name, total_extended_latch_wait_time, total_extended_latch_waits from table (mon_get_extended_latch_wait( -2) );
-insert into session.mon_get_group_bufferpool_end select current timestamp,member, num_gbp_full from table (mon_get_group_bufferpool( -2) );
-insert into session.mon_get_memory_pool_end select current timestamp,member, memory_pool_type, db_name, memory_pool_used, memory_pool_used_hwm from table (mon_get_memory_pool( 'database', null, -2) );
-insert into session.mon_get_memory_set_end select current timestamp,member, memory_set_type, db_name, memory_set_used, memory_set_used_hwm from table (mon_get_memory_set( null, null, -2) );
-insert into session.mon_get_page_access_info_end select current timestamp,member, tabschema, tabname, objtype, data_partition_id, iid, page_reclaims_x, page_reclaims_s, reclaim_wait_time, spacemappage_page_reclaims_x, spacemappage_page_reclaims_s, spacemappage_reclaim_wait_time from table (mon_get_page_access_info( null, null, -2) );
-insert into session.mon_get_pkg_cache_stmt_end select current timestamp,member, planid, executable_id, package_name, stmt_text, stmtid, semantic_env_id, active_sorts_top, sort_heap_top, sort_shrheap_top, num_exec_with_metrics, coord_stmt_exec_time, total_act_time, total_cpu_time, total_act_wait_time, lock_wait_time, log_disk_wait_time, log_buffer_wait_time, pool_write_time, pool_read_time, direct_write_time, direct_read_time, rows_modified, rows_read, rows_returned, total_sorts, sort_overflows, total_section_time, total_section_sort_time, pool_data_l_reads, pool_index_l_reads, pool_data_p_reads, pool_index_p_reads, pool_data_writes, pool_index_writes, pool_temp_data_p_reads, pool_temp_index_p_reads, direct_read_reqs, direct_write_reqs, cf_wait_time, reclaim_wait_time, total_extended_latch_wait_time, lock_wait_time_global, prefetch_wait_time, diaglog_write_wait_time, fcm_recv_wait_time, fcm_send_wait_time, pool_col_l_reads, pool_col_p_reads, total_col_time, col_synopsis_rows_inserted from table (mon_get_pkg_cache_stmt( null, null, null, -2) ) where stmt_text not like 'CALL dbms_alert.sleep%' order by coord_stmt_exec_time desc;
-insert into session.mon_get_serverlist_end select current timestamp,member, cached_timestamp, hostname, port_number, ssl_port_number, priority from table (mon_get_serverlist( -2) );
-insert into session.mon_get_table_end select current timestamp,member, tabname, tabschema, data_partition_id, tbsp_id, tab_file_id, data_sharing_state_change_time, data_sharing_state, rows_read, rows_inserted, rows_updated, rows_deleted, overflow_accesses, overflow_creates, page_reorgs, direct_read_reqs, direct_write_reqs, object_data_p_reads, object_data_l_reads, data_sharing_remote_lockwait_count, data_sharing_remote_lockwait_time, col_object_l_pages from table (mon_get_table( null, null, -2) );
-insert into session.mon_get_tablespace_end select current timestamp,member, tbsp_name, tbsp_page_size, tbsp_id, tbsp_extent_size, tbsp_prefetch_size, fs_caching, pool_read_time, pool_async_read_time, pool_write_time, pool_async_write_time, pool_data_writes, pool_async_data_writes, pool_index_writes, pool_async_index_writes, pool_data_l_reads, pool_temp_data_l_reads, pool_async_data_reads, pool_data_p_reads, pool_temp_data_p_reads, pool_async_index_reads, pool_index_l_reads, pool_temp_index_l_reads, pool_index_p_reads, pool_temp_index_p_reads, pool_xda_l_reads, pool_temp_xda_l_reads, pool_async_xda_reads, pool_xda_p_reads, pool_temp_xda_p_reads, pool_xda_writes, pool_async_xda_writes, unread_prefetch_pages, vectored_ios, pages_from_vectored_ios, block_ios, pages_from_block_ios, pool_data_lbp_pages_found, pool_index_lbp_pages_found, pool_async_data_lbp_pages_found, pool_async_index_lbp_pages_found, direct_read_reqs, direct_write_reqs, direct_read_time, direct_write_time, tbsp_used_pages, tbsp_page_top, pool_data_gbp_l_reads, pool_data_gbp_p_reads, pool_index_gbp_l_reads, pool_index_gbp_p_reads, pool_data_gbp_invalid_pages, pool_async_data_gbp_invalid_pages, pool_index_gbp_invalid_pages, pool_async_index_gbp_invalid_pages, pool_async_data_gbp_l_reads, pool_async_data_gbp_p_reads, pool_async_data_gbp_indep_pages_found_in_lbp, pool_async_index_gbp_l_reads, pool_async_index_gbp_p_reads, pool_async_index_gbp_indep_pages_found_in_lbp, prefetch_wait_time, prefetch_waits, skipped_prefetch_data_p_reads, skipped_prefetch_index_p_reads, skipped_prefetch_temp_data_p_reads, skipped_prefetch_temp_index_p_reads, pool_col_l_reads, pool_col_p_reads, pool_async_col_reads, pool_col_writes, pool_async_col_writes, pool_col_lbp_pages_found, pool_async_col_lbp_pages_found, pool_temp_col_l_reads, pool_temp_col_p_reads from table (mon_get_tablespace( null, -2) );
-insert into session.mon_get_transaction_log_end select current timestamp,member, log_writes, log_write_time, num_log_write_io, num_log_part_page_io, num_log_buffer_full, log_reads, log_read_time, num_log_read_io, log_hadr_wait_time, log_hadr_waits_total, num_log_data_found_in_buffer, cur_commit_log_buff_log_reads, cur_commit_disk_log_reads from table (mon_get_transaction_log( -2) );
-insert into session.mon_get_utility_end select current timestamp,coord_member, application_handle, utility_start_time, utility_type, utility_operation_type, utility_detail from table (mon_get_utility( -2) );
-insert into session.mon_get_workload_end select current timestamp,member, workload_name, sort_shrheap_allocated, act_completed_total, total_act_time, total_rqst_time, total_wait_time, lock_wait_time, log_disk_wait_time, pool_write_time, pool_read_time, direct_write_time, direct_read_time, tcpip_recv_wait_time, tcpip_send_wait_time, fcm_recv_wait_time, fcm_send_wait_time, total_cpu_time, total_compile_time, total_compile_proc_time, total_routine_time, total_section_sort_time, total_section_sort_proc_time, total_section_time, total_section_proc_time, total_commit_time, total_rollback_time, total_runstats_time, total_reorg_time, total_load_time, total_app_commits, total_app_rollbacks, deadlocks, lock_timeouts, lock_escals, client_idle_wait_time, rows_modified, rows_read, rows_returned, pkg_cache_inserts, total_sorts, sort_overflows, post_threshold_sorts, post_shrthreshold_sorts, total_reorgs, total_loads, total_runstats, pool_data_l_reads, pool_data_p_reads, pool_temp_data_p_reads, pool_index_l_reads, pool_index_p_reads, pool_temp_index_p_reads, pool_xda_p_reads, pool_temp_xda_p_reads, lock_wait_time_global, total_extended_latch_wait_time, reclaim_wait_time, cf_wait_time, prefetch_wait_time, log_buffer_wait_time, lock_timeouts_global, lock_escals_maxlocks, lock_escals_locklist, lock_escals_global, total_routine_user_code_time, diaglog_write_wait_time, total_connect_request_time, total_connect_request_proc_time, select_sql_stmts, uid_sql_stmts, rows_inserted, rows_updated, total_col_time, total_col_proc_time, total_backup_time, total_index_build_time, total_hash_joins, hash_join_overflows, post_threshold_hash_joins, post_shrthreshold_hash_joins, total_peds, post_threshold_peds, disabled_peds, total_peas, post_threshold_peas, pool_col_l_reads, pool_col_p_reads, pool_temp_col_p_reads, total_col_synopsis_time, ext_table_recv_wait_time, ext_table_recvs_total, ext_table_recv_volume, ext_table_read_volume, ext_table_send_wait_time, ext_table_sends_total, ext_table_send_volume, ext_table_write_volume from table (mon_get_workload( null, -2) );
+/* IBM_DB2MON */ select current timestamp as monitor_end_time from sysibm.sysdummy1;
+/* IBM_DB2MON */ insert into session.db_get_cfg_end select current timestamp,member, name, value, value_flags from table (db_get_cfg( -2) );
+/* IBM_DB2MON */ insert into session.dbmcfg_end select current timestamp,name, value, value_flags from sysibmadm.dbmcfg;
+/* IBM_DB2MON */ insert into session.env_cf_sys_resources_end select current timestamp,id, name, value, unit from sysibmadm.env_cf_sys_resources;
+/* IBM_DB2MON */ insert into session.env_get_reg_variables_end select current timestamp,member, reg_var_name, reg_var_value, level from table (env_get_reg_variables( -2) );
+/* IBM_DB2MON */ insert into session.env_get_system_resources_end select current timestamp,member, os_name, host_name, os_version, os_release, cpu_total, cpu_online, cpu_configured, cpu_speed, cpu_hmt_degree, memory_total, memory_free, cpu_load_short, cpu_load_medium, cpu_load_long, cpu_usage_total, swap_pages_in, swap_pages_out from table (sysproc.env_get_system_resources( ) );
+/* IBM_DB2MON */ insert into session.env_inst_info_end select current timestamp,inst_name, num_dbpartitions, service_level, bld_level, ptf, num_members from sysibmadm.env_inst_info;
+/* IBM_DB2MON */ insert into session.mon_get_bufferpool_end select current timestamp,member, bp_name, bp_cur_buffsz, automatic, pool_read_time, pool_data_l_reads, pool_data_p_reads, pool_async_read_time, pool_async_data_reads, pool_async_index_reads, pool_async_xda_reads, pool_data_writes, pool_async_data_writes, pool_data_lbp_pages_found, pool_async_data_lbp_pages_found, pool_temp_data_l_reads, pool_temp_data_p_reads, pool_index_lbp_pages_found, pool_async_index_lbp_pages_found, pool_temp_index_l_reads, pool_temp_index_p_reads, pool_write_time, pool_async_write_time, pool_index_l_reads, pool_index_p_reads, pool_index_writes, pool_async_index_writes, pool_xda_l_reads, pool_temp_xda_l_reads, pool_xda_p_reads, pool_temp_xda_p_reads, pool_xda_writes, pool_async_xda_writes, pool_data_gbp_l_reads, pool_data_gbp_p_reads, pool_index_gbp_l_reads, pool_index_gbp_p_reads, pool_data_gbp_invalid_pages, pool_async_data_gbp_invalid_pages, pool_index_gbp_invalid_pages, pool_async_index_gbp_invalid_pages, pool_col_l_reads, pool_col_p_reads, pool_async_col_reads, pool_col_writes, pool_async_col_writes, pool_col_lbp_pages_found, pool_async_col_lbp_pages_found, pool_temp_col_l_reads, pool_temp_col_p_reads from table (mon_get_bufferpool( null, -2) );
+/* IBM_DB2MON */ insert into session.mon_get_cf_end select current timestamp,id, host_name, current_cf_mem_size, configured_cf_mem_size, current_cf_gbp_size, configured_cf_gbp_size, target_cf_gbp_size, current_cf_lock_size, configured_cf_lock_size, target_cf_lock_size, current_cf_sca_size, configured_cf_sca_size, target_cf_sca_size from table (mon_get_cf( null) );
+/* IBM_DB2MON */ insert into session.mon_get_cf_cmd_end select current timestamp,hostname, id, cf_cmd_name, total_cf_requests, total_cf_cmd_time_micro from table (mon_get_cf_cmd( null) );
+/* IBM_DB2MON */ insert into session.mon_get_cf_wait_time_end select current timestamp,member, hostname, id, cf_cmd_name, total_cf_requests, total_cf_wait_time_micro from table (mon_get_cf_wait_time( -2) );
+/* IBM_DB2MON */ insert into session.mon_get_connection_end select current timestamp,member, application_name, application_handle, client_applname, connection_reusability_status, reusability_status_reason, client_idle_wait_time, total_rqst_time, rqsts_completed_total, total_wait_time, lock_wait_time, log_disk_wait_time, fcm_recv_wait_time, fcm_send_wait_time, pool_write_time, pool_read_time, direct_write_time, direct_read_time, total_section_sort_time, total_commit_time, total_runstats_time, total_reorg_time, total_load_time, total_app_commits, total_app_rollbacks, deadlocks, rows_modified, rows_read, rows_returned, total_sorts, total_reorgs, total_loads, total_runstats, pool_data_l_reads, pool_data_p_reads, pool_index_l_reads, pool_index_p_reads, ida_send_wait_time, ida_recv_wait_time, cf_wait_time, reclaim_wait_time, total_extended_latch_wait_time, prefetch_wait_time, diaglog_write_wait_time, log_buffer_wait_time, audit_file_write_wait_time, audit_subsystem_wait_time, fcm_message_recv_wait_time, fcm_message_send_wait_time, fcm_tq_recv_wait_time, fcm_tq_send_wait_time, evmon_wait_time, lock_wait_time_global, pool_col_l_reads, pool_col_p_reads, comm_exit_wait_time, ext_table_recv_wait_time, ext_table_send_wait_time, lob_prefetch_wait_time, fed_wait_time from table (mon_get_connection( null, -2) );
+/* IBM_DB2MON */ insert into session.mon_get_extended_latch_wait_end select current timestamp,member, latch_name, total_extended_latch_wait_time, total_extended_latch_waits from table (mon_get_extended_latch_wait( -2) );
+/* IBM_DB2MON */ insert into session.mon_get_group_bufferpool_end select current timestamp,member, num_gbp_full from table (mon_get_group_bufferpool( -2) );
+/* IBM_DB2MON */ insert into session.mon_get_index_end select current timestamp,member, tabschema, tabname, iid, data_partition_id, nleaf, nlevels, index_scans, index_only_scans, key_updates, include_col_updates, pseudo_deletes, del_keys_cleaned, root_node_splits, int_node_splits, boundary_leaf_node_splits, nonboundary_leaf_node_splits, page_allocations, pseudo_empty_pages, empty_pages_reused, empty_pages_deleted, pages_merged, object_index_l_reads, object_index_p_reads, object_index_gbp_l_reads, object_index_gbp_p_reads, object_index_gbp_invalid_pages, object_index_lbp_pages_found, object_index_gbp_indep_pages_found_in_lbp, index_jump_scans from table (mon_get_index( null, null, -2) );
+/* IBM_DB2MON */ insert into session.mon_get_memory_pool_end select current timestamp,member, memory_pool_type, db_name, memory_pool_used, memory_pool_used_hwm from table (mon_get_memory_pool( 'database', null, -2) );
+/* IBM_DB2MON */ insert into session.mon_get_memory_set_end select current timestamp,member, memory_set_type, db_name, memory_set_used, memory_set_used_hwm from table (mon_get_memory_set( null, null, -2) );
+/* IBM_DB2MON */ insert into session.mon_get_page_access_info_end select current timestamp,member, tabschema, tabname, objtype, data_partition_id, iid, page_reclaims_x, page_reclaims_s, reclaim_wait_time, spacemappage_page_reclaims_x, spacemappage_page_reclaims_s, spacemappage_reclaim_wait_time from table (mon_get_page_access_info( null, null, -2) );
+/* IBM_DB2MON */ insert into session.mon_get_pkg_cache_stmt_end select current timestamp,member, planid, executable_id, package_name, stmt_text, effective_isolation, stmtid, semantic_env_id, active_sorts_top, sort_heap_top, sort_shrheap_top, num_exec_with_metrics, coord_stmt_exec_time, total_act_time, total_cpu_time, total_act_wait_time, lock_wait_time, log_disk_wait_time, log_buffer_wait_time, pool_write_time, pool_read_time, direct_write_time, direct_read_time, rows_modified, rows_read, rows_returned, total_sorts, sort_overflows, total_section_time, total_section_sort_time, pool_data_l_reads, pool_index_l_reads, pool_data_p_reads, pool_index_p_reads, pool_data_writes, pool_index_writes, pool_temp_data_p_reads, pool_temp_index_p_reads, direct_read_reqs, direct_write_reqs, ida_send_wait_time, ida_recv_wait_time, cf_wait_time, reclaim_wait_time, total_extended_latch_wait_time, lock_wait_time_global, prefetch_wait_time, diaglog_write_wait_time, audit_file_write_wait_time, audit_subsystem_wait_time, fcm_recv_wait_time, fcm_send_wait_time, fcm_message_recv_wait_time, fcm_message_send_wait_time, fcm_tq_recv_wait_time, fcm_tq_send_wait_time, evmon_wait_time, pool_col_l_reads, pool_col_p_reads, total_col_time, comm_exit_wait_time, col_synopsis_rows_inserted, ext_table_recv_wait_time, ext_table_send_wait_time, lob_prefetch_wait_time, fed_wait_time from table (mon_get_pkg_cache_stmt( null, null, null, -2) ) where stmt_text not like 'CALL dbms_alert.sleep%' and stmt_text not like '%/* IBM_DB2MON */%';
+/* IBM_DB2MON */ insert into session.mon_get_serverlist_end select current timestamp,member, cached_timestamp, hostname, port_number, ssl_port_number, priority from table (mon_get_serverlist( -2) );
+/* IBM_DB2MON */ insert into session.mon_get_table_end select current timestamp,member, tabname, tabschema, data_partition_id, tbsp_id, tab_file_id, data_sharing_state_change_time, data_sharing_state, rows_read, rows_inserted, rows_updated, rows_deleted, overflow_accesses, overflow_creates, page_reorgs, direct_read_reqs, direct_write_reqs, object_data_p_reads, object_data_l_reads, data_sharing_remote_lockwait_count, data_sharing_remote_lockwait_time, col_object_l_pages from table (mon_get_table( null, null, -2) );
+/* IBM_DB2MON */ insert into session.mon_get_tablespace_end select current timestamp,member, tbsp_name, tbsp_page_size, tbsp_id, tbsp_extent_size, tbsp_prefetch_size, fs_caching, pool_read_time, pool_async_read_time, pool_write_time, pool_async_write_time, pool_data_writes, pool_async_data_writes, pool_index_writes, pool_async_index_writes, pool_data_l_reads, pool_temp_data_l_reads, pool_async_data_reads, pool_data_p_reads, pool_temp_data_p_reads, pool_async_index_reads, pool_index_l_reads, pool_temp_index_l_reads, pool_index_p_reads, pool_temp_index_p_reads, pool_xda_l_reads, pool_temp_xda_l_reads, pool_async_xda_reads, pool_xda_p_reads, pool_temp_xda_p_reads, pool_xda_writes, pool_async_xda_writes, unread_prefetch_pages, vectored_ios, pages_from_vectored_ios, block_ios, pages_from_block_ios, pool_data_lbp_pages_found, pool_index_lbp_pages_found, pool_async_data_lbp_pages_found, pool_async_index_lbp_pages_found, direct_read_reqs, direct_write_reqs, direct_read_time, direct_write_time, tbsp_used_pages, tbsp_page_top, pool_data_gbp_l_reads, pool_data_gbp_p_reads, pool_index_gbp_l_reads, pool_index_gbp_p_reads, pool_data_gbp_invalid_pages, pool_async_data_gbp_invalid_pages, pool_index_gbp_invalid_pages, pool_async_index_gbp_invalid_pages, pool_async_data_gbp_l_reads, pool_async_data_gbp_p_reads, pool_async_data_gbp_indep_pages_found_in_lbp, pool_async_index_gbp_l_reads, pool_async_index_gbp_p_reads, pool_async_index_gbp_indep_pages_found_in_lbp, prefetch_wait_time, prefetch_waits, skipped_prefetch_data_p_reads, skipped_prefetch_index_p_reads, skipped_prefetch_temp_data_p_reads, skipped_prefetch_temp_index_p_reads, pool_col_l_reads, pool_col_p_reads, pool_async_col_reads, pool_col_writes, pool_async_col_writes, pool_col_lbp_pages_found, pool_async_col_lbp_pages_found, pool_temp_col_l_reads, pool_temp_col_p_reads from table (mon_get_tablespace( null, -2) ) where tbsp_used_pages > 1000;
+/* IBM_DB2MON */ insert into session.mon_get_transaction_log_end select current timestamp,member, log_writes, log_write_time, num_log_write_io, num_log_part_page_io, num_log_buffer_full, log_reads, log_read_time, num_log_read_io, log_hadr_wait_time, log_hadr_waits_total, num_log_data_found_in_buffer, cur_commit_log_buff_log_reads, cur_commit_disk_log_reads from table (mon_get_transaction_log( -2) );
+/* IBM_DB2MON */ insert into session.mon_get_utility_end select current timestamp,member, coord_member, application_handle, utility_start_time, utility_type, utility_operation_type, utility_detail from table (mon_get_utility( -2) );
+/* IBM_DB2MON */ insert into session.mon_get_workload_end select current timestamp,member, workload_name, sort_shrheap_allocated, act_completed_total, total_act_time, total_rqst_time, total_wait_time, lock_wait_time, log_disk_wait_time, pool_write_time, pool_read_time, direct_write_time, direct_read_time, tcpip_recv_wait_time, tcpip_send_wait_time, fcm_recv_wait_time, fcm_send_wait_time, total_cpu_time, total_compile_time, total_compile_proc_time, total_routine_time, total_section_sort_time, total_section_sort_proc_time, total_section_time, total_section_proc_time, total_commit_time, total_rollback_time, total_runstats_time, total_reorg_time, total_load_time, total_app_commits, total_app_rollbacks, deadlocks, lock_timeouts, lock_escals, client_idle_wait_time, rows_modified, rows_read, rows_returned, pkg_cache_inserts, total_sorts, sort_overflows, post_threshold_sorts, post_shrthreshold_sorts, total_reorgs, total_loads, total_runstats, pool_data_l_reads, pool_data_p_reads, pool_temp_data_p_reads, pool_index_l_reads, pool_index_p_reads, pool_temp_index_p_reads, pool_xda_p_reads, pool_temp_xda_p_reads, ida_send_wait_time, ida_recv_wait_time, lock_wait_time_global, total_extended_latch_wait_time, reclaim_wait_time, cf_wait_time, prefetch_wait_time, log_buffer_wait_time, lock_timeouts_global, lock_escals_maxlocks, lock_escals_locklist, lock_escals_global, total_routine_user_code_time, diaglog_write_wait_time, total_connect_request_time, total_connect_request_proc_time, audit_file_write_wait_time, audit_subsystem_wait_time, fcm_message_recv_wait_time, fcm_message_send_wait_time, fcm_tq_recv_wait_time, fcm_tq_send_wait_time, evmon_wait_time, select_sql_stmts, uid_sql_stmts, rows_inserted, rows_updated, total_col_time, total_col_proc_time, total_backup_time, total_index_build_time, total_hash_joins, hash_join_overflows, post_threshold_hash_joins, post_shrthreshold_hash_joins, total_peds, post_threshold_peds, disabled_peds, total_peas, post_threshold_peas, pool_col_l_reads, pool_col_p_reads, pool_temp_col_p_reads, comm_exit_wait_time, total_col_synopsis_time, ext_table_recv_wait_time, ext_table_recvs_total, ext_table_recv_volume, ext_table_read_volume, ext_table_send_wait_time, ext_table_sends_total, ext_table_send_volume, ext_table_write_volume, lob_prefetch_wait_time, fed_wait_time from table (mon_get_workload( null, -2) );
 
-  insert into session.mon_current_sql_plus_end
-    with 
+  /* IBM_DB2MON */ insert into session.mon_current_sql_plus_end
+    with /* IBM_DB2MON */
   mga ( ts, count,
 coord_member,application_handle,uow_id,activity_id,executable_id,package_name,section_number,active_sorts,active_sorts_top,active_sort_consumers,active_sort_consumers_top,sort_shrheap_allocated,sort_shrheap_top,post_threshold_sorts,post_shrthreshold_sorts,post_threshold_hash_joins,post_shrthreshold_hash_joins,post_threshold_hash_grpbys,post_threshold_olap_funcs,total_act_time,total_act_wait_time,lock_wait_time,pool_read_time,direct_read_time,direct_write_time,fcm_recv_wait_time,fcm_send_wait_time,total_extended_latch_wait_time,log_disk_wait_time,cf_wait_time,reclaim_wait_time,spacemappage_reclaim_wait_time) as (
     select current timestamp, count(*),       coord_member,application_handle,uow_id,activity_id,
@@ -39,12 +40,14 @@ where
   mcs.application_handle = mga.application_handle and 
   mcs.coord_member = mga.coord_member and 
   mcs.uow_id = mga.uow_id and 
-  mcs.activity_id = mga.activity_id
-
+  mcs.activity_id = mga.activity_id and 
+  mcs.stmt_text not like '%/* IBM_DB2MON */%'
   with UR;
 
-  insert into session.mon_get_locks_end
-    select
+  /* IBM_DB2MON */ insert into session.mon_get_locks_end
+    
+   select
+   /* IBM_DB2MON */
    distinct
    member,
    application_handle,
@@ -58,49 +61,52 @@ from
    table ( mon_get_locks(null,-2) )
   with UR;
 
-insert into session.env_get_system_resources_diff select (((JULIAN_DAY(e.ts)-JULIAN_DAY(s.ts))*24 + (HOUR(e.ts)-HOUR(s.ts)))*60 + (MINUTE(e.ts)-MINUTE(s.ts)))*60 + (SECOND(e.ts)-SECOND(s.ts)),e.ts,s.member, s.os_name, s.host_name, s.os_version, s.os_release, s.cpu_total, s.cpu_online, s.cpu_configured, s.cpu_speed, s.cpu_hmt_degree, s.memory_total, s.memory_free, s.cpu_load_short, s.cpu_load_medium, s.cpu_load_long, s.cpu_usage_total, e.swap_pages_in - s.swap_pages_in as swap_pages_in, e.swap_pages_out - s.swap_pages_out as swap_pages_out from session.env_get_system_resources_start s, session.env_get_system_resources_end e where (s.member = e.member or (s.member is NULL and e.member is NULL)) with UR;
-insert into session.env_get_system_resources_diff select null, e.ts,e.member, e.os_name, e.host_name, e.os_version, e.os_release, e.cpu_total, e.cpu_online, e.cpu_configured, e.cpu_speed, e.cpu_hmt_degree, e.memory_total, e.memory_free, e.cpu_load_short, e.cpu_load_medium, e.cpu_load_long, e.cpu_usage_total, e.swap_pages_in, e.swap_pages_out from session.env_get_system_resources_end e where not exists ( select null from session.env_get_system_resources_start s where (s.member = e.member or (s.member is NULL and e.member is NULL)) ) with UR;
-update session.env_get_system_resources_diff set ts_delta = (select max(ts_delta) from session.env_get_system_resources_diff) where ts_delta is null;
-insert into session.mon_get_bufferpool_diff select (((JULIAN_DAY(e.ts)-JULIAN_DAY(s.ts))*24 + (HOUR(e.ts)-HOUR(s.ts)))*60 + (MINUTE(e.ts)-MINUTE(s.ts)))*60 + (SECOND(e.ts)-SECOND(s.ts)),e.ts,s.member, s.bp_name, s.bp_cur_buffsz, s.automatic, e.pool_read_time - s.pool_read_time as pool_read_time, e.pool_data_l_reads - s.pool_data_l_reads as pool_data_l_reads, e.pool_data_p_reads - s.pool_data_p_reads as pool_data_p_reads, e.pool_async_read_time - s.pool_async_read_time as pool_async_read_time, e.pool_async_data_reads - s.pool_async_data_reads as pool_async_data_reads, e.pool_async_index_reads - s.pool_async_index_reads as pool_async_index_reads, e.pool_async_xda_reads - s.pool_async_xda_reads as pool_async_xda_reads, e.pool_data_writes - s.pool_data_writes as pool_data_writes, e.pool_async_data_writes - s.pool_async_data_writes as pool_async_data_writes, e.pool_data_lbp_pages_found - s.pool_data_lbp_pages_found as pool_data_lbp_pages_found, e.pool_async_data_lbp_pages_found - s.pool_async_data_lbp_pages_found as pool_async_data_lbp_pages_found, e.pool_temp_data_l_reads - s.pool_temp_data_l_reads as pool_temp_data_l_reads, e.pool_temp_data_p_reads - s.pool_temp_data_p_reads as pool_temp_data_p_reads, e.pool_index_lbp_pages_found - s.pool_index_lbp_pages_found as pool_index_lbp_pages_found, e.pool_async_index_lbp_pages_found - s.pool_async_index_lbp_pages_found as pool_async_index_lbp_pages_found, e.pool_temp_index_l_reads - s.pool_temp_index_l_reads as pool_temp_index_l_reads, e.pool_temp_index_p_reads - s.pool_temp_index_p_reads as pool_temp_index_p_reads, e.pool_write_time - s.pool_write_time as pool_write_time, e.pool_async_write_time - s.pool_async_write_time as pool_async_write_time, e.pool_index_l_reads - s.pool_index_l_reads as pool_index_l_reads, e.pool_index_p_reads - s.pool_index_p_reads as pool_index_p_reads, e.pool_index_writes - s.pool_index_writes as pool_index_writes, e.pool_async_index_writes - s.pool_async_index_writes as pool_async_index_writes, e.pool_xda_l_reads - s.pool_xda_l_reads as pool_xda_l_reads, e.pool_temp_xda_l_reads - s.pool_temp_xda_l_reads as pool_temp_xda_l_reads, e.pool_xda_p_reads - s.pool_xda_p_reads as pool_xda_p_reads, e.pool_temp_xda_p_reads - s.pool_temp_xda_p_reads as pool_temp_xda_p_reads, e.pool_xda_writes - s.pool_xda_writes as pool_xda_writes, e.pool_async_xda_writes - s.pool_async_xda_writes as pool_async_xda_writes, e.pool_data_gbp_l_reads - s.pool_data_gbp_l_reads as pool_data_gbp_l_reads, e.pool_data_gbp_p_reads - s.pool_data_gbp_p_reads as pool_data_gbp_p_reads, e.pool_index_gbp_l_reads - s.pool_index_gbp_l_reads as pool_index_gbp_l_reads, e.pool_index_gbp_p_reads - s.pool_index_gbp_p_reads as pool_index_gbp_p_reads, e.pool_data_gbp_invalid_pages - s.pool_data_gbp_invalid_pages as pool_data_gbp_invalid_pages, e.pool_async_data_gbp_invalid_pages - s.pool_async_data_gbp_invalid_pages as pool_async_data_gbp_invalid_pages, e.pool_index_gbp_invalid_pages - s.pool_index_gbp_invalid_pages as pool_index_gbp_invalid_pages, e.pool_async_index_gbp_invalid_pages - s.pool_async_index_gbp_invalid_pages as pool_async_index_gbp_invalid_pages, e.pool_col_l_reads - s.pool_col_l_reads as pool_col_l_reads, e.pool_col_p_reads - s.pool_col_p_reads as pool_col_p_reads, e.pool_async_col_reads - s.pool_async_col_reads as pool_async_col_reads, e.pool_col_writes - s.pool_col_writes as pool_col_writes, e.pool_async_col_writes - s.pool_async_col_writes as pool_async_col_writes, e.pool_col_lbp_pages_found - s.pool_col_lbp_pages_found as pool_col_lbp_pages_found, e.pool_async_col_lbp_pages_found - s.pool_async_col_lbp_pages_found as pool_async_col_lbp_pages_found, e.pool_temp_col_l_reads - s.pool_temp_col_l_reads as pool_temp_col_l_reads, e.pool_temp_col_p_reads - s.pool_temp_col_p_reads as pool_temp_col_p_reads from session.mon_get_bufferpool_start s, session.mon_get_bufferpool_end e where (s.member = e.member or (s.member is NULL and e.member is NULL)) and (s.bp_name = e.bp_name or (s.bp_name is NULL and e.bp_name is NULL)) with UR;
-insert into session.mon_get_bufferpool_diff select null, e.ts,e.member, e.bp_name, e.bp_cur_buffsz, e.automatic, e.pool_read_time, e.pool_data_l_reads, e.pool_data_p_reads, e.pool_async_read_time, e.pool_async_data_reads, e.pool_async_index_reads, e.pool_async_xda_reads, e.pool_data_writes, e.pool_async_data_writes, e.pool_data_lbp_pages_found, e.pool_async_data_lbp_pages_found, e.pool_temp_data_l_reads, e.pool_temp_data_p_reads, e.pool_index_lbp_pages_found, e.pool_async_index_lbp_pages_found, e.pool_temp_index_l_reads, e.pool_temp_index_p_reads, e.pool_write_time, e.pool_async_write_time, e.pool_index_l_reads, e.pool_index_p_reads, e.pool_index_writes, e.pool_async_index_writes, e.pool_xda_l_reads, e.pool_temp_xda_l_reads, e.pool_xda_p_reads, e.pool_temp_xda_p_reads, e.pool_xda_writes, e.pool_async_xda_writes, e.pool_data_gbp_l_reads, e.pool_data_gbp_p_reads, e.pool_index_gbp_l_reads, e.pool_index_gbp_p_reads, e.pool_data_gbp_invalid_pages, e.pool_async_data_gbp_invalid_pages, e.pool_index_gbp_invalid_pages, e.pool_async_index_gbp_invalid_pages, e.pool_col_l_reads, e.pool_col_p_reads, e.pool_async_col_reads, e.pool_col_writes, e.pool_async_col_writes, e.pool_col_lbp_pages_found, e.pool_async_col_lbp_pages_found, e.pool_temp_col_l_reads, e.pool_temp_col_p_reads from session.mon_get_bufferpool_end e where not exists ( select null from session.mon_get_bufferpool_start s where (s.member = e.member or (s.member is NULL and e.member is NULL)) and (s.bp_name = e.bp_name or (s.bp_name is NULL and e.bp_name is NULL)) ) with UR;
-update session.mon_get_bufferpool_diff set ts_delta = (select max(ts_delta) from session.mon_get_bufferpool_diff) where ts_delta is null;
-insert into session.mon_get_cf_cmd_diff select (((JULIAN_DAY(e.ts)-JULIAN_DAY(s.ts))*24 + (HOUR(e.ts)-HOUR(s.ts)))*60 + (MINUTE(e.ts)-MINUTE(s.ts)))*60 + (SECOND(e.ts)-SECOND(s.ts)),e.ts,s.hostname, s.id, s.cf_cmd_name, e.total_cf_requests - s.total_cf_requests as total_cf_requests, e.total_cf_cmd_time_micro - s.total_cf_cmd_time_micro as total_cf_cmd_time_micro from session.mon_get_cf_cmd_start s, session.mon_get_cf_cmd_end e where (s.hostname = e.hostname or (s.hostname is NULL and e.hostname is NULL)) and (s.id = e.id or (s.id is NULL and e.id is NULL)) and (s.cf_cmd_name = e.cf_cmd_name or (s.cf_cmd_name is NULL and e.cf_cmd_name is NULL)) with UR;
-insert into session.mon_get_cf_cmd_diff select null, e.ts,e.hostname, e.id, e.cf_cmd_name, e.total_cf_requests, e.total_cf_cmd_time_micro from session.mon_get_cf_cmd_end e where not exists ( select null from session.mon_get_cf_cmd_start s where (s.hostname = e.hostname or (s.hostname is NULL and e.hostname is NULL)) and (s.id = e.id or (s.id is NULL and e.id is NULL)) and (s.cf_cmd_name = e.cf_cmd_name or (s.cf_cmd_name is NULL and e.cf_cmd_name is NULL)) ) with UR;
-update session.mon_get_cf_cmd_diff set ts_delta = (select max(ts_delta) from session.mon_get_cf_cmd_diff) where ts_delta is null;
-insert into session.mon_get_cf_wait_time_diff select (((JULIAN_DAY(e.ts)-JULIAN_DAY(s.ts))*24 + (HOUR(e.ts)-HOUR(s.ts)))*60 + (MINUTE(e.ts)-MINUTE(s.ts)))*60 + (SECOND(e.ts)-SECOND(s.ts)),e.ts,s.member, s.hostname, s.id, s.cf_cmd_name, e.total_cf_requests - s.total_cf_requests as total_cf_requests, e.total_cf_wait_time_micro - s.total_cf_wait_time_micro as total_cf_wait_time_micro from session.mon_get_cf_wait_time_start s, session.mon_get_cf_wait_time_end e where (s.member = e.member or (s.member is NULL and e.member is NULL)) and (s.hostname = e.hostname or (s.hostname is NULL and e.hostname is NULL)) and (s.id = e.id or (s.id is NULL and e.id is NULL)) and (s.cf_cmd_name = e.cf_cmd_name or (s.cf_cmd_name is NULL and e.cf_cmd_name is NULL)) with UR;
-insert into session.mon_get_cf_wait_time_diff select null, e.ts,e.member, e.hostname, e.id, e.cf_cmd_name, e.total_cf_requests, e.total_cf_wait_time_micro from session.mon_get_cf_wait_time_end e where not exists ( select null from session.mon_get_cf_wait_time_start s where (s.member = e.member or (s.member is NULL and e.member is NULL)) and (s.hostname = e.hostname or (s.hostname is NULL and e.hostname is NULL)) and (s.id = e.id or (s.id is NULL and e.id is NULL)) and (s.cf_cmd_name = e.cf_cmd_name or (s.cf_cmd_name is NULL and e.cf_cmd_name is NULL)) ) with UR;
-update session.mon_get_cf_wait_time_diff set ts_delta = (select max(ts_delta) from session.mon_get_cf_wait_time_diff) where ts_delta is null;
-insert into session.mon_get_connection_diff select (((JULIAN_DAY(e.ts)-JULIAN_DAY(s.ts))*24 + (HOUR(e.ts)-HOUR(s.ts)))*60 + (MINUTE(e.ts)-MINUTE(s.ts)))*60 + (SECOND(e.ts)-SECOND(s.ts)),e.ts,s.member, s.application_name, s.application_handle, s.client_applname, s.connection_reusability_status, s.reusability_status_reason, e.client_idle_wait_time - s.client_idle_wait_time as client_idle_wait_time, e.total_rqst_time - s.total_rqst_time as total_rqst_time, e.rqsts_completed_total - s.rqsts_completed_total as rqsts_completed_total, e.total_wait_time - s.total_wait_time as total_wait_time, e.lock_wait_time - s.lock_wait_time as lock_wait_time, e.log_disk_wait_time - s.log_disk_wait_time as log_disk_wait_time, e.fcm_recv_wait_time - s.fcm_recv_wait_time as fcm_recv_wait_time, e.fcm_send_wait_time - s.fcm_send_wait_time as fcm_send_wait_time, e.pool_write_time - s.pool_write_time as pool_write_time, e.pool_read_time - s.pool_read_time as pool_read_time, e.direct_write_time - s.direct_write_time as direct_write_time, e.direct_read_time - s.direct_read_time as direct_read_time, e.total_section_sort_time - s.total_section_sort_time as total_section_sort_time, e.total_commit_time - s.total_commit_time as total_commit_time, e.total_runstats_time - s.total_runstats_time as total_runstats_time, e.total_reorg_time - s.total_reorg_time as total_reorg_time, e.total_load_time - s.total_load_time as total_load_time, e.total_app_commits - s.total_app_commits as total_app_commits, e.total_app_rollbacks - s.total_app_rollbacks as total_app_rollbacks, e.deadlocks - s.deadlocks as deadlocks, e.rows_modified - s.rows_modified as rows_modified, e.rows_read - s.rows_read as rows_read, e.rows_returned - s.rows_returned as rows_returned, e.total_sorts - s.total_sorts as total_sorts, e.total_reorgs - s.total_reorgs as total_reorgs, e.total_loads - s.total_loads as total_loads, e.total_runstats - s.total_runstats as total_runstats, e.pool_data_l_reads - s.pool_data_l_reads as pool_data_l_reads, e.pool_data_p_reads - s.pool_data_p_reads as pool_data_p_reads, e.pool_index_l_reads - s.pool_index_l_reads as pool_index_l_reads, e.pool_index_p_reads - s.pool_index_p_reads as pool_index_p_reads, e.cf_wait_time - s.cf_wait_time as cf_wait_time, e.reclaim_wait_time - s.reclaim_wait_time as reclaim_wait_time, e.total_extended_latch_wait_time - s.total_extended_latch_wait_time as total_extended_latch_wait_time, e.prefetch_wait_time - s.prefetch_wait_time as prefetch_wait_time, e.diaglog_write_wait_time - s.diaglog_write_wait_time as diaglog_write_wait_time, e.log_buffer_wait_time - s.log_buffer_wait_time as log_buffer_wait_time, e.lock_wait_time_global - s.lock_wait_time_global as lock_wait_time_global, e.pool_col_l_reads - s.pool_col_l_reads as pool_col_l_reads, e.pool_col_p_reads - s.pool_col_p_reads as pool_col_p_reads from session.mon_get_connection_start s, session.mon_get_connection_end e where (s.member = e.member or (s.member is NULL and e.member is NULL)) and (s.application_name = e.application_name or (s.application_name is NULL and e.application_name is NULL)) and (s.application_handle = e.application_handle or (s.application_handle is NULL and e.application_handle is NULL)) and (s.client_applname = e.client_applname or (s.client_applname is NULL and e.client_applname is NULL)) with UR;
-insert into session.mon_get_connection_diff select null, e.ts,e.member, e.application_name, e.application_handle, e.client_applname, e.connection_reusability_status, e.reusability_status_reason, e.client_idle_wait_time, e.total_rqst_time, e.rqsts_completed_total, e.total_wait_time, e.lock_wait_time, e.log_disk_wait_time, e.fcm_recv_wait_time, e.fcm_send_wait_time, e.pool_write_time, e.pool_read_time, e.direct_write_time, e.direct_read_time, e.total_section_sort_time, e.total_commit_time, e.total_runstats_time, e.total_reorg_time, e.total_load_time, e.total_app_commits, e.total_app_rollbacks, e.deadlocks, e.rows_modified, e.rows_read, e.rows_returned, e.total_sorts, e.total_reorgs, e.total_loads, e.total_runstats, e.pool_data_l_reads, e.pool_data_p_reads, e.pool_index_l_reads, e.pool_index_p_reads, e.cf_wait_time, e.reclaim_wait_time, e.total_extended_latch_wait_time, e.prefetch_wait_time, e.diaglog_write_wait_time, e.log_buffer_wait_time, e.lock_wait_time_global, e.pool_col_l_reads, e.pool_col_p_reads from session.mon_get_connection_end e where not exists ( select null from session.mon_get_connection_start s where (s.member = e.member or (s.member is NULL and e.member is NULL)) and (s.application_name = e.application_name or (s.application_name is NULL and e.application_name is NULL)) and (s.application_handle = e.application_handle or (s.application_handle is NULL and e.application_handle is NULL)) and (s.client_applname = e.client_applname or (s.client_applname is NULL and e.client_applname is NULL)) ) with UR;
-update session.mon_get_connection_diff set ts_delta = (select max(ts_delta) from session.mon_get_connection_diff) where ts_delta is null;
-insert into session.mon_get_extended_latch_wait_diff select (((JULIAN_DAY(e.ts)-JULIAN_DAY(s.ts))*24 + (HOUR(e.ts)-HOUR(s.ts)))*60 + (MINUTE(e.ts)-MINUTE(s.ts)))*60 + (SECOND(e.ts)-SECOND(s.ts)),e.ts,s.member, s.latch_name, e.total_extended_latch_wait_time - s.total_extended_latch_wait_time as total_extended_latch_wait_time, e.total_extended_latch_waits - s.total_extended_latch_waits as total_extended_latch_waits from session.mon_get_extended_latch_wait_start s, session.mon_get_extended_latch_wait_end e where (s.member = e.member or (s.member is NULL and e.member is NULL)) and (s.latch_name = e.latch_name or (s.latch_name is NULL and e.latch_name is NULL)) with UR;
-insert into session.mon_get_extended_latch_wait_diff select null, e.ts,e.member, e.latch_name, e.total_extended_latch_wait_time, e.total_extended_latch_waits from session.mon_get_extended_latch_wait_end e where not exists ( select null from session.mon_get_extended_latch_wait_start s where (s.member = e.member or (s.member is NULL and e.member is NULL)) and (s.latch_name = e.latch_name or (s.latch_name is NULL and e.latch_name is NULL)) ) with UR;
-update session.mon_get_extended_latch_wait_diff set ts_delta = (select max(ts_delta) from session.mon_get_extended_latch_wait_diff) where ts_delta is null;
-insert into session.mon_get_group_bufferpool_diff select (((JULIAN_DAY(e.ts)-JULIAN_DAY(s.ts))*24 + (HOUR(e.ts)-HOUR(s.ts)))*60 + (MINUTE(e.ts)-MINUTE(s.ts)))*60 + (SECOND(e.ts)-SECOND(s.ts)),e.ts,s.member, e.num_gbp_full - s.num_gbp_full as num_gbp_full from session.mon_get_group_bufferpool_start s, session.mon_get_group_bufferpool_end e where (s.member = e.member or (s.member is NULL and e.member is NULL)) with UR;
-insert into session.mon_get_group_bufferpool_diff select null, e.ts,e.member, e.num_gbp_full from session.mon_get_group_bufferpool_end e where not exists ( select null from session.mon_get_group_bufferpool_start s where (s.member = e.member or (s.member is NULL and e.member is NULL)) ) with UR;
-update session.mon_get_group_bufferpool_diff set ts_delta = (select max(ts_delta) from session.mon_get_group_bufferpool_diff) where ts_delta is null;
-insert into session.mon_get_page_access_info_diff select (((JULIAN_DAY(e.ts)-JULIAN_DAY(s.ts))*24 + (HOUR(e.ts)-HOUR(s.ts)))*60 + (MINUTE(e.ts)-MINUTE(s.ts)))*60 + (SECOND(e.ts)-SECOND(s.ts)),e.ts,s.member, s.tabschema, s.tabname, s.objtype, s.data_partition_id, s.iid, e.page_reclaims_x - s.page_reclaims_x as page_reclaims_x, e.page_reclaims_s - s.page_reclaims_s as page_reclaims_s, e.reclaim_wait_time - s.reclaim_wait_time as reclaim_wait_time, e.spacemappage_page_reclaims_x - s.spacemappage_page_reclaims_x as spacemappage_page_reclaims_x, e.spacemappage_page_reclaims_s - s.spacemappage_page_reclaims_s as spacemappage_page_reclaims_s, e.spacemappage_reclaim_wait_time - s.spacemappage_reclaim_wait_time as spacemappage_reclaim_wait_time from session.mon_get_page_access_info_start s, session.mon_get_page_access_info_end e where (s.member = e.member or (s.member is NULL and e.member is NULL)) and (s.tabschema = e.tabschema or (s.tabschema is NULL and e.tabschema is NULL)) and (s.tabname = e.tabname or (s.tabname is NULL and e.tabname is NULL)) and (s.objtype = e.objtype or (s.objtype is NULL and e.objtype is NULL)) and (s.data_partition_id = e.data_partition_id or (s.data_partition_id is NULL and e.data_partition_id is NULL)) and (s.iid = e.iid or (s.iid is NULL and e.iid is NULL)) with UR;
-insert into session.mon_get_page_access_info_diff select null, e.ts,e.member, e.tabschema, e.tabname, e.objtype, e.data_partition_id, e.iid, e.page_reclaims_x, e.page_reclaims_s, e.reclaim_wait_time, e.spacemappage_page_reclaims_x, e.spacemappage_page_reclaims_s, e.spacemappage_reclaim_wait_time from session.mon_get_page_access_info_end e where not exists ( select null from session.mon_get_page_access_info_start s where (s.member = e.member or (s.member is NULL and e.member is NULL)) and (s.tabschema = e.tabschema or (s.tabschema is NULL and e.tabschema is NULL)) and (s.tabname = e.tabname or (s.tabname is NULL and e.tabname is NULL)) and (s.objtype = e.objtype or (s.objtype is NULL and e.objtype is NULL)) and (s.data_partition_id = e.data_partition_id or (s.data_partition_id is NULL and e.data_partition_id is NULL)) and (s.iid = e.iid or (s.iid is NULL and e.iid is NULL)) ) with UR;
-update session.mon_get_page_access_info_diff set ts_delta = (select max(ts_delta) from session.mon_get_page_access_info_diff) where ts_delta is null;
-insert into session.mon_get_pkg_cache_stmt_diff select (((JULIAN_DAY(e.ts)-JULIAN_DAY(s.ts))*24 + (HOUR(e.ts)-HOUR(s.ts)))*60 + (MINUTE(e.ts)-MINUTE(s.ts)))*60 + (SECOND(e.ts)-SECOND(s.ts)),e.ts,s.member, s.planid, s.executable_id, s.package_name, s.stmt_text, s.stmtid, s.semantic_env_id, s.active_sorts_top, s.sort_heap_top, s.sort_shrheap_top, e.num_exec_with_metrics - s.num_exec_with_metrics as num_exec_with_metrics, e.coord_stmt_exec_time - s.coord_stmt_exec_time as coord_stmt_exec_time, e.total_act_time - s.total_act_time as total_act_time, e.total_cpu_time - s.total_cpu_time as total_cpu_time, e.total_act_wait_time - s.total_act_wait_time as total_act_wait_time, e.lock_wait_time - s.lock_wait_time as lock_wait_time, e.log_disk_wait_time - s.log_disk_wait_time as log_disk_wait_time, e.log_buffer_wait_time - s.log_buffer_wait_time as log_buffer_wait_time, e.pool_write_time - s.pool_write_time as pool_write_time, e.pool_read_time - s.pool_read_time as pool_read_time, e.direct_write_time - s.direct_write_time as direct_write_time, e.direct_read_time - s.direct_read_time as direct_read_time, e.rows_modified - s.rows_modified as rows_modified, e.rows_read - s.rows_read as rows_read, e.rows_returned - s.rows_returned as rows_returned, e.total_sorts - s.total_sorts as total_sorts, e.sort_overflows - s.sort_overflows as sort_overflows, e.total_section_time - s.total_section_time as total_section_time, e.total_section_sort_time - s.total_section_sort_time as total_section_sort_time, e.pool_data_l_reads - s.pool_data_l_reads as pool_data_l_reads, e.pool_index_l_reads - s.pool_index_l_reads as pool_index_l_reads, e.pool_data_p_reads - s.pool_data_p_reads as pool_data_p_reads, e.pool_index_p_reads - s.pool_index_p_reads as pool_index_p_reads, e.pool_data_writes - s.pool_data_writes as pool_data_writes, e.pool_index_writes - s.pool_index_writes as pool_index_writes, e.pool_temp_data_p_reads - s.pool_temp_data_p_reads as pool_temp_data_p_reads, e.pool_temp_index_p_reads - s.pool_temp_index_p_reads as pool_temp_index_p_reads, e.direct_read_reqs - s.direct_read_reqs as direct_read_reqs, e.direct_write_reqs - s.direct_write_reqs as direct_write_reqs, e.cf_wait_time - s.cf_wait_time as cf_wait_time, e.reclaim_wait_time - s.reclaim_wait_time as reclaim_wait_time, e.total_extended_latch_wait_time - s.total_extended_latch_wait_time as total_extended_latch_wait_time, e.lock_wait_time_global - s.lock_wait_time_global as lock_wait_time_global, e.prefetch_wait_time - s.prefetch_wait_time as prefetch_wait_time, e.diaglog_write_wait_time - s.diaglog_write_wait_time as diaglog_write_wait_time, e.fcm_recv_wait_time - s.fcm_recv_wait_time as fcm_recv_wait_time, e.fcm_send_wait_time - s.fcm_send_wait_time as fcm_send_wait_time, e.pool_col_l_reads - s.pool_col_l_reads as pool_col_l_reads, e.pool_col_p_reads - s.pool_col_p_reads as pool_col_p_reads, e.total_col_time - s.total_col_time as total_col_time, e.col_synopsis_rows_inserted - s.col_synopsis_rows_inserted as col_synopsis_rows_inserted from session.mon_get_pkg_cache_stmt_start s, session.mon_get_pkg_cache_stmt_end e where (s.member = e.member or (s.member is NULL and e.member is NULL)) and (s.planid = e.planid or (s.planid is NULL and e.planid is NULL)) and (s.executable_id = e.executable_id or (s.executable_id is NULL and e.executable_id is NULL)) with UR;
-insert into session.mon_get_pkg_cache_stmt_diff select null, e.ts,e.member, e.planid, e.executable_id, e.package_name, e.stmt_text, e.stmtid, e.semantic_env_id, e.active_sorts_top, e.sort_heap_top, e.sort_shrheap_top, e.num_exec_with_metrics, e.coord_stmt_exec_time, e.total_act_time, e.total_cpu_time, e.total_act_wait_time, e.lock_wait_time, e.log_disk_wait_time, e.log_buffer_wait_time, e.pool_write_time, e.pool_read_time, e.direct_write_time, e.direct_read_time, e.rows_modified, e.rows_read, e.rows_returned, e.total_sorts, e.sort_overflows, e.total_section_time, e.total_section_sort_time, e.pool_data_l_reads, e.pool_index_l_reads, e.pool_data_p_reads, e.pool_index_p_reads, e.pool_data_writes, e.pool_index_writes, e.pool_temp_data_p_reads, e.pool_temp_index_p_reads, e.direct_read_reqs, e.direct_write_reqs, e.cf_wait_time, e.reclaim_wait_time, e.total_extended_latch_wait_time, e.lock_wait_time_global, e.prefetch_wait_time, e.diaglog_write_wait_time, e.fcm_recv_wait_time, e.fcm_send_wait_time, e.pool_col_l_reads, e.pool_col_p_reads, e.total_col_time, e.col_synopsis_rows_inserted from session.mon_get_pkg_cache_stmt_end e where not exists ( select null from session.mon_get_pkg_cache_stmt_start s where (s.member = e.member or (s.member is NULL and e.member is NULL)) and (s.planid = e.planid or (s.planid is NULL and e.planid is NULL)) and (s.executable_id = e.executable_id or (s.executable_id is NULL and e.executable_id is NULL)) ) with UR;
-update session.mon_get_pkg_cache_stmt_diff set ts_delta = (select max(ts_delta) from session.mon_get_pkg_cache_stmt_diff) where ts_delta is null;
-create index session.idx_mon_get_pkg_cache_stmt_diff on session.mon_get_pkg_cache_stmt_diff (member, planid, executable_id);
-insert into session.mon_get_table_diff select (((JULIAN_DAY(e.ts)-JULIAN_DAY(s.ts))*24 + (HOUR(e.ts)-HOUR(s.ts)))*60 + (MINUTE(e.ts)-MINUTE(s.ts)))*60 + (SECOND(e.ts)-SECOND(s.ts)),e.ts,s.member, s.tabname, s.tabschema, s.data_partition_id, s.tbsp_id, s.tab_file_id, s.data_sharing_state_change_time, s.data_sharing_state, e.rows_read - s.rows_read as rows_read, e.rows_inserted - s.rows_inserted as rows_inserted, e.rows_updated - s.rows_updated as rows_updated, e.rows_deleted - s.rows_deleted as rows_deleted, e.overflow_accesses - s.overflow_accesses as overflow_accesses, e.overflow_creates - s.overflow_creates as overflow_creates, e.page_reorgs - s.page_reorgs as page_reorgs, e.direct_read_reqs - s.direct_read_reqs as direct_read_reqs, e.direct_write_reqs - s.direct_write_reqs as direct_write_reqs, e.object_data_p_reads - s.object_data_p_reads as object_data_p_reads, e.object_data_l_reads - s.object_data_l_reads as object_data_l_reads, e.data_sharing_remote_lockwait_count - s.data_sharing_remote_lockwait_count as data_sharing_remote_lockwait_count, e.data_sharing_remote_lockwait_time - s.data_sharing_remote_lockwait_time as data_sharing_remote_lockwait_time, e.col_object_l_pages - s.col_object_l_pages as col_object_l_pages from session.mon_get_table_start s, session.mon_get_table_end e where (s.member = e.member or (s.member is NULL and e.member is NULL)) and (s.tabname = e.tabname or (s.tabname is NULL and e.tabname is NULL)) and (s.tabschema = e.tabschema or (s.tabschema is NULL and e.tabschema is NULL)) and (s.data_partition_id = e.data_partition_id or (s.data_partition_id is NULL and e.data_partition_id is NULL)) and (s.tbsp_id = e.tbsp_id or (s.tbsp_id is NULL and e.tbsp_id is NULL)) and (s.tab_file_id = e.tab_file_id or (s.tab_file_id is NULL and e.tab_file_id is NULL)) with UR;
-insert into session.mon_get_table_diff select null, e.ts,e.member, e.tabname, e.tabschema, e.data_partition_id, e.tbsp_id, e.tab_file_id, e.data_sharing_state_change_time, e.data_sharing_state, e.rows_read, e.rows_inserted, e.rows_updated, e.rows_deleted, e.overflow_accesses, e.overflow_creates, e.page_reorgs, e.direct_read_reqs, e.direct_write_reqs, e.object_data_p_reads, e.object_data_l_reads, e.data_sharing_remote_lockwait_count, e.data_sharing_remote_lockwait_time, e.col_object_l_pages from session.mon_get_table_end e where not exists ( select null from session.mon_get_table_start s where (s.member = e.member or (s.member is NULL and e.member is NULL)) and (s.tabname = e.tabname or (s.tabname is NULL and e.tabname is NULL)) and (s.tabschema = e.tabschema or (s.tabschema is NULL and e.tabschema is NULL)) and (s.data_partition_id = e.data_partition_id or (s.data_partition_id is NULL and e.data_partition_id is NULL)) and (s.tbsp_id = e.tbsp_id or (s.tbsp_id is NULL and e.tbsp_id is NULL)) and (s.tab_file_id = e.tab_file_id or (s.tab_file_id is NULL and e.tab_file_id is NULL)) ) with UR;
-update session.mon_get_table_diff set ts_delta = (select max(ts_delta) from session.mon_get_table_diff) where ts_delta is null;
-create index session.idx_mon_get_table_diff on session.mon_get_table_diff (member, tabname, tabschema, data_partition_id, tbsp_id, tab_file_id);
-insert into session.mon_get_tablespace_diff select (((JULIAN_DAY(e.ts)-JULIAN_DAY(s.ts))*24 + (HOUR(e.ts)-HOUR(s.ts)))*60 + (MINUTE(e.ts)-MINUTE(s.ts)))*60 + (SECOND(e.ts)-SECOND(s.ts)),e.ts,s.member, s.tbsp_name, s.tbsp_page_size, s.tbsp_id, s.tbsp_extent_size, s.tbsp_prefetch_size, s.fs_caching, e.pool_read_time - s.pool_read_time as pool_read_time, e.pool_async_read_time - s.pool_async_read_time as pool_async_read_time, e.pool_write_time - s.pool_write_time as pool_write_time, e.pool_async_write_time - s.pool_async_write_time as pool_async_write_time, e.pool_data_writes - s.pool_data_writes as pool_data_writes, e.pool_async_data_writes - s.pool_async_data_writes as pool_async_data_writes, e.pool_index_writes - s.pool_index_writes as pool_index_writes, e.pool_async_index_writes - s.pool_async_index_writes as pool_async_index_writes, e.pool_data_l_reads - s.pool_data_l_reads as pool_data_l_reads, e.pool_temp_data_l_reads - s.pool_temp_data_l_reads as pool_temp_data_l_reads, e.pool_async_data_reads - s.pool_async_data_reads as pool_async_data_reads, e.pool_data_p_reads - s.pool_data_p_reads as pool_data_p_reads, e.pool_temp_data_p_reads - s.pool_temp_data_p_reads as pool_temp_data_p_reads, e.pool_async_index_reads - s.pool_async_index_reads as pool_async_index_reads, e.pool_index_l_reads - s.pool_index_l_reads as pool_index_l_reads, e.pool_temp_index_l_reads - s.pool_temp_index_l_reads as pool_temp_index_l_reads, e.pool_index_p_reads - s.pool_index_p_reads as pool_index_p_reads, e.pool_temp_index_p_reads - s.pool_temp_index_p_reads as pool_temp_index_p_reads, e.pool_xda_l_reads - s.pool_xda_l_reads as pool_xda_l_reads, e.pool_temp_xda_l_reads - s.pool_temp_xda_l_reads as pool_temp_xda_l_reads, e.pool_async_xda_reads - s.pool_async_xda_reads as pool_async_xda_reads, e.pool_xda_p_reads - s.pool_xda_p_reads as pool_xda_p_reads, e.pool_temp_xda_p_reads - s.pool_temp_xda_p_reads as pool_temp_xda_p_reads, e.pool_xda_writes - s.pool_xda_writes as pool_xda_writes, e.pool_async_xda_writes - s.pool_async_xda_writes as pool_async_xda_writes, e.unread_prefetch_pages - s.unread_prefetch_pages as unread_prefetch_pages, e.vectored_ios - s.vectored_ios as vectored_ios, e.pages_from_vectored_ios - s.pages_from_vectored_ios as pages_from_vectored_ios, e.block_ios - s.block_ios as block_ios, e.pages_from_block_ios - s.pages_from_block_ios as pages_from_block_ios, e.pool_data_lbp_pages_found - s.pool_data_lbp_pages_found as pool_data_lbp_pages_found, e.pool_index_lbp_pages_found - s.pool_index_lbp_pages_found as pool_index_lbp_pages_found, e.pool_async_data_lbp_pages_found - s.pool_async_data_lbp_pages_found as pool_async_data_lbp_pages_found, e.pool_async_index_lbp_pages_found - s.pool_async_index_lbp_pages_found as pool_async_index_lbp_pages_found, e.direct_read_reqs - s.direct_read_reqs as direct_read_reqs, e.direct_write_reqs - s.direct_write_reqs as direct_write_reqs, e.direct_read_time - s.direct_read_time as direct_read_time, e.direct_write_time - s.direct_write_time as direct_write_time, e.tbsp_used_pages - s.tbsp_used_pages as tbsp_used_pages, e.tbsp_page_top - s.tbsp_page_top as tbsp_page_top, e.pool_data_gbp_l_reads - s.pool_data_gbp_l_reads as pool_data_gbp_l_reads, e.pool_data_gbp_p_reads - s.pool_data_gbp_p_reads as pool_data_gbp_p_reads, e.pool_index_gbp_l_reads - s.pool_index_gbp_l_reads as pool_index_gbp_l_reads, e.pool_index_gbp_p_reads - s.pool_index_gbp_p_reads as pool_index_gbp_p_reads, e.pool_data_gbp_invalid_pages - s.pool_data_gbp_invalid_pages as pool_data_gbp_invalid_pages, e.pool_async_data_gbp_invalid_pages - s.pool_async_data_gbp_invalid_pages as pool_async_data_gbp_invalid_pages, e.pool_index_gbp_invalid_pages - s.pool_index_gbp_invalid_pages as pool_index_gbp_invalid_pages, e.pool_async_index_gbp_invalid_pages - s.pool_async_index_gbp_invalid_pages as pool_async_index_gbp_invalid_pages, e.pool_async_data_gbp_l_reads - s.pool_async_data_gbp_l_reads as pool_async_data_gbp_l_reads, e.pool_async_data_gbp_p_reads - s.pool_async_data_gbp_p_reads as pool_async_data_gbp_p_reads, e.pool_async_data_gbp_indep_pages_found_in_lbp - s.pool_async_data_gbp_indep_pages_found_in_lbp as pool_async_data_gbp_indep_pages_found_in_lbp, e.pool_async_index_gbp_l_reads - s.pool_async_index_gbp_l_reads as pool_async_index_gbp_l_reads, e.pool_async_index_gbp_p_reads - s.pool_async_index_gbp_p_reads as pool_async_index_gbp_p_reads, e.pool_async_index_gbp_indep_pages_found_in_lbp - s.pool_async_index_gbp_indep_pages_found_in_lbp as pool_async_index_gbp_indep_pages_found_in_lbp, e.prefetch_wait_time - s.prefetch_wait_time as prefetch_wait_time, e.prefetch_waits - s.prefetch_waits as prefetch_waits, e.skipped_prefetch_data_p_reads - s.skipped_prefetch_data_p_reads as skipped_prefetch_data_p_reads, e.skipped_prefetch_index_p_reads - s.skipped_prefetch_index_p_reads as skipped_prefetch_index_p_reads, e.skipped_prefetch_temp_data_p_reads - s.skipped_prefetch_temp_data_p_reads as skipped_prefetch_temp_data_p_reads, e.skipped_prefetch_temp_index_p_reads - s.skipped_prefetch_temp_index_p_reads as skipped_prefetch_temp_index_p_reads, e.pool_col_l_reads - s.pool_col_l_reads as pool_col_l_reads, e.pool_col_p_reads - s.pool_col_p_reads as pool_col_p_reads, e.pool_async_col_reads - s.pool_async_col_reads as pool_async_col_reads, e.pool_col_writes - s.pool_col_writes as pool_col_writes, e.pool_async_col_writes - s.pool_async_col_writes as pool_async_col_writes, e.pool_col_lbp_pages_found - s.pool_col_lbp_pages_found as pool_col_lbp_pages_found, e.pool_async_col_lbp_pages_found - s.pool_async_col_lbp_pages_found as pool_async_col_lbp_pages_found, e.pool_temp_col_l_reads - s.pool_temp_col_l_reads as pool_temp_col_l_reads, e.pool_temp_col_p_reads - s.pool_temp_col_p_reads as pool_temp_col_p_reads from session.mon_get_tablespace_start s, session.mon_get_tablespace_end e where (s.member = e.member or (s.member is NULL and e.member is NULL)) and (s.tbsp_name = e.tbsp_name or (s.tbsp_name is NULL and e.tbsp_name is NULL)) with UR;
-insert into session.mon_get_tablespace_diff select null, e.ts,e.member, e.tbsp_name, e.tbsp_page_size, e.tbsp_id, e.tbsp_extent_size, e.tbsp_prefetch_size, e.fs_caching, e.pool_read_time, e.pool_async_read_time, e.pool_write_time, e.pool_async_write_time, e.pool_data_writes, e.pool_async_data_writes, e.pool_index_writes, e.pool_async_index_writes, e.pool_data_l_reads, e.pool_temp_data_l_reads, e.pool_async_data_reads, e.pool_data_p_reads, e.pool_temp_data_p_reads, e.pool_async_index_reads, e.pool_index_l_reads, e.pool_temp_index_l_reads, e.pool_index_p_reads, e.pool_temp_index_p_reads, e.pool_xda_l_reads, e.pool_temp_xda_l_reads, e.pool_async_xda_reads, e.pool_xda_p_reads, e.pool_temp_xda_p_reads, e.pool_xda_writes, e.pool_async_xda_writes, e.unread_prefetch_pages, e.vectored_ios, e.pages_from_vectored_ios, e.block_ios, e.pages_from_block_ios, e.pool_data_lbp_pages_found, e.pool_index_lbp_pages_found, e.pool_async_data_lbp_pages_found, e.pool_async_index_lbp_pages_found, e.direct_read_reqs, e.direct_write_reqs, e.direct_read_time, e.direct_write_time, e.tbsp_used_pages, e.tbsp_page_top, e.pool_data_gbp_l_reads, e.pool_data_gbp_p_reads, e.pool_index_gbp_l_reads, e.pool_index_gbp_p_reads, e.pool_data_gbp_invalid_pages, e.pool_async_data_gbp_invalid_pages, e.pool_index_gbp_invalid_pages, e.pool_async_index_gbp_invalid_pages, e.pool_async_data_gbp_l_reads, e.pool_async_data_gbp_p_reads, e.pool_async_data_gbp_indep_pages_found_in_lbp, e.pool_async_index_gbp_l_reads, e.pool_async_index_gbp_p_reads, e.pool_async_index_gbp_indep_pages_found_in_lbp, e.prefetch_wait_time, e.prefetch_waits, e.skipped_prefetch_data_p_reads, e.skipped_prefetch_index_p_reads, e.skipped_prefetch_temp_data_p_reads, e.skipped_prefetch_temp_index_p_reads, e.pool_col_l_reads, e.pool_col_p_reads, e.pool_async_col_reads, e.pool_col_writes, e.pool_async_col_writes, e.pool_col_lbp_pages_found, e.pool_async_col_lbp_pages_found, e.pool_temp_col_l_reads, e.pool_temp_col_p_reads from session.mon_get_tablespace_end e where not exists ( select null from session.mon_get_tablespace_start s where (s.member = e.member or (s.member is NULL and e.member is NULL)) and (s.tbsp_name = e.tbsp_name or (s.tbsp_name is NULL and e.tbsp_name is NULL)) ) with UR;
-update session.mon_get_tablespace_diff set ts_delta = (select max(ts_delta) from session.mon_get_tablespace_diff) where ts_delta is null;
-insert into session.mon_get_transaction_log_diff select (((JULIAN_DAY(e.ts)-JULIAN_DAY(s.ts))*24 + (HOUR(e.ts)-HOUR(s.ts)))*60 + (MINUTE(e.ts)-MINUTE(s.ts)))*60 + (SECOND(e.ts)-SECOND(s.ts)),e.ts,s.member, e.log_writes - s.log_writes as log_writes, e.log_write_time - s.log_write_time as log_write_time, e.num_log_write_io - s.num_log_write_io as num_log_write_io, e.num_log_part_page_io - s.num_log_part_page_io as num_log_part_page_io, e.num_log_buffer_full - s.num_log_buffer_full as num_log_buffer_full, e.log_reads - s.log_reads as log_reads, e.log_read_time - s.log_read_time as log_read_time, e.num_log_read_io - s.num_log_read_io as num_log_read_io, e.log_hadr_wait_time - s.log_hadr_wait_time as log_hadr_wait_time, e.log_hadr_waits_total - s.log_hadr_waits_total as log_hadr_waits_total, e.num_log_data_found_in_buffer - s.num_log_data_found_in_buffer as num_log_data_found_in_buffer, e.cur_commit_log_buff_log_reads - s.cur_commit_log_buff_log_reads as cur_commit_log_buff_log_reads, e.cur_commit_disk_log_reads - s.cur_commit_disk_log_reads as cur_commit_disk_log_reads from session.mon_get_transaction_log_start s, session.mon_get_transaction_log_end e where (s.member = e.member or (s.member is NULL and e.member is NULL)) with UR;
-insert into session.mon_get_transaction_log_diff select null, e.ts,e.member, e.log_writes, e.log_write_time, e.num_log_write_io, e.num_log_part_page_io, e.num_log_buffer_full, e.log_reads, e.log_read_time, e.num_log_read_io, e.log_hadr_wait_time, e.log_hadr_waits_total, e.num_log_data_found_in_buffer, e.cur_commit_log_buff_log_reads, e.cur_commit_disk_log_reads from session.mon_get_transaction_log_end e where not exists ( select null from session.mon_get_transaction_log_start s where (s.member = e.member or (s.member is NULL and e.member is NULL)) ) with UR;
-update session.mon_get_transaction_log_diff set ts_delta = (select max(ts_delta) from session.mon_get_transaction_log_diff) where ts_delta is null;
-insert into session.mon_get_workload_diff select (((JULIAN_DAY(e.ts)-JULIAN_DAY(s.ts))*24 + (HOUR(e.ts)-HOUR(s.ts)))*60 + (MINUTE(e.ts)-MINUTE(s.ts)))*60 + (SECOND(e.ts)-SECOND(s.ts)),e.ts,s.member, s.workload_name, s.sort_shrheap_allocated, e.act_completed_total - s.act_completed_total as act_completed_total, e.total_act_time - s.total_act_time as total_act_time, e.total_rqst_time - s.total_rqst_time as total_rqst_time, e.total_wait_time - s.total_wait_time as total_wait_time, e.lock_wait_time - s.lock_wait_time as lock_wait_time, e.log_disk_wait_time - s.log_disk_wait_time as log_disk_wait_time, e.pool_write_time - s.pool_write_time as pool_write_time, e.pool_read_time - s.pool_read_time as pool_read_time, e.direct_write_time - s.direct_write_time as direct_write_time, e.direct_read_time - s.direct_read_time as direct_read_time, e.tcpip_recv_wait_time - s.tcpip_recv_wait_time as tcpip_recv_wait_time, e.tcpip_send_wait_time - s.tcpip_send_wait_time as tcpip_send_wait_time, e.fcm_recv_wait_time - s.fcm_recv_wait_time as fcm_recv_wait_time, e.fcm_send_wait_time - s.fcm_send_wait_time as fcm_send_wait_time, e.total_cpu_time - s.total_cpu_time as total_cpu_time, e.total_compile_time - s.total_compile_time as total_compile_time, e.total_compile_proc_time - s.total_compile_proc_time as total_compile_proc_time, e.total_routine_time - s.total_routine_time as total_routine_time, e.total_section_sort_time - s.total_section_sort_time as total_section_sort_time, e.total_section_sort_proc_time - s.total_section_sort_proc_time as total_section_sort_proc_time, e.total_section_time - s.total_section_time as total_section_time, e.total_section_proc_time - s.total_section_proc_time as total_section_proc_time, e.total_commit_time - s.total_commit_time as total_commit_time, e.total_rollback_time - s.total_rollback_time as total_rollback_time, e.total_runstats_time - s.total_runstats_time as total_runstats_time, e.total_reorg_time - s.total_reorg_time as total_reorg_time, e.total_load_time - s.total_load_time as total_load_time, e.total_app_commits - s.total_app_commits as total_app_commits, e.total_app_rollbacks - s.total_app_rollbacks as total_app_rollbacks, e.deadlocks - s.deadlocks as deadlocks, e.lock_timeouts - s.lock_timeouts as lock_timeouts, e.lock_escals - s.lock_escals as lock_escals, e.client_idle_wait_time - s.client_idle_wait_time as client_idle_wait_time, e.rows_modified - s.rows_modified as rows_modified, e.rows_read - s.rows_read as rows_read, e.rows_returned - s.rows_returned as rows_returned, e.pkg_cache_inserts - s.pkg_cache_inserts as pkg_cache_inserts, e.total_sorts - s.total_sorts as total_sorts, e.sort_overflows - s.sort_overflows as sort_overflows, e.post_threshold_sorts - s.post_threshold_sorts as post_threshold_sorts, e.post_shrthreshold_sorts - s.post_shrthreshold_sorts as post_shrthreshold_sorts, e.total_reorgs - s.total_reorgs as total_reorgs, e.total_loads - s.total_loads as total_loads, e.total_runstats - s.total_runstats as total_runstats, e.pool_data_l_reads - s.pool_data_l_reads as pool_data_l_reads, e.pool_data_p_reads - s.pool_data_p_reads as pool_data_p_reads, e.pool_temp_data_p_reads - s.pool_temp_data_p_reads as pool_temp_data_p_reads, e.pool_index_l_reads - s.pool_index_l_reads as pool_index_l_reads, e.pool_index_p_reads - s.pool_index_p_reads as pool_index_p_reads, e.pool_temp_index_p_reads - s.pool_temp_index_p_reads as pool_temp_index_p_reads, e.pool_xda_p_reads - s.pool_xda_p_reads as pool_xda_p_reads, e.pool_temp_xda_p_reads - s.pool_temp_xda_p_reads as pool_temp_xda_p_reads, e.lock_wait_time_global - s.lock_wait_time_global as lock_wait_time_global, e.total_extended_latch_wait_time - s.total_extended_latch_wait_time as total_extended_latch_wait_time, e.reclaim_wait_time - s.reclaim_wait_time as reclaim_wait_time, e.cf_wait_time - s.cf_wait_time as cf_wait_time, e.prefetch_wait_time - s.prefetch_wait_time as prefetch_wait_time, e.log_buffer_wait_time - s.log_buffer_wait_time as log_buffer_wait_time, e.lock_timeouts_global - s.lock_timeouts_global as lock_timeouts_global, e.lock_escals_maxlocks - s.lock_escals_maxlocks as lock_escals_maxlocks, e.lock_escals_locklist - s.lock_escals_locklist as lock_escals_locklist, e.lock_escals_global - s.lock_escals_global as lock_escals_global, e.total_routine_user_code_time - s.total_routine_user_code_time as total_routine_user_code_time, e.diaglog_write_wait_time - s.diaglog_write_wait_time as diaglog_write_wait_time, e.total_connect_request_time - s.total_connect_request_time as total_connect_request_time, e.total_connect_request_proc_time - s.total_connect_request_proc_time as total_connect_request_proc_time, e.select_sql_stmts - s.select_sql_stmts as select_sql_stmts, e.uid_sql_stmts - s.uid_sql_stmts as uid_sql_stmts, e.rows_inserted - s.rows_inserted as rows_inserted, e.rows_updated - s.rows_updated as rows_updated, e.total_col_time - s.total_col_time as total_col_time, e.total_col_proc_time - s.total_col_proc_time as total_col_proc_time, e.total_backup_time - s.total_backup_time as total_backup_time, e.total_index_build_time - s.total_index_build_time as total_index_build_time, e.total_hash_joins - s.total_hash_joins as total_hash_joins, e.hash_join_overflows - s.hash_join_overflows as hash_join_overflows, e.post_threshold_hash_joins - s.post_threshold_hash_joins as post_threshold_hash_joins, e.post_shrthreshold_hash_joins - s.post_shrthreshold_hash_joins as post_shrthreshold_hash_joins, e.total_peds - s.total_peds as total_peds, e.post_threshold_peds - s.post_threshold_peds as post_threshold_peds, e.disabled_peds - s.disabled_peds as disabled_peds, e.total_peas - s.total_peas as total_peas, e.post_threshold_peas - s.post_threshold_peas as post_threshold_peas, e.pool_col_l_reads - s.pool_col_l_reads as pool_col_l_reads, e.pool_col_p_reads - s.pool_col_p_reads as pool_col_p_reads, e.pool_temp_col_p_reads - s.pool_temp_col_p_reads as pool_temp_col_p_reads, e.total_col_synopsis_time - s.total_col_synopsis_time as total_col_synopsis_time, e.ext_table_recv_wait_time - s.ext_table_recv_wait_time as ext_table_recv_wait_time, e.ext_table_recvs_total - s.ext_table_recvs_total as ext_table_recvs_total, e.ext_table_recv_volume - s.ext_table_recv_volume as ext_table_recv_volume, e.ext_table_read_volume - s.ext_table_read_volume as ext_table_read_volume, e.ext_table_send_wait_time - s.ext_table_send_wait_time as ext_table_send_wait_time, e.ext_table_sends_total - s.ext_table_sends_total as ext_table_sends_total, e.ext_table_send_volume - s.ext_table_send_volume as ext_table_send_volume, e.ext_table_write_volume - s.ext_table_write_volume as ext_table_write_volume from session.mon_get_workload_start s, session.mon_get_workload_end e where (s.member = e.member or (s.member is NULL and e.member is NULL)) and (s.workload_name = e.workload_name or (s.workload_name is NULL and e.workload_name is NULL)) with UR;
-insert into session.mon_get_workload_diff select null, e.ts,e.member, e.workload_name, e.sort_shrheap_allocated, e.act_completed_total, e.total_act_time, e.total_rqst_time, e.total_wait_time, e.lock_wait_time, e.log_disk_wait_time, e.pool_write_time, e.pool_read_time, e.direct_write_time, e.direct_read_time, e.tcpip_recv_wait_time, e.tcpip_send_wait_time, e.fcm_recv_wait_time, e.fcm_send_wait_time, e.total_cpu_time, e.total_compile_time, e.total_compile_proc_time, e.total_routine_time, e.total_section_sort_time, e.total_section_sort_proc_time, e.total_section_time, e.total_section_proc_time, e.total_commit_time, e.total_rollback_time, e.total_runstats_time, e.total_reorg_time, e.total_load_time, e.total_app_commits, e.total_app_rollbacks, e.deadlocks, e.lock_timeouts, e.lock_escals, e.client_idle_wait_time, e.rows_modified, e.rows_read, e.rows_returned, e.pkg_cache_inserts, e.total_sorts, e.sort_overflows, e.post_threshold_sorts, e.post_shrthreshold_sorts, e.total_reorgs, e.total_loads, e.total_runstats, e.pool_data_l_reads, e.pool_data_p_reads, e.pool_temp_data_p_reads, e.pool_index_l_reads, e.pool_index_p_reads, e.pool_temp_index_p_reads, e.pool_xda_p_reads, e.pool_temp_xda_p_reads, e.lock_wait_time_global, e.total_extended_latch_wait_time, e.reclaim_wait_time, e.cf_wait_time, e.prefetch_wait_time, e.log_buffer_wait_time, e.lock_timeouts_global, e.lock_escals_maxlocks, e.lock_escals_locklist, e.lock_escals_global, e.total_routine_user_code_time, e.diaglog_write_wait_time, e.total_connect_request_time, e.total_connect_request_proc_time, e.select_sql_stmts, e.uid_sql_stmts, e.rows_inserted, e.rows_updated, e.total_col_time, e.total_col_proc_time, e.total_backup_time, e.total_index_build_time, e.total_hash_joins, e.hash_join_overflows, e.post_threshold_hash_joins, e.post_shrthreshold_hash_joins, e.total_peds, e.post_threshold_peds, e.disabled_peds, e.total_peas, e.post_threshold_peas, e.pool_col_l_reads, e.pool_col_p_reads, e.pool_temp_col_p_reads, e.total_col_synopsis_time, e.ext_table_recv_wait_time, e.ext_table_recvs_total, e.ext_table_recv_volume, e.ext_table_read_volume, e.ext_table_send_wait_time, e.ext_table_sends_total, e.ext_table_send_volume, e.ext_table_write_volume from session.mon_get_workload_end e where not exists ( select null from session.mon_get_workload_start s where (s.member = e.member or (s.member is NULL and e.member is NULL)) and (s.workload_name = e.workload_name or (s.workload_name is NULL and e.workload_name is NULL)) ) with UR;
-update session.mon_get_workload_diff set ts_delta = (select max(ts_delta) from session.mon_get_workload_diff) where ts_delta is null;
-commit work;
-set current schema session;
+/* IBM_DB2MON */ insert into session.env_get_system_resources_diff select (((JULIAN_DAY(e.ts)-JULIAN_DAY(s.ts))*24 + (HOUR(e.ts)-HOUR(s.ts)))*60 + (MINUTE(e.ts)-MINUTE(s.ts)))*60 + (SECOND(e.ts)-SECOND(s.ts)),e.ts,s.member, s.os_name, s.host_name, s.os_version, s.os_release, s.cpu_total, s.cpu_online, s.cpu_configured, s.cpu_speed, s.cpu_hmt_degree, s.memory_total, s.memory_free, s.cpu_load_short, s.cpu_load_medium, s.cpu_load_long, s.cpu_usage_total, e.swap_pages_in - s.swap_pages_in as swap_pages_in, e.swap_pages_out - s.swap_pages_out as swap_pages_out from session.env_get_system_resources_start s, session.env_get_system_resources_end e where (s.member = e.member or (s.member is NULL and e.member is NULL)) with UR;
+/* IBM_DB2MON */ insert into session.env_get_system_resources_diff select null, e.ts,e.member, e.os_name, e.host_name, e.os_version, e.os_release, e.cpu_total, e.cpu_online, e.cpu_configured, e.cpu_speed, e.cpu_hmt_degree, e.memory_total, e.memory_free, e.cpu_load_short, e.cpu_load_medium, e.cpu_load_long, e.cpu_usage_total, e.swap_pages_in, e.swap_pages_out from session.env_get_system_resources_end e where not exists ( select null from session.env_get_system_resources_start s where (s.member = e.member or (s.member is NULL and e.member is NULL)) ) with UR;
+/* IBM_DB2MON */ update session.env_get_system_resources_diff set ts_delta = (select max(ts_delta) from session.env_get_system_resources_diff) where ts_delta is null;
+/* IBM_DB2MON */ insert into session.mon_get_bufferpool_diff select (((JULIAN_DAY(e.ts)-JULIAN_DAY(s.ts))*24 + (HOUR(e.ts)-HOUR(s.ts)))*60 + (MINUTE(e.ts)-MINUTE(s.ts)))*60 + (SECOND(e.ts)-SECOND(s.ts)),e.ts,s.member, s.bp_name, s.bp_cur_buffsz, s.automatic, e.pool_read_time - s.pool_read_time as pool_read_time, e.pool_data_l_reads - s.pool_data_l_reads as pool_data_l_reads, e.pool_data_p_reads - s.pool_data_p_reads as pool_data_p_reads, e.pool_async_read_time - s.pool_async_read_time as pool_async_read_time, e.pool_async_data_reads - s.pool_async_data_reads as pool_async_data_reads, e.pool_async_index_reads - s.pool_async_index_reads as pool_async_index_reads, e.pool_async_xda_reads - s.pool_async_xda_reads as pool_async_xda_reads, e.pool_data_writes - s.pool_data_writes as pool_data_writes, e.pool_async_data_writes - s.pool_async_data_writes as pool_async_data_writes, e.pool_data_lbp_pages_found - s.pool_data_lbp_pages_found as pool_data_lbp_pages_found, e.pool_async_data_lbp_pages_found - s.pool_async_data_lbp_pages_found as pool_async_data_lbp_pages_found, e.pool_temp_data_l_reads - s.pool_temp_data_l_reads as pool_temp_data_l_reads, e.pool_temp_data_p_reads - s.pool_temp_data_p_reads as pool_temp_data_p_reads, e.pool_index_lbp_pages_found - s.pool_index_lbp_pages_found as pool_index_lbp_pages_found, e.pool_async_index_lbp_pages_found - s.pool_async_index_lbp_pages_found as pool_async_index_lbp_pages_found, e.pool_temp_index_l_reads - s.pool_temp_index_l_reads as pool_temp_index_l_reads, e.pool_temp_index_p_reads - s.pool_temp_index_p_reads as pool_temp_index_p_reads, e.pool_write_time - s.pool_write_time as pool_write_time, e.pool_async_write_time - s.pool_async_write_time as pool_async_write_time, e.pool_index_l_reads - s.pool_index_l_reads as pool_index_l_reads, e.pool_index_p_reads - s.pool_index_p_reads as pool_index_p_reads, e.pool_index_writes - s.pool_index_writes as pool_index_writes, e.pool_async_index_writes - s.pool_async_index_writes as pool_async_index_writes, e.pool_xda_l_reads - s.pool_xda_l_reads as pool_xda_l_reads, e.pool_temp_xda_l_reads - s.pool_temp_xda_l_reads as pool_temp_xda_l_reads, e.pool_xda_p_reads - s.pool_xda_p_reads as pool_xda_p_reads, e.pool_temp_xda_p_reads - s.pool_temp_xda_p_reads as pool_temp_xda_p_reads, e.pool_xda_writes - s.pool_xda_writes as pool_xda_writes, e.pool_async_xda_writes - s.pool_async_xda_writes as pool_async_xda_writes, e.pool_data_gbp_l_reads - s.pool_data_gbp_l_reads as pool_data_gbp_l_reads, e.pool_data_gbp_p_reads - s.pool_data_gbp_p_reads as pool_data_gbp_p_reads, e.pool_index_gbp_l_reads - s.pool_index_gbp_l_reads as pool_index_gbp_l_reads, e.pool_index_gbp_p_reads - s.pool_index_gbp_p_reads as pool_index_gbp_p_reads, e.pool_data_gbp_invalid_pages - s.pool_data_gbp_invalid_pages as pool_data_gbp_invalid_pages, e.pool_async_data_gbp_invalid_pages - s.pool_async_data_gbp_invalid_pages as pool_async_data_gbp_invalid_pages, e.pool_index_gbp_invalid_pages - s.pool_index_gbp_invalid_pages as pool_index_gbp_invalid_pages, e.pool_async_index_gbp_invalid_pages - s.pool_async_index_gbp_invalid_pages as pool_async_index_gbp_invalid_pages, e.pool_col_l_reads - s.pool_col_l_reads as pool_col_l_reads, e.pool_col_p_reads - s.pool_col_p_reads as pool_col_p_reads, e.pool_async_col_reads - s.pool_async_col_reads as pool_async_col_reads, e.pool_col_writes - s.pool_col_writes as pool_col_writes, e.pool_async_col_writes - s.pool_async_col_writes as pool_async_col_writes, e.pool_col_lbp_pages_found - s.pool_col_lbp_pages_found as pool_col_lbp_pages_found, e.pool_async_col_lbp_pages_found - s.pool_async_col_lbp_pages_found as pool_async_col_lbp_pages_found, e.pool_temp_col_l_reads - s.pool_temp_col_l_reads as pool_temp_col_l_reads, e.pool_temp_col_p_reads - s.pool_temp_col_p_reads as pool_temp_col_p_reads from session.mon_get_bufferpool_start s, session.mon_get_bufferpool_end e where (s.member = e.member or (s.member is NULL and e.member is NULL)) and (s.bp_name = e.bp_name or (s.bp_name is NULL and e.bp_name is NULL)) with UR;
+/* IBM_DB2MON */ insert into session.mon_get_bufferpool_diff select null, e.ts,e.member, e.bp_name, e.bp_cur_buffsz, e.automatic, e.pool_read_time, e.pool_data_l_reads, e.pool_data_p_reads, e.pool_async_read_time, e.pool_async_data_reads, e.pool_async_index_reads, e.pool_async_xda_reads, e.pool_data_writes, e.pool_async_data_writes, e.pool_data_lbp_pages_found, e.pool_async_data_lbp_pages_found, e.pool_temp_data_l_reads, e.pool_temp_data_p_reads, e.pool_index_lbp_pages_found, e.pool_async_index_lbp_pages_found, e.pool_temp_index_l_reads, e.pool_temp_index_p_reads, e.pool_write_time, e.pool_async_write_time, e.pool_index_l_reads, e.pool_index_p_reads, e.pool_index_writes, e.pool_async_index_writes, e.pool_xda_l_reads, e.pool_temp_xda_l_reads, e.pool_xda_p_reads, e.pool_temp_xda_p_reads, e.pool_xda_writes, e.pool_async_xda_writes, e.pool_data_gbp_l_reads, e.pool_data_gbp_p_reads, e.pool_index_gbp_l_reads, e.pool_index_gbp_p_reads, e.pool_data_gbp_invalid_pages, e.pool_async_data_gbp_invalid_pages, e.pool_index_gbp_invalid_pages, e.pool_async_index_gbp_invalid_pages, e.pool_col_l_reads, e.pool_col_p_reads, e.pool_async_col_reads, e.pool_col_writes, e.pool_async_col_writes, e.pool_col_lbp_pages_found, e.pool_async_col_lbp_pages_found, e.pool_temp_col_l_reads, e.pool_temp_col_p_reads from session.mon_get_bufferpool_end e where not exists ( select null from session.mon_get_bufferpool_start s where (s.member = e.member or (s.member is NULL and e.member is NULL)) and (s.bp_name = e.bp_name or (s.bp_name is NULL and e.bp_name is NULL)) ) with UR;
+/* IBM_DB2MON */ update session.mon_get_bufferpool_diff set ts_delta = (select max(ts_delta) from session.mon_get_bufferpool_diff) where ts_delta is null;
+/* IBM_DB2MON */ insert into session.mon_get_cf_cmd_diff select (((JULIAN_DAY(e.ts)-JULIAN_DAY(s.ts))*24 + (HOUR(e.ts)-HOUR(s.ts)))*60 + (MINUTE(e.ts)-MINUTE(s.ts)))*60 + (SECOND(e.ts)-SECOND(s.ts)),e.ts,s.hostname, s.id, s.cf_cmd_name, e.total_cf_requests - s.total_cf_requests as total_cf_requests, e.total_cf_cmd_time_micro - s.total_cf_cmd_time_micro as total_cf_cmd_time_micro from session.mon_get_cf_cmd_start s, session.mon_get_cf_cmd_end e where (s.hostname = e.hostname or (s.hostname is NULL and e.hostname is NULL)) and (s.id = e.id or (s.id is NULL and e.id is NULL)) and (s.cf_cmd_name = e.cf_cmd_name or (s.cf_cmd_name is NULL and e.cf_cmd_name is NULL)) with UR;
+/* IBM_DB2MON */ insert into session.mon_get_cf_cmd_diff select null, e.ts,e.hostname, e.id, e.cf_cmd_name, e.total_cf_requests, e.total_cf_cmd_time_micro from session.mon_get_cf_cmd_end e where not exists ( select null from session.mon_get_cf_cmd_start s where (s.hostname = e.hostname or (s.hostname is NULL and e.hostname is NULL)) and (s.id = e.id or (s.id is NULL and e.id is NULL)) and (s.cf_cmd_name = e.cf_cmd_name or (s.cf_cmd_name is NULL and e.cf_cmd_name is NULL)) ) with UR;
+/* IBM_DB2MON */ update session.mon_get_cf_cmd_diff set ts_delta = (select max(ts_delta) from session.mon_get_cf_cmd_diff) where ts_delta is null;
+/* IBM_DB2MON */ insert into session.mon_get_cf_wait_time_diff select (((JULIAN_DAY(e.ts)-JULIAN_DAY(s.ts))*24 + (HOUR(e.ts)-HOUR(s.ts)))*60 + (MINUTE(e.ts)-MINUTE(s.ts)))*60 + (SECOND(e.ts)-SECOND(s.ts)),e.ts,s.member, s.hostname, s.id, s.cf_cmd_name, e.total_cf_requests - s.total_cf_requests as total_cf_requests, e.total_cf_wait_time_micro - s.total_cf_wait_time_micro as total_cf_wait_time_micro from session.mon_get_cf_wait_time_start s, session.mon_get_cf_wait_time_end e where (s.member = e.member or (s.member is NULL and e.member is NULL)) and (s.hostname = e.hostname or (s.hostname is NULL and e.hostname is NULL)) and (s.id = e.id or (s.id is NULL and e.id is NULL)) and (s.cf_cmd_name = e.cf_cmd_name or (s.cf_cmd_name is NULL and e.cf_cmd_name is NULL)) with UR;
+/* IBM_DB2MON */ insert into session.mon_get_cf_wait_time_diff select null, e.ts,e.member, e.hostname, e.id, e.cf_cmd_name, e.total_cf_requests, e.total_cf_wait_time_micro from session.mon_get_cf_wait_time_end e where not exists ( select null from session.mon_get_cf_wait_time_start s where (s.member = e.member or (s.member is NULL and e.member is NULL)) and (s.hostname = e.hostname or (s.hostname is NULL and e.hostname is NULL)) and (s.id = e.id or (s.id is NULL and e.id is NULL)) and (s.cf_cmd_name = e.cf_cmd_name or (s.cf_cmd_name is NULL and e.cf_cmd_name is NULL)) ) with UR;
+/* IBM_DB2MON */ update session.mon_get_cf_wait_time_diff set ts_delta = (select max(ts_delta) from session.mon_get_cf_wait_time_diff) where ts_delta is null;
+/* IBM_DB2MON */ insert into session.mon_get_connection_diff select (((JULIAN_DAY(e.ts)-JULIAN_DAY(s.ts))*24 + (HOUR(e.ts)-HOUR(s.ts)))*60 + (MINUTE(e.ts)-MINUTE(s.ts)))*60 + (SECOND(e.ts)-SECOND(s.ts)),e.ts,s.member, s.application_name, s.application_handle, s.client_applname, s.connection_reusability_status, s.reusability_status_reason, e.client_idle_wait_time - s.client_idle_wait_time as client_idle_wait_time, e.total_rqst_time - s.total_rqst_time as total_rqst_time, e.rqsts_completed_total - s.rqsts_completed_total as rqsts_completed_total, e.total_wait_time - s.total_wait_time as total_wait_time, e.lock_wait_time - s.lock_wait_time as lock_wait_time, e.log_disk_wait_time - s.log_disk_wait_time as log_disk_wait_time, e.fcm_recv_wait_time - s.fcm_recv_wait_time as fcm_recv_wait_time, e.fcm_send_wait_time - s.fcm_send_wait_time as fcm_send_wait_time, e.pool_write_time - s.pool_write_time as pool_write_time, e.pool_read_time - s.pool_read_time as pool_read_time, e.direct_write_time - s.direct_write_time as direct_write_time, e.direct_read_time - s.direct_read_time as direct_read_time, e.total_section_sort_time - s.total_section_sort_time as total_section_sort_time, e.total_commit_time - s.total_commit_time as total_commit_time, e.total_runstats_time - s.total_runstats_time as total_runstats_time, e.total_reorg_time - s.total_reorg_time as total_reorg_time, e.total_load_time - s.total_load_time as total_load_time, e.total_app_commits - s.total_app_commits as total_app_commits, e.total_app_rollbacks - s.total_app_rollbacks as total_app_rollbacks, e.deadlocks - s.deadlocks as deadlocks, e.rows_modified - s.rows_modified as rows_modified, e.rows_read - s.rows_read as rows_read, e.rows_returned - s.rows_returned as rows_returned, e.total_sorts - s.total_sorts as total_sorts, e.total_reorgs - s.total_reorgs as total_reorgs, e.total_loads - s.total_loads as total_loads, e.total_runstats - s.total_runstats as total_runstats, e.pool_data_l_reads - s.pool_data_l_reads as pool_data_l_reads, e.pool_data_p_reads - s.pool_data_p_reads as pool_data_p_reads, e.pool_index_l_reads - s.pool_index_l_reads as pool_index_l_reads, e.pool_index_p_reads - s.pool_index_p_reads as pool_index_p_reads, e.ida_send_wait_time - s.ida_send_wait_time as ida_send_wait_time, e.ida_recv_wait_time - s.ida_recv_wait_time as ida_recv_wait_time, e.cf_wait_time - s.cf_wait_time as cf_wait_time, e.reclaim_wait_time - s.reclaim_wait_time as reclaim_wait_time, e.total_extended_latch_wait_time - s.total_extended_latch_wait_time as total_extended_latch_wait_time, e.prefetch_wait_time - s.prefetch_wait_time as prefetch_wait_time, e.diaglog_write_wait_time - s.diaglog_write_wait_time as diaglog_write_wait_time, e.log_buffer_wait_time - s.log_buffer_wait_time as log_buffer_wait_time, e.audit_file_write_wait_time - s.audit_file_write_wait_time as audit_file_write_wait_time, e.audit_subsystem_wait_time - s.audit_subsystem_wait_time as audit_subsystem_wait_time, e.fcm_message_recv_wait_time - s.fcm_message_recv_wait_time as fcm_message_recv_wait_time, e.fcm_message_send_wait_time - s.fcm_message_send_wait_time as fcm_message_send_wait_time, e.fcm_tq_recv_wait_time - s.fcm_tq_recv_wait_time as fcm_tq_recv_wait_time, e.fcm_tq_send_wait_time - s.fcm_tq_send_wait_time as fcm_tq_send_wait_time, e.evmon_wait_time - s.evmon_wait_time as evmon_wait_time, e.lock_wait_time_global - s.lock_wait_time_global as lock_wait_time_global, e.pool_col_l_reads - s.pool_col_l_reads as pool_col_l_reads, e.pool_col_p_reads - s.pool_col_p_reads as pool_col_p_reads, e.comm_exit_wait_time - s.comm_exit_wait_time as comm_exit_wait_time, e.ext_table_recv_wait_time - s.ext_table_recv_wait_time as ext_table_recv_wait_time, e.ext_table_send_wait_time - s.ext_table_send_wait_time as ext_table_send_wait_time, e.lob_prefetch_wait_time - s.lob_prefetch_wait_time as lob_prefetch_wait_time, e.fed_wait_time - s.fed_wait_time as fed_wait_time from session.mon_get_connection_start s, session.mon_get_connection_end e where (s.member = e.member or (s.member is NULL and e.member is NULL)) and (s.application_name = e.application_name or (s.application_name is NULL and e.application_name is NULL)) and (s.application_handle = e.application_handle or (s.application_handle is NULL and e.application_handle is NULL)) and (s.client_applname = e.client_applname or (s.client_applname is NULL and e.client_applname is NULL)) with UR;
+/* IBM_DB2MON */ insert into session.mon_get_connection_diff select null, e.ts,e.member, e.application_name, e.application_handle, e.client_applname, e.connection_reusability_status, e.reusability_status_reason, e.client_idle_wait_time, e.total_rqst_time, e.rqsts_completed_total, e.total_wait_time, e.lock_wait_time, e.log_disk_wait_time, e.fcm_recv_wait_time, e.fcm_send_wait_time, e.pool_write_time, e.pool_read_time, e.direct_write_time, e.direct_read_time, e.total_section_sort_time, e.total_commit_time, e.total_runstats_time, e.total_reorg_time, e.total_load_time, e.total_app_commits, e.total_app_rollbacks, e.deadlocks, e.rows_modified, e.rows_read, e.rows_returned, e.total_sorts, e.total_reorgs, e.total_loads, e.total_runstats, e.pool_data_l_reads, e.pool_data_p_reads, e.pool_index_l_reads, e.pool_index_p_reads, e.ida_send_wait_time, e.ida_recv_wait_time, e.cf_wait_time, e.reclaim_wait_time, e.total_extended_latch_wait_time, e.prefetch_wait_time, e.diaglog_write_wait_time, e.log_buffer_wait_time, e.audit_file_write_wait_time, e.audit_subsystem_wait_time, e.fcm_message_recv_wait_time, e.fcm_message_send_wait_time, e.fcm_tq_recv_wait_time, e.fcm_tq_send_wait_time, e.evmon_wait_time, e.lock_wait_time_global, e.pool_col_l_reads, e.pool_col_p_reads, e.comm_exit_wait_time, e.ext_table_recv_wait_time, e.ext_table_send_wait_time, e.lob_prefetch_wait_time, e.fed_wait_time from session.mon_get_connection_end e where not exists ( select null from session.mon_get_connection_start s where (s.member = e.member or (s.member is NULL and e.member is NULL)) and (s.application_name = e.application_name or (s.application_name is NULL and e.application_name is NULL)) and (s.application_handle = e.application_handle or (s.application_handle is NULL and e.application_handle is NULL)) and (s.client_applname = e.client_applname or (s.client_applname is NULL and e.client_applname is NULL)) ) with UR;
+/* IBM_DB2MON */ update session.mon_get_connection_diff set ts_delta = (select max(ts_delta) from session.mon_get_connection_diff) where ts_delta is null;
+/* IBM_DB2MON */ insert into session.mon_get_extended_latch_wait_diff select (((JULIAN_DAY(e.ts)-JULIAN_DAY(s.ts))*24 + (HOUR(e.ts)-HOUR(s.ts)))*60 + (MINUTE(e.ts)-MINUTE(s.ts)))*60 + (SECOND(e.ts)-SECOND(s.ts)),e.ts,s.member, s.latch_name, e.total_extended_latch_wait_time - s.total_extended_latch_wait_time as total_extended_latch_wait_time, e.total_extended_latch_waits - s.total_extended_latch_waits as total_extended_latch_waits from session.mon_get_extended_latch_wait_start s, session.mon_get_extended_latch_wait_end e where (s.member = e.member or (s.member is NULL and e.member is NULL)) and (s.latch_name = e.latch_name or (s.latch_name is NULL and e.latch_name is NULL)) with UR;
+/* IBM_DB2MON */ insert into session.mon_get_extended_latch_wait_diff select null, e.ts,e.member, e.latch_name, e.total_extended_latch_wait_time, e.total_extended_latch_waits from session.mon_get_extended_latch_wait_end e where not exists ( select null from session.mon_get_extended_latch_wait_start s where (s.member = e.member or (s.member is NULL and e.member is NULL)) and (s.latch_name = e.latch_name or (s.latch_name is NULL and e.latch_name is NULL)) ) with UR;
+/* IBM_DB2MON */ update session.mon_get_extended_latch_wait_diff set ts_delta = (select max(ts_delta) from session.mon_get_extended_latch_wait_diff) where ts_delta is null;
+/* IBM_DB2MON */ insert into session.mon_get_group_bufferpool_diff select (((JULIAN_DAY(e.ts)-JULIAN_DAY(s.ts))*24 + (HOUR(e.ts)-HOUR(s.ts)))*60 + (MINUTE(e.ts)-MINUTE(s.ts)))*60 + (SECOND(e.ts)-SECOND(s.ts)),e.ts,s.member, e.num_gbp_full - s.num_gbp_full as num_gbp_full from session.mon_get_group_bufferpool_start s, session.mon_get_group_bufferpool_end e where (s.member = e.member or (s.member is NULL and e.member is NULL)) with UR;
+/* IBM_DB2MON */ insert into session.mon_get_group_bufferpool_diff select null, e.ts,e.member, e.num_gbp_full from session.mon_get_group_bufferpool_end e where not exists ( select null from session.mon_get_group_bufferpool_start s where (s.member = e.member or (s.member is NULL and e.member is NULL)) ) with UR;
+/* IBM_DB2MON */ update session.mon_get_group_bufferpool_diff set ts_delta = (select max(ts_delta) from session.mon_get_group_bufferpool_diff) where ts_delta is null;
+/* IBM_DB2MON */ insert into session.mon_get_index_diff select (((JULIAN_DAY(e.ts)-JULIAN_DAY(s.ts))*24 + (HOUR(e.ts)-HOUR(s.ts)))*60 + (MINUTE(e.ts)-MINUTE(s.ts)))*60 + (SECOND(e.ts)-SECOND(s.ts)),e.ts,s.member, s.tabschema, s.tabname, s.iid, s.data_partition_id, e.nleaf - s.nleaf as nleaf, e.nlevels - s.nlevels as nlevels, e.index_scans - s.index_scans as index_scans, e.index_only_scans - s.index_only_scans as index_only_scans, e.key_updates - s.key_updates as key_updates, e.include_col_updates - s.include_col_updates as include_col_updates, e.pseudo_deletes - s.pseudo_deletes as pseudo_deletes, e.del_keys_cleaned - s.del_keys_cleaned as del_keys_cleaned, e.root_node_splits - s.root_node_splits as root_node_splits, e.int_node_splits - s.int_node_splits as int_node_splits, e.boundary_leaf_node_splits - s.boundary_leaf_node_splits as boundary_leaf_node_splits, e.nonboundary_leaf_node_splits - s.nonboundary_leaf_node_splits as nonboundary_leaf_node_splits, e.page_allocations - s.page_allocations as page_allocations, e.pseudo_empty_pages - s.pseudo_empty_pages as pseudo_empty_pages, e.empty_pages_reused - s.empty_pages_reused as empty_pages_reused, e.empty_pages_deleted - s.empty_pages_deleted as empty_pages_deleted, e.pages_merged - s.pages_merged as pages_merged, e.object_index_l_reads - s.object_index_l_reads as object_index_l_reads, e.object_index_p_reads - s.object_index_p_reads as object_index_p_reads, e.object_index_gbp_l_reads - s.object_index_gbp_l_reads as object_index_gbp_l_reads, e.object_index_gbp_p_reads - s.object_index_gbp_p_reads as object_index_gbp_p_reads, e.object_index_gbp_invalid_pages - s.object_index_gbp_invalid_pages as object_index_gbp_invalid_pages, e.object_index_lbp_pages_found - s.object_index_lbp_pages_found as object_index_lbp_pages_found, e.object_index_gbp_indep_pages_found_in_lbp - s.object_index_gbp_indep_pages_found_in_lbp as object_index_gbp_indep_pages_found_in_lbp, e.index_jump_scans - s.index_jump_scans as index_jump_scans from session.mon_get_index_start s, session.mon_get_index_end e where (s.member = e.member or (s.member is NULL and e.member is NULL)) and (s.tabschema = e.tabschema or (s.tabschema is NULL and e.tabschema is NULL)) and (s.tabname = e.tabname or (s.tabname is NULL and e.tabname is NULL)) and (s.iid = e.iid or (s.iid is NULL and e.iid is NULL)) and (s.data_partition_id = e.data_partition_id or (s.data_partition_id is NULL and e.data_partition_id is NULL)) with UR;
+/* IBM_DB2MON */ insert into session.mon_get_index_diff select null, e.ts,e.member, e.tabschema, e.tabname, e.iid, e.data_partition_id, e.nleaf, e.nlevels, e.index_scans, e.index_only_scans, e.key_updates, e.include_col_updates, e.pseudo_deletes, e.del_keys_cleaned, e.root_node_splits, e.int_node_splits, e.boundary_leaf_node_splits, e.nonboundary_leaf_node_splits, e.page_allocations, e.pseudo_empty_pages, e.empty_pages_reused, e.empty_pages_deleted, e.pages_merged, e.object_index_l_reads, e.object_index_p_reads, e.object_index_gbp_l_reads, e.object_index_gbp_p_reads, e.object_index_gbp_invalid_pages, e.object_index_lbp_pages_found, e.object_index_gbp_indep_pages_found_in_lbp, e.index_jump_scans from session.mon_get_index_end e where not exists ( select null from session.mon_get_index_start s where (s.member = e.member or (s.member is NULL and e.member is NULL)) and (s.tabschema = e.tabschema or (s.tabschema is NULL and e.tabschema is NULL)) and (s.tabname = e.tabname or (s.tabname is NULL and e.tabname is NULL)) and (s.iid = e.iid or (s.iid is NULL and e.iid is NULL)) and (s.data_partition_id = e.data_partition_id or (s.data_partition_id is NULL and e.data_partition_id is NULL)) ) with UR;
+/* IBM_DB2MON */ update session.mon_get_index_diff set ts_delta = (select max(ts_delta) from session.mon_get_index_diff) where ts_delta is null;
+/* IBM_DB2MON */ insert into session.mon_get_page_access_info_diff select (((JULIAN_DAY(e.ts)-JULIAN_DAY(s.ts))*24 + (HOUR(e.ts)-HOUR(s.ts)))*60 + (MINUTE(e.ts)-MINUTE(s.ts)))*60 + (SECOND(e.ts)-SECOND(s.ts)),e.ts,s.member, s.tabschema, s.tabname, s.objtype, s.data_partition_id, s.iid, e.page_reclaims_x - s.page_reclaims_x as page_reclaims_x, e.page_reclaims_s - s.page_reclaims_s as page_reclaims_s, e.reclaim_wait_time - s.reclaim_wait_time as reclaim_wait_time, e.spacemappage_page_reclaims_x - s.spacemappage_page_reclaims_x as spacemappage_page_reclaims_x, e.spacemappage_page_reclaims_s - s.spacemappage_page_reclaims_s as spacemappage_page_reclaims_s, e.spacemappage_reclaim_wait_time - s.spacemappage_reclaim_wait_time as spacemappage_reclaim_wait_time from session.mon_get_page_access_info_start s, session.mon_get_page_access_info_end e where (s.member = e.member or (s.member is NULL and e.member is NULL)) and (s.tabschema = e.tabschema or (s.tabschema is NULL and e.tabschema is NULL)) and (s.tabname = e.tabname or (s.tabname is NULL and e.tabname is NULL)) and (s.objtype = e.objtype or (s.objtype is NULL and e.objtype is NULL)) and (s.data_partition_id = e.data_partition_id or (s.data_partition_id is NULL and e.data_partition_id is NULL)) and (s.iid = e.iid or (s.iid is NULL and e.iid is NULL)) with UR;
+/* IBM_DB2MON */ insert into session.mon_get_page_access_info_diff select null, e.ts,e.member, e.tabschema, e.tabname, e.objtype, e.data_partition_id, e.iid, e.page_reclaims_x, e.page_reclaims_s, e.reclaim_wait_time, e.spacemappage_page_reclaims_x, e.spacemappage_page_reclaims_s, e.spacemappage_reclaim_wait_time from session.mon_get_page_access_info_end e where not exists ( select null from session.mon_get_page_access_info_start s where (s.member = e.member or (s.member is NULL and e.member is NULL)) and (s.tabschema = e.tabschema or (s.tabschema is NULL and e.tabschema is NULL)) and (s.tabname = e.tabname or (s.tabname is NULL and e.tabname is NULL)) and (s.objtype = e.objtype or (s.objtype is NULL and e.objtype is NULL)) and (s.data_partition_id = e.data_partition_id or (s.data_partition_id is NULL and e.data_partition_id is NULL)) and (s.iid = e.iid or (s.iid is NULL and e.iid is NULL)) ) with UR;
+/* IBM_DB2MON */ update session.mon_get_page_access_info_diff set ts_delta = (select max(ts_delta) from session.mon_get_page_access_info_diff) where ts_delta is null;
+/* IBM_DB2MON */ insert into session.mon_get_pkg_cache_stmt_diff select (((JULIAN_DAY(e.ts)-JULIAN_DAY(s.ts))*24 + (HOUR(e.ts)-HOUR(s.ts)))*60 + (MINUTE(e.ts)-MINUTE(s.ts)))*60 + (SECOND(e.ts)-SECOND(s.ts)),e.ts,s.member, s.planid, s.executable_id, s.package_name, s.stmt_text, s.effective_isolation, s.stmtid, s.semantic_env_id, s.active_sorts_top, s.sort_heap_top, s.sort_shrheap_top, e.num_exec_with_metrics - s.num_exec_with_metrics as num_exec_with_metrics, e.coord_stmt_exec_time - s.coord_stmt_exec_time as coord_stmt_exec_time, e.total_act_time - s.total_act_time as total_act_time, e.total_cpu_time - s.total_cpu_time as total_cpu_time, e.total_act_wait_time - s.total_act_wait_time as total_act_wait_time, e.lock_wait_time - s.lock_wait_time as lock_wait_time, e.log_disk_wait_time - s.log_disk_wait_time as log_disk_wait_time, e.log_buffer_wait_time - s.log_buffer_wait_time as log_buffer_wait_time, e.pool_write_time - s.pool_write_time as pool_write_time, e.pool_read_time - s.pool_read_time as pool_read_time, e.direct_write_time - s.direct_write_time as direct_write_time, e.direct_read_time - s.direct_read_time as direct_read_time, e.rows_modified - s.rows_modified as rows_modified, e.rows_read - s.rows_read as rows_read, e.rows_returned - s.rows_returned as rows_returned, e.total_sorts - s.total_sorts as total_sorts, e.sort_overflows - s.sort_overflows as sort_overflows, e.total_section_time - s.total_section_time as total_section_time, e.total_section_sort_time - s.total_section_sort_time as total_section_sort_time, e.pool_data_l_reads - s.pool_data_l_reads as pool_data_l_reads, e.pool_index_l_reads - s.pool_index_l_reads as pool_index_l_reads, e.pool_data_p_reads - s.pool_data_p_reads as pool_data_p_reads, e.pool_index_p_reads - s.pool_index_p_reads as pool_index_p_reads, e.pool_data_writes - s.pool_data_writes as pool_data_writes, e.pool_index_writes - s.pool_index_writes as pool_index_writes, e.pool_temp_data_p_reads - s.pool_temp_data_p_reads as pool_temp_data_p_reads, e.pool_temp_index_p_reads - s.pool_temp_index_p_reads as pool_temp_index_p_reads, e.direct_read_reqs - s.direct_read_reqs as direct_read_reqs, e.direct_write_reqs - s.direct_write_reqs as direct_write_reqs, e.ida_send_wait_time - s.ida_send_wait_time as ida_send_wait_time, e.ida_recv_wait_time - s.ida_recv_wait_time as ida_recv_wait_time, e.cf_wait_time - s.cf_wait_time as cf_wait_time, e.reclaim_wait_time - s.reclaim_wait_time as reclaim_wait_time, e.total_extended_latch_wait_time - s.total_extended_latch_wait_time as total_extended_latch_wait_time, e.lock_wait_time_global - s.lock_wait_time_global as lock_wait_time_global, e.prefetch_wait_time - s.prefetch_wait_time as prefetch_wait_time, e.diaglog_write_wait_time - s.diaglog_write_wait_time as diaglog_write_wait_time, e.audit_file_write_wait_time - s.audit_file_write_wait_time as audit_file_write_wait_time, e.audit_subsystem_wait_time - s.audit_subsystem_wait_time as audit_subsystem_wait_time, e.fcm_recv_wait_time - s.fcm_recv_wait_time as fcm_recv_wait_time, e.fcm_send_wait_time - s.fcm_send_wait_time as fcm_send_wait_time, e.fcm_message_recv_wait_time - s.fcm_message_recv_wait_time as fcm_message_recv_wait_time, e.fcm_message_send_wait_time - s.fcm_message_send_wait_time as fcm_message_send_wait_time, e.fcm_tq_recv_wait_time - s.fcm_tq_recv_wait_time as fcm_tq_recv_wait_time, e.fcm_tq_send_wait_time - s.fcm_tq_send_wait_time as fcm_tq_send_wait_time, e.evmon_wait_time - s.evmon_wait_time as evmon_wait_time, e.pool_col_l_reads - s.pool_col_l_reads as pool_col_l_reads, e.pool_col_p_reads - s.pool_col_p_reads as pool_col_p_reads, e.total_col_time - s.total_col_time as total_col_time, e.comm_exit_wait_time - s.comm_exit_wait_time as comm_exit_wait_time, e.col_synopsis_rows_inserted - s.col_synopsis_rows_inserted as col_synopsis_rows_inserted, e.ext_table_recv_wait_time - s.ext_table_recv_wait_time as ext_table_recv_wait_time, e.ext_table_send_wait_time - s.ext_table_send_wait_time as ext_table_send_wait_time, e.lob_prefetch_wait_time - s.lob_prefetch_wait_time as lob_prefetch_wait_time, e.fed_wait_time - s.fed_wait_time as fed_wait_time from session.mon_get_pkg_cache_stmt_start s, session.mon_get_pkg_cache_stmt_end e where (s.member = e.member or (s.member is NULL and e.member is NULL)) and (s.planid = e.planid or (s.planid is NULL and e.planid is NULL)) and (s.executable_id = e.executable_id or (s.executable_id is NULL and e.executable_id is NULL)) with UR;
+/* IBM_DB2MON */ insert into session.mon_get_pkg_cache_stmt_diff select null, e.ts,e.member, e.planid, e.executable_id, e.package_name, e.stmt_text, e.effective_isolation, e.stmtid, e.semantic_env_id, e.active_sorts_top, e.sort_heap_top, e.sort_shrheap_top, e.num_exec_with_metrics, e.coord_stmt_exec_time, e.total_act_time, e.total_cpu_time, e.total_act_wait_time, e.lock_wait_time, e.log_disk_wait_time, e.log_buffer_wait_time, e.pool_write_time, e.pool_read_time, e.direct_write_time, e.direct_read_time, e.rows_modified, e.rows_read, e.rows_returned, e.total_sorts, e.sort_overflows, e.total_section_time, e.total_section_sort_time, e.pool_data_l_reads, e.pool_index_l_reads, e.pool_data_p_reads, e.pool_index_p_reads, e.pool_data_writes, e.pool_index_writes, e.pool_temp_data_p_reads, e.pool_temp_index_p_reads, e.direct_read_reqs, e.direct_write_reqs, e.ida_send_wait_time, e.ida_recv_wait_time, e.cf_wait_time, e.reclaim_wait_time, e.total_extended_latch_wait_time, e.lock_wait_time_global, e.prefetch_wait_time, e.diaglog_write_wait_time, e.audit_file_write_wait_time, e.audit_subsystem_wait_time, e.fcm_recv_wait_time, e.fcm_send_wait_time, e.fcm_message_recv_wait_time, e.fcm_message_send_wait_time, e.fcm_tq_recv_wait_time, e.fcm_tq_send_wait_time, e.evmon_wait_time, e.pool_col_l_reads, e.pool_col_p_reads, e.total_col_time, e.comm_exit_wait_time, e.col_synopsis_rows_inserted, e.ext_table_recv_wait_time, e.ext_table_send_wait_time, e.lob_prefetch_wait_time, e.fed_wait_time from session.mon_get_pkg_cache_stmt_end e where not exists ( select null from session.mon_get_pkg_cache_stmt_start s where (s.member = e.member or (s.member is NULL and e.member is NULL)) and (s.planid = e.planid or (s.planid is NULL and e.planid is NULL)) and (s.executable_id = e.executable_id or (s.executable_id is NULL and e.executable_id is NULL)) ) with UR;
+/* IBM_DB2MON */ update session.mon_get_pkg_cache_stmt_diff set ts_delta = (select max(ts_delta) from session.mon_get_pkg_cache_stmt_diff) where ts_delta is null;
+/* IBM_DB2MON */ create index session.idx_mon_get_pkg_cache_stmt_diff on session.mon_get_pkg_cache_stmt_diff (member, planid, executable_id);
+/* IBM_DB2MON */ insert into session.mon_get_table_diff select (((JULIAN_DAY(e.ts)-JULIAN_DAY(s.ts))*24 + (HOUR(e.ts)-HOUR(s.ts)))*60 + (MINUTE(e.ts)-MINUTE(s.ts)))*60 + (SECOND(e.ts)-SECOND(s.ts)),e.ts,s.member, s.tabname, s.tabschema, s.data_partition_id, s.tbsp_id, s.tab_file_id, s.data_sharing_state_change_time, s.data_sharing_state, e.rows_read - s.rows_read as rows_read, e.rows_inserted - s.rows_inserted as rows_inserted, e.rows_updated - s.rows_updated as rows_updated, e.rows_deleted - s.rows_deleted as rows_deleted, e.overflow_accesses - s.overflow_accesses as overflow_accesses, e.overflow_creates - s.overflow_creates as overflow_creates, e.page_reorgs - s.page_reorgs as page_reorgs, e.direct_read_reqs - s.direct_read_reqs as direct_read_reqs, e.direct_write_reqs - s.direct_write_reqs as direct_write_reqs, e.object_data_p_reads - s.object_data_p_reads as object_data_p_reads, e.object_data_l_reads - s.object_data_l_reads as object_data_l_reads, e.data_sharing_remote_lockwait_count - s.data_sharing_remote_lockwait_count as data_sharing_remote_lockwait_count, e.data_sharing_remote_lockwait_time - s.data_sharing_remote_lockwait_time as data_sharing_remote_lockwait_time, e.col_object_l_pages - s.col_object_l_pages as col_object_l_pages from session.mon_get_table_start s, session.mon_get_table_end e where (s.member = e.member or (s.member is NULL and e.member is NULL)) and (s.tabname = e.tabname or (s.tabname is NULL and e.tabname is NULL)) and (s.tabschema = e.tabschema or (s.tabschema is NULL and e.tabschema is NULL)) and (s.data_partition_id = e.data_partition_id or (s.data_partition_id is NULL and e.data_partition_id is NULL)) and (s.tbsp_id = e.tbsp_id or (s.tbsp_id is NULL and e.tbsp_id is NULL)) and (s.tab_file_id = e.tab_file_id or (s.tab_file_id is NULL and e.tab_file_id is NULL)) with UR;
+/* IBM_DB2MON */ insert into session.mon_get_table_diff select null, e.ts,e.member, e.tabname, e.tabschema, e.data_partition_id, e.tbsp_id, e.tab_file_id, e.data_sharing_state_change_time, e.data_sharing_state, e.rows_read, e.rows_inserted, e.rows_updated, e.rows_deleted, e.overflow_accesses, e.overflow_creates, e.page_reorgs, e.direct_read_reqs, e.direct_write_reqs, e.object_data_p_reads, e.object_data_l_reads, e.data_sharing_remote_lockwait_count, e.data_sharing_remote_lockwait_time, e.col_object_l_pages from session.mon_get_table_end e where not exists ( select null from session.mon_get_table_start s where (s.member = e.member or (s.member is NULL and e.member is NULL)) and (s.tabname = e.tabname or (s.tabname is NULL and e.tabname is NULL)) and (s.tabschema = e.tabschema or (s.tabschema is NULL and e.tabschema is NULL)) and (s.data_partition_id = e.data_partition_id or (s.data_partition_id is NULL and e.data_partition_id is NULL)) and (s.tbsp_id = e.tbsp_id or (s.tbsp_id is NULL and e.tbsp_id is NULL)) and (s.tab_file_id = e.tab_file_id or (s.tab_file_id is NULL and e.tab_file_id is NULL)) ) with UR;
+/* IBM_DB2MON */ update session.mon_get_table_diff set ts_delta = (select max(ts_delta) from session.mon_get_table_diff) where ts_delta is null;
+/* IBM_DB2MON */ create index session.idx_mon_get_table_diff on session.mon_get_table_diff (member, tabname, tabschema, data_partition_id, tbsp_id, tab_file_id);
+/* IBM_DB2MON */ insert into session.mon_get_tablespace_diff select (((JULIAN_DAY(e.ts)-JULIAN_DAY(s.ts))*24 + (HOUR(e.ts)-HOUR(s.ts)))*60 + (MINUTE(e.ts)-MINUTE(s.ts)))*60 + (SECOND(e.ts)-SECOND(s.ts)),e.ts,s.member, s.tbsp_name, s.tbsp_page_size, s.tbsp_id, s.tbsp_extent_size, s.tbsp_prefetch_size, s.fs_caching, e.pool_read_time - s.pool_read_time as pool_read_time, e.pool_async_read_time - s.pool_async_read_time as pool_async_read_time, e.pool_write_time - s.pool_write_time as pool_write_time, e.pool_async_write_time - s.pool_async_write_time as pool_async_write_time, e.pool_data_writes - s.pool_data_writes as pool_data_writes, e.pool_async_data_writes - s.pool_async_data_writes as pool_async_data_writes, e.pool_index_writes - s.pool_index_writes as pool_index_writes, e.pool_async_index_writes - s.pool_async_index_writes as pool_async_index_writes, e.pool_data_l_reads - s.pool_data_l_reads as pool_data_l_reads, e.pool_temp_data_l_reads - s.pool_temp_data_l_reads as pool_temp_data_l_reads, e.pool_async_data_reads - s.pool_async_data_reads as pool_async_data_reads, e.pool_data_p_reads - s.pool_data_p_reads as pool_data_p_reads, e.pool_temp_data_p_reads - s.pool_temp_data_p_reads as pool_temp_data_p_reads, e.pool_async_index_reads - s.pool_async_index_reads as pool_async_index_reads, e.pool_index_l_reads - s.pool_index_l_reads as pool_index_l_reads, e.pool_temp_index_l_reads - s.pool_temp_index_l_reads as pool_temp_index_l_reads, e.pool_index_p_reads - s.pool_index_p_reads as pool_index_p_reads, e.pool_temp_index_p_reads - s.pool_temp_index_p_reads as pool_temp_index_p_reads, e.pool_xda_l_reads - s.pool_xda_l_reads as pool_xda_l_reads, e.pool_temp_xda_l_reads - s.pool_temp_xda_l_reads as pool_temp_xda_l_reads, e.pool_async_xda_reads - s.pool_async_xda_reads as pool_async_xda_reads, e.pool_xda_p_reads - s.pool_xda_p_reads as pool_xda_p_reads, e.pool_temp_xda_p_reads - s.pool_temp_xda_p_reads as pool_temp_xda_p_reads, e.pool_xda_writes - s.pool_xda_writes as pool_xda_writes, e.pool_async_xda_writes - s.pool_async_xda_writes as pool_async_xda_writes, e.unread_prefetch_pages - s.unread_prefetch_pages as unread_prefetch_pages, e.vectored_ios - s.vectored_ios as vectored_ios, e.pages_from_vectored_ios - s.pages_from_vectored_ios as pages_from_vectored_ios, e.block_ios - s.block_ios as block_ios, e.pages_from_block_ios - s.pages_from_block_ios as pages_from_block_ios, e.pool_data_lbp_pages_found - s.pool_data_lbp_pages_found as pool_data_lbp_pages_found, e.pool_index_lbp_pages_found - s.pool_index_lbp_pages_found as pool_index_lbp_pages_found, e.pool_async_data_lbp_pages_found - s.pool_async_data_lbp_pages_found as pool_async_data_lbp_pages_found, e.pool_async_index_lbp_pages_found - s.pool_async_index_lbp_pages_found as pool_async_index_lbp_pages_found, e.direct_read_reqs - s.direct_read_reqs as direct_read_reqs, e.direct_write_reqs - s.direct_write_reqs as direct_write_reqs, e.direct_read_time - s.direct_read_time as direct_read_time, e.direct_write_time - s.direct_write_time as direct_write_time, e.tbsp_used_pages - s.tbsp_used_pages as tbsp_used_pages, e.tbsp_page_top - s.tbsp_page_top as tbsp_page_top, e.pool_data_gbp_l_reads - s.pool_data_gbp_l_reads as pool_data_gbp_l_reads, e.pool_data_gbp_p_reads - s.pool_data_gbp_p_reads as pool_data_gbp_p_reads, e.pool_index_gbp_l_reads - s.pool_index_gbp_l_reads as pool_index_gbp_l_reads, e.pool_index_gbp_p_reads - s.pool_index_gbp_p_reads as pool_index_gbp_p_reads, e.pool_data_gbp_invalid_pages - s.pool_data_gbp_invalid_pages as pool_data_gbp_invalid_pages, e.pool_async_data_gbp_invalid_pages - s.pool_async_data_gbp_invalid_pages as pool_async_data_gbp_invalid_pages, e.pool_index_gbp_invalid_pages - s.pool_index_gbp_invalid_pages as pool_index_gbp_invalid_pages, e.pool_async_index_gbp_invalid_pages - s.pool_async_index_gbp_invalid_pages as pool_async_index_gbp_invalid_pages, e.pool_async_data_gbp_l_reads - s.pool_async_data_gbp_l_reads as pool_async_data_gbp_l_reads, e.pool_async_data_gbp_p_reads - s.pool_async_data_gbp_p_reads as pool_async_data_gbp_p_reads, e.pool_async_data_gbp_indep_pages_found_in_lbp - s.pool_async_data_gbp_indep_pages_found_in_lbp as pool_async_data_gbp_indep_pages_found_in_lbp, e.pool_async_index_gbp_l_reads - s.pool_async_index_gbp_l_reads as pool_async_index_gbp_l_reads, e.pool_async_index_gbp_p_reads - s.pool_async_index_gbp_p_reads as pool_async_index_gbp_p_reads, e.pool_async_index_gbp_indep_pages_found_in_lbp - s.pool_async_index_gbp_indep_pages_found_in_lbp as pool_async_index_gbp_indep_pages_found_in_lbp, e.prefetch_wait_time - s.prefetch_wait_time as prefetch_wait_time, e.prefetch_waits - s.prefetch_waits as prefetch_waits, e.skipped_prefetch_data_p_reads - s.skipped_prefetch_data_p_reads as skipped_prefetch_data_p_reads, e.skipped_prefetch_index_p_reads - s.skipped_prefetch_index_p_reads as skipped_prefetch_index_p_reads, e.skipped_prefetch_temp_data_p_reads - s.skipped_prefetch_temp_data_p_reads as skipped_prefetch_temp_data_p_reads, e.skipped_prefetch_temp_index_p_reads - s.skipped_prefetch_temp_index_p_reads as skipped_prefetch_temp_index_p_reads, e.pool_col_l_reads - s.pool_col_l_reads as pool_col_l_reads, e.pool_col_p_reads - s.pool_col_p_reads as pool_col_p_reads, e.pool_async_col_reads - s.pool_async_col_reads as pool_async_col_reads, e.pool_col_writes - s.pool_col_writes as pool_col_writes, e.pool_async_col_writes - s.pool_async_col_writes as pool_async_col_writes, e.pool_col_lbp_pages_found - s.pool_col_lbp_pages_found as pool_col_lbp_pages_found, e.pool_async_col_lbp_pages_found - s.pool_async_col_lbp_pages_found as pool_async_col_lbp_pages_found, e.pool_temp_col_l_reads - s.pool_temp_col_l_reads as pool_temp_col_l_reads, e.pool_temp_col_p_reads - s.pool_temp_col_p_reads as pool_temp_col_p_reads from session.mon_get_tablespace_start s, session.mon_get_tablespace_end e where (s.member = e.member or (s.member is NULL and e.member is NULL)) and (s.tbsp_name = e.tbsp_name or (s.tbsp_name is NULL and e.tbsp_name is NULL)) with UR;
+/* IBM_DB2MON */ insert into session.mon_get_tablespace_diff select null, e.ts,e.member, e.tbsp_name, e.tbsp_page_size, e.tbsp_id, e.tbsp_extent_size, e.tbsp_prefetch_size, e.fs_caching, e.pool_read_time, e.pool_async_read_time, e.pool_write_time, e.pool_async_write_time, e.pool_data_writes, e.pool_async_data_writes, e.pool_index_writes, e.pool_async_index_writes, e.pool_data_l_reads, e.pool_temp_data_l_reads, e.pool_async_data_reads, e.pool_data_p_reads, e.pool_temp_data_p_reads, e.pool_async_index_reads, e.pool_index_l_reads, e.pool_temp_index_l_reads, e.pool_index_p_reads, e.pool_temp_index_p_reads, e.pool_xda_l_reads, e.pool_temp_xda_l_reads, e.pool_async_xda_reads, e.pool_xda_p_reads, e.pool_temp_xda_p_reads, e.pool_xda_writes, e.pool_async_xda_writes, e.unread_prefetch_pages, e.vectored_ios, e.pages_from_vectored_ios, e.block_ios, e.pages_from_block_ios, e.pool_data_lbp_pages_found, e.pool_index_lbp_pages_found, e.pool_async_data_lbp_pages_found, e.pool_async_index_lbp_pages_found, e.direct_read_reqs, e.direct_write_reqs, e.direct_read_time, e.direct_write_time, e.tbsp_used_pages, e.tbsp_page_top, e.pool_data_gbp_l_reads, e.pool_data_gbp_p_reads, e.pool_index_gbp_l_reads, e.pool_index_gbp_p_reads, e.pool_data_gbp_invalid_pages, e.pool_async_data_gbp_invalid_pages, e.pool_index_gbp_invalid_pages, e.pool_async_index_gbp_invalid_pages, e.pool_async_data_gbp_l_reads, e.pool_async_data_gbp_p_reads, e.pool_async_data_gbp_indep_pages_found_in_lbp, e.pool_async_index_gbp_l_reads, e.pool_async_index_gbp_p_reads, e.pool_async_index_gbp_indep_pages_found_in_lbp, e.prefetch_wait_time, e.prefetch_waits, e.skipped_prefetch_data_p_reads, e.skipped_prefetch_index_p_reads, e.skipped_prefetch_temp_data_p_reads, e.skipped_prefetch_temp_index_p_reads, e.pool_col_l_reads, e.pool_col_p_reads, e.pool_async_col_reads, e.pool_col_writes, e.pool_async_col_writes, e.pool_col_lbp_pages_found, e.pool_async_col_lbp_pages_found, e.pool_temp_col_l_reads, e.pool_temp_col_p_reads from session.mon_get_tablespace_end e where not exists ( select null from session.mon_get_tablespace_start s where (s.member = e.member or (s.member is NULL and e.member is NULL)) and (s.tbsp_name = e.tbsp_name or (s.tbsp_name is NULL and e.tbsp_name is NULL)) ) with UR;
+/* IBM_DB2MON */ update session.mon_get_tablespace_diff set ts_delta = (select max(ts_delta) from session.mon_get_tablespace_diff) where ts_delta is null;
+/* IBM_DB2MON */ insert into session.mon_get_transaction_log_diff select (((JULIAN_DAY(e.ts)-JULIAN_DAY(s.ts))*24 + (HOUR(e.ts)-HOUR(s.ts)))*60 + (MINUTE(e.ts)-MINUTE(s.ts)))*60 + (SECOND(e.ts)-SECOND(s.ts)),e.ts,s.member, e.log_writes - s.log_writes as log_writes, e.log_write_time - s.log_write_time as log_write_time, e.num_log_write_io - s.num_log_write_io as num_log_write_io, e.num_log_part_page_io - s.num_log_part_page_io as num_log_part_page_io, e.num_log_buffer_full - s.num_log_buffer_full as num_log_buffer_full, e.log_reads - s.log_reads as log_reads, e.log_read_time - s.log_read_time as log_read_time, e.num_log_read_io - s.num_log_read_io as num_log_read_io, e.log_hadr_wait_time - s.log_hadr_wait_time as log_hadr_wait_time, e.log_hadr_waits_total - s.log_hadr_waits_total as log_hadr_waits_total, e.num_log_data_found_in_buffer - s.num_log_data_found_in_buffer as num_log_data_found_in_buffer, e.cur_commit_log_buff_log_reads - s.cur_commit_log_buff_log_reads as cur_commit_log_buff_log_reads, e.cur_commit_disk_log_reads - s.cur_commit_disk_log_reads as cur_commit_disk_log_reads from session.mon_get_transaction_log_start s, session.mon_get_transaction_log_end e where (s.member = e.member or (s.member is NULL and e.member is NULL)) with UR;
+/* IBM_DB2MON */ insert into session.mon_get_transaction_log_diff select null, e.ts,e.member, e.log_writes, e.log_write_time, e.num_log_write_io, e.num_log_part_page_io, e.num_log_buffer_full, e.log_reads, e.log_read_time, e.num_log_read_io, e.log_hadr_wait_time, e.log_hadr_waits_total, e.num_log_data_found_in_buffer, e.cur_commit_log_buff_log_reads, e.cur_commit_disk_log_reads from session.mon_get_transaction_log_end e where not exists ( select null from session.mon_get_transaction_log_start s where (s.member = e.member or (s.member is NULL and e.member is NULL)) ) with UR;
+/* IBM_DB2MON */ update session.mon_get_transaction_log_diff set ts_delta = (select max(ts_delta) from session.mon_get_transaction_log_diff) where ts_delta is null;
+/* IBM_DB2MON */ insert into session.mon_get_workload_diff select (((JULIAN_DAY(e.ts)-JULIAN_DAY(s.ts))*24 + (HOUR(e.ts)-HOUR(s.ts)))*60 + (MINUTE(e.ts)-MINUTE(s.ts)))*60 + (SECOND(e.ts)-SECOND(s.ts)),e.ts,s.member, s.workload_name, s.sort_shrheap_allocated, e.act_completed_total - s.act_completed_total as act_completed_total, e.total_act_time - s.total_act_time as total_act_time, e.total_rqst_time - s.total_rqst_time as total_rqst_time, e.total_wait_time - s.total_wait_time as total_wait_time, e.lock_wait_time - s.lock_wait_time as lock_wait_time, e.log_disk_wait_time - s.log_disk_wait_time as log_disk_wait_time, e.pool_write_time - s.pool_write_time as pool_write_time, e.pool_read_time - s.pool_read_time as pool_read_time, e.direct_write_time - s.direct_write_time as direct_write_time, e.direct_read_time - s.direct_read_time as direct_read_time, e.tcpip_recv_wait_time - s.tcpip_recv_wait_time as tcpip_recv_wait_time, e.tcpip_send_wait_time - s.tcpip_send_wait_time as tcpip_send_wait_time, e.fcm_recv_wait_time - s.fcm_recv_wait_time as fcm_recv_wait_time, e.fcm_send_wait_time - s.fcm_send_wait_time as fcm_send_wait_time, e.total_cpu_time - s.total_cpu_time as total_cpu_time, e.total_compile_time - s.total_compile_time as total_compile_time, e.total_compile_proc_time - s.total_compile_proc_time as total_compile_proc_time, e.total_routine_time - s.total_routine_time as total_routine_time, e.total_section_sort_time - s.total_section_sort_time as total_section_sort_time, e.total_section_sort_proc_time - s.total_section_sort_proc_time as total_section_sort_proc_time, e.total_section_time - s.total_section_time as total_section_time, e.total_section_proc_time - s.total_section_proc_time as total_section_proc_time, e.total_commit_time - s.total_commit_time as total_commit_time, e.total_rollback_time - s.total_rollback_time as total_rollback_time, e.total_runstats_time - s.total_runstats_time as total_runstats_time, e.total_reorg_time - s.total_reorg_time as total_reorg_time, e.total_load_time - s.total_load_time as total_load_time, e.total_app_commits - s.total_app_commits as total_app_commits, e.total_app_rollbacks - s.total_app_rollbacks as total_app_rollbacks, e.deadlocks - s.deadlocks as deadlocks, e.lock_timeouts - s.lock_timeouts as lock_timeouts, e.lock_escals - s.lock_escals as lock_escals, e.client_idle_wait_time - s.client_idle_wait_time as client_idle_wait_time, e.rows_modified - s.rows_modified as rows_modified, e.rows_read - s.rows_read as rows_read, e.rows_returned - s.rows_returned as rows_returned, e.pkg_cache_inserts - s.pkg_cache_inserts as pkg_cache_inserts, e.total_sorts - s.total_sorts as total_sorts, e.sort_overflows - s.sort_overflows as sort_overflows, e.post_threshold_sorts - s.post_threshold_sorts as post_threshold_sorts, e.post_shrthreshold_sorts - s.post_shrthreshold_sorts as post_shrthreshold_sorts, e.total_reorgs - s.total_reorgs as total_reorgs, e.total_loads - s.total_loads as total_loads, e.total_runstats - s.total_runstats as total_runstats, e.pool_data_l_reads - s.pool_data_l_reads as pool_data_l_reads, e.pool_data_p_reads - s.pool_data_p_reads as pool_data_p_reads, e.pool_temp_data_p_reads - s.pool_temp_data_p_reads as pool_temp_data_p_reads, e.pool_index_l_reads - s.pool_index_l_reads as pool_index_l_reads, e.pool_index_p_reads - s.pool_index_p_reads as pool_index_p_reads, e.pool_temp_index_p_reads - s.pool_temp_index_p_reads as pool_temp_index_p_reads, e.pool_xda_p_reads - s.pool_xda_p_reads as pool_xda_p_reads, e.pool_temp_xda_p_reads - s.pool_temp_xda_p_reads as pool_temp_xda_p_reads, e.ida_send_wait_time - s.ida_send_wait_time as ida_send_wait_time, e.ida_recv_wait_time - s.ida_recv_wait_time as ida_recv_wait_time, e.lock_wait_time_global - s.lock_wait_time_global as lock_wait_time_global, e.total_extended_latch_wait_time - s.total_extended_latch_wait_time as total_extended_latch_wait_time, e.reclaim_wait_time - s.reclaim_wait_time as reclaim_wait_time, e.cf_wait_time - s.cf_wait_time as cf_wait_time, e.prefetch_wait_time - s.prefetch_wait_time as prefetch_wait_time, e.log_buffer_wait_time - s.log_buffer_wait_time as log_buffer_wait_time, e.lock_timeouts_global - s.lock_timeouts_global as lock_timeouts_global, e.lock_escals_maxlocks - s.lock_escals_maxlocks as lock_escals_maxlocks, e.lock_escals_locklist - s.lock_escals_locklist as lock_escals_locklist, e.lock_escals_global - s.lock_escals_global as lock_escals_global, e.total_routine_user_code_time - s.total_routine_user_code_time as total_routine_user_code_time, e.diaglog_write_wait_time - s.diaglog_write_wait_time as diaglog_write_wait_time, e.total_connect_request_time - s.total_connect_request_time as total_connect_request_time, e.total_connect_request_proc_time - s.total_connect_request_proc_time as total_connect_request_proc_time, e.audit_file_write_wait_time - s.audit_file_write_wait_time as audit_file_write_wait_time, e.audit_subsystem_wait_time - s.audit_subsystem_wait_time as audit_subsystem_wait_time, e.fcm_message_recv_wait_time - s.fcm_message_recv_wait_time as fcm_message_recv_wait_time, e.fcm_message_send_wait_time - s.fcm_message_send_wait_time as fcm_message_send_wait_time, e.fcm_tq_recv_wait_time - s.fcm_tq_recv_wait_time as fcm_tq_recv_wait_time, e.fcm_tq_send_wait_time - s.fcm_tq_send_wait_time as fcm_tq_send_wait_time, e.evmon_wait_time - s.evmon_wait_time as evmon_wait_time, e.select_sql_stmts - s.select_sql_stmts as select_sql_stmts, e.uid_sql_stmts - s.uid_sql_stmts as uid_sql_stmts, e.rows_inserted - s.rows_inserted as rows_inserted, e.rows_updated - s.rows_updated as rows_updated, e.total_col_time - s.total_col_time as total_col_time, e.total_col_proc_time - s.total_col_proc_time as total_col_proc_time, e.total_backup_time - s.total_backup_time as total_backup_time, e.total_index_build_time - s.total_index_build_time as total_index_build_time, e.total_hash_joins - s.total_hash_joins as total_hash_joins, e.hash_join_overflows - s.hash_join_overflows as hash_join_overflows, e.post_threshold_hash_joins - s.post_threshold_hash_joins as post_threshold_hash_joins, e.post_shrthreshold_hash_joins - s.post_shrthreshold_hash_joins as post_shrthreshold_hash_joins, e.total_peds - s.total_peds as total_peds, e.post_threshold_peds - s.post_threshold_peds as post_threshold_peds, e.disabled_peds - s.disabled_peds as disabled_peds, e.total_peas - s.total_peas as total_peas, e.post_threshold_peas - s.post_threshold_peas as post_threshold_peas, e.pool_col_l_reads - s.pool_col_l_reads as pool_col_l_reads, e.pool_col_p_reads - s.pool_col_p_reads as pool_col_p_reads, e.pool_temp_col_p_reads - s.pool_temp_col_p_reads as pool_temp_col_p_reads, e.comm_exit_wait_time - s.comm_exit_wait_time as comm_exit_wait_time, e.total_col_synopsis_time - s.total_col_synopsis_time as total_col_synopsis_time, e.ext_table_recv_wait_time - s.ext_table_recv_wait_time as ext_table_recv_wait_time, e.ext_table_recvs_total - s.ext_table_recvs_total as ext_table_recvs_total, e.ext_table_recv_volume - s.ext_table_recv_volume as ext_table_recv_volume, e.ext_table_read_volume - s.ext_table_read_volume as ext_table_read_volume, e.ext_table_send_wait_time - s.ext_table_send_wait_time as ext_table_send_wait_time, e.ext_table_sends_total - s.ext_table_sends_total as ext_table_sends_total, e.ext_table_send_volume - s.ext_table_send_volume as ext_table_send_volume, e.ext_table_write_volume - s.ext_table_write_volume as ext_table_write_volume, e.lob_prefetch_wait_time - s.lob_prefetch_wait_time as lob_prefetch_wait_time, e.fed_wait_time - s.fed_wait_time as fed_wait_time from session.mon_get_workload_start s, session.mon_get_workload_end e where (s.member = e.member or (s.member is NULL and e.member is NULL)) and (s.workload_name = e.workload_name or (s.workload_name is NULL and e.workload_name is NULL)) with UR;
+/* IBM_DB2MON */ insert into session.mon_get_workload_diff select null, e.ts,e.member, e.workload_name, e.sort_shrheap_allocated, e.act_completed_total, e.total_act_time, e.total_rqst_time, e.total_wait_time, e.lock_wait_time, e.log_disk_wait_time, e.pool_write_time, e.pool_read_time, e.direct_write_time, e.direct_read_time, e.tcpip_recv_wait_time, e.tcpip_send_wait_time, e.fcm_recv_wait_time, e.fcm_send_wait_time, e.total_cpu_time, e.total_compile_time, e.total_compile_proc_time, e.total_routine_time, e.total_section_sort_time, e.total_section_sort_proc_time, e.total_section_time, e.total_section_proc_time, e.total_commit_time, e.total_rollback_time, e.total_runstats_time, e.total_reorg_time, e.total_load_time, e.total_app_commits, e.total_app_rollbacks, e.deadlocks, e.lock_timeouts, e.lock_escals, e.client_idle_wait_time, e.rows_modified, e.rows_read, e.rows_returned, e.pkg_cache_inserts, e.total_sorts, e.sort_overflows, e.post_threshold_sorts, e.post_shrthreshold_sorts, e.total_reorgs, e.total_loads, e.total_runstats, e.pool_data_l_reads, e.pool_data_p_reads, e.pool_temp_data_p_reads, e.pool_index_l_reads, e.pool_index_p_reads, e.pool_temp_index_p_reads, e.pool_xda_p_reads, e.pool_temp_xda_p_reads, e.ida_send_wait_time, e.ida_recv_wait_time, e.lock_wait_time_global, e.total_extended_latch_wait_time, e.reclaim_wait_time, e.cf_wait_time, e.prefetch_wait_time, e.log_buffer_wait_time, e.lock_timeouts_global, e.lock_escals_maxlocks, e.lock_escals_locklist, e.lock_escals_global, e.total_routine_user_code_time, e.diaglog_write_wait_time, e.total_connect_request_time, e.total_connect_request_proc_time, e.audit_file_write_wait_time, e.audit_subsystem_wait_time, e.fcm_message_recv_wait_time, e.fcm_message_send_wait_time, e.fcm_tq_recv_wait_time, e.fcm_tq_send_wait_time, e.evmon_wait_time, e.select_sql_stmts, e.uid_sql_stmts, e.rows_inserted, e.rows_updated, e.total_col_time, e.total_col_proc_time, e.total_backup_time, e.total_index_build_time, e.total_hash_joins, e.hash_join_overflows, e.post_threshold_hash_joins, e.post_shrthreshold_hash_joins, e.total_peds, e.post_threshold_peds, e.disabled_peds, e.total_peas, e.post_threshold_peas, e.pool_col_l_reads, e.pool_col_p_reads, e.pool_temp_col_p_reads, e.comm_exit_wait_time, e.total_col_synopsis_time, e.ext_table_recv_wait_time, e.ext_table_recvs_total, e.ext_table_recv_volume, e.ext_table_read_volume, e.ext_table_send_wait_time, e.ext_table_sends_total, e.ext_table_send_volume, e.ext_table_write_volume, e.lob_prefetch_wait_time, e.fed_wait_time from session.mon_get_workload_end e where not exists ( select null from session.mon_get_workload_start s where (s.member = e.member or (s.member is NULL and e.member is NULL)) and (s.workload_name = e.workload_name or (s.workload_name is NULL and e.workload_name is NULL)) ) with UR;
+/* IBM_DB2MON */ update session.mon_get_workload_diff set ts_delta = (select max(ts_delta) from session.mon_get_workload_diff) where ts_delta is null;
+/* IBM_DB2MON */ commit work;
+/* IBM_DB2MON */ set current schema session;
 echo REPORT STARTS HERE;
 echo;
 
@@ -109,6 +115,7 @@ echo  Point-in-time data: Current executing SQL, lock waits and utilities at sta
 echo ################################################################################################################### ;
 echo;
 
+/* IBM_DB2MON */
 select min(ts) capture_time from mon_current_sql_plus_start;
 
 echo ================================================================================= ;
@@ -116,7 +123,7 @@ echo  START#EXSQL: Currently executing SQL at start of capture (non-zero metrics
 echo ================================================================================= ;
 echo ;
 
-with mon as (select ts,
+with /* IBM_DB2MON */ mon as (select ts,
 count,
 coord_member,application_handle,uow_id,activity_id,elapsed_time_sec,total_cpu_time,rows_read,direct_reads,direct_writes,executable_id,package_name,section_number,active_sorts,active_sorts_top,active_sort_consumers,active_sort_consumers_top,sort_shrheap_allocated,sort_shrheap_top,post_threshold_sorts,post_shrthreshold_sorts,post_threshold_hash_joins,post_shrthreshold_hash_joins,post_threshold_hash_grpbys,post_threshold_olap_funcs,total_act_time,total_act_wait_time,lock_wait_time,pool_read_time,direct_read_time,direct_write_time,fcm_recv_wait_time,fcm_send_wait_time,total_extended_latch_wait_time,log_disk_wait_time,cf_wait_time,reclaim_wait_time,spacemappage_reclaim_wait_time,stmt_text
 from
@@ -154,11 +161,11 @@ from
         '   Lock: '    || cast(case when total_act_time > 0 then smallint( (lock_wait_time / double(total_act_time)) * 100 ) else 0 end as varchar(5)) ||
         '   Pool rd: ' || cast(case when total_act_time > 0 then smallint( (pool_read_time / double(total_act_time)) * 100 ) else 0 end as varchar(5)) ||
         '   Dir IO: '  || cast(case when total_act_time > 0 then smallint( ((direct_read_time+direct_write_time) / double(total_act_time)) * 100 ) else 0 end as varchar(5)) ||
-        '   FCM: '     || cast(case when total_act_time > 0 then smallint( ((fcm_recv_wait_time+fcm_send_wait_time) / double(total_act_time)) * 100 ) else 0 end as varchar(5)) ||
+        '   FCM: '     || cast(case when total_act_time > 0 then smallint( ((fcm_recv_wait_time + fcm_send_wait_time) / double(total_act_time)) * 100 ) else 0 end as varchar(5)) ||
         '   Latch: '   || cast(case when total_act_time > 0 then smallint( (total_extended_latch_wait_time / double(total_act_time)) * 100 ) else 0 end as varchar(5)) ||
         '   Log: '     || cast(case when total_act_time > 0 then smallint( (log_disk_wait_time / double(total_act_time)) * 100 ) else 0 end as varchar(5)) ||
         '   CF: '      || cast(case when total_act_time > 0 then smallint( (cf_wait_time / double(total_act_time)) * 100 ) else 0 end as varchar(5)) ||
-        '   Reclaim: ' || cast(case when total_act_time > 0 then smallint( ((reclaim_wait_time+spacemappage_reclaim_wait_time) / double(total_act_time)) * 100 ) else 0 end as varchar(5)) ),
+        '   Reclaim: ' || cast(case when total_act_time > 0 then smallint( ((reclaim_wait_time + spacemappage_reclaim_wait_time) / double(total_act_time)) * 100 ) else 0 end as varchar(5)) ),
     (cast(repeat('-',32) as varchar(32)),cast(repeat('-',120) as varchar(120))) )
   as t(metric,value)
   where t.metric = 'COORD_MEMBER' or t.value <> '0'
@@ -170,6 +177,7 @@ echo  START#LOCKW: Current lock waits at start of capture  ;
 echo ===================================================== ;
 echo ;
 
+/* IBM_DB2MON */
 select
 (select cast(substr(tbspace,1,20) as varchar(20)) from syscat.tablespaces where tbspaceid = tbsp_id) tbspace,
 (select cast(substr(tabname,1,30) as varchar(30)) from syscat.tables where tab_file_id = tableid and tbspaceid = tbsp_id) tabname,
@@ -192,24 +200,27 @@ echo  START#EXUTL: Currently executing utilities at start of capture  ;
 echo ================================================================ ;
 echo ;
 
-  select
-    coord_member,
-    application_handle,
-    utility_start_time,
-    utility_type,
-    utility_operation_type,
-    cast(substr(utility_detail,1,100) as varchar(100)) utility_detail
-  from
-        mon_get_utility_start
-  order by
-        utility_start_time asc
-  with UR;
+/* IBM_DB2MON */
+select
+  member,
+  coord_member,
+  application_handle,
+  utility_start_time,
+  utility_type,
+  utility_operation_type,
+  cast(substr(utility_detail,1,100) as varchar(100)) utility_detail
+from
+  mon_get_utility_start
+order by
+  utility_start_time asc
+with UR;
 
 echo ################################################################################################################### ;
 echo  Point-in-time data: Current executing SQL, lock waits and utilities at end of capture ;
 echo ################################################################################################################### ;
 echo;
 
+/* IBM_DB2MON */
 select min(ts) capture_time from mon_current_sql_plus_end;
 
 echo ============================================================================= ;
@@ -217,7 +228,7 @@ echo  END#EXSQL: Currently executing SQL at end of capture (non-zero metrics onl
 echo ============================================================================= ;
 echo ;
 
-with mon as (select ts,
+with /* IBM_DB2MON */ mon as (select ts,
 count,
 coord_member,application_handle,uow_id,activity_id,elapsed_time_sec,total_cpu_time,rows_read,direct_reads,direct_writes,executable_id,package_name,section_number,active_sorts,active_sorts_top,active_sort_consumers,active_sort_consumers_top,sort_shrheap_allocated,sort_shrheap_top,post_threshold_sorts,post_shrthreshold_sorts,post_threshold_hash_joins,post_shrthreshold_hash_joins,post_threshold_hash_grpbys,post_threshold_olap_funcs,total_act_time,total_act_wait_time,lock_wait_time,pool_read_time,direct_read_time,direct_write_time,fcm_recv_wait_time,fcm_send_wait_time,total_extended_latch_wait_time,log_disk_wait_time,cf_wait_time,reclaim_wait_time,spacemappage_reclaim_wait_time,stmt_text
 from
@@ -255,11 +266,11 @@ from
         '   Lock: '    || cast(case when total_act_time > 0 then smallint( (lock_wait_time / double(total_act_time)) * 100 ) else 0 end as varchar(5)) ||
         '   Pool rd: ' || cast(case when total_act_time > 0 then smallint( (pool_read_time / double(total_act_time)) * 100 ) else 0 end as varchar(5)) ||
         '   Dir IO: '  || cast(case when total_act_time > 0 then smallint( ((direct_read_time+direct_write_time) / double(total_act_time)) * 100 ) else 0 end as varchar(5)) ||
-        '   FCM: '     || cast(case when total_act_time > 0 then smallint( ((fcm_recv_wait_time+fcm_send_wait_time) / double(total_act_time)) * 100 ) else 0 end as varchar(5)) ||
+        '   FCM: '     || cast(case when total_act_time > 0 then smallint( ((fcm_recv_wait_time + fcm_send_wait_time) / double(total_act_time)) * 100 ) else 0 end as varchar(5)) ||
         '   Latch: '   || cast(case when total_act_time > 0 then smallint( (total_extended_latch_wait_time / double(total_act_time)) * 100 ) else 0 end as varchar(5)) ||
         '   Log: '     || cast(case when total_act_time > 0 then smallint( (log_disk_wait_time / double(total_act_time)) * 100 ) else 0 end as varchar(5)) ||
         '   CF: '      || cast(case when total_act_time > 0 then smallint( (cf_wait_time / double(total_act_time)) * 100 ) else 0 end as varchar(5)) ||
-        '   Reclaim: ' || cast(case when total_act_time > 0 then smallint( ((reclaim_wait_time+spacemappage_reclaim_wait_time) / double(total_act_time)) * 100 ) else 0 end as varchar(5)) ),
+        '   Reclaim: ' || cast(case when total_act_time > 0 then smallint( ((reclaim_wait_time + spacemappage_reclaim_wait_time) / double(total_act_time)) * 100 ) else 0 end as varchar(5)) ),
     (cast(repeat('-',32) as varchar(32)),cast(repeat('-',120) as varchar(120))) )
   as t(metric,value)
   where t.metric = 'COORD_MEMBER' or t.value <> '0'
@@ -271,6 +282,7 @@ echo  END#LOCKW: Current lock waits at end of capture  ;
 echo ================================================= ;
 echo ;
 
+/* IBM_DB2MON */
 select
 (select cast(substr(tbspace,1,20) as varchar(20)) from syscat.tablespaces where tbspaceid = tbsp_id) tbspace,
 (select cast(substr(tabname,1,30) as varchar(30)) from syscat.tables where tab_file_id = tableid and tbspaceid = tbsp_id) tabname,
@@ -293,18 +305,20 @@ echo  END#EXUTL: Currently executing utilities at end of capture  ;
 echo ============================================================ ;
 echo ;
 
-  select
-    coord_member,
-    application_handle,
-    utility_start_time,
-    utility_type,
-    utility_operation_type,
-    cast(substr(utility_detail,1,100) as varchar(100)) utility_detail
-  from
-        mon_get_utility_end
-  order by
-        utility_start_time asc
-  with UR;
+/* IBM_DB2MON */
+select
+  member,
+  coord_member,
+  application_handle,
+  utility_start_time,
+  utility_type,
+  utility_operation_type,
+  cast(substr(utility_detail,1,100) as varchar(100)) utility_detail
+from
+  mon_get_utility_end
+order by
+  utility_start_time asc
+with UR;
 
 echo ################################################################################################################### ;
 echo  Data collected from start to end of monitor interval;
@@ -315,6 +329,7 @@ echo  DB#THRUP: Throughput metrics at database level  ;
 echo ================================================ ;
 echo ;
 
+/* IBM_DB2MON */
 select
    min(ts_delta) ts_delta,
    member,
@@ -337,7 +352,7 @@ select
 from
    mon_get_workload_diff
 where
-        ts_delta > 0
+   ts_delta > 0
 group by
    member
 order by
@@ -350,6 +365,7 @@ echo ======================================================================= ;
 echo ;
 
 with
+/* IBM_DB2MON */
    total_clients as
        (  select
              member,
@@ -373,7 +389,7 @@ with
           from
              mon_get_connection_diff
           where
-             rqsts_completed_total > ts_delta or                                        -- at least one request per second, or
+             rqsts_completed_total >= ts_delta or                                       -- At least one request per second, or ...
              (total_rqst_time > 0 and client_idle_wait_time / total_rqst_time < 2)      -- long requests, at least half as long as the client idle wait time
           group by
              member
@@ -401,6 +417,7 @@ echo  DB#TIMEB: Time breakdown at database level (wait + processing)  ;
 echo ================================================================ ;
 echo ;
 
+/* IBM_DB2MON */
 select
    member,
    integer(sum(total_rqst_time)) as total_rqst_tm,
@@ -432,6 +449,7 @@ echo  DB#WAITT: Wait times at database level  ;
 echo ======================================== ;
 echo ;
 
+/* IBM_DB2MON */
 select
    w.member,
    integer(sum(total_rqst_time)) as total_rqst_tm,
@@ -446,11 +464,22 @@ select
    decimal((sum(cf_wait_time) / float(sum(total_rqst_time))) * 100, 5, 2) as pct_cf,
    decimal((sum(prefetch_wait_time) / float(sum(total_rqst_time))) * 100, 5, 2) as pct_pftch,
    decimal((sum(diaglog_write_wait_time) / float(sum(total_rqst_time))) * 100, 5, 2) as pct_diag,
+   decimal((sum(audit_file_write_wait_time) / double(sum(total_rqst_time))) * 100, 5, 2) as pct_aud_w,
+   decimal((sum(audit_subsystem_wait_time) / double(sum(total_rqst_time))) * 100, 5, 2) as pct_aud_ss,
+   decimal((sum(evmon_wait_time) / float(sum(total_rqst_time))) * 100, 5, 2) as pct_evmon,
+   -- fcm_recv_wait_time = fcm_message_recv_wait_time + fcm_tq_recv_wait_time (similarly for send)
+   -- decimal((sum(fcm_message_recv_wait_time + fcm_message_send_wait_time) / float(sum(total_rqst_time))) * 100, 5, 2) as pct_fcm_msg,
+   -- decimal((sum(fcm_tq_recv_wait_time + fcm_tq_send_wait_time) / float(sum(total_rqst_time))) * 100, 5, 2) as pct_fcm_tq,
+   decimal((sum(comm_exit_wait_time) / float(sum(total_rqst_time))) * 100, 5, 2) as pct_commexit,
+   decimal((sum(lob_prefetch_wait_time) / float(sum(total_rqst_time))) * 100, 5, 2) as pct_lob_pftch,
+   decimal((sum(ext_table_recv_wait_time + ext_table_send_wait_time) / float(sum(total_rqst_time))) * 100, 5, 2) as pct_extbl,
+   decimal((sum(fed_wait_time) / float(sum(total_rqst_time))) * 100, 5, 2) as pct_fed,
    decimal((sum(pool_read_time) / float(sum(total_rqst_time))) * 100, 5, 2) as pct_pool_r,
    decimal((sum(direct_read_time) / float(sum(total_rqst_time))) * 100, 5, 2) as pct_dir_r,
    decimal((sum(direct_write_time) / float(sum(total_rqst_time))) * 100, 5, 2) as pct_dir_w,
-   decimal((sum(fcm_recv_wait_time+fcm_send_wait_time) / float(sum(total_rqst_time))) * 100, 5, 2) as pct_fcm,
-   decimal((sum(tcpip_send_wait_time+tcpip_recv_wait_time) / float(sum(total_rqst_time))) * 100, 5, 2) as pct_tcpip
+   decimal((sum(fcm_recv_wait_time + fcm_send_wait_time) / float(sum(total_rqst_time))) * 100, 5, 2) as pct_fcm,
+   decimal((sum(tcpip_send_wait_time + tcpip_recv_wait_time) / float(sum(total_rqst_time))) * 100, 5, 2) as pct_tcpip,
+   decimal((sum(ida_send_wait_time + ida_recv_wait_time) / double(sum(total_rqst_time))) * 100, 5, 2) as pct_ida
 from
    mon_get_workload_diff w
 group by
@@ -464,6 +493,7 @@ echo  DB#PROCT: Processing times at database level  ;
 echo ============================================== ;
 echo ;
 
+/* IBM_DB2MON */
 select
    member,
    integer(sum(total_rqst_time)) as total_rqst_tm,
@@ -489,6 +519,7 @@ echo  DB#SORT: Sort metrics at database level  ;
 echo ========================================= ;
 echo ;
 
+/* IBM_DB2MON */
 select
    member,
    integer(sum(total_sorts)) total_sorts,
@@ -514,31 +545,38 @@ echo  SQL#TOPEXECT: Top SQL statements by execution time  ;
 echo ==================================================== ;
 echo ;
 
+/* IBM_DB2MON */
 select
    member,
    integer(num_exec_with_metrics) as num_exec,
-
-   coord_stmt_exec_time,
-   decimal(coord_stmt_exec_time / double(num_exec_with_metrics), 10, 2) as avg_coord_exec_time,
-   decimal( (coord_stmt_exec_time / double(total_coord_stmt_exec_time)) * 100, 5, 2 ) as pct_coord_stmt_exec_time,
-
+   m.coord_stmt_exec_time,
+   decimal(m.coord_stmt_exec_time / double(num_exec_with_metrics), 10, 2) as avg_coord_exec_time,
+   decimal( (m.coord_stmt_exec_time / double(total_coord_stmt_exec_time)) * 100, 5, 2 ) as pct_coord_stmt_exec_time,
+   m.total_act_time,
    total_cpu_time,
    total_cpu_time / num_exec_with_metrics as avg_cpu_time,
-   decimal( (total_act_wait_time / double(total_act_time)) * 100, 5, 2 ) as pct_wait_time,
-   decimal(total_section_time / double(num_exec_with_metrics), 10, 2) as avg_sect_time,
-decimal(total_col_time / double(num_exec_with_metrics), 10, 2) as avg_col_time,
+   case when total_act_time > 0
+      then decimal( (total_act_wait_time / double(total_act_time)) * 100, 5, 2 )
+      else 0
+   end as pct_wait_time,
+   decimal(total_section_time / double(num_exec_with_metrics), 20, 2) as avg_sect_time,
+decimal(total_col_time / double(num_exec_with_metrics), 20, 2) as avg_col_time,
+   effective_isolation as iso,
    replace(replace(cast(substr(stmt_text,1,200) as varchar(200)), chr(10), ' '), chr(13), ' ') as stmt_text
 from
-        mon_get_pkg_cache_stmt_diff,
-  (  select
-        sum(coord_stmt_exec_time) as total_coord_stmt_exec_time
-     from
-        mon_get_pkg_cache_stmt_diff   )
+   mon_get_pkg_cache_stmt_diff m,
+   (select sum(coord_stmt_exec_time) as total_coord_stmt_exec_time from mon_get_pkg_cache_stmt_diff where coord_stmt_exec_time > 0),
+   (select executable_id, coord_stmt_exec_time
+    from mon_get_pkg_cache_stmt_diff
+    where coord_stmt_exec_time <> 0
+    order by coord_stmt_exec_time desc
+    fetch first 100 rows only) c
 where
-        coord_stmt_exec_time <> 0 and total_act_time <> 0 and num_exec_with_metrics <> 0
+   (total_act_time <> 0 or m.coord_stmt_exec_time <> 0) and num_exec_with_metrics <> 0 and c.executable_id = m.executable_id
 order by
-        coord_stmt_exec_time desc
-fetch first 100 rows only
+   -- Order by c.coord_stmt_exec_time not m.coord_stmt_exec_time (c has coord value, m has member value which could be zero)
+   -- Doing this has the nice effect of grouping member executions of the same statement together.
+   c.coord_stmt_exec_time desc, total_act_time desc, member asc
 with UR;
 
 echo ========================================================================== ;
@@ -546,42 +584,49 @@ echo  SQL#TOPEXECP: Top SQL statements by execution time, aggregated by PLANID  
 echo ========================================================================== ;
 echo ;
 
+/* IBM_DB2MON */
 select
    member,
    count(*) num_stmts,
    integer(sum(num_exec_with_metrics)) total_exec,
-
-   sum(coord_stmt_exec_time) coord_stmt_exec_time,
-   decimal(sum(coord_stmt_exec_time) / double(sum(num_exec_with_metrics)), 10, 2) as avg_coord_exec_time,
-   decimal( (sum(coord_stmt_exec_time) / double(sum(total_coord_stmt_exec_time))) * 100, 5, 2 ) as pct_coord_stmt_exec_time,
-
+   sum(m.coord_stmt_exec_time) coord_stmt_exec_time,
+   decimal(sum(m.coord_stmt_exec_time) / double(sum(num_exec_with_metrics)), 10, 2) as avg_coord_exec_time,
+   decimal( (sum(m.coord_stmt_exec_time) / double(max(total_coord_stmt_exec_time))) * 100, 5, 2 ) as pct_coord_stmt_exec_time,
+   sum(m.total_act_time) total_act_time,
    sum(total_cpu_time) total_cpu_time,
    sum(total_cpu_time) / sum(num_exec_with_metrics) as avg_cpu_time,
-   decimal( (sum(total_act_wait_time) / double(sum(total_act_time))) * 100, 5, 2 ) as pct_wait_time,
-   decimal(sum(total_section_time) / double(sum(num_exec_with_metrics)), 10, 2) as avg_sect_time,
-   decimal(sum(total_col_time) / double(sum(num_exec_with_metrics)), 10, 2) as avg_col_time,
-  (select replace(replace(cast(substr(stmt_text,1,200) as varchar(200)), chr(10), ' '), chr(13), ' ') as stmt_text from mon_get_pkg_cache_stmt_diff mgpcs4planid
-   where mgpcs4planid.member = t.member and mgpcs4planid.planid = t.planid
-   fetch first 1 row only)
+   case when sum(total_act_time) > 0
+      then decimal( (sum(total_act_wait_time) / double(sum(total_act_time))) * 100, 5, 2 )
+      else 0
+   end as pct_wait_time,
+   decimal(sum(total_section_time) / double(sum(num_exec_with_metrics)), 20, 2) as avg_sect_time,
+   decimal(sum(total_col_time) / double(sum(num_exec_with_metrics)), 20, 2) as avg_col_time,
+   ( select replace(replace(cast(substr(stmt_text,1,200) as varchar(200)), chr(10), ' '), chr(13), ' ') as stmt_text
+     from mon_get_pkg_cache_stmt_diff mgpcs4planid
+     where mgpcs4planid.member = m.member and mgpcs4planid.planid = m.planid
+     fetch first 1 row only )
 from
-  mon_get_pkg_cache_stmt_diff t,
-  (  select
-        sum(coord_stmt_exec_time) as total_coord_stmt_exec_time
-     from
-        mon_get_pkg_cache_stmt_diff   )
+   mon_get_pkg_cache_stmt_diff m,
+   (select sum(coord_stmt_exec_time) as total_coord_stmt_exec_time from mon_get_pkg_cache_stmt_diff where coord_stmt_exec_time > 0),
+   (select planid, sum(coord_stmt_exec_time) as total_coord_stmt_exec_time_planid
+    from mon_get_pkg_cache_stmt_diff
+    where coord_stmt_exec_time <> 0
+    group by planid
+    order by sum(coord_stmt_exec_time) desc
+    fetch first 100 rows only) c
 where
-  coord_stmt_exec_time <> 0 and total_act_time <> 0 and num_exec_with_metrics <> 0
+   (total_act_time <> 0 or m.coord_stmt_exec_time <> 0) and num_exec_with_metrics <> 0 and c.planid = m.planid
 group by
-  member,planid
+   member, m.planid
 order by
-  coord_stmt_exec_time desc
-fetch first 100 rows only
+   sum(c.total_coord_stmt_exec_time_planid) desc, total_act_time desc, member asc
 with UR;
 echo ============================================ ;
 echo  PKG#EXECT: Time spent executing by package  ;
 echo ============================================ ;
 echo ;
 
+/* IBM_DB2MON */
 select
     member,
     cast(substr(package_name,1,20) as varchar(20)) as package_name,
@@ -603,11 +648,12 @@ echo  SQL#TOPWAITT: Wait time breakdown for top SQL statements by execution time
 echo ============================================================================ ;
 echo ;
 
+/* IBM_DB2MON */
 select
    member,
    decimal((total_act_wait_time / double(total_act_time)) * 100, 5, 2) as pct_wait,
    decimal((log_disk_wait_time / double(total_act_time)) * 100, 5, 2) as pct_lg_dsk,
-   decimal((log_buffer_wait_time/double(total_act_time)) * 100, 5, 2) as pct_lg_buf,
+   decimal((log_buffer_wait_time / double(total_act_time)) * 100, 5, 2) as pct_lg_buf,
    decimal((lock_wait_time / double(total_act_time)) * 100, 5, 2) as pct_lock,
 
    decimal((lock_wait_time_global / double(total_act_time)) * 100, 5, 2) as pct_glb_lock,
@@ -621,15 +667,31 @@ select
    decimal((pool_read_time / double(total_act_time)) * 100, 5, 2) as pct_pool_r,
    decimal((direct_read_time / double(total_act_time)) * 100, 5, 2) as pct_dir_r,
    decimal((direct_write_time / double(total_act_time)) * 100, 5, 2) as pct_dir_w,
+
+
    decimal(((fcm_recv_wait_time+fcm_send_wait_time) / double(total_act_time)) * 100, 5, 2) as pct_fcm,
+   decimal((audit_file_write_wait_time / double(total_act_time)) * 100, 5, 2) as pct_aud_w,
+   decimal((audit_subsystem_wait_time / double(total_act_time)) * 100, 5, 2) as pct_aud_ss,
+   decimal((evmon_wait_time / double(total_act_time)) * 100, 5, 2) as pct_evmon,
+
+   decimal((comm_exit_wait_time / double(total_act_time)) * 100, 5, 2) as pct_commexit,
+   decimal((lob_prefetch_wait_time / double(total_act_time)) * 100, 5, 2) as pct_lob_pftch,
+   decimal(((ext_table_recv_wait_time + ext_table_send_wait_time) / double(total_act_time)) * 100, 5, 2) as pct_extbl,
+   decimal((fed_wait_time / double(total_act_time)) * 100, 5, 2) as pct_fed,
+
+   decimal(((ida_send_wait_time + ida_recv_wait_time) / double(total_act_time)) * 100, 5, 2) as pct_ida,
    replace(replace(cast(substr(stmt_text,1,200) as varchar(200)), chr(10), ' '), chr(13), ' ') as stmt_text
 from
-        mon_get_pkg_cache_stmt_diff
+   mon_get_pkg_cache_stmt_diff m,
+   (select executable_id, coord_stmt_exec_time
+    from mon_get_pkg_cache_stmt_diff
+    where coord_stmt_exec_time <> 0
+    order by coord_stmt_exec_time desc
+    fetch first 100 rows only) c
 where
-        coord_stmt_exec_time <> 0 and total_act_time <> 0
+   total_act_time <> 0 and num_exec_with_metrics <> 0 and c.executable_id = m.executable_id
 order by
-        coord_stmt_exec_time desc
-fetch first 100 rows only
+   c.coord_stmt_exec_time desc, total_act_time desc, member asc
 with UR;
 
 echo ======================================================== ;
@@ -637,11 +699,12 @@ echo  SQL#TOPWAITW: Top SQL statements by time spent waiting  ;
 echo ======================================================== ;
 echo ;
 
+/* IBM_DB2MON */
 select
    member,
    decimal((total_act_wait_time / double(total_act_time)) * 100, 5, 2) as pct_wait,
    decimal((log_disk_wait_time / double(total_act_time)) * 100, 5, 2) as pct_lg_dsk,
-   decimal((log_buffer_wait_time/double(total_act_time)) * 100, 5, 2) as pct_lg_buf,
+   decimal((log_buffer_wait_time / double(total_act_time)) * 100, 5, 2) as pct_lg_buf,
    decimal((lock_wait_time / double(total_act_time)) * 100, 5, 2) as pct_lock,
 
 
@@ -656,15 +719,31 @@ select
    decimal((pool_read_time / double(total_act_time)) * 100, 5, 2) as pct_pool_r,
    decimal((direct_read_time / double(total_act_time)) * 100, 5, 2) as pct_dir_r,
    decimal((direct_write_time / double(total_act_time)) * 100, 5, 2) as pct_dir_w,
+
+
    decimal(((fcm_recv_wait_time+fcm_send_wait_time) / double(total_act_time)) * 100, 5, 2) as pct_fcm,
+   decimal((audit_file_write_wait_time / double(total_act_time)) * 100, 5, 2) as pct_aud_w,
+   decimal((audit_subsystem_wait_time / double(total_act_time)) * 100, 5, 2) as pct_aud_ss,
+   decimal((evmon_wait_time / double(total_act_time)) * 100, 5, 2) as pct_evmon,
+
+   decimal((comm_exit_wait_time / double(total_act_time)) * 100, 5, 2) as pct_commexit,
+   decimal((lob_prefetch_wait_time / double(total_act_time)) * 100, 5, 2) as pct_lob_pftch,
+   decimal(((ext_table_recv_wait_time + ext_table_send_wait_time) / double(total_act_time)) * 100, 5, 2) as pct_extbl,
+   decimal((fed_wait_time / double(total_act_time)) * 100, 5, 2) as pct_fed,
+
+   decimal(((ida_send_wait_time + ida_recv_wait_time) / double(total_act_time)) * 100, 5, 2) as pct_ida,
    replace(replace(cast(substr(stmt_text,1,200) as varchar(200)), chr(10), ' '), chr(13), ' ') as stmt_text
 from
-        mon_get_pkg_cache_stmt_diff
+   mon_get_pkg_cache_stmt_diff m,
+   (select executable_id, sum(total_act_wait_time) sum_members_total_act_wait_time
+    from mon_get_pkg_cache_stmt_diff
+		group by executable_id
+    order by sum(total_act_wait_time) desc
+    fetch first 100 rows only) c
 where
-        total_act_time <> 0
+   total_act_wait_time <> 0 and num_exec_with_metrics <> 0 and c.executable_id = m.executable_id
 order by
-        total_act_wait_time desc
-fetch first 100 rows only
+   sum_members_total_act_wait_time desc, total_act_wait_time desc, member asc
 with UR;
 
 echo ========================================================================= ;
@@ -672,6 +751,7 @@ echo  SQL#TOPIOSTA: IO statistics per stmt - top statements by execution time  ;
 echo ========================================================================= ;
 echo ;
 
+/* IBM_DB2MON */
 select
    member,
    integer(num_exec_with_metrics) num_exec,
@@ -687,12 +767,16 @@ decimal(pool_col_p_reads/double(num_exec_with_metrics), 10,1) as avg_col_prd,
    decimal(direct_write_reqs/double(num_exec_with_metrics), 8,1) avg_dir_w_rqs,
    replace(replace(cast(substr(stmt_text,1,200) as varchar(200)), chr(10), ' '), chr(13), ' ') as stmt_text
 from
-   mon_get_pkg_cache_stmt_diff
+   mon_get_pkg_cache_stmt_diff m,
+   (select executable_id, coord_stmt_exec_time
+    from mon_get_pkg_cache_stmt_diff
+    where coord_stmt_exec_time <> 0
+    order by coord_stmt_exec_time desc
+    fetch first 100 rows only) c
 where
-        coord_stmt_exec_time <> 0 and num_exec_with_metrics <> 0
+   (total_act_time <> 0 or m.coord_stmt_exec_time <> 0) and num_exec_with_metrics <> 0 and c.executable_id = m.executable_id
 order by
-        coord_stmt_exec_time desc
-fetch first 100 rows only
+   c.coord_stmt_exec_time desc, total_act_time desc, member asc
 with UR;
 
 echo =============================================================================== ;
@@ -700,6 +784,7 @@ echo  SQL#TOPROWS: Row level statistics per stmt - top statements by execution t
 echo =============================================================================== ;
 echo ;
 
+/* IBM_DB2MON */
 select
   member,
   integer(num_exec_with_metrics) as num_exec,
@@ -709,12 +794,16 @@ select
 col_synopsis_rows_inserted,
   replace(replace(cast(substr(stmt_text,1,200) as varchar(200)), chr(10), ' '), chr(13), ' ') as stmt_text
 from
-        mon_get_pkg_cache_stmt_diff
+  mon_get_pkg_cache_stmt_diff m,
+  (select executable_id, coord_stmt_exec_time
+   from mon_get_pkg_cache_stmt_diff
+   where coord_stmt_exec_time <> 0
+   order by coord_stmt_exec_time desc
+   fetch first 100 rows only) c
 where
-        coord_stmt_exec_time <> 0
+  (total_act_time <> 0 or m.coord_stmt_exec_time <> 0) and num_exec_with_metrics <> 0 and c.executable_id = m.executable_id
 order by
-        coord_stmt_exec_time desc
-fetch first 100 rows only
+  c.coord_stmt_exec_time desc, total_act_time desc, member asc
 with UR;
 
 echo ========================================================================== ;
@@ -722,22 +811,29 @@ echo  SQL#TOPSORT: Sort statistics per stmt - top statements by execution time  
 echo ========================================================================== ;
 echo ;
 
+/* IBM_DB2MON */
 select
   member,
-  decimal((total_section_sort_time / double(total_act_time)) * 100, 5, 2) as pct_sort_time,
-  decimal(total_sorts/double(num_exec_with_metrics), 8,1) as avg_tot_sorts,
-  decimal(sort_overflows/double(num_exec_with_metrics), 8,1) as avg_sort_ovflws,
+  case when total_act_time > 0
+    then decimal((total_section_sort_time / double(total_act_time)) * 100, 5, 2)
+    else 0
+  end as pct_sort_time,
+  decimal(total_sorts / double(num_exec_with_metrics), 8,1) as avg_tot_sorts,
+  decimal(sort_overflows / double(num_exec_with_metrics), 8,1) as avg_sort_ovflws,
   integer(active_sorts_top) active_sorts_top,
   integer(sort_heap_top) sort_heap_top,
-  --integer(sort_shrheap_top) sort_shrheap_top,
   replace(replace(cast(substr(stmt_text,1,200) as varchar(200)), chr(10), ' '), chr(13), ' ') as stmt_text
 from
-        mon_get_pkg_cache_stmt_diff
+  mon_get_pkg_cache_stmt_diff m,
+  (select executable_id, coord_stmt_exec_time
+   from mon_get_pkg_cache_stmt_diff
+   where coord_stmt_exec_time <> 0
+   order by coord_stmt_exec_time desc
+   fetch first 100 rows only) c
 where
-        coord_stmt_exec_time <> 0 and total_act_time <> 0 and num_exec_with_metrics <> 0
+  (total_act_time <> 0 or m.coord_stmt_exec_time <> 0) and num_exec_with_metrics <> 0 and c.executable_id = m.executable_id
 order by
-        coord_stmt_exec_time desc
-fetch first 100 rows only
+  c.coord_stmt_exec_time desc, total_act_time desc, member asc
 with UR;
 
 echo ============================================================================================ ;
@@ -748,6 +844,7 @@ echo    db2 "call explain_from_section(x'<executable id>','M',NULL,0,'<current u
 echo ============================================================================================ ;
 echo ;
 
+/* IBM_DB2MON */
 select
   member,
   executable_id,
@@ -769,6 +866,7 @@ echo  DB#SYSRE: Database system resource usage information  ;
 echo ====================================================== ;
 echo ;
 
+/* IBM_DB2MON */
 select
    member,
    cast(substr(os_name,1,8) as varchar(8)) as os,
@@ -800,6 +898,7 @@ echo  DB#LOGWR: Database log write times  ;
 echo ==================================== ;
 echo ;
 
+/* IBM_DB2MON */
 select
    member,
    num_log_write_io,
@@ -828,6 +927,7 @@ echo  DB#LOGRE: Database log read times  ;
 echo =================================== ;
 echo ;
 
+/* IBM_DB2MON */
 select
    member,
    integer(num_log_read_io) num_log_read_io,
@@ -855,6 +955,7 @@ echo  DB#LOGST: Other database log statistics  ;
 echo ========================================= ;
 echo ;
 
+/* IBM_DB2MON */
 select
    member,
    num_log_write_io,
@@ -878,6 +979,7 @@ echo  TSP#DSKIO: Disk read and write I/O times  ;
 echo ========================================== ;
 echo ;
 
+/* IBM_DB2MON */
 select
    member,
    cast(substr(tbsp_name,1,20) as varchar(20)) as tbsp_name,
@@ -886,13 +988,13 @@ select
 
    (pool_data_p_reads + pool_temp_data_p_reads + pool_index_p_reads + pool_temp_index_p_reads + pool_xda_p_reads + pool_temp_xda_p_reads + pool_col_p_reads + pool_temp_col_p_reads) as num_reads,
    case when ((pool_data_p_reads + pool_temp_data_p_reads + pool_index_p_reads + pool_temp_index_p_reads + pool_xda_p_reads + pool_temp_xda_p_reads + pool_col_p_reads + pool_temp_col_p_reads)) > 0
-      then decimal( pool_read_time / double((pool_data_p_reads + pool_temp_data_p_reads + pool_index_p_reads + pool_temp_index_p_reads + pool_xda_p_reads + pool_temp_xda_p_reads + pool_col_p_reads + pool_temp_col_p_reads)), 5, 2 )
+      then decimal( pool_read_time / double((pool_data_p_reads + pool_temp_data_p_reads + pool_index_p_reads + pool_temp_index_p_reads + pool_xda_p_reads + pool_temp_xda_p_reads + pool_col_p_reads + pool_temp_col_p_reads)), 10, 2 )
       else null
    end as avg_read_time,
 
    direct_read_reqs,
    case when direct_read_reqs > 0
-      then decimal( direct_read_time / direct_read_reqs, 5, 2 )
+      then decimal( direct_read_time / direct_read_reqs, 10, 2 )
       else null
    end as avg_drct_read_time,
 
@@ -900,19 +1002,19 @@ select
 
    (pool_data_writes + pool_index_writes + pool_xda_writes + pool_col_writes) as num_writes,
    case when ((pool_data_writes + pool_index_writes + pool_xda_writes + pool_col_writes)) > 0
-      then decimal( pool_write_time / double((pool_data_writes + pool_index_writes + pool_xda_writes + pool_col_writes)), 5, 2 )
+      then decimal( pool_write_time / double((pool_data_writes + pool_index_writes + pool_xda_writes + pool_col_writes)), 10, 2 )
       else null
    end as avg_write_time,
 
    direct_write_reqs,
    case when direct_write_reqs > 0
-      then decimal( direct_write_time / direct_write_reqs, 5, 2 )
+      then decimal( direct_write_time / direct_write_reqs, 10, 2 )
       else null
    end as avg_drct_write_time
 from
    mon_get_tablespace_diff
 where
-   ((pool_data_p_reads + pool_temp_data_p_reads + pool_index_p_reads + pool_temp_index_p_reads + pool_xda_p_reads + pool_temp_xda_p_reads + pool_col_p_reads + pool_temp_col_p_reads) + direct_read_reqs + (pool_data_writes + pool_index_writes + pool_xda_writes + pool_col_writes) + direct_write_reqs) > 0
+   ((pool_data_p_reads + pool_temp_data_p_reads + pool_index_p_reads + pool_temp_index_p_reads + pool_xda_p_reads + pool_temp_xda_p_reads + pool_col_p_reads + pool_temp_col_p_reads) + direct_read_reqs + (pool_data_writes + pool_index_writes + pool_xda_writes + pool_col_writes) + direct_write_reqs) >= ts_delta
 order by
    ((pool_data_p_reads + pool_temp_data_p_reads + pool_index_p_reads + pool_temp_index_p_reads + pool_xda_p_reads + pool_temp_xda_p_reads + pool_col_p_reads + pool_temp_col_p_reads) + direct_read_reqs + (pool_data_writes + pool_index_writes + pool_xda_writes + pool_col_writes) + direct_write_reqs) desc
 with UR;
@@ -922,6 +1024,7 @@ echo  TSP#DSKIOSYNC: Disk read and write I/O times (synchronous)  ;
 echo ============================================================ ;
 echo ;
 
+/* IBM_DB2MON */
 select
    member,
    cast(substr(tbsp_name,1,20) as varchar(20)) as tbsp_name,
@@ -930,7 +1033,7 @@ select
 
    ((pool_data_p_reads + pool_temp_data_p_reads + pool_index_p_reads + pool_temp_index_p_reads + pool_xda_p_reads + pool_temp_xda_p_reads + pool_col_p_reads + pool_temp_col_p_reads) - (pool_async_data_reads + pool_async_index_reads + pool_async_xda_reads + pool_async_col_reads)) as num_reads,
    case when (((pool_data_p_reads + pool_temp_data_p_reads + pool_index_p_reads + pool_temp_index_p_reads + pool_xda_p_reads + pool_temp_xda_p_reads + pool_col_p_reads + pool_temp_col_p_reads) - (pool_async_data_reads + pool_async_index_reads + pool_async_xda_reads + pool_async_col_reads))) > 0
-      then decimal( (pool_read_time - pool_async_read_time) / double(((pool_data_p_reads + pool_temp_data_p_reads + pool_index_p_reads + pool_temp_index_p_reads + pool_xda_p_reads + pool_temp_xda_p_reads + pool_col_p_reads + pool_temp_col_p_reads) - (pool_async_data_reads + pool_async_index_reads + pool_async_xda_reads + pool_async_col_reads))), 5, 2 )
+      then decimal( (pool_read_time - pool_async_read_time) / double(((pool_data_p_reads + pool_temp_data_p_reads + pool_index_p_reads + pool_temp_index_p_reads + pool_xda_p_reads + pool_temp_xda_p_reads + pool_col_p_reads + pool_temp_col_p_reads) - (pool_async_data_reads + pool_async_index_reads + pool_async_xda_reads + pool_async_col_reads))), 10, 2 )
       else null
    end as avg_sync_read_time,
 
@@ -938,13 +1041,13 @@ select
 
    ((pool_data_writes + pool_index_writes + pool_xda_writes + pool_col_writes) - (pool_async_data_writes + pool_async_index_writes + pool_async_xda_writes + pool_async_col_writes)) as num_writes,
    case when (((pool_data_writes + pool_index_writes + pool_xda_writes + pool_col_writes) - (pool_async_data_writes + pool_async_index_writes + pool_async_xda_writes + pool_async_col_writes))) > 0
-      then decimal( (pool_write_time - pool_async_write_time) / double(((pool_data_writes + pool_index_writes + pool_xda_writes + pool_col_writes) - (pool_async_data_writes + pool_async_index_writes + pool_async_xda_writes + pool_async_col_writes))), 5, 2 )
+      then decimal( (pool_write_time - pool_async_write_time) / double(((pool_data_writes + pool_index_writes + pool_xda_writes + pool_col_writes) - (pool_async_data_writes + pool_async_index_writes + pool_async_xda_writes + pool_async_col_writes))), 10, 2 )
       else null
    end as avg_sync_write_time
 from
    mon_get_tablespace_diff
 where
-   (((pool_data_p_reads + pool_temp_data_p_reads + pool_index_p_reads + pool_temp_index_p_reads + pool_xda_p_reads + pool_temp_xda_p_reads + pool_col_p_reads + pool_temp_col_p_reads) - (pool_async_data_reads + pool_async_index_reads + pool_async_xda_reads + pool_async_col_reads)) + ((pool_data_writes + pool_index_writes + pool_xda_writes + pool_col_writes) - (pool_async_data_writes + pool_async_index_writes + pool_async_xda_writes + pool_async_col_writes))) > 0
+   (((pool_data_p_reads + pool_temp_data_p_reads + pool_index_p_reads + pool_temp_index_p_reads + pool_xda_p_reads + pool_temp_xda_p_reads + pool_col_p_reads + pool_temp_col_p_reads) - (pool_async_data_reads + pool_async_index_reads + pool_async_xda_reads + pool_async_col_reads)) + ((pool_data_writes + pool_index_writes + pool_xda_writes + pool_col_writes) - (pool_async_data_writes + pool_async_index_writes + pool_async_xda_writes + pool_async_col_writes))) >= ts_delta
 order by
    (((pool_data_p_reads + pool_temp_data_p_reads + pool_index_p_reads + pool_temp_index_p_reads + pool_xda_p_reads + pool_temp_xda_p_reads + pool_col_p_reads + pool_temp_col_p_reads) - (pool_async_data_reads + pool_async_index_reads + pool_async_xda_reads + pool_async_col_reads)) + ((pool_data_writes + pool_index_writes + pool_xda_writes + pool_col_writes) - (pool_async_data_writes + pool_async_index_writes + pool_async_xda_writes + pool_async_col_writes))) desc
 with UR;
@@ -954,6 +1057,7 @@ echo  TSP#DSKIOASYNC: Disk read and write I/O times (asynchronous)  ;
 echo ============================================================== ;
 echo ;
 
+/* IBM_DB2MON */
 select
    member,
    cast(substr(tbsp_name,1,20) as varchar(20)) as tbsp_name,
@@ -976,7 +1080,7 @@ select
 from
    mon_get_tablespace_diff
 where
-   ((pool_async_data_reads + pool_async_index_reads + pool_async_xda_reads + pool_async_col_reads) + (pool_async_data_writes + pool_async_index_writes + pool_async_xda_writes + pool_async_col_writes)) > 0
+   ((pool_async_data_reads + pool_async_index_reads + pool_async_xda_reads + pool_async_col_reads) + (pool_async_data_writes + pool_async_index_writes + pool_async_xda_writes + pool_async_col_writes)) >= ts_delta
 order by
    ((pool_async_data_reads + pool_async_index_reads + pool_async_xda_reads + pool_async_col_reads) + (pool_async_data_writes + pool_async_index_writes + pool_async_xda_writes + pool_async_col_writes)) desc
 with UR;
@@ -986,8 +1090,8 @@ echo  DB#EXTBM: External table metrics  ;
 echo ================================== ;
 echo ;
 
+/* IBM_DB2MON */
 select
-   min(ts_delta) ts_delta,
    member,
    sum(ext_table_recvs_total) as ext_table_recvs_total,
    sum(ext_table_recv_wait_time) as ext_table_recv_wait_time,
@@ -1003,6 +1107,8 @@ select
    decimal((sum(ext_table_write_volume) / float(min(ts_delta))), 10, 1) as write_per_s
 from
    mon_get_workload_diff
+where
+   ext_table_recvs_total + ext_table_sends_total >= ts_delta
 group by
    member
 order by
@@ -1014,6 +1120,7 @@ echo  LTC#WAITT: Latch wait metrics  ;
 echo =============================== ;
 echo ;
 
+/* IBM_DB2MON */
 select
    member,
    cast(substr(latch_name,1,60) as varchar(60)) as latch_name,
@@ -1023,7 +1130,7 @@ select
 from
    mon_get_extended_latch_wait_diff
 where
-  total_extended_latch_waits > 0
+  total_extended_latch_waits >= ts_delta
 order by
    total_extended_latch_wait_time desc
 with UR;
@@ -1048,6 +1155,7 @@ echo  DB#DLCKS: Deadlocks, lock timeouts and lock escalations  ;
 echo ========================================================= ;
 echo ;
 
+/* IBM_DB2MON */
 select
    member,
    integer(sum(deadlocks)) as deadlocks,
@@ -1074,6 +1182,7 @@ echo  TBL#ROWMC: Various table level metrics  ;
 echo ======================================== ;
 echo ;
 
+/* IBM_DB2MON */
 select
   mgt.member,
   cast(substr(mgt.tabname,1,32) as varchar(32)) as tabname,
@@ -1106,18 +1215,143 @@ where
   mgt.tabname = systab.tabname and
   mgt.tabschema = systab.tabschema
 group by
-  mgt.member,mgt.tabname,mgt.tabschema,mgt.data_partition_id,mgt.tbsp_id    -- we'll roll up over tab_file_id as it's an unimportant difference
+  mgt.member,mgt.tabname,mgt.tabschema,mgt.data_partition_id,mgt.tbsp_id    -- Roll up over tab_file_id as it's an unimportant difference
 having
-  sum(rows_read + rows_inserted + rows_updated + rows_deleted + page_reorgs) > 0
+  sum(rows_read + rows_inserted + rows_updated + rows_deleted + page_reorgs) >= max(ts_delta)
 order by
   mgt.tabname asc
 with UR;
 
+echo =========================== ;
+echo  IDX#OPS: Index operations  ;
+echo =========================== ;
+echo ;
+
+/* IBM_DB2MON */
+select
+  mgi.member,
+  cast(substr(mgi.tabschema,1,16) as varchar(16)) as tabschema,
+  cast(substr(mgi.tabname,1,32) as varchar(32)) as tabname,
+  cast(substr(sysidx.indname,1,32) as varchar(32)) as indname,
+  mgi.data_partition_id as data_part_id,
+  mgi.iid,
+  mgi.index_scans,
+  mgi.index_only_scans,
+    mgi.index_jump_scans,
+
+  mgi.key_updates,
+  mgi.pseudo_deletes,
+  mgi.del_keys_cleaned
+from
+  mon_get_index_diff mgi, syscat.indexes sysidx
+where
+  mgi.tabschema = sysidx.tabschema and
+  mgi.tabname = sysidx.tabname and
+  mgi.iid = sysidx.iid and
+  (mgi.index_scans + mgi.index_only_scans + mgi.key_updates + mgi.pseudo_deletes
+    + mgi.index_jump_scans
+  ) >= ts_delta
+order by
+  (mgi.index_scans + mgi.index_only_scans + mgi.key_updates + mgi.pseudo_deletes
+    + mgi.index_jump_scans
+
+  ) desc
+with UR;
+
+echo =============================== ;
+echo  IDX#SPLITS: Index page splits  ;
+echo =============================== ;
+echo ;
+
+/* IBM_DB2MON */
+select
+  mgi.member,
+  cast(substr(mgi.tabschema,1,16) as varchar(16)) as tabschema,
+  cast(substr(mgi.tabname,1,32) as varchar(32)) as tabname,
+  cast(substr(sysidx.indname,1,32) as varchar(32)) as indname,
+  mgi.data_partition_id as data_part_id,
+  mgi.iid,
+  decimal((mgi.root_node_splits + mgi.int_node_splits + mgi.boundary_leaf_node_splits + mgi.nonboundary_leaf_node_splits) / float(ts_delta), 10, 1) as splits_per_s,
+  mgi.root_node_splits,
+  mgi.int_node_splits,
+  mgi.boundary_leaf_node_splits,
+  mgi.nonboundary_leaf_node_splits
+from
+  mon_get_index_diff mgi, syscat.indexes sysidx
+where
+  mgi.tabschema = sysidx.tabschema and
+  mgi.tabname = sysidx.tabname and
+  mgi.iid = sysidx.iid and
+  (mgi.root_node_splits + mgi.int_node_splits + mgi.boundary_leaf_node_splits + mgi.nonboundary_leaf_node_splits) > 0
+order by
+  (mgi.root_node_splits + mgi.int_node_splits + mgi.boundary_leaf_node_splits + mgi.nonboundary_leaf_node_splits) desc
+with UR;
+
+echo ===================================== ;
+echo  IDX#PAGEUSE: Index page use metrics  ;
+echo ===================================== ;
+echo ;
+
+/* IBM_DB2MON */
+select
+  mgi.member,
+  cast(substr(mgi.tabschema,1,16) as varchar(16)) as tabschema,
+  cast(substr(mgi.tabname,1,32) as varchar(32)) as tabname,
+  cast(substr(sysidx.indname,1,32) as varchar(32)) as indname,
+  mgi.data_partition_id as data_part_id,
+  mgi.iid,
+  mgi.page_allocations,
+  mgi.pseudo_empty_pages,
+  mgi.empty_pages_reused,
+  mgi.empty_pages_deleted,
+  mgi.pages_merged
+from
+  mon_get_index_diff mgi, syscat.indexes sysidx
+where
+  mgi.tabschema = sysidx.tabschema and
+  mgi.tabname = sysidx.tabname and
+  mgi.iid = sysidx.iid and
+  (mgi.page_allocations + mgi.pseudo_empty_pages + mgi.empty_pages_reused + mgi.empty_pages_deleted + mgi.pages_merged) > 0
+order by
+  (mgi.page_allocations + mgi.pseudo_empty_pages + mgi.empty_pages_reused + mgi.empty_pages_deleted + mgi.pages_merged) desc
+with UR;
+
+echo ==================================== ;
+echo  IDX#READS: Index page read metrics  ;
+echo ==================================== ;
+echo ;
+
+/* IBM_DB2MON */
+select
+  mgi.member,
+  cast(substr(mgi.tabschema,1,16) as varchar(16)) as tabschema,
+  cast(substr(mgi.tabname,1,32) as varchar(32)) as tabname,
+  cast(substr(sysidx.indname,1,32) as varchar(32)) as indname,
+  mgi.data_partition_id as data_part_id,
+  mgi.iid,
+  mgi.object_index_l_reads as l_reads,
+  mgi.object_index_p_reads as p_reads,
+  mgi.object_index_gbp_l_reads as gbp_l_reads,
+  mgi.object_index_gbp_p_reads as gbp_p_reads,
+  mgi.object_index_gbp_invalid_pages as gbp_invalid,
+  mgi.object_index_lbp_pages_found as lbp_found,
+  mgi.object_index_gbp_indep_pages_found_in_lbp as indep_lbp_found
+from
+  mon_get_index_diff mgi, syscat.indexes sysidx
+where
+  mgi.tabschema = sysidx.tabschema and
+  mgi.tabname = sysidx.tabname and
+  mgi.iid = sysidx.iid and
+  (mgi.object_index_l_reads + mgi.object_index_p_reads) >= ts_delta
+order by
+  (mgi.object_index_l_reads + mgi.object_index_p_reads) desc
+with UR;
 echo ================================= ;
 echo  TBL#DATSH: Data sharing metrics  ;
 echo ================================= ;
 echo ;
 
+/* IBM_DB2MON */
 select
   member,
   cast(substr(tabname,1,40) as varchar(40)) as tabname,
@@ -1129,7 +1363,7 @@ select
 from
   mon_get_table_diff
 where
-  rows_read + rows_inserted + rows_updated + rows_deleted + page_reorgs > 0
+  rows_read + rows_inserted + rows_updated + rows_deleted + page_reorgs >= ts_delta
   and data_sharing_state_change_time is not null
 order by
   tabname asc
@@ -1140,15 +1374,16 @@ echo  DB#SIZE: Size of database  ;
 echo =========================== ;
 echo ;
 
+/* IBM_DB2MON */
 select
-        member,
-        decimal( sum( double(tbsp_used_pages) * tbsp_page_size ) / 1024 / 1024, 10, 2 ) as db_mb_used
+  member,
+  decimal( sum( double(tbsp_used_pages) * tbsp_page_size ) / 1024 / 1024, 10, 2 ) as db_mb_used
 from
-        mon_get_tablespace_end
+  mon_get_tablespace_end
 group by
-        member
+  member
 order by
-        member asc
+  member asc
 with UR;
 
 echo ================================= ;
@@ -1156,6 +1391,7 @@ echo  TSP#SIZE: Tablespace properties  ;
 echo ================================= ;
 echo ;
 
+/* IBM_DB2MON */
 select
   member,
   cast(substr(tbsp_name,1,32) as varchar(32)) as tbsp_name,
@@ -1168,9 +1404,9 @@ select
   case fs_caching when 2 then 'Default off' when 1 then 'Explicit off' else 'Explicit on' end fs_caching,
   tbsp_prefetch_size
 from
-        mon_get_tablespace_end
+  mon_get_tablespace_end
 order by
-        member asc, tbsp_used_pages desc
+  member asc, tbsp_used_pages desc
 with UR;
 
 echo ====================================================== ;
@@ -1178,17 +1414,18 @@ echo  TSP#USAGE: Tablespace usage over monitoring interval  ;
 echo ====================================================== ;
 echo ;
 
+/* IBM_DB2MON */
 select
   member,
   cast(substr(tbsp_name,1,30) as varchar(30)) as tbsp_name,
   tbsp_used_pages,
   decimal( (double(tbsp_used_pages) * tbsp_page_size) / 1024 / 1024, 10, 2 ) as tbsp_mb_used
 from
-        mon_get_tablespace_diff
+  mon_get_tablespace_diff
 where
-        tbsp_used_pages > 0
+  tbsp_used_pages > 0
 order by
-        member asc, tbsp_used_pages desc
+  member asc, tbsp_used_pages desc
 with UR;
 
 echo ================================================ ;
@@ -1196,6 +1433,7 @@ echo  BPL#STATS: Bufferpool statistics by tablespace  ;
 echo ================================================ ;
 echo ;
 
+/* IBM_DB2MON */
 select
    member,
    cast(substr(tbsp_name,1,20) as varchar(20)) as tbsp_name,
@@ -1240,7 +1478,7 @@ select
 from
    mon_get_tablespace_diff
 where
-   (pool_data_l_reads + pool_temp_data_l_reads + pool_index_l_reads + pool_temp_index_l_reads + pool_xda_l_reads + pool_temp_xda_l_reads + pool_col_l_reads + pool_temp_col_l_reads) > 0
+   (pool_data_l_reads + pool_temp_data_l_reads + pool_index_l_reads + pool_temp_index_l_reads + pool_xda_l_reads + pool_temp_xda_l_reads + pool_col_l_reads + pool_temp_col_l_reads) >= ts_delta
 order by
    pool_read_time desc
 with UR;
@@ -1251,6 +1489,7 @@ echo  TSP#PRFST: Tablespace prefetching statistics  ;
 echo ============================================== ;
 echo ;
 
+/* IBM_DB2MON */
 select
   member,
   cast(substr(tbsp_name,1,30) as varchar(30)) as tbsp_name,
@@ -1270,13 +1509,14 @@ select
   unread_prefetch_pages
 
 from
-        mon_get_tablespace_diff
+  mon_get_tablespace_diff
 where
-        (pool_data_p_reads + pool_temp_data_p_reads + pool_index_p_reads + pool_temp_index_p_reads + pool_xda_p_reads + pool_temp_xda_p_reads + pool_col_p_reads + pool_temp_col_p_reads) > 0
+  (pool_data_p_reads + pool_temp_data_p_reads + pool_index_p_reads + pool_temp_index_p_reads + pool_xda_p_reads + pool_temp_xda_p_reads + pool_col_p_reads + pool_temp_col_p_reads) >= ts_delta
 order by
-        member asc, (pool_data_p_reads + pool_temp_data_p_reads + pool_index_p_reads + pool_temp_index_p_reads + pool_xda_p_reads + pool_temp_xda_p_reads + pool_col_p_reads + pool_temp_col_p_reads) desc
+  member asc, (pool_data_p_reads + pool_temp_data_p_reads + pool_index_p_reads + pool_temp_index_p_reads + pool_xda_p_reads + pool_temp_xda_p_reads + pool_col_p_reads + pool_temp_col_p_reads) desc
 with UR;
 
+/* IBM_DB2MON */
 select
   member,
   cast(substr(tbsp_name,1,30) as varchar(30)) as tbsp_name,
@@ -1287,11 +1527,11 @@ select
   pages_from_block_ios,
   case when block_ios > 0 then decimal(pages_from_block_ios / float(block_ios), 5, 2) else null end as avg_bio_sz
 from
-        mon_get_tablespace_diff
+  mon_get_tablespace_diff
 where
-   (vectored_ios + block_ios) > 0
+  (vectored_ios + block_ios) >= ts_delta
 order by
-        member asc, (vectored_ios + block_ios) desc
+  member asc, (vectored_ios + block_ios) desc
 with UR;
 
 echo ============================================= ;
@@ -1299,6 +1539,7 @@ echo  TSP#BPMAP: Tablespace to bufferpool mapping  ;
 echo ============================================= ;
 echo ;
 
+/* IBM_DB2MON */
 select
    cast(substr(tbspace,1,20) as varchar(20)) as tbsp_name,
    datatype,
@@ -1314,6 +1555,7 @@ echo  BPL#SIZES: Bufferpool sizes  ;
 echo ============================= ;
 echo ;
 
+/* IBM_DB2MON */
 select
    member,
    cast(substr(bp_name,1,20) as varchar(20)) as bp_name,
@@ -1334,6 +1576,7 @@ echo  BPL#HITRA: Bufferpool data and index hit ratios  ;
 echo ================================================= ;
 echo ;
 
+/* IBM_DB2MON */
 select
    member,
    cast(substr(bp_name,1,20) as varchar(20)) as bp_name,
@@ -1365,6 +1608,7 @@ echo  BPL#READS: Bufferpool read statistics (overall)  ;
 echo ================================================= ;
 echo ;
 
+/* IBM_DB2MON */
 select
    member,
    cast(substr(bp_name,1,20) as varchar(20)) as bp_name,
@@ -1392,6 +1636,7 @@ echo  BPL#RDSYNC: Bufferpool read statistics (synchronous reads)  ;
 echo ============================================================ ;
 echo ;
 
+/* IBM_DB2MON */
 select
    member,
    cast(substr(bp_name,1,20) as varchar(20)) as bp_name,
@@ -1416,6 +1661,7 @@ echo  BPL#RDASYNC: Bufferpool read statistics (asynchronous reads)  ;
 echo ============================================================== ;
 echo ;
 
+/* IBM_DB2MON */
 select
    member,
    cast(substr(bp_name,1,20) as varchar(20)) as bp_name,
@@ -1440,6 +1686,7 @@ echo  BPL#WRITE: Bufferpool write statistics (overall)  ;
 echo ================================================== ;
 echo ;
 
+/* IBM_DB2MON */
 select
    member,
    cast(substr(bp_name,1,20) as varchar(20)) as bp_name,
@@ -1465,6 +1712,7 @@ echo  BPL#WRSYNC: Bufferpool write statistics (synchronous writes)  ;
 echo ============================================================== ;
 echo ;
 
+/* IBM_DB2MON */
 select
    member,
    cast(substr(bp_name,1,20) as varchar(20)) as bp_name,
@@ -1490,6 +1738,7 @@ echo  BPL#WRASYNC: Bufferpool write statistics (asynchronous writes)  ;
 echo ================================================================ ;
 echo ;
 
+/* IBM_DB2MON */
 select
    member,
    cast(substr(bp_name,1,20) as varchar(20)) as bp_name,
@@ -1515,6 +1764,7 @@ echo  CON#WAITT: Wait times at connection level  ;
 echo =========================================== ;
 echo ;
 
+/* IBM_DB2MON */
 select
    member,
    cast(substr(application_name,1,20) as varchar(20)) as app_name,
@@ -1524,21 +1774,32 @@ select
    decimal((total_wait_time / double(total_rqst_time)) * 100, 5, 2) as pct_rqst_wt,
    decimal((lock_wait_time / double(total_rqst_time)) * 100, 5, 2) as pct_lock,
    decimal((log_disk_wait_time / double(total_rqst_time)) * 100, 5, 2) as pct_lg_dsk,
+
+
    decimal((log_buffer_wait_time / double(total_rqst_time)) * 100, 5, 2) as pct_lg_buf,
-
-
    decimal((lock_wait_time_global / double(total_rqst_time)) * 100, 5, 2) as pct_glb_lock,
    decimal((total_extended_latch_wait_time / double(total_rqst_time)) * 100, 5, 2) as pct_ltch,
    decimal((reclaim_wait_time / double(total_rqst_time)) * 100, 5, 2) as pct_rclm,
    decimal((cf_wait_time / double(total_rqst_time)) * 100, 5, 2) as pct_cf,
    decimal((prefetch_wait_time / double(total_rqst_time)) * 100, 5, 2) as pct_pftch,
    decimal((diaglog_write_wait_time / double(total_rqst_time)) * 100, 5, 2) as pct_diag,
+   -- fcm_recv_wait_time = fcm_message_recv_wait_time + fcm_tq_recv_wait_time (similarly for send)
+   -- decimal(((fcm_message_recv_wait_time + fcm_message_send_wait_time) / float(total_rqst_time)) * 100, 5, 2) as pct_fcm_msg,
+   -- decimal(((fcm_tq_recv_wait_time + fcm_tq_send_wait_time) / float(total_rqst_time)) * 100, 5, 2) as pct_fcm_tq,
+   decimal((audit_file_write_wait_time / double(total_rqst_time)) * 100, 5, 2) as pct_aud_w,
+   decimal((audit_subsystem_wait_time / double(total_rqst_time)) * 100, 5, 2) as pct_aud_ss,
+   decimal((evmon_wait_time / float(total_rqst_time)) * 100, 5, 2) as pct_evmon,
 
+   decimal((comm_exit_wait_time / float(total_rqst_time)) * 100, 5, 2) as pct_commexit,
+   decimal((lob_prefetch_wait_time / float(total_rqst_time)) * 100, 5, 2) as pct_lob_pftch,
+   decimal(((ext_table_recv_wait_time + ext_table_send_wait_time) / float(total_rqst_time)) * 100, 5, 2) as pct_extbl,
+   decimal((fed_wait_time / float(total_rqst_time)) * 100, 5, 2) as pct_fed,
 
    decimal((pool_read_time / double(total_rqst_time)) * 100, 5, 2) as pct_pool_r,
    decimal((direct_read_time / float(total_rqst_time)) * 100, 5, 2) as pct_dir_r,
    decimal((direct_write_time / float(total_rqst_time)) * 100, 5, 2) as pct_dir_w,
-   decimal(((fcm_recv_wait_time+fcm_send_wait_time) / float(total_rqst_time)) * 100, 5, 2) as pct_fcm
+   decimal(((fcm_recv_wait_time + fcm_send_wait_time) / float(total_rqst_time)) * 100, 5, 2) as pct_fcm,
+   decimal(((ida_send_wait_time + ida_recv_wait_time) / double(total_rqst_time)) * 100, 5, 2) as pct_ida
 from
    mon_get_connection_diff
 where
@@ -1552,6 +1813,7 @@ echo  CON#STATS: Various metrics at connection level  ;
 echo ================================================ ;
 echo ;
 
+/* IBM_DB2MON */
 select
    member,
    cast(substr(application_name,1,20) as varchar(20)) as app_name,
@@ -1579,6 +1841,7 @@ echo  CON#PAGRW: Physical and logical page reads and writes at connection level 
 echo =========================================================================== ;
 echo ;
 
+/* IBM_DB2MON */
 select
    member,
    cast(substr(application_name,1,20) as varchar(20)) as app_name,
@@ -1604,6 +1867,7 @@ echo  WLB#SLIST: Workload balancing server list  ;
 echo =========================================== ;
 echo ;
 
+/* IBM_DB2MON */
 select
   member,
   cached_timestamp,
@@ -1622,6 +1886,7 @@ echo  CFG#REGVA: DB2 registry variable settings  ;
 echo =========================================== ;
 echo ;
 
+/* IBM_DB2MON */
 select
    member,
    cast(substr(reg_var_name,1,50) as varchar(50)) as reg_var_name,
@@ -1638,6 +1903,7 @@ echo  CFG#DB: Database configuration settings  ;
 echo ========================================= ;
 echo ;
 
+/* IBM_DB2MON */
 select
    member,
    cast(substr(name,1,24) as varchar(24)) as name,
@@ -1656,6 +1922,7 @@ echo  CFG#DBM: Database manager configuration settings  ;
 echo ================================================== ;
 echo ;
 
+/* IBM_DB2MON */
 select
    cast(substr(name,1,24) as varchar(24)) as name,
    case when value_flags = 'NONE' then '' else value_flags end flags,
@@ -1671,6 +1938,7 @@ echo  INS#INFO: Instance information  ;
 echo ================================ ;
 echo ;
 
+/* IBM_DB2MON */
 select
    cast(substr(inst_name,1,20) as varchar(20)) as inst_name,
    num_dbpartitions,
@@ -1687,6 +1955,7 @@ echo  DB#MEMST: Database memory set information @ end  ;
 echo ================================================= ;
 echo ;
 
+/* IBM_DB2MON */
 select
    member,
    cast(substr(memory_set_type,1,20) as varchar(20)) as set_type,
@@ -1704,6 +1973,7 @@ echo  DB#MEMPL: Memory pool information @ end  ;
 echo ========================================= ;
 echo ;
 
+/* IBM_DB2MON */
 select
    member,
    cast(substr(memory_pool_type,1,20) as varchar(20)) as memory_pool_type,
@@ -1721,6 +1991,7 @@ echo  DB#SEQIN: Sequences information  ;
 echo ================================= ;
 echo ;
 
+/* IBM_DB2MON */
 select
    cast(substr(seqschema,1,40) as varchar(40)) as seqschema,
    cast(substr(seqname,1,40) as varchar(40)) as seqname,
@@ -1741,6 +2012,7 @@ echo  CF#GBPIO: Group bufferpool IO statistics by tablespace  ;
 echo ======================================================== ;
 echo ;
 
+/* IBM_DB2MON */
 select
    member,
    cast(substr(tbsp_name,1,20) as varchar(20)) as tbsp_name,
@@ -1781,7 +2053,7 @@ select
 from
    mon_get_tablespace_diff
 where
-   pool_data_gbp_l_reads + pool_index_gbp_l_reads > 0
+   pool_data_gbp_l_reads + pool_index_gbp_l_reads >= ts_delta
 order by
    pool_data_gbp_l_reads + pool_data_gbp_p_reads + pool_index_gbp_l_reads + pool_index_gbp_p_reads desc
 with UR;
@@ -1792,6 +2064,7 @@ echo  CF#GBPHR: Group bufferpool data and index hit ratios  ;
 echo ====================================================== ;
 echo ;
 
+/* IBM_DB2MON */
 select
    member,
    cast(substr(bp_name,1,20) as varchar(20)) as bp_name,
@@ -1827,6 +2100,7 @@ echo  CF#GBPIV: Group bufferpool invalid page statistics  ;
 echo ==================================================== ;
 echo ;
 
+/* IBM_DB2MON */
 select
    member,
    cast(substr(bp_name,1,20) as varchar(20)) as bp_name,
@@ -1857,6 +2131,7 @@ echo  CF#GBPDP: Tablespace data page prefetching statistics for group bufferpool
 echo ============================================================================ ;
 echo ;
 
+/* IBM_DB2MON */
 select
   member,
   cast(substr(tbsp_name,1,30) as varchar(30)) as tbsp_name,
@@ -1866,11 +2141,11 @@ select
   pool_async_data_gbp_invalid_pages,
   pool_async_data_gbp_indep_pages_found_in_lbp
 from
-        mon_get_tablespace_diff
+  mon_get_tablespace_diff
 where
-   pool_async_data_gbp_l_reads > 0
+  pool_async_data_gbp_l_reads >= ts_delta
 order by
-        member asc, pool_async_data_gbp_l_reads  desc
+  member asc, pool_async_data_gbp_l_reads desc
 with UR;
 
 echo ============================================================================= ;
@@ -1878,6 +2153,7 @@ echo  CF#GBPIP: Tablespace index page prefetching statistics for group bufferpoo
 echo ============================================================================= ;
 echo ;
 
+/* IBM_DB2MON */
 select
   member,
   cast(substr(tbsp_name,1,30) as varchar(30)) as tbsp_name,
@@ -1887,11 +2163,11 @@ select
   pool_async_index_gbp_invalid_pages,
   pool_async_index_gbp_indep_pages_found_in_lbp
 from
-        mon_get_tablespace_diff
+  mon_get_tablespace_diff
 where
-   pool_async_index_gbp_l_reads > 0
+  pool_async_index_gbp_l_reads >= ts_delta
 order by
-        member asc, pool_async_index_gbp_l_reads  desc
+  member asc, pool_async_index_gbp_l_reads desc
 with UR;
 
 echo ===================================================== ;
@@ -1899,6 +2175,7 @@ echo  CF#GBPFL: Count of group bufferpool full conditions  ;
 echo ===================================================== ;
 echo ;
 
+/* IBM_DB2MON */
 select
    member,
    num_gbp_full
@@ -1913,12 +2190,13 @@ echo  PAG#RCM: Page reclaim metrics for index and data pages  ;
 echo ======================================================== ;
 echo ;
 
+/* IBM_DB2MON */
 select
    member,
    cast(substr(tabschema,1,20) as varchar(20)) as tabschema,
    cast(substr(tabname,1,40) as varchar(40)) as tabname,
    cast(substr(objtype,1,10) as varchar(10)) as objtype,
-   data_partition_id,
+   data_partition_id as data_part_id,
    iid,
    (page_reclaims_x + page_reclaims_s) as page_reclaims,
    reclaim_wait_time
@@ -1927,7 +2205,7 @@ from
 where
   reclaim_wait_time > 0
 order by
-   reclaim_wait_time desc
+  reclaim_wait_time desc
 with UR;
 
 echo =============================================== ;
@@ -1935,12 +2213,13 @@ echo  PAG#RCSMP: Page reclaim metrics for SMP pages  ;
 echo =============================================== ;
 echo ;
 
+/* IBM_DB2MON */
 select
    member,
    cast(substr(tabschema,1,20) as varchar(20)) as tabschema,
    cast(substr(tabname,1,40) as varchar(40)) as tabname,
    cast(substr(objtype,1,10) as varchar(10)) as objtype,
-   data_partition_id,
+   data_partition_id as data_part_id,
    iid,
    (spacemappage_page_reclaims_x + spacemappage_page_reclaims_s) as smp_page_reclaims,
    spacemappage_reclaim_wait_time as smp_page_reclaim_wait_time
@@ -1957,6 +2236,7 @@ echo  CF#RTTIM: Round-trip CF command execution counts and average response time
 echo ============================================================================= ;
 echo ;
 
+/* IBM_DB2MON */
 select
    member,
    id,
@@ -1976,6 +2256,7 @@ echo  CF#CMDCT: Aggregate CF command execution counts  ;
 echo ================================================= ;
 echo ;
 
+/* IBM_DB2MON */
 select
    member,
    id,
@@ -1993,6 +2274,7 @@ echo  CF#CMDTM: CF-side command execution counts and average response times  ;
 echo ======================================================================= ;
 echo ;
 
+/* IBM_DB2MON */
 select
    d.id,
    cast(substr(cf_cmd_name,1,50) as varchar(50)) as cf_cmd_name,
@@ -2015,6 +2297,7 @@ echo  CF#CMDTO: CF-side total command execution counts  ;
 echo ================================================== ;
 echo ;
 
+/* IBM_DB2MON */
 select
    id,
    sum(total_cf_requests) as total_cf_requests
@@ -2032,6 +2315,7 @@ echo  CF#SYSRE: CF system resource information  ;
 echo ========================================== ;
 echo ;
 
+/* IBM_DB2MON */
 select
    id,
    cast(substr(name,1,30) as varchar(30)) as name,
@@ -2048,6 +2332,7 @@ echo  CF#SIZE: CF structure size information  ;
 echo ======================================== ;
 echo ;
 
+/* IBM_DB2MON */
 select
    id,
    cast(substr(host_name,1,40) as varchar(40)) as hostname,
@@ -2084,6 +2369,7 @@ echo  BLU#PAGDI: Partial early aggregation / distincts  ;
 echo ================================================== ;
 echo ;
 
+/* IBM_DB2MON */
 select
    member,
    sum(total_peds) total_peds,
@@ -2093,10 +2379,12 @@ select
    sum(post_threshold_peas) post_threshold_peas
 from
    mon_get_workload_diff
+where
+   total_peds >= ts_delta
 group by
    member
 order by
    member
 with UR;
 
-set current schema current user;
+/* IBM_DB2MON */ set current schema current user;

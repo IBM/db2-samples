@@ -82,7 +82,7 @@ pluginConfig_t *db2ldapGetConfigDataPtr(void)
 }
 
 
-#define INFO_BUFFER_SIZE 4096
+#define INFO_BUFFER_SIZE 257
 
 /* WhoAmI
  * Figure out what userid we're running as, look them up in LDAP,
