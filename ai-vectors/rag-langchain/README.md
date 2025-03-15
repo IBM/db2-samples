@@ -208,26 +208,4 @@ PWD=your_db2_password
 - `UID`: Username for Db2 authentication.
 - `PWD`: Password for the Db2 user.
 
-**Loading Variables in Python:**
-
-To utilize these variables in your Python code, ensure you have the `python-dotenv` library installed:
-
-```bash
-pip install python-dotenv
-```
-
-Then, in your Python script or notebook, load the variables as follows:
-
-```python
-import os
-from dotenv import load_dotenv
-
-load_dotenv()
-
-watsonx_project = os.getenv('WATSONX_PROJECT')
-watsonx_apikey = os.getenv('WATSONX_APIKEY')
-db2_database = os.getenv('DATABASE')
-db2_hostname = os.getenv('HOSTNAME')
-db2_port = os.getenv('PORT')
-db2_protocol = os.getenv('PROTOCOL')
-db2_uid
+Now, open the notebook ['rag-basic.ipynb'](rag-basic.ipynb) and run it. 
