@@ -2,7 +2,7 @@
 
 ## Introduction
 
-This README presents step-by-step instructions for implementing a Retrieval-Augmented Generation (RAG) use case using IBM Db2, watsonx.ai, and LangChain. The complete is available in the [`rag-basic.ipynb`](rag-basic.ipynb) notebook in the same folder,  In March 2025 Early Access Program (EAP) build , Db2 introduced a native vector data type and vector similarity search functionality. Leveraging these capabilities, I have implemented a complete RAG pipeline with LangChain and Python in a Jupyter Notebook. Customers with access to [this](http://ibm.biz/db2_early_access_program) EAP build can try out these features in a non-production setup. In this notebook, 
+This README presents step-by-step instructions for implementing a Retrieval-Augmented Generation (RAG) use case using IBM Db2, watsonx.ai, and LangChain. The complete is available in the [`rag-basic.ipynb`](rag-basic.ipynb) notebook in the same folder,  In March 2025 Early Access Program (EAP) build , Db2 introduced a native vector data type and vector similarity search functionality. Leveraging these capabilities, I have implemented a complete RAG pipeline with LangChain and Python in a Jupyter Notebook. Customers with access to [this](http://ibm.biz/db2_early_access_program) EAP build can try out these features in a non-production setup.  
 
 ## Understanding Retrieval-Augmented Generation
 
