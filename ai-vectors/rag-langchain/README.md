@@ -1,8 +1,8 @@
-# Implementing Retrieval-Augmented Generation with IBM Db2 and LangChain on RHEL 9.4
+# Implementing Retrieval-Augmented Generation with IBM Db2, watsonx.ai, LangChain
 
 ## Introduction
 
-This README presents step-by-step instructions for implementing a Retrieval-Augmented Generation (RAG) use case using IBM Db2 and LangChain on Red Hat Enterprise Linux (RHEL) 9.4. In a recent Early Access Program (EAP), Db2 introduced a native vector data type and vector similarity search functionality. Leveraging these capabilities, I have implemented a complete RAG pipeline with LangChain and Python in a Jupyter Notebook. Customers with access to this EAP build can try out these features in a non-production setup.
+This README presents step-by-step instructions for implementing a Retrieval-Augmented Generation (RAG) use case using IBM Db2, watsonx.ai, and LangChain. The complete is available in the [`rag-basic.ipynb`](rag-basic.ipynb) notebook in the same folder,  In March 2025 Early Access Program (EAP) build , Db2 introduced a native vector data type and vector similarity search functionality. Leveraging these capabilities, I have implemented a complete RAG pipeline with LangChain and Python in a Jupyter Notebook. Customers with access to [this](http://ibm.biz/db2_early_access_program) EAP build can try out these features in a non-production setup. In this notebook, 
 
 ## Understanding Retrieval-Augmented Generation
 
@@ -61,9 +61,8 @@ These enhancements allow Db2 to efficiently store and process high-dimensional d
 
 ## Implementing the RAG Pipeline
 
-### 1. Setting Up the Environment on RHEL 9.4
-
-To begin, ensure that your system is running RHEL 9.4 and has Python 3.12 installed. Starting from RHEL 9.4, Python 3.12 is available in the default package manager.
+### 1. Setting Up the Python Environment
+I created this tutorial on RHEL 9.4 using Python 3.12. Below are the steps I followed to set up the Python environment on RHEL 9.4.
 
 **Installing Python 3.12**
 
@@ -216,7 +215,6 @@ To utilize these variables in your Python code, ensure you have the `python-dote
 ```bash
 pip install python-dotenv
 ```
-
 
 Then, in your Python script or notebook, load the variables as follows:
 
