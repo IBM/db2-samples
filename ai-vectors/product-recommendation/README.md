@@ -115,9 +115,7 @@ uv pip install -r requirements.txt
 
 ---
 
-## 🔐 API Key Configuration (Optional)
-
-If you want to regenerate the vector embeddings using Watsonx.ai:
+## 🔐 API Key Configuration
 
 ### 10. Rename `.env-sample` to `.env` and Fill in Required Fields
 
@@ -133,7 +131,7 @@ uid=
 pwd=
 ```
 
-> ⚠️ This step is optional. Pre-generated embeddings are already provided in `shoes-vectors.csv`.
+> ⚠️ Using Watsonx.ai APIs is optional. Pre-generated embeddings using watsonx.ai API are already provided in `shoes-vectors.csv`.
 
 ---
 
