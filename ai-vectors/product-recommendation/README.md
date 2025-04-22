@@ -1,97 +1,146 @@
-1. **Install Python 3.12**
+### Semantic Search for Product Recommendation Using Db2 Vector AI
 
-   RHEL 9.4 includes Python 3.12 in its package repositories. To install it, run:
+This repository contains code and data for implementing a **semantic product recommendation** demo using **IBM Db2's Vector AI** features, planned for release in **Db2 Version 12 Mod Pack 2 (June 2025)**.
 
-   ```bash
-   sudo dnf install python3.12
-   ```
+---
 
-   Verify the installation:
+## 🛍️ Use Case Overview
 
-   ```bash
-   python3.12 --version
-   ```
+This demo simulates a scenario at a shoe store where a customer walks in with a reference shoe they found online and wants to find a similar shoe available in the local store. We use **semantic search** over shoe descriptions stored in Db2 to recommend similar products.
 
-2. **Install `pip` for Python 3.12**
+---
 
-   To manage Python packages, install `pip` for Python 3.12:
+## ⚙️ Workflow Summary
 
-   ```bash
-   sudo dnf install python3.12-pip
-   ```
+- A Db2 table is created to store shoe records, which include descriptive attributes (e.g., color, material, type) and metadata (e.g., SKU, store location).
+- These records are populated from a **synthetically generated dataset**. You can find the data generation steps in `generate_dataset.ipynb`.
+- The full product recommendation logic is implemented in **`similar_shoes_search.ipynb`**, which is self-contained and ready to run.
+- It uses **pre-generated vector embeddings** (provided in `shoes-vectors.csv`) to power similarity search, so you can run the demo **without needing API access to external services**.
+- If you wish to regenerate the embeddings, Watsonx.ai can be used via the Python SDK.
 
-3. **Install `uv` for managing python dependencies
-```shell
+---
+
+## 🐍 Environment Setup (RHEL 9.4 + Python 3.12)
+
+Follow these steps to set up your environment and run the demo:
+
+### 1. Install Python 3.12
+
+RHEL 9.4 includes Python 3.12 in its package repositories.
+
+```bash
+sudo dnf install python3.12
+python3.12 --version
+```
+
+### 2. Install `pip` for Python 3.12
+
+```bash
+sudo dnf install python3.12-pip
+```
+
+### 3. Install `uv` (a modern Python package manager)
+
+```bash
 python3.12 -m pip install uv
 ```
 
-4. **Add `uv` to the your shell profile
-Add this line to your ~/.kshrc, ~/.profile, or ~/.bashrc (depending on your shell setup). In my case, it is ~/.profile
-```shell
-vi ~/.profile
-```
-First, find the installation path of `uv`:
-```shell
+### 4. Add `uv` to Your Shell Profile
+
+Determine the user base path:
+
+```bash
 python3.12 -m site --user-base
 ```
 
-This gave me:
-```
-/home/shaikhq/.local
+This should return something like:
+
+```bash
+/home/<your-username>/.local
 ```
 
-Add the following line at the end of the file:
+Edit your shell profile:
+
+```bash
+vi ~/.profile  # or ~/.bashrc, ~/.kshrc depending on your shell
 ```
+
+Add the following line:
+
+```bash
 export PATH="$HOME/.local/bin:$PATH"
 ```
 
-Saved changes and exited vi editor. 
-
 Apply the changes:
-```
+
+```bash
 . ~/.profile
+uv --version
+# Should output: uv 0.6.15 (or newer)
 ```
 
-Verify that `uv` is now on the path:
-```shell
-uv --version
-```
+### 5. Create a Python Virtual Environment
 
-uv --version
-uv 0.6.15
-
-5. **Create a python virtual environment
-```shell
+```bash
 uv venv --python=python3.12
 ```
 
-6. **Activate the python virtual env:
-```shell
+### 6. Activate the Virtual Environment
+
+```bash
 source .venv/bin/activate
 ```
 
-7. **Install packages from `requirements.txt`
+### 7. Install Required Packages
+
+```bash
 uv pip install -r requirements.txt
+```
 
-8. **Configure VS Code to Use the Virtual Environment**
+---
 
-   - Open the Command Palette (`Ctrl+Shift+P` or `Cmd+Shift+P` on macOS).
-   - Type `Python: Select Interpreter` and select the interpreter located in your `.venv` directory.
+## 🧠 IDE Setup (VS Code)
 
-9. **Set the Notebook's Python Interpreter in VS Code**
+### 8. Configure VS Code to Use the Virtual Environment
 
-   - Open your Jupyter notebook in VS Code.
-   - Click on the kernel name at the top right corner.
-   - Select the interpreter from your `.venv`.
+- Open Command Palette: `Ctrl+Shift+P` (or `Cmd+Shift+P` on macOS)
+- Search: `Python: Select Interpreter`
+- Select: The interpreter inside `.venv`
 
-10. Rename `.env-sample` to `.env` and populate the required API keys and metadata from your target AI platforms. Fill in the necessary values as shown below:
+### 9. Set Notebook Kernel to Virtual Environment
+
+- Open `similar_shoes_search.ipynb`
+- Click the kernel name (top-right)
+- Choose the `.venv` Python interpreter
+
+---
+
+## 🔐 API Key Configuration (Optional)
+
+If you want to regenerate the vector embeddings using Watsonx.ai:
+
+### 10. Rename `.env-sample` to `.env` and Fill in Required Fields
 
 ```env
 WATSONX_PROJECT=
 WATSONX_APIKEY=
+
 database=
 hostname=
 port=
 protocol=
 uid=
 pwd=
+```
+
+> ⚠️ This step is optional. Pre-generated embeddings are already provided in `shoes-vectors.csv`.
+
+---
+
+## ✅ Ready to Run
+
+To run the full demo:
+
+1. Activate your environment
+2. Launch the `shoes_search.ipynb` notebook
+3. Run all cells to walk through the entire workflow
