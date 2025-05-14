@@ -270,6 +270,9 @@
   <xsl:text>Statement Comments                     : </xsl:text>
     <xsl:value-of select="pkg:stmt_comments/text()" />
   <xsl:text>&#10;</xsl:text>
+  <xsl:text>Tenant Id                              : </xsl:text>
+    <xsl:value-of select="pkg:tenant_id/text()" />
+  <xsl:text>&#10;</xsl:text>
 
   <!-- =================================================== -->
   <!-- Max_COORD_STMT_EXEC_TIME/TIMESTAMP and input args   -->
@@ -867,6 +870,39 @@
   <xsl:text>&#10;</xsl:text>
   <xsl:text>POOL_COL_CACHING_TIER_L_READS       : </xsl:text>
     <xsl:value-of select="pkg:activity_metrics/pkg:pool_col_caching_tier_l_reads/text()" />
+  <xsl:text>&#10;</xsl:text>
+  <xsl:text>POOL_TEMP_DATA_CACHING_TIER_L_READS              : </xsl:text>
+    <xsl:value-of select="pkg:system_metrics/pkg:pool_temp_data_caching_tier_l_reads/text()" />
+  <xsl:text>&#10;</xsl:text>
+  <xsl:text>POOL_TEMP_INDEX_CACHING_TIER_L_READS             : </xsl:text>
+    <xsl:value-of select="pkg:system_metrics/pkg:pool_temp_index_caching_tier_l_reads/text()" />
+  <xsl:text>&#10;</xsl:text>
+  <xsl:text>POOL_TEMP_XDA_CACHING_TIER_L_READS               : </xsl:text>
+    <xsl:value-of select="pkg:system_metrics/pkg:pool_temp_xda_caching_tier_l_reads/text()" />
+  <xsl:text>&#10;</xsl:text>
+  <xsl:text>POOL_TEMP_COL_CACHING_TIER_L_READS               : </xsl:text>
+    <xsl:value-of select="pkg:system_metrics/pkg:pool_temp_col_caching_tier_l_reads/text()" />
+  <xsl:text>&#10;</xsl:text>
+  <xsl:text>POOL_TEMP_DATA_CACHING_TIER_PAGES_FOUND              : </xsl:text>
+    <xsl:value-of select="pkg:system_metrics/pkg:pool_temp_data_caching_tier_pages_found/text()" />
+  <xsl:text>&#10;</xsl:text>
+  <xsl:text>POOL_TEMP_INDEX_CACHING_TIER_PAGES_FOUND             : </xsl:text>
+    <xsl:value-of select="pkg:system_metrics/pkg:pool_temp_index_caching_tier_pages_found/text()" />
+  <xsl:text>&#10;</xsl:text>
+  <xsl:text>POOL_TEMP_XDA_CACHING_TIER_PAGES_FOUND               : </xsl:text>
+    <xsl:value-of select="pkg:system_metrics/pkg:pool_temp_xda_caching_tier_pages_found/text()" />
+  <xsl:text>&#10;</xsl:text>
+  <xsl:text>POOL_TEMP_COL_CACHING_TIER_PAGES_FOUND               : </xsl:text>
+    <xsl:value-of select="pkg:system_metrics/pkg:pool_temp_col_caching_tier_pages_found/text()" />
+  <xsl:text>&#10;</xsl:text>
+  <xsl:text>CACHING_TIER_DIRECT_READS             : </xsl:text>
+    <xsl:value-of select="pkg:system_metrics/pkg:caching_tier_direct_reads/text()" />
+  <xsl:text>&#10;</xsl:text>
+  <xsl:text>CACHING_TIER_DIRECT_READ_TIME               : </xsl:text>
+    <xsl:value-of select="pkg:system_metrics/pkg:caching_tier_direct_read_time/text()" />
+  <xsl:text>&#10;</xsl:text>
+  <xsl:text>CACHING_TIER_DIRECT_READ_REQS               : </xsl:text>
+    <xsl:value-of select="pkg:system_metrics/pkg:caching_tier_direct_read_reqs/text()" />
   <xsl:text>&#10;</xsl:text>
   <xsl:text>POOL_DATA_CACHING_TIER_PAGE_WRITES  : </xsl:text>
     <xsl:value-of select="pkg:activity_metrics/pkg:pool_data_caching_tier_page_writes/text()" />

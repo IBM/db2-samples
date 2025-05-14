@@ -3527,9 +3527,9 @@ int main(int argc, char * argv[])
   SQLRETURN rc;
 
   struct sqlfupd  l_sqlfupd;
-  short  applheapsz = 0;
-  short  logprimary = 0;
-  short    logfilsz = 0;
+  unsigned short applheapsz = 0;
+  unsigned short logprimary = 0;
+  unsigned int logfilsz = 0;
   char   yn_reply[4];
 
   int dbExists = 0;
@@ -3823,7 +3823,7 @@ code %d.\n", sqlca.sqlcode);
     /*==================================================================*/
     /*                        LOGFILSZ                                  */
     /*==================================================================*/
-    l_sqlfupd.token = SQLF_DBTN_LOGFILSIZ;
+    l_sqlfupd.token = SQLF_DBTN_LOGFIL_SIZ;
     l_sqlfupd.ptrvalue = (char*)&logfilsz;
 
     rc = sqlfxdb((_SQLOLDCHAR *)dbase, 1, &l_sqlfupd, &sqlca);

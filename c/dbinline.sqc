@@ -82,7 +82,7 @@ EXEC SQL BEGIN DECLARE SECTION;
 
   char dbAlias[15];
   char user[15];
-  char pswd[15];
+  char pswd[256];
   char strStmt[1000];
   short input;
   short output;

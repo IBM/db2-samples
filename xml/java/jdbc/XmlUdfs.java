@@ -48,7 +48,7 @@
 // PREREQUISITE: None
 //
 // EXECUTION: javac XmlUdfs.java
-//            java XmlUdfs username password servername portnumber
+//            java XmlUdfs <SERVER_NAME> <PORT_NO> <USERID> <PASSWORD>
 //
 // INPUTS: NONE
 //
@@ -103,27 +103,17 @@ import java.io.*;
 
 class XmlUdfs
 {
+  static Db db;
   public static void main(String argv[])
   {
     String url="jdbc:db2:sample";
     Connection con = null;
     ResultSet rs = null;
     javax.sql.DataSource ds = null;
+
     try
     {
-       String port=argv[3];
-       int port1=Integer.parseInt(port);
-       ds=new com.ibm.db2.jcc.DB2SimpleDataSource();
-       ((com.ibm.db2.jcc.DB2BaseDataSource) ds).
-       setServerName(argv[2]);
-       ((com.ibm.db2.jcc.DB2BaseDataSource) ds).
-       setPortNumber(port1);
-       ((com.ibm.db2.jcc.DB2BaseDataSource) ds).
-       setDatabaseName("sample");
-       ((com.ibm.db2.jcc.DB2BaseDataSource) ds).
-       setDriverType(4);
-       ((com.ibm.db2.jcc.DB2BaseDataSource) ds).
-       setTraceFile("jcctrace.txt");
+       db=new Db(argv);
     }
     catch (Exception e)
     {
@@ -133,10 +123,9 @@ class XmlUdfs
     }
     try
     {
-       con = ds.getConnection(argv[0], argv[1]);
-   
+       con = db.connect();
     }
-    catch (SQLException e)
+    catch (Exception e)
     {
        System.out.println("Connection to sample db can't be established.");
        System.err.println(e) ;
@@ -159,6 +148,17 @@ class XmlUdfs
     catch(Exception e)
     {
       System.out.println("Error..."+e);
+    }
+
+    try
+    {
+       db.disconnect();
+    }
+    catch (Exception e)
+    {
+       System.out.println("Connection to sample db can't be terminated.");
+       System.err.println(e) ;
+       System.exit(1);
     }
 
   } // main

@@ -532,9 +532,17 @@ int ImplicitCasting()
   INTO :comm INDICATOR :comm_ind;
   EMB_SQL_CHECK("Fetch -- cursor");
 
+  /* We expect COMM to be NULL */
   printf("\n\nCOMM");
   printf("\n-----------");
-  printf("\n%d", comm);
+  if (comm_ind < 0)
+  {
+    printf("\nNULL");
+  }
+  else
+  {
+    printf("\nError: COMM(%d) is not NULL", comm);
+  }
 	
   /* If either operand is null, the result will be null */
 
@@ -571,10 +579,17 @@ int ImplicitCasting()
   INTO :empsalary INDICATOR :empsalary_ind;
   EMB_SQL_CHECK("cursor -- fetch");
 
+  /* We expect EMPSALARY to be NULL */
   printf("\n\nEMPSALARY ");
   printf("\n-------------");
-  printf("\n%d",          empsalary);
-   
+  if (empsalary_ind < 0)
+  {
+    printf("\nNULL");
+  }
+  else
+  {
+    printf("\nError: EMPSALARY(%d) is not NULL", comm);
+  }
 
   /*****************************************************************/
   /* Untyped Expression                                           */

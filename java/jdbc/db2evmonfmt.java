@@ -275,6 +275,7 @@ public class db2evmonfmt
         //----------------------------------------------------------
         con= DriverManager.getConnection(dbName, userid, passwd);
         con.setAutoCommit(false);
+        SetTenantToSystem(con);
 
         wttEvmonName = wttEvmonName.trim();
 
@@ -413,6 +414,7 @@ public class db2evmonfmt
      {
        con = DriverManager.getConnection(dbName, userid, passwd);
        con.setAutoCommit(false);
+       SetTenantToSystem(con);
 
        //-----------------------------------------------------------------------
        // Get names and schemas for all the tables of change hist event monitor
@@ -980,7 +982,7 @@ public class db2evmonfmt
 
 
    /*!
-    *   brief RetrieveXMLDocumentsFromEvmonLCK
+    *   /brief RetrieveXMLDocumentsFromEvmonLCK
     *
     *   Function to extract XML document from lock event
     */
@@ -1010,6 +1012,7 @@ public class db2evmonfmt
      {
        con = DriverManager.getConnection(dbName, userid, passwd);
        con.setAutoCommit(false);
+       SetTenantToSystem(con);
      
        //---------------------------------------------------
        // Get names and schemas for tables of locking evnet
@@ -1220,7 +1223,9 @@ public class db2evmonfmt
                                                "xmlelement(name \"client_applname\", client_applname), " +
                                                "xmlelement(name \"client_acctng\", client_acctng), " +
                                                "xmlelement(name \"utility_invocation_id\", utility_invocation_id), " +
-                                               "xmlelement(name \"service_superclass_name\", service_superclass_name)), " +
+                                               "xmlelement(name \"service_superclass_name\", service_superclass_name), " +
+                                               "xmlelement(name \"tenant_id\", tenant_id), " +
+                                               "xmlelement(name \"tenant_name\", tenant_name)), " +
                                     "xmlact)) " +
            "from " + lptSchema + "." + lptName + " AS X " +
            "LEFT JOIN PARTICIPANT_ACTIVITIES AS Y " +
@@ -1392,6 +1397,7 @@ public class db2evmonfmt
         //----------------------------------------------------------------------
         con = DriverManager.getConnection(dbName, userid, passwd);
         con.setAutoCommit(false);
+        SetTenantToSystem(con);
 
         //----------------------------------------------------------------------
         // Get names for pkgcache, pkgcache_stmt_args table
@@ -1499,7 +1505,8 @@ public class db2evmonfmt
                                             "xmlelement(name \"estimated_sort_shrheap_top\", estimated_sort_shrheap_top), " +
                                             "xmlelement(name \"estimated_sort_consumers_top\", estimated_sort_consumers_top), " +
                                             "xmlelement(name \"estimated_runtime\", estimated_runtime), " +
-                                            "xmlelement(name \"agents_top\", agents_top)) " +
+                                            "xmlelement(name \"agents_top\", agents_top), " +
+                                            "xmlelement(name \"tenant_id\", tenant_id)) " +
                                             "as BLOB(20M)) as XMLREPORT " +
                           "from " + pkcSchema + "." + pkcName  + " as A " +
                           "left join PKG_ARG_LIST as B "+
@@ -1614,6 +1621,7 @@ public class db2evmonfmt
         //-------------------------------------------------------
         con = DriverManager.getConnection(dbName, userid, passwd);
         con.setAutoCommit(false);
+        SetTenantToSystem(con);
         
         //-------------------------------------------------------
         // Get names for uow, matrics, package table
@@ -1732,7 +1740,9 @@ public class db2evmonfmt
                                             "xmlelement(name \"executable_list_truncated\", executable_list_truncated),"+
                                             "xmlelement(name \"executable_list_entries\", B.EXEC_ENTRIES)),"+
                                  "xmlelement(name \"intra_parallel_state\", intra_parallel_state),"+
-                                 "xmlelement(name \"member_subset_id\", member_subset_id))" +
+                                 "xmlelement(name \"member_subset_id\", member_subset_id)," +
+                                 "xmlelement(name \"tenant_name\", tenant_name),"+
+                                 "xmlelement(name \"tenant_id\", tenant_id))"+
                                  " as Blob(20M) ) as XMLREPORT"+
                           " from " + uow_schema + "." + uow_name + " as A " +
                           "left join EXEC_LIST as B " +
@@ -1844,6 +1854,7 @@ public class db2evmonfmt
        //----------------------------------------------------------
        con = DriverManager.getConnection(dbName, userid, passwd);
        con.setAutoCommit(false);
+       SetTenantToSystem(con);
 
        //----------------------------------------------------------
        // Let us query the UE table and retrieve the events.
@@ -2210,7 +2221,7 @@ public class db2evmonfmt
    }
 
    /*!
-    *  brief ChangeHistoryReportFormatter
+    *  /brief ChangeHistoryReportFormatter
     *
     *  Function will format the Change History report based on the XML stylesheet
     */
@@ -2702,6 +2713,47 @@ public class db2evmonfmt
       }
    }
 
+   /*!
+    *  /brief SetTenantToSystem 
+    *
+    * Sets the current tenant to SYSTEM 
+    */
+   private static void SetTenantToSystem(Connection con)
+   {
+      Statement stmt = null;
+   
+      try
+      {
+         stmt = con.createStatement();
+         stmt.execute("SET CURRENT TENANT SYSTEM");
+
+         //----------------------------------------------------------
+         // Close the statement and result set
+         //----------------------------------------------------------
+         stmt.close();
+      }
+      catch (SQLException e)
+      {
+         System.out.println(e.getMessage());
+         System.out.println();
+         try
+         {
+           con.rollback();
+         }
+         catch (Exception error )
+         {
+           System.out.println(e.getMessage());
+           System.out.println();
+         }
+         System.exit(1);
+      }
+      catch (Exception e)
+      {
+         System.out.println(e.getMessage());
+         System.out.println();
+         System.exit(1);
+      }
+   }
 }
 
 /*!

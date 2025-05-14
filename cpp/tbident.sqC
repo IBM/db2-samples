@@ -81,7 +81,7 @@ EXEC SQL BEGIN DECLARE SECTION;
   char insert[300];
   char print[50];
   short id; 
-  char address[20];
+  char address[21] = {0};
   char city[11] = {0};
   short floors;
   short capacity;

@@ -571,7 +571,7 @@ void getKrb5ErrorMsg( krb5_error_code kStatus,
 
 #elif defined NAS_SUPPORT
 
-  krb5_svc_get_msg( (const krb5_ui_4) kStatus, &message );
+  krb5_svc_get_msg( (krb5_ui_4) kStatus, &message );
 
 #endif
 
@@ -2123,7 +2123,7 @@ SQL_API_RC SQL_API_FN db2secServerAuthPluginInit(
       *ppErrorMsg = (char *) malloc( *pErrorMsgLen );
       if( ppErrorMsg )
       {
-        snprintf( *ppErrorMsg, *pErrorMsgLen, getenvError );
+        snprintf( *ppErrorMsg, *pErrorMsgLen, "%s", getenvError );
       }
       else  /* At least write an error message into the db2diag.log */
       {

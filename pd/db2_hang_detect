@@ -643,13 +643,16 @@ checkCompletion()
 
    let counter=0
 
-   kill -0 ${ProcNum} 2> /dev/null > /dev/null
+   # Collects the child process pid and its ppid and checks 
+   # if ppid matches the caller's pid with 1 second interval.
+   # If the pid is reused by some unrelated process, we would notice that.
+   ps -p ${ProcNum} -o ppid | grep -q $$
    ret=$?
    while [[ $counter -lt ${waitTime?} && $ret -eq 0 ]]; 
    do
       # logger -i -p debug -t $PROGNAME "$ProcNum still executing: Iteration $counter"
       sleep 1
-      kill -0 ${ProcNum} 2> /dev/null > /dev/null
+      ps -p ${ProcNum} -o ppid | grep -q $$
       ret=$?
       let counter+=1
    done

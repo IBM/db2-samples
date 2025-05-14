@@ -1,0 +1,11 @@
+matplotlib
+seaborn
+scikit-image
+jupyter
+wget
+QGRID
+multiprocess
+ibm_db
+pydatagrid
+python-dotenv
+scikit-learn

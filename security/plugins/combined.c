@@ -590,7 +590,7 @@ SQL_API_RC SQL_API_FN CheckPassword(const char *userid,
     if (password != NULL && passwordLength > 0)
     {
 #if defined USE_CRYPT
-        if (strlen(password) > 8)
+        if (strlen(password) > DB2SEC_MAX_PASSWORD_LENGTH)
         {
             /* Bad password. */
             rc = DB2SEC_PLUGIN_BADPWD;
