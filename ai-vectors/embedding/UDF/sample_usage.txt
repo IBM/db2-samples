@@ -1,0 +1,77 @@
+---------------------------------------------------
+Create table with sample prompts
+---------------------------------------------------
+clear
+export PROMPTTAB=myprompts
+db2 "DROP TABLE IF EXISTS $PROMPTTAB"
+db2 "CREATE TABLE $PROMPTTAB (promptid bigint generated always as identity, prompt varchar(4192))"
+db2 "INSERT INTO $PROMPTTAB(prompt) VALUES('How can Python UDFs be used in Db2 LUW?'), ('This is prompt2.'), ('yet another prompt'), ('still one more prompt'), ('final prompt to use')"
+db2 "INSERT INTO $PROMPTTAB(prompt) SELECT concat(concat(a.prompt,' a '),b.prompt) FROM myprompts as a, myprompts as b"
+db2 "INSERT INTO $PROMPTTAB(prompt) SELECT concat(concat(a.prompt,' b '),b.prompt) FROM myprompts as a, myprompts as b"
+db2 "SELECT promptid, SUBSTR(prompt,1,60) as prompt FROM $PROMPTTAB FETCH FIRST 10 ROWS ONLY"
+db2 "SELECT COUNT(*) as NUMER_OF_ROWS FROM $PROMPTTAB"
+
+
+---------------------------------------------------
+Call Stored Procedure to generate embeddings
+---------------------------------------------------
+
+# Calculate embedding and update single table (with id column) 
+clear
+export TESTTAB=E_TEST
+db2 "DROP TABLE IF EXISTS $TESTTAB"
+db2 "CREATE TABLE $TESTTAB (promptid bigint, prompt varchar(4192), embedding varchar(8000))"
+db2 "INSERT INTO $TESTTAB (promptid, prompt, embedding) SELECT promptid, prompt, NULL from $PROMPTTAB"
+db2 "SELECT promptid, SUBSTR(prompt,1,60) as prompt, SUBSTR(embedding,1,60) as embedding FROM $TESTTAB FETCH FIRST 10 ROWS ONLY"
+
+db2 "CALL EMBEDDING_UPDATE('$TESTTAB', 'promptid', 'prompt', 'embedding', 'granite-embedding-30m-english-Q6_K.gguf')"
+db2 "SELECT promptid, SUBSTR(prompt,1,60) as prompt, SUBSTR(embedding,1,60) as embedding FROM $TESTTAB FETCH FIRST 10 ROWS ONLY"
+
+
+# Calculate embedding and update single table (with no id column) 
+clear
+export TESTTAB1=E_TEST1
+db2 "DROP TABLE IF EXISTS $TESTTAB1"
+db2 "CREATE TABLE $TESTTAB1 (prompt varchar(4192), embedding varchar(8000))"
+db2 "INSERT INTO $TESTTAB1 (prompt, embedding) SELECT prompt, NULL from $PROMPTTAB"
+db2 "SELECT SUBSTR(prompt,1,60) as prompt, SUBSTR(embedding,1,60) as embedding FROM $TESTTAB1 FETCH FIRST 10 ROWS ONLY"
+
+db2 "CALL EMBEDDING_UPDATE('$TESTTAB1', 'prompt', 'embedding', 'granite-embedding-30m-english-Q6_K.gguf')"
+db2 "SELECT SUBSTR(prompt,1,60) as prompt, SUBSTR(embedding,1,60) as embedding FROM $TESTTAB1 FETCH FIRST 10 ROWS ONLY"
+
+
+# Take prompt and id from source table, calculate embedding and update row with respective id in target table 
+clear
+export TESTTAB2=E_TEST2
+db2 "DROP TABLE IF EXISTS $TESTTAB2"
+db2 "CREATE TABLE $TESTTAB2 (p_id bigint, embedding varchar(8000))"
+db2 "INSERT INTO $TESTTAB2 (p_id, embedding) SELECT promptid, NULL from $PROMPTTAB"
+db2 "SELECT promptid, SUBSTR(prompt,1,60) as prompt FROM $PROMPTTAB FETCH FIRST 10 ROWS ONLY"
+db2 "SELECT p_id, SUBSTR(embedding,1,60) as embedding FROM $TESTTAB2 FETCH FIRST 10 ROWS ONLY"
+
+db2 "CALL EMBEDDING_UPDATE('$PROMPTTAB', 'promptid', 'prompt', '$TESTTAB2', 'p_id', 'embedding', 'granite-embedding-30m-english-Q6_K.gguf')"
+db2 "SELECT p_id, SUBSTR(embedding,1,60) as embedding FROM $TESTTAB2 FETCH FIRST 10 ROWS ONLY"
+
+
+# Take prompt and id from source table, calculate embedding and insert id and embedding in target table 
+clear
+export TESTTAB3=E_TEST3
+db2 "DROP TABLE IF EXISTS $TESTTAB3"
+db2 "CREATE TABLE $TESTTAB3 (p_id bigint, embedding varchar(8000))"
+db2 "SELECT p_id, SUBSTR(embedding,1,60) as embedding FROM $TESTTAB3"
+
+db2 "CALL EMBEDDING_INSERT('$PROMPTTAB', 'promptid', 'prompt', '$TESTTAB3', 'p_id', 'embedding', 'granite-embedding-30m-english-Q6_K.gguf')"
+db2 "SELECT p_id, SUBSTR(embedding,1,60) as embedding FROM $TESTTAB3 FETCH FIRST 10 ROWS ONLY"
+
+
+---------------------------------------------------
+Use UDFs to generate embeddings
+---------------------------------------------------
+
+UDSF:
+db2 "SELECT EMBEDDING('granite-embedding-30m-english-Q6_K.gguf','This is my prompt') FROM SYSIBM.SYSDUMMY1"
+db2 "SELECT SUBSTR(EMBEDDING('granite-embedding-30m-english-Q6_K.gguf',prompt),1,60) as embedding FROM myprompts FETCH FIRST 10 ROWS ONLY"
+
+UDTF (batched)
+db2 "select id, SUBSTR(embedding,1,60) as embedding from myprompts, table(EMBEDDING_BATCH_INTID((SELECT COUNT(*) FROM myprompts),'granite-embedding-30m-english-Q6_K.gguf', prompt, promptid))"
+
