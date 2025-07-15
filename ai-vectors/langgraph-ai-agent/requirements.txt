@@ -1,0 +1,17 @@
+langgraph 
+langchain-community 
+langchain-text-splitters
+ipykernel
+jupyter
+tiktoken
+langchain_ibm
+python-dotenv
+langchain-ollama>=0.1.0
+trafilatura
+spacy
+llama-cpp-python
+huggingface-hub
+pygraphviz
+langchain-db2
+langchain-core
+ibm_db
