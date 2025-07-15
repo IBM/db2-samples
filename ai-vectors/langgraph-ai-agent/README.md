@@ -76,6 +76,12 @@ Add the following:
 ```
 WATSONX_PROJECT=
 WATSONX_APIKEY=
+DB_HOST=
+DB_NAME=
+DB_PORT=
+DB_PROTOCOL=
+DB_USER=
+DB_PASSWORD=
 ```
 
 Replace values with your Watsonx credentials.
