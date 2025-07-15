@@ -1,4 +1,4 @@
-# 🔍 Local Agentic RAG Pipeline (macOS) – README
+# 🔍 Building an Agentic RAG Pipeline using IBM Db2 and Db2 LangChain Connector - macOS setup
 
 ## 🎯 Use Case
 
