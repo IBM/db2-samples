@@ -4,7 +4,7 @@ This README provides step-by-step instructions for exploring the new Vector Inde
 
 Vector Indexes enable efficient similarity search over high-dimensional vector data, supporting use cases such as AI-powered retrieval, recommendation systems, and semantic search.
 
-⚠️ Vector Index functionality is only available in the Db2 Early Access Program (EAP 97+). It is not included in general availability (GA) releases.
+⚠️ Vector Index functionality is only available in the Db2 Early Access Program (EAP 97). It is not included in general availability (GA) releases.
 
 ## Before You Begin
 
@@ -35,7 +35,7 @@ Before running the example, ensure the following prerequisites are met:
 * Operating System: RHEL 9.4
 * Python: Version 3+ with pip
 * Tools: curl (for downloading the dataset)
-* Db2: Access to the Early Access Program (EAP) for version 12.1.5.0
+* Db2: Access to the Early Access Program (EAP 97)
 
 Next, download all the files contained in this directory to your local machine.
 
