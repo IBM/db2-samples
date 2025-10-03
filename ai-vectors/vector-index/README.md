@@ -1,14 +1,14 @@
 # Vector Indexes in Db2 (Early Access Program)
 
-This README provides step-by-step instructions for exploring the new Vector Indexes feature introduced in IBM Db2 as part of the Early Access Program (EAP) for version 12.1.5.0.
+This README provides step-by-step instructions for exploring the new Vector Indexes feature introduced in IBM Db2 as part of the Early Access Program (EAP).
 
 Vector Indexes enable efficient similarity search over high-dimensional vector data, supporting use cases such as AI-powered retrieval, recommendation systems, and semantic search.
 
-⚠️ Vector Index functionality is only available in the Db2 Early Access Program (EAP) for version 12.1.5.0. It is not included in general availability (GA) releases.
+⚠️ Vector Index functionality is only available in the Db2 Early Access Program (EAP 97+). It is not included in general availability (GA) releases.
 
 ## Before You Begin
 
-To understand the capabilities, limitations, and prerequisites of the Vector Index feature in Db2, please read the official [Early Access Program documentation](https://github.ibm.com/DB2/db2-docs/tree/master/v121m3fp0/VectorIndexing/EAP_Release_Notes.asciidoc).
+To understand the capabilities, limitations, and prerequisites of the Vector Index feature in Db2, please read the official Early Access Program documentation.
 
 ## Workflow Overview
 
