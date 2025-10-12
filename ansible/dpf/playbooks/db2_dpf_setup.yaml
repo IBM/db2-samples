@@ -1,0 +1,137 @@
+---
+- hosts: db2_hosts
+  any_errors_fatal: true
+  gather_facts: true
+  vars_files:
+    - vars.yaml
+
+  tasks:
+
+  - name: Run play to install Db2
+    include_tasks: db2_install.yaml
+
+  - name: Run play to setup shared home on NFS server
+    when: inventory_hostname == groups['db2_hosts'][0]
+    include_tasks: nfs_server_shared_home.yaml
+
+  - name: Run play to setup shared home on NFS clients
+    include_tasks: nfs_client_shared_home.yaml
+
+  - name: Copy private ssh key for root to hosts
+    copy:
+      src: root_id_rsa
+      dest: /root/.ssh/id_rsa
+      mode: '0400'
+
+  - name: Copy public ssh key for root to hosts
+    copy:
+      src: root_id_rsa.pub
+      dest: /root/.ssh/id_rsa.pub
+      mode: '0400'
+
+  - name: Update authorized_keys for root
+    authorized_key:
+      user: root
+      key: "{{ lookup('file', 'root_id_rsa.pub') }}"
+
+  - name: Update ssh_known_hosts
+    blockinfile:
+      path: /etc/ssh/ssh_known_hosts
+      create: true
+      insertafter: EOF
+      block: |
+        {% for host in groups['db2_hosts'] %}
+        {{ hostvars[host]['ansible_default_ipv4']['address'] }} {{ 'ssh-rsa' }} {{hostvars[host]['ansible_ssh_host_key_rsa_public'] }}
+        {{ hostvars[host]['ansible_hostname'] }} {{ 'ssh-rsa' }} {{hostvars[host]['ansible_ssh_host_key_rsa_public'] }}
+        {% endfor %}
+
+  - name: Create Db2 Instance
+    when: inventory_hostname == groups['db2_hosts'][0]
+    command:
+      cmd: /opt/ibm/db2/instance/db2icrt -u db2fenc1 db2inst1
+      creates: /home/db2inst1/sqllib
+
+  - name: Create .ssh dir for db2inst1
+    when: inventory_hostname == groups['db2_hosts'][0]
+    file:
+      path: /home/db2inst1/.ssh
+      state: directory
+      mode: '0700'
+      owner: db2inst1
+      group: db2inst1
+
+  - name: Copy private ssh key for db2inst1 to hosts
+    when: inventory_hostname == groups['db2_hosts'][0]
+    copy:
+      src: db2inst1_id_rsa
+      dest: /home/db2inst1/.ssh/id_rsa
+      mode: '0400'
+      owner: db2inst1
+      group: db2inst1
+
+  - name: Copy public ssh key for db2inst1 to hosts
+    when: inventory_hostname == groups['db2_hosts'][0]
+    copy:
+      src: db2inst1_id_rsa.pub
+      dest: /home/db2inst1/.ssh/id_rsa.pub
+      mode: '0400'
+      owner: db2inst1
+      group: db2inst1
+
+  - name: Update authorized_keys for db2inst1
+    when: inventory_hostname == groups['db2_hosts'][0]
+    become_user: db2inst1
+    authorized_key:
+      user: db2inst1
+      key: "{{ lookup('file', 'db2inst1_id_rsa.pub') }}"
+
+  - name: Set SELinux boolean to allow passwordless ssh when home is on NFS
+    seboolean:
+      name: use_nfs_home_dirs
+      state: true
+      persistent: true
+
+  - name: Create db2nodes.cfg
+    when: inventory_hostname == groups['db2_hosts'][0]
+    copy:
+      dest: /home/db2inst1/sqllib/db2nodes.cfg
+      content: |
+        {% for item in groups['db2_hosts'] | product(range(mlns_per_host)) %}
+        {{ loop.index - 1 }} {{ hostvars[item[0]]['ansible_hostname'] }} {{ item[1] }}
+        {% endfor %}
+      owner: db2inst1
+      group: db2inst1
+
+  - name: Remove entries from /etc/services
+    lineinfile:
+      path: /etc/services
+      search_string: 'db2inst1'
+      state: absent
+
+  # TODO Should use loop over mlns_per_host below
+  - name: Add entries to /etc/services
+    blockinfile:
+      path: /etc/services
+      insertafter: EOF
+      block: |
+        DB2_db2inst1      20016/tcp
+        DB2_db2inst1_1    20017/tcp
+        DB2_db2inst1_2    20018/tcp
+        DB2_db2inst1_3    20019/tcp
+        DB2_db2inst1_4    20020/tcp
+        DB2_db2inst1_5    20021/tcp
+        DB2_db2inst1_6    20022/tcp
+        DB2_db2inst1_7    20023/tcp
+        DB2_db2inst1_8    20024/tcp
+        DB2_db2inst1_END  20025/tcp
+        db2c_db2inst1     25010/tcp
+
+  # Need to open all non-privileged ports as per https://www.ibm.com/docs/en/db2/12.1.0?topic=support-packet-filter-firewalls
+  # Here we just add all our hosts to the trusted zone
+  - name: Add firewall rule for Db2
+    firewalld:
+      source: "{{ vm_ip_prefix }}.0/24"
+      zone: trusted
+      state: enabled
+      permanent: yes
+      immediate: yes
