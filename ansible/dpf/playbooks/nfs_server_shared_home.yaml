@@ -1,0 +1,68 @@
+- name: Install NFS package
+  dnf:
+    name: nfs-utils
+    state: latest
+
+- name: Stop NFS server
+  systemd:
+    name: nfs-server
+    state: stopped
+
+- name: Create filesystem on shared home
+  filesystem:
+    dev: "{{ shared_home_dev }}"
+    fstype: xfs
+    opts: "-L SHARED_HOME"
+
+- name: Mount shared home export
+  mount:
+    path: "{{ shared_home_export }}"
+    src: "{{ shared_home_dev }}"
+    fstype: xfs
+    opts: defaults,nofail
+    state: mounted
+
+# XXX db2inst1 should be created by this point
+- name: Set permissions on shared home export
+  file:
+    path: "{{ shared_home_export }}"
+    owner: db2inst1
+    group: db2inst1
+
+- name: Initialize db2inst1 home directory
+  copy:
+    src: /etc/skel/
+    dest: /home/db2inst1
+    force: false
+    owner: db2inst1
+    group: db2inst1
+
+- name: Generate ssh key for db2inst1
+  user:
+    name: db2inst1
+    uid: 5000
+    create_home: false
+    generate_ssh_key: true
+
+- name: Setup /etc/exports
+  blockinfile:
+    path: /etc/exports
+    create: true
+    insertafter: EOF
+    block: |
+      {% for host in groups['db2_hosts'] %}
+      {{ shared_home_export }} {{ host }}{{ '(rw,no_root_squash)' }}
+      {% endfor %}
+
+- name: Add firewall rule for NFS server
+  firewalld:
+    state: enabled
+    service: nfs
+    permanent: yes
+    immediate: yes
+
+- name: Setup NFS server
+  systemd:
+    name: nfs-server
+    state: restarted
+    enabled: false
