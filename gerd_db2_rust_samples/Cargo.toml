@@ -1,3 +1,8 @@
+# Copyright Dr. Gerd Anders. All Rights Reserved.
+#
+# SPDX-License-Identifier: Apache-2.0
+#
+
 [package]
 name = "rust_odbc_test"
 version = "0.1.0"

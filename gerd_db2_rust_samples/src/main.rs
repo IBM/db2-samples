@@ -1,3 +1,9 @@
+/*
+Copyright Dr. Gerd Anders. All Rights Reserved.
+
+SPDX-License-Identifier: Apache-2.0
+*/
+
 // https://docs.rs/odbc-api/latest/odbc_api/struct.Connection.html
 
 // For option 2:

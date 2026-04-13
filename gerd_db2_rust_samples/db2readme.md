@@ -1,3 +1,6 @@
+[//]: # (Copyright Dr. Gerd Anders. All Rights Reserved.)
+[//]: # (SPDX-License-Identifier: Apache-2.0)
+
 # Installation of the Db2 Community Edition (v12.1.4)
 
 Ubuntu Server v22.04.4 LTS is used. The Db2 server hostname is db2samples.
