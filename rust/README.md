@@ -131,6 +131,7 @@ For the Db2 server installation, Linux Kernel parameters are supposed to be set,
 
 ## Creating the SAMPLE database (and optionally activate it)
 
+```bash
 db2luw1@db2samples:~$ db2start
 MM/DD/YYYY hh:mm:ss     0   0   SQL1063N  DB2START processing was successful.
 SQL1063N  DB2START processing was successful.
@@ -163,7 +164,7 @@ Database 1 entry:
  Catalog database partition number    = 0
  Alternate server hostname            =
  Alternate server port number         =
-
+```
 
 ## Installing Db2 ODBC CLI driver
 
@@ -239,6 +240,11 @@ pwd=<your_password>
 autocommit=1
 TableType="'TABLE','VIEW','SYSTEM TABLE'"
 ```
+
+Remark: Set proper file permissions for
+- ~/db2\_odbc\_cli/clidriver/cfg/db2dsdriver.cfg
+- ~/db2\_odbc\_cli/clidriver/cfg/db2cli.ini
+explicitly.
 
 ### When Linux user is not a Db2 instance owner (like in this case)
 
@@ -350,9 +356,10 @@ scientist@db2samples:~$ find ~/db2_odbc_cli/clidriver -name "libdb2o.so" -type l
 scientist@db2samples:~$
 ```
 
-Create the following file with the following content:
+Create or modify the ini file below with the following content:
 
 ```bash
+scientist@db2samples:~$ cat ~/.odbc.ini
 [ODBC Data sources]
 dsn_db2samples = db2driver
 
