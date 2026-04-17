@@ -8,20 +8,20 @@ Ubuntu Server v22.04.4 LTS is used. The Db2 server hostname is db2samples.
 ## Installing required Linux packages for Db2 Community Edition (CE)
 
 ```bash
-root@db2samples:~# apt install apt install ksh binutils -y
+root@db2samples:~# apt update && apt install ksh binutils -y
 ```
 
 ## Create directory for extracting Db2 installation image
 
 ```bash
-root@db2samples:~# mkdir -p db2ce
-root@db2samples:~# cd db2ce/
+root@db2samples:~# mkdir -p ~/db2ce
+root@db2samples:~# cd ~/db2ce/
 root@db2samples:~/db2ce#
 ```
 
 ## Extract Db2 installation image
 
-It is assumed that the Db2 CE installation package is located in db2ce sub directory.
+It is assumed that the Db2 CE installation package is located in the db2ce subdirectory.
 
 ```bash
 root@db2samples:~/db2ce# ls -1
@@ -45,7 +45,7 @@ Summary of prerequisites that are not met on the current system:
 DBT3514W  The db2prereqcheck utility failed to find the following 32-bit library file only required to support 32-bit non-sql routines: "libstdc++.so.6" provided by the "libstdc++.i686" package.
 ```
 
-The warnings are referring to 32 bit libraries. This can be ignored. Otherwise, to get rid of them:
+The warnings refer to 32-bit libraries. These can be ignored. Otherwise, to get rid of them:
 
 ```bash
 root@db2samples:~/db2ce/server_dec# dpkg --add-architecture i386
@@ -92,7 +92,7 @@ root@db2samples:/opt/ibm/db2/v12.1.4/bin#
 
 ## Creating Db2 groups and users
 
-Feel free to use different group IDs (here 5001 and 5002 are used), group names and / or user names:
+Feel free to use different group IDs (here 5001 and 5002 are used), group names, and/or user names:
 
 ```bash
 root@db2samples:/opt/ibm/db2/v12.1.4/bin# groupadd -g 5001 db2luwgr
@@ -101,7 +101,7 @@ root@db2samples:/opt/ibm/db2/v12.1.4/bin# useradd -c "Db2 LUW instance user" -u 
 root@db2samples:/opt/ibm/db2/v12.1.4/bin# useradd -c "Db2 LUW fenced user" -u 5002 -g db2fengr -s /bin/bash -m db2fluw1
 ```
 
-A password for db2luw1 is required later, this setting is skipped here.
+A password for db2luw1 is required later; this setting is skipped here.
 
 ## Create Db2 instance
 
@@ -118,18 +118,18 @@ DBI1070I  Program db2icrt completed successfully.
 root@db2samples:/opt/ibm/db2/v12.1.4/instance#
 ```
 
-## Cleanup Db2 CE installation
+## Clean up Db2 CE installation
 
 ```bash
 root@db2samples:/opt/ibm/db2/v12.1.4/instance# cd
-root@db2samples:~# rm -fR db2ce/
+root@db2samples:~# rm -rf ~/db2ce/
 ```
 
 ## Linux Kernel parameter settings
 
-For the Db2 server installation, Linux Kernel parameters are supposed to be set, see [Kernel parameter requirements (Linux](https://www.ibm.com/docs/en/db2/12.1.x?topic=unix-kernel-parameter-requirements-linux). For the sake of simplicity they are skipped here. Db2 server should nevertheless work.
+For the Db2 server installation, Linux kernel parameters should be set; see [Kernel parameter requirements (Linux](https://www.ibm.com/docs/en/db2/12.1.x?topic=unix-kernel-parameter-requirements-linux). For the sake of simplicity, they are skipped here. The Db2 server should nevertheless work.
 
-## Creating the SAMPLE database (and optionally activate it)
+## Creating the SAMPLE database (and optionally activating it)
 
 ```bash
 db2luw1@db2samples:~$ db2start
@@ -176,9 +176,9 @@ root@db2samples:~# apt install unixodbc unixodbc-dev gcc -y
 root@db2samples:~#
 ```
 
-Note: Any "normal" Linux user, here scientist, is taken for the following tasks.
+Note: Any "regular" Linux user (in this case, scientist) is used for the following tasks.
 
-The Db2 ODBC CLI driver v12.1.4 can be downloaded from [here](https://www.ibm.com/support/fixcentral/swg/selectFixes?parent=ibm%2FInformation%20Management&product=ibm/Information+Management/IBM+Data+Server+Client+Packages&release=12.1.4.0&platform=Linux+64-bit,x86_64&function=fixId&fixids=*odbc_cli-*FP000&includeSupersedes=0&source=fc). Use the one with linuxx64 in the file name.
+The Db2 ODBC CLI driver v12.1.4 can be downloaded from [here](https://www.ibm.com/support/fixcentral/swg/selectFixes?parent=ibm%2FInformation%20Management&product=ibm/Information+Management/IBM+Data+Server+Client+Packages&release=12.1.4.0&platform=Linux+64-bit,x86_64&function=fixId&fixids=*odbc_cli-*FP000&includeSupersedes=0&source=fc). Use the one with linuxx64 in the filename.
 
 
 ```bash
@@ -187,7 +187,7 @@ v12.1.4_linuxx64_odbc_cli.tar.gz
 scientist@db2samples:~/db2odbccli$ tar -xzf v12.1.4_linuxx64_odbc_cli.tar.gz
 scientist@db2samples:~/db2odbccli$ mv odbc_cli/ ~/db2_odbc_cli
 scientist@db2samples:~/db2odbccli$ cd ..
-scientist@db2samples:~$ rm -fR db2odbccli/
+scientist@db2samples:~$ rm -rf ~/db2odbccli/
 scientist@db2samples:~$
 ```
 
