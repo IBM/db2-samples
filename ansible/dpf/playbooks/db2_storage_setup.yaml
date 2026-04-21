@@ -1,0 +1,60 @@
+---
+- hosts: db2_hosts
+  any_errors_fatal: true
+  gather_facts: true
+  vars_files:
+    - vars.yaml
+
+  tasks:
+
+    - name: Create filesystem on data device
+      filesystem:
+        dev: "{{ '/dev/' }}{{ item.key }}"
+        fstype: xfs
+        opts: "{{ '-L DATA%04d' % item.value.model.split('_')[1] | int }}"
+      loop: "{{ ansible_devices|dict2items }}"
+      loop_control:
+        label: "{{ item.value.model }}"
+      when: "inventory_hostname == groups['db2_hosts'][0] and item.value.model != None and item.value.model.startswith('DB2DATA_')"
+
+    # This is not sufficient to pickup new labels, so we run udevadm below
+    - name: Rescan iSCSI devices to pickup LABELs
+      open_iscsi:
+        rescan: true
+
+    - name: Run command to read the new fs labels
+      command: udevadm trigger
+
+    - name: Update facts for devices so LABEL data is avaialble after filesystem create
+      setup:
+        gather_subset: devices
+
+    - name: Add data device filesystems to fstab
+      mount:
+        path: "{{ db2data_path }}/db2inst1/{{ item.value.links.labels[0] | replace('DATA', 'NODE') }}"
+        src: "{{ 'LABEL=' }}{{ item.value.links.labels[0] }}"
+        fstype: xfs
+        opts: defaults,noauto
+        state: present
+      loop: "{{ ansible_devices|dict2items }}"
+      loop_control:
+        label: "{{ item.value.model }}"
+      when: "item.value.model != None and item.value.model.startswith('DB2DATA_')"
+
+    - name: Mount needed data device filesystems for each host
+      mount:
+        path: "{{ db2data_path }}/db2inst1/{{ 'NODE%04d' % i }}"
+        src: "{{ 'LABEL=' }}{{ 'DATA%04d' % i }}"
+        state: mounted
+        fstype: xfs
+      loop: "{{ groups['db2_hosts'] | product(range(mlns_per_host)) }}"
+      loop_control:
+        index_var: i
+      when: "item[0] == inventory_hostname"
+
+    - name: Set permissions on db2data path
+      file:
+        path: "{{ db2data_path }}"
+        owner: db2inst1
+        group: db2inst1
+        recurse: true

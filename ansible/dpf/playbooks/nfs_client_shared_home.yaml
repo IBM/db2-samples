@@ -1,0 +1,12 @@
+- name: Install NFS package
+  dnf:
+    name: nfs-utils
+    state: latest
+
+- name: Mount shared home
+  mount:
+    path: /home/db2inst1
+    src: "{{ groups['db2_hosts'][0] }}{{':'}}{{ shared_home_export }}"
+    fstype: nfs
+    opts: rw,sync,hard,nofail
+    state: mounted

@@ -1,0 +1,31 @@
+---
+- hosts: all
+  gather_facts: true
+  vars_files:
+    - vars.yaml
+
+  tasks:
+
+  - name: Set RHEL release
+    rhsm_release:
+      release: "{{ rhel_release }}"
+
+  - name: Update all packages
+    dnf:
+      name: '*'
+      disablerepo: rhel-9-for-x86_64-highavailability-rpms
+      state: latest
+    register: dnf_update
+
+  - name: Reboot to pickup latest kernel
+    reboot:
+    when: dnf_update.changed
+
+  - name: Update /etc/hosts
+    blockinfile:
+      path: /etc/hosts
+      insertafter: EOF
+      block: |
+        {% for host in groups['all'] %}
+        {{ hostvars[host]['ansible_default_ipv4']['address'] }} {{ hostvars[host]['ansible_hostname'] }}
+        {% endfor %}
