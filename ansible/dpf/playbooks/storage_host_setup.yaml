@@ -1,0 +1,92 @@
+---
+- hosts: storage_host
+  gather_facts: true
+  vars_files:
+    - vars.yaml
+
+  tasks:
+
+  - name: Install packages
+    dnf:
+      name: targetcli
+      state: latest
+
+  # Stop it (if already running) to avoid device in use errors
+  - name: Stop target service
+    systemd:
+      name: target
+      state: stopped
+
+  - name: Create shared home vg
+    lvg:
+      vg: shared_home_vg
+      pvs: /dev/vdb
+
+  - name: Create shared home lv
+    lvol:
+        vg: shared_home_vg
+        lv: shared_home_lv
+        size: 100%FREE
+        shrink: false
+
+  - name: Create data volume group
+    lvg:
+      vg: storagevg
+      pvs: /dev/vdc
+
+  - name: Create data logical volumes
+    lvol:
+      vg: storagevg
+      lv: "{{ 'datalv_' }}{{ item }}"
+      size: 5g
+    loop: "{{ range(groups['db2_hosts'] | product(range(mlns_per_host)) | length)}}"
+
+  - name: Start target service
+    systemd:
+      name: target
+      state: started
+      enabled: true
+
+  - name: Open target port on firewall
+    firewalld:
+      state: enabled
+      service: iscsi-target
+      permanent: yes
+      immediate: yes
+
+  - name: Create iSCSI target
+    vars:
+      - iqn: iqn.2025-04.vm.storage:target
+      - shared_home_lun_name: shared_home_lun
+
+    shell: |
+      targetcli <<EOF
+      cd /
+      clearconfig confirm=True
+      cd /iscsi
+      create wwn={{ iqn }}
+      cd /backstores/block
+      create dev=/dev/shared_home_vg/shared_home_lv name={{ shared_home_lun_name }}
+      cd /iscsi/{{ iqn }}/tpg1/luns
+      create /backstores/block/{{ shared_home_lun_name }}
+      {% for i in range(groups['db2_hosts'] | product(range(mlns_per_host)) | length) %}
+      cd /backstores/block
+      create dev=/dev/storagevg/datalv_{{ i }} name={{ 'DB2DATA_' }}{{ i }}
+      cd /iscsi/{{ iqn }}/tpg1/luns
+      create /backstores/block/{{ 'DB2DATA_' }}{{ i }}
+      {% endfor %}
+      cd ../portals
+      delete 0.0.0.0 3260
+      create ip_address={{ hostvars[inventory_hostname]['ansible_default_ipv4']['address'] }} ip_port=3260
+      cd ..
+      set attribute authentication=0
+      set attribute generate_node_acls=1
+      set attribute cache_dynamic_acls=1
+      set attribute demo_mode_write_protect=0
+      EOF
+    register: targetcli_result
+
+  - name: Check create iSCSI target
+    assert:
+      that: targetcli_result.stderr_lines == []
+      fail_msg: "{{ targetcli_result.stderr_lines }}"
