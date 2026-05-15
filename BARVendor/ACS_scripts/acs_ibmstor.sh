@@ -7,7 +7,7 @@
 # Purpose: implement the scripted interface for DB2 ACS using IBM System Storage DS4800 and Storage Manager.
 # This script is called by DB2 to make snapshot backups of paths provided by DB2.
 # 
-# Please see developerwork article for details: https://www.ibm.com/developerworks/data/library/techarticle/dm-1506scriptdb2copy4/dm-1506scriptdb2copy4-pdf.pdf
+# Please see https://github.com/IBM/db2-samples/tree/master/BARVendor/ACS_scripts/acs_ibmstor.pdf for details.
 #
 # The following sample of source code ("Sample") is owned by International
 # Business Machines Corporation or one of its subsidiaries ("IBM") and is
