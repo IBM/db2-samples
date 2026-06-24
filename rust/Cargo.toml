@@ -5,9 +5,9 @@
 
 [package]
 name = "rust_odbc_test"
-version = "0.1.0"
+version = "0.2.0"
 edition = "2024"
 
 [dependencies]
-anyhow = "1.0.102"
-odbc-api = "24.0.0"
+anyhow = "1.0"
+odbc-api = "28.1"
