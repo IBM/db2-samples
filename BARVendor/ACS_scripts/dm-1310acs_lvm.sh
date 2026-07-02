@@ -6,7 +6,7 @@
 # 
 # Purpose: implement the scripted interface for DB2 ACS using Linux LVM.
 # 
-# Please see developerwork article for details: https://www.ibm.com/developerworks/data/library/techarticle/dm-1310scriptdb2copy2/dm-1310scriptdb2copy2-pdf.pdf
+# Please see https://github.com/IBM/db2-samples/tree/master/BARVendor/ACS_scripts/acs_lvm.pdf for details.
 #
 # The following sample of source code ("Sample") is owned by International
 # Business Machines Corporation or one of its subsidiaries ("IBM") and is
