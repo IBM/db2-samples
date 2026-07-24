@@ -4,6 +4,23 @@ DB2's Integrated Analytics System allows for an impressive amount of user define
 We can store, manage, update and score models trained in scikit-learn and other python frameworks in DB2. We can also 
 run models trained in Lua, C, R, or C++. This document will demonstrate a python based example. 
 
+# Before you begin
+
+Note that this tutorial involves dynamically deploying Python code to a Db2 server using pickling and other techniques which serialize python code. As such you must make sure that the version of python you use to develop the code outside of Db2 is the same as the version of python that is installed on the Db2 server. Otherwise you may experience errors. 
+
+Example: 
+
+1. You train a model using python 3.9 on my local machine.
+2. You install Python 3.7 on the Db2 server
+3. You follow the rest of this tutorial to deploy the model
+4. You experience a runtime error because the python version you used to train the model is different than the python version running on the Db2 server.
+
+You can verify the version of python you are running using the following command:
+
+`python --version`
+
+Note that there are signficant differences between minor versions of Python 3, which means that code written in Python 3.6 is often not compatible with the Python 3.7 or 3.5 runtimes as an example. 
+
 # DB2 Configuration
 
 We will need to store a python class for scoring a generic model in our DB2 server, and make some minor configuration changes. 
