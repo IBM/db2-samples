@@ -1,0 +1,12 @@
+[package]
+name = "db2libadmin"
+version = "0.1.0"
+edition = "2024"
+authors.workspace = true
+description.workspace = true
+
+[dependencies]
+anyhow = {workspace = true}
+odbc-api = {workspace = true}
+env_logger = {workspace = true}
+log = {workspace = true}

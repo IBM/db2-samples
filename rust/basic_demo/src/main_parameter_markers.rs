@@ -6,10 +6,12 @@ SPDX-License-Identifier: Apache-2.0
 
 // https://docs.rs/odbc-api/latest/odbc_api/struct.Connection.html
 
+// Readme: Rename this file to main.rs - save already exisitng main.rs before if desired - and compile it
+
 // For option 2:
 use anyhow::{Context, Result};
 
-use odbc_api::{Cursor, Environment, ConnectionOptions};
+use odbc_api::{Cursor, Environment, ConnectionOptions, IntoParameter};
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     let env = Environment::new()?;
@@ -20,7 +22,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     // const DB2_DSN: &str = "dsn_db2samples";
     // const DB2_USER: &str = "db2luw1";
     // const DB2_PWD: &str = "db2lUw1";
-    
+
     // let conn = env.connect(&DB2_DSN, &DB2_USER, &DB2_PWD, ConnectionOptions::default())?;
 
     // Option 2: Values taken from environmnt variables
@@ -28,14 +30,14 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     // export DB2_DSN="dsn_db2samples";
     // export DB2_USER="db2luw1";
     // export DB2_PWD="db2lUw1";
-    //
+
     let db2_dsn = std::env::var("DB2_DSN").context("DB2_DSN environment variable not set")?;
     let db2_user = std::env::var("DB2_USER").context("DB2_USER environment variable not set")?;
     let db2_pwd = std::env::var("DB2_PWD").context("DB2_PWD environment variable not set")?;
 
     let conn = env.connect(&db2_dsn, &db2_user, &db2_pwd, ConnectionOptions::default())?;
 
-    // The queries below do not use any parameters
+    // The SELECT queries below do not use any parameters
     let query_params = ();
     let timeout_sec: Option<usize> = None;
     let mut row_cnt: u32 = 0;
@@ -86,9 +88,25 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     println!("\n\nINSERT sample");
 
     let insert_stmt = "INSERT INTO employee (empno, firstnme, midinit, lastname, workdept, phoneno, hiredate, job, edlevel, sex, birthdate, salary, bonus, comm) \
-                        VALUES ('000000', 'THOMAS', 'J', 'WATSON', 'A00', '1234', '05/01/1914', 'FOUNDER', 20, 'M', '02/17/1874', 250000, 2500, 8750)";
+                        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)";
 
-    match conn.execute(insert_stmt, query_params, timeout_sec) {
+    let ip0 = "000000".into_parameter();
+    let ip1 = "THOMAS".into_parameter();
+    let ip2 = "J".into_parameter();
+    let ip3 = "WATSON".into_parameter();
+    let ip4 = "A00".into_parameter();
+    let ip5 = "1234".into_parameter();
+    let ip6 = "05/01/1914".into_parameter();
+    let ip7 = "FOUNDER".into_parameter();
+    let ip8: i16 = 20;
+    let ip9 = "M".into_parameter();
+    let ip10 = "02/17/1874".into_parameter();
+    let ip11: f64 = 250000.0;
+    let ip12: f64 = 2500.0;
+    let ip13: f64 = 8750.0;
+    let insert_params = (&ip0, &ip1, &ip2, &ip3, &ip4, &ip5, &ip6, &ip7, &ip8, &ip9, &ip10, &ip11, &ip12, &ip13);
+
+    match conn.execute(insert_stmt, insert_params, timeout_sec) {
         Err(e) => println!("INSERT stmt: {}", e),
         Ok(None) => println!("INSERT stmt: Ok(None))"),
         Ok(Some(_)) => println!("INSERT stmt: Ok(some(_))"),
@@ -96,15 +114,17 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     // INSERT validation
 
-    let select_stmt = "SELECT empno, firstnme, COALESCE(midinit, '-') AS midinit, lastname, edlevel FROM employee WHERE empno = '000000'";
-        
+    let select_stmt = "SELECT empno, firstnme, COALESCE(midinit, '-') AS midinit, lastname, edlevel FROM employee WHERE empno = ?";
+    let sp0 = "000000".into_parameter();
+    let select_params = (&sp0,);
+
     println!("After INSERT:\n");
     println!("| {:>8} | {:<12} | {:<8} | {:<15} | {:<7} |", "empno", "firstnme", "midinit", "lastname", "edlevel");
     println!("|----------|--------------|----------|-----------------|---------|");
 
     row_cnt = 0;
 
-    let mut cursor = conn.execute(select_stmt, query_params, timeout_sec)?.expect("Assume select statement creates cursor");
+    let mut cursor = conn.execute(select_stmt, select_params, timeout_sec)?.expect("Assume select statement creates cursor");
     while let Some(mut row) = cursor.next_row()? {
         let mut buf = Vec::<u8>::new();
         row.get_text(1, &mut buf)?;
@@ -136,9 +156,13 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     println!("\n\nUPDATE sample");
 
-    let update_stmt = "UPDATE employee SET empno = '000001' WHERE empno = '000000'";
+    let update_stmt = "UPDATE employee SET empno = ? WHERE empno = ?";
 
-    match conn.execute(update_stmt, query_params, timeout_sec) {
+    let up0 = "000001".into_parameter();
+    let up1 = "000000".into_parameter();
+    let update_params = (&up0, &up1);
+
+    match conn.execute(update_stmt, update_params, timeout_sec) {
         Err(e) => println!("UPDATE stmt: {}", e),
         Ok(None) => println!("UPDATE stmt: Ok(None))"),
         Ok(Some(_)) => println!("UPDATE stmt: Ok(some(_))"),
@@ -186,9 +210,12 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     println!("\n\nDELETE sample");
 
-    let delete_stmt = "DELETE FROM employee WHERE empno <= '000001'";
+    let delete_stmt = "DELETE FROM employee WHERE empno <= ?";
 
-    match conn.execute(delete_stmt, query_params, timeout_sec) {
+    let dp0 = "000001".into_parameter();
+    let delete_params = (&dp0,);
+
+    match conn.execute(delete_stmt, delete_params, timeout_sec) {
         Err(e) => println!("DELETE stmt: {}", e),
         Ok(None) => println!("DELETE stmt: Ok(None))"),
         Ok(Some(_)) => println!("DELETE stmt: Ok(some(_))"),

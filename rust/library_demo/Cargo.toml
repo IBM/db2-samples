@@ -1,0 +1,33 @@
+[workspace]
+members = ["db2binmain","db2libadmin", "db2libimpload"]
+resolver = "2"
+
+[workspace.package]
+authors = ["Dr. Gerd Anders"]
+description = "Rust files / binaries for processing data from SAMPLE database"
+
+# listed here, since used by most / all packages:
+[workspace.dependencies]
+odbc-api = "29.0"
+substring = "1.4.5"
+env_logger = "0.11"
+log = { version = "0.4", features = ["std"] }
+clap = { version = "4.5", features = ["derive"] }
+anyhow = "1.0"
+
+# https://nnethercote.github.io/perf-book/build-configuration.html
+# https://medium.com/@nishantspatil0408/mastering-rust-workspaces-from-development-to-production-a57ca9545309
+[profile.release]
+lto = "fat"              # Link-time optimization
+codegen-units = 1        # Better optimization
+# panic = "abort"          # Smaller binaries
+
+# https://rust-lang.github.io/packed_simd/perf-guide/target-feature/rustflags.html
+# cat ~/.cargo/config.toml 
+# [build]
+# rustflags = ["-C", "target-cpu=native"]
+
+[profile.dev]
+debug = 1                # Faster dev builds
+opt-level = 1            # Some optimization in dev
+
