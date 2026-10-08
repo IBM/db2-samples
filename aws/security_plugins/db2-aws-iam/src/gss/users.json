@@ -1,0 +1,40 @@
+{
+    "iamusers": {
+        "IBMid-1900097PYX": "dv_ibmid_1900097pyx"
+    },
+    "policies": {
+        "default": {
+            "max_attempts": "5",
+            "lock_duration": "900"
+        },
+        "db2inst1_policy": {
+            "max_attempts": "5",
+            "lock_duration": "0"
+        }
+    },
+    "groups": {
+        "BLUUSERS": {
+            "desc": "Non-Admin Group"
+        },
+        "DB2IADM1": {
+            "desc": "SYSADM group"
+        },
+        "BLUADMIN": {
+            "desc": "Admin Group"
+        }
+    },
+    "users": {
+        "dv_ibmid_1900097pyx": {
+            "username": "dv_ibmid_1900097pyx",
+            "role": "DV_ADMIN",
+            "email": "json.test@ibm.com",
+            "policyname": "default",
+            "locked": false,
+            "locked_count": 0,
+            "locked_time": 0,
+            "password": "{SHA2}VK2P5JkVuB8RHZ2gDJFQ60sj3iHmetRr2oD\/92NKvuYwSSpLpICEqQ==",
+            "group": "bluusers"
+        }
+    },
+    "rev": 0
+}
