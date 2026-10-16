@@ -1,0 +1,403 @@
+/*
+ * (c) Copyright IBM Corp. 2026 All Rights Reserved.
+ *
+ * SPDX-License-Identifier: Apache-2.0
+ */
+/****************************************************************************
+** Trust Procedure Demonstration
+**
+** FILE        : trust_proc.sqc
+**
+** PURPOSE     : C-based external stored procedure used as a TRUST PROCEDURE
+**               attribute on a Db2 trusted context. Validates the client-
+**               supplied apptoken by checking its prefix, expiry time, and
+**               RS256 (RSA-2048/SHA-256) digital signature.
+**
+** TOKEN FORMAT (all fields concatenated, no padding):
+**   PREFIX   : "TRUSTCALLBACK"  — 13 ASCII bytes
+**   NONCE    : raw nonce bytes  — (total_len - 13 - 8 - 2 - siglen) bytes
+**   EXPIRY   : Unix epoch, big-endian int64                — 8 bytes
+**   SIGLEN   : byte count of SIG, big-endian uint16        — 2 bytes
+**   SIG      : RSA-2048/SHA-256 signature over
+**              (PREFIX || NONCE || EXPIRY)                 — SIGLEN bytes
+**
+** VALIDATION :
+**   1. Fetch CLIENT_APPTOKEN and APPTOKEN_NONCE from Db2 global variables
+**   2. Verify prefix == "TRUSTCALLBACK"
+**   3. Parse EXPIRY, SIGLEN, SIG from the trailing fields
+**   4. Check EXPIRY > current Unix time (token not yet expired)
+**   5. Verify signature over (PREFIX || NONCE || EXPIRY) with public key
+**   6. All checks pass  -> SQLSTATE 01H5B (trusted)
+**      Any check fails  -> SQLSTATE 00000 (not trusted, connection proceeds)
+**
+** PUBLIC KEY : $HOME/trustproc_keys/public.pem  (RSA-2048, PEM format)
+**
+** BUILD       : From signedtoken/:
+**                 make trust_proc DB=$DB
+**
+** LOGGING     : Writes a timestamped log to /tmp/trust_proc.log on every
+**               invocation.
+**
+** REGISTRATION: See setup.sql
+*****************************************************************************/
+
+#include <stdio.h>
+#include <string.h>
+#include <stdlib.h>
+#include <stdarg.h>
+#include <time.h>
+#include <stdint.h>
+#include <memory.h>
+#include <sqlda.h>
+#include <sqlca.h>
+#include <sqludf.h>
+#include <sqlstate.h>
+#include <sql.h>
+#include <openssl/evp.h>
+#include <openssl/pem.h>
+#include <openssl/err.h>
+
+/* The fixed prefix every valid apptoken must start with */
+#define TRUST_PREFIX        "TRUSTCALLBACK"
+#define TRUST_PREFIX_LEN    13              /* strlen("TRUSTCALLBACK") */
+
+/* Sizes of the fixed trailing fields */
+#define EXPIRY_LEN          8   /* big-endian int64 */
+#define SIGLEN_LEN          2   /* big-endian uint16 */
+
+/* Minimum token length: prefix + expiry + siglen + at least 1 sig byte */
+#define TOKEN_MIN_LEN       (TRUST_PREFIX_LEN + EXPIRY_LEN + SIGLEN_LEN + 1)
+
+/* Maximum sizes matching the global variable definitions */
+#define APPTOKEN_MAX_LEN    32672
+#define NONCE_MAX_LEN       1024
+
+/* Path to the RSA-2048 public key (PEM format) */
+#define PUBLIC_KEY_PATH_SUFFIX  "/trustproc_keys/public.pem"
+
+/* Log file path — override at compile time with -DTRUST_PROC_LOG='"path"' */
+#ifndef TRUST_PROC_LOG
+#define TRUST_PROC_LOG      "/tmp/trust_proc.log"
+#endif
+
+/* -------------------------------------------------------------------------
+** tp_log() — append a timestamped line to the log file.
+** ------------------------------------------------------------------------- */
+static void tp_log(const char *fmt, ...)
+{
+    FILE       *f;
+    time_t      now;
+    struct tm   tm_info;
+    char        ts[32];
+    va_list     ap;
+
+    f = fopen(TRUST_PROC_LOG, "a");
+    if (!f)
+        return;
+
+    time(&now);
+    localtime_r(&now, &tm_info);
+    strftime(ts, sizeof(ts), "%Y-%m-%d %H:%M:%S", &tm_info);
+
+    fprintf(f, "[%s] ", ts);
+    va_start(ap, fmt);
+    vfprintf(f, fmt, ap);
+    va_end(ap);
+    fputc('\n', f);
+
+    fclose(f);
+}
+
+/* -------------------------------------------------------------------------
+** tp_log_hex() — log a binary buffer as a hex string with a label.
+** Limits output to the first 64 bytes to keep the log readable.
+** ------------------------------------------------------------------------- */
+static void tp_log_hex(const char *label, const unsigned char *buf, unsigned int len)
+{
+    char        hex[197];   /* 64 bytes * 3 chars each + "..." (4 bytes) + NUL */
+    unsigned int i;
+    unsigned int show = len > 64 ? 64 : len;
+
+    for (i = 0; i < show; i++)
+        snprintf(hex + i * 3, 4, "%02X ", buf[i]);
+    if (show < len)
+        snprintf(hex + show * 3, 5, "...");
+    else if (show > 0)
+        hex[show * 3 - 1] = '\0';   /* trim trailing space */
+    else
+        hex[0] = '\0';
+
+    tp_log("%s (%u bytes): %s", label, len, hex);
+}
+
+/* -------------------------------------------------------------------------
+** read_be64 — read a big-endian 64-bit value.
+** ------------------------------------------------------------------------- */
+static uint64_t read_be64(const unsigned char *src)
+{
+    return ((uint64_t)src[0] << 56) | ((uint64_t)src[1] << 48) |
+           ((uint64_t)src[2] << 40) | ((uint64_t)src[3] << 32) |
+           ((uint64_t)src[4] << 24) | ((uint64_t)src[5] << 16) |
+           ((uint64_t)src[6] <<  8) |  (uint64_t)src[7];
+}
+
+/* -------------------------------------------------------------------------
+** read_be16 — read a big-endian 16-bit value.
+** ------------------------------------------------------------------------- */
+static uint16_t read_be16(const unsigned char *src)
+{
+    return (uint16_t)(((uint16_t)src[0] << 8) | (uint16_t)src[1]);
+}
+
+/*
+** Trust procedure entry point.
+** No user parameters — only the standard SQLUDF trail args.
+*/
+int SQL_API_FN trustProc( SQLUDF_TRAIL_ARGS )
+{
+    EXEC SQL INCLUDE SQLCA;
+    EXEC SQL WHENEVER SQLERROR GOTO return_error;
+
+    EXEC SQL BEGIN DECLARE SECTION;
+    /*
+    ** CLIENT_APPTOKEN is VARBINARY(32672).
+    ** A {short len; char arr[N]} struct is the embedded SQL host variable
+    ** format for varying-length data.
+    ** NOTE: literal sizes required inside DECLARE SECTION (no macro expansion).
+    */
+    struct { short len; char arr[32672]; } appToken;
+
+    /*
+    ** APPTOKEN_NONCE is BINARY(1024) — fixed-length binary, always 1024 bytes,
+    ** zero-padded if the nonce is shorter.
+    */
+    char nonce[1024];
+
+    short indAppToken = 0;   /* NULL indicator: -1 = NULL */
+    short indNonce    = 0;   /* NULL indicator: -1 = NULL */
+    EXEC SQL END DECLARE SECTION;
+
+    tp_log("=== trustProc invoked ===");
+
+    /* ----------------------------------------------------------------
+    ** 1. Fetch the global variables populated by Db2 during connect
+    ** ---------------------------------------------------------------- */
+    EXEC SQL VALUES SYSIBM.CLIENT_APPTOKEN
+             INTO :appToken INDICATOR :indAppToken;
+
+    EXEC SQL VALUES SYSIBM.APPTOKEN_NONCE
+             INTO :nonce INDICATOR :indNonce;
+
+    tp_log("CLIENT_APPTOKEN indicator=%d  len=%d",
+           (int)indAppToken, (int)appToken.len);
+    tp_log("APPTOKEN_NONCE  indicator=%d", (int)indNonce);
+
+    /* ----------------------------------------------------------------
+    ** 2. NULL check
+    ** ---------------------------------------------------------------- */
+    if (indAppToken < 0 || indNonce < 0)
+    {
+        tp_log("NULL input(s) — returning NOT TRUSTED (00000)");
+        memcpy(SQLUDF_STATE, SQLUDF_STATE_OK, strlen(SQLUDF_STATE_OK));
+        return 0;
+    }
+
+    tp_log_hex("CLIENT_APPTOKEN data", (unsigned char *)appToken.arr,
+               (unsigned int)appToken.len);
+
+    /* ----------------------------------------------------------------
+    ** 3. Minimum length and prefix check
+    ** ---------------------------------------------------------------- */
+    if ((unsigned int)appToken.len < TOKEN_MIN_LEN)
+    {
+        tp_log("CLIENT_APPTOKEN too short (len=%d, min=%d) — NOT TRUSTED",
+               (int)appToken.len, TOKEN_MIN_LEN);
+        memcpy(SQLUDF_STATE, SQLUDF_STATE_OK, strlen(SQLUDF_STATE_OK));
+        return 0;
+    }
+
+    if (memcmp(appToken.arr, TRUST_PREFIX, TRUST_PREFIX_LEN) != 0)
+    {
+        tp_log("Prefix mismatch — NOT TRUSTED");
+        memcpy(SQLUDF_STATE, SQLUDF_STATE_OK, strlen(SQLUDF_STATE_OK));
+        return 0;
+    }
+
+    /* ----------------------------------------------------------------
+    ** 4. Parse token fields
+    **    Layout: PREFIX(13) | NONCE(N) | EXPIRY(8) | SIGLEN(2) | SIG(SIGLEN)
+    **
+    **    We cannot parse NONCE length from the token alone without first
+    **    knowing SIGLEN, and SIGLEN is embedded before the SIG at the end.
+    **    For this demo we control the key size (RSA-2048 = 256 bytes always),
+    **    so we locate fields by working backwards from the end:
+    **      last 256 bytes       = SIG
+    **      2 bytes before SIG   = SIGLEN field (must equal 256)
+    **      8 bytes before SIGLEN= EXPIRY
+    **      bytes 13..expiry-1   = NONCE
+    ** ---------------------------------------------------------------- */
+    unsigned int total = (unsigned int)appToken.len;
+    const unsigned char *tok = (const unsigned char *)appToken.arr;
+
+    /* RSA-2048 always produces exactly 256 bytes */
+    const unsigned int RSA2048_SIG_BYTES = 256;
+
+    if (total < TRUST_PREFIX_LEN + EXPIRY_LEN + SIGLEN_LEN + RSA2048_SIG_BYTES)
+    {
+        tp_log("Token too short for RSA-2048 signature — NOT TRUSTED");
+        memcpy(SQLUDF_STATE, SQLUDF_STATE_OK, strlen(SQLUDF_STATE_OK));
+        return 0;
+    }
+
+    /* Locate fields from the back */
+    const unsigned char *sig_ptr    = tok + total - RSA2048_SIG_BYTES;
+    const unsigned char *siglen_field = sig_ptr - SIGLEN_LEN;
+    const unsigned char *expiry_ptr  = siglen_field - EXPIRY_LEN;
+
+    uint16_t siglen_val = read_be16(siglen_field);
+    if (siglen_val != RSA2048_SIG_BYTES)
+    {
+        tp_log("SIGLEN field=%u does not match expected=%u — NOT TRUSTED",
+               (unsigned int)siglen_val, RSA2048_SIG_BYTES);
+        memcpy(SQLUDF_STATE, SQLUDF_STATE_OK, strlen(SQLUDF_STATE_OK));
+        return 0;
+    }
+
+    uint64_t expiry_val = read_be64(expiry_ptr);
+
+    /* nonceLen = everything between PREFIX and EXPIRY */
+    unsigned int nonceLen = (unsigned int)(expiry_ptr - (tok + TRUST_PREFIX_LEN));
+    if (nonceLen == 0 || nonceLen > NONCE_MAX_LEN)
+    {
+        tp_log("Derived nonceLen=%u invalid — NOT TRUSTED", nonceLen);
+        memcpy(SQLUDF_STATE, SQLUDF_STATE_OK, strlen(SQLUDF_STATE_OK));
+        return 0;
+    }
+    const unsigned char *nonce_ptr = tok + TRUST_PREFIX_LEN;
+
+    tp_log("Parsed: nonceLen=%u  expiry=%llu  siglen=%u",
+           nonceLen, (unsigned long long)expiry_val, (unsigned int)siglen_val);
+    tp_log_hex("Parsed nonce", nonce_ptr, nonceLen);
+    tp_log_hex("Parsed expiry", expiry_ptr, EXPIRY_LEN);
+
+    /* ----------------------------------------------------------------
+    ** 5. Expiry check
+    ** ---------------------------------------------------------------- */
+    time_t now = time(NULL);
+    if ((uint64_t)now > expiry_val)
+    {
+        tp_log("Token expired: expiry=%llu now=%llu — NOT TRUSTED",
+               (unsigned long long)expiry_val, (unsigned long long)now);
+        memcpy(SQLUDF_STATE, SQLUDF_STATE_OK, strlen(SQLUDF_STATE_OK));
+        return 0;
+    }
+    tp_log("Expiry check passed: expires in %llu seconds",
+           (unsigned long long)(expiry_val - (uint64_t)now));
+
+    /* ----------------------------------------------------------------
+    ** 6. Verify signature over (PREFIX || NONCE || EXPIRY)
+    ** ---------------------------------------------------------------- */
+    const char *home = getenv("HOME");
+    if (!home || home[0] == '\0')
+    {
+        tp_log("ERROR: HOME not set — cannot load public key — NOT TRUSTED");
+        memcpy(SQLUDF_STATE, SQLUDF_STATE_OK, strlen(SQLUDF_STATE_OK));
+        return 0;
+    }
+
+    char keypath[512];
+    if (strlen(home) + strlen(PUBLIC_KEY_PATH_SUFFIX) + 1 > sizeof(keypath))
+    {
+        tp_log("ERROR: HOME path too long — cannot load public key — NOT TRUSTED");
+        memcpy(SQLUDF_STATE, SQLUDF_STATE_OK, strlen(SQLUDF_STATE_OK));
+        return 0;
+    }
+    snprintf(keypath, sizeof(keypath), "%s%s", home, PUBLIC_KEY_PATH_SUFFIX);
+
+    FILE *kf = fopen(keypath, "r");
+    if (!kf)
+    {
+        tp_log("ERROR: Cannot open public key: %s — NOT TRUSTED", keypath);
+        memcpy(SQLUDF_STATE, SQLUDF_STATE_OK, strlen(SQLUDF_STATE_OK));
+        return 0;
+    }
+    EVP_PKEY *pkey = PEM_read_PUBKEY(kf, NULL, NULL, NULL);
+    fclose(kf);
+    if (!pkey)
+    {
+        tp_log("ERROR: Failed to parse public key: %s — NOT TRUSTED", keypath);
+        memcpy(SQLUDF_STATE, SQLUDF_STATE_OK, strlen(SQLUDF_STATE_OK));
+        return 0;
+    }
+    tp_log("Loaded public key from: %s", keypath);
+
+    /* Build the data-to-verify: PREFIX || NONCE || EXPIRY (same as client) */
+    unsigned int dts_len = TRUST_PREFIX_LEN + nonceLen + EXPIRY_LEN;
+    unsigned char *dts = (unsigned char *)malloc(dts_len);
+    if (!dts)
+    {
+        tp_log("ERROR: Out of memory for verify buffer — NOT TRUSTED");
+        EVP_PKEY_free(pkey);
+        memcpy(SQLUDF_STATE, SQLUDF_STATE_OK, strlen(SQLUDF_STATE_OK));
+        return 0;
+    }
+    memcpy(dts,                              TRUST_PREFIX, TRUST_PREFIX_LEN);
+    memcpy(dts + TRUST_PREFIX_LEN,           nonce_ptr,    nonceLen);
+    memcpy(dts + TRUST_PREFIX_LEN + nonceLen, expiry_ptr,  EXPIRY_LEN);
+
+    EVP_MD_CTX *mdctx = EVP_MD_CTX_new();
+    int verify_ok = 0;
+
+    if (mdctx &&
+        EVP_DigestVerifyInit(mdctx, NULL, EVP_sha256(), NULL, pkey) == 1 &&
+        EVP_DigestVerifyUpdate(mdctx, dts, dts_len) == 1)
+    {
+        int result = EVP_DigestVerifyFinal(mdctx, sig_ptr, (size_t)siglen_val);
+        verify_ok = (result == 1);
+        if (result != 1)
+        {
+            /* Log OpenSSL error details */
+            unsigned long oerr = ERR_get_error();
+            char obuf[128];
+            ERR_error_string_n(oerr, obuf, sizeof(obuf));
+            tp_log("Signature verification FAILED: %s", obuf);
+        }
+    }
+    else
+    {
+        tp_log("ERROR: EVP verify initialisation failed");
+    }
+
+    if (mdctx) EVP_MD_CTX_free(mdctx);
+    free(dts);
+    EVP_PKEY_free(pkey);
+
+    /* ----------------------------------------------------------------
+    ** 7. Grant or deny trust based on verification result
+    ** ---------------------------------------------------------------- */
+    if (verify_ok)
+    {
+        tp_log("Signature verified — returning TRUSTED (01H5B)");
+        memcpy(SQLUDF_STATE, "01H5B", 5);
+    }
+    else
+    {
+        tp_log("Signature invalid — returning NOT TRUSTED (00000)");
+        memcpy(SQLUDF_STATE, SQLUDF_STATE_OK, strlen(SQLUDF_STATE_OK));
+    }
+
+    return 0;
+
+    /* ----------------------------------------------------------------
+    ** Error handler — propagate the SQLSTATE and code from the SQLCA
+    ** ---------------------------------------------------------------- */
+    return_error:
+    {
+        tp_log("SQL error sqlcode=%d sqlstate=%.5s — returning error state",
+               sqlca.sqlcode, sqlca.sqlstate);
+        memcpy(SQLUDF_STATE, sqlca.sqlstate, sizeof(sqlca.sqlstate));
+        snprintf(SQLUDF_MSGTX, SQLUDF_MSGTEXT_LEN,
+                 "%d : Failed to evaluate trusted connection", sqlca.sqlcode);
+        return 0;
+    }
+}

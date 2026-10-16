@@ -1,0 +1,177 @@
+#! /bin/sh
+#############################################################################
+# (c) Copyright IBM Corp. 2026 All Rights Reserved.
+#
+# SPDX-License-Identifier: Apache-2.0
+#############################################################################
+# SCRIPT: bldrtn
+# Builds C routines (stored procedures or UDFs) for Linux
+# Usage: bldrtn <prog_name> [ <db_name> ] [ -l "<extra_libs>" ] [ -s "<extra_srcs>" ] [ -u ]
+#
+# All compiled output (.o, shared library) is written to the build/ subdirectory,
+# which is created automatically if it does not exist.  The source file
+# (<prog_name>.sqc or <prog_name>.c) is located by searching src/ and the
+# current directory.
+#
+# Options:
+#   -l "<extra_libs>"  Additional libraries to pass to the linker.
+#                      Quote the argument when passing multiple flags.
+#                      Example: bldrtn trust_proc testdb -l "-lssl -lcrypto"
+#   -s "<extra_srcs>"  Additional C source files to compile and link.
+#                      Quote the argument when listing multiple files.
+#                      Example: -s "src/client/c/utilapptokensigner.c"
+#   -u                 Install to the unfenced function directory
+#                      ($DB2PATH/function/unfenced) instead of $DB2PATH/function.
+#############################################################################
+
+# Consume the positional arguments, then scan for flags.
+PROG=$1
+DB=$2
+
+EXTRA_LINK_LIBS=""
+EXTRA_SRCS=""
+UNFENCED=0
+
+# Parse optional flags from the remaining arguments.
+shift 2 2>/dev/null || shift $# 2>/dev/null
+while [ $# -gt 0 ]; do
+    case "$1" in
+        -l)
+            EXTRA_LINK_LIBS="$2"
+            shift 2
+            ;;
+        -s)
+            EXTRA_SRCS="$2"
+            shift 2
+            ;;
+        -u)
+            UNFENCED=1
+            shift
+            ;;
+        *)
+            shift
+            ;;
+    esac
+done
+
+# Select the compiler to use
+CC=gcc
+#CC=xlc_r
+
+# Set DB2PATH to where DB2 will be accessed.
+# The default is the standard instance path.
+DB2PATH=$HOME/sqllib
+
+# Default compiler/linker settings
+EXTRA_C_FLAGS=""
+SHARED_LIB_FLAG=""
+
+# Figure out which Linux architecture we are on
+HARDWAREPLAT=`uname -m`
+
+# Default to native bitwidth for the platform
+if [ "$HARDWAREPLAT" = "x86_64" ] || [ "$HARDWAREPLAT" = "ppc64" ] || 
+   [ "$HARDWAREPLAT" = "s390x" ] || [ "$HARDWAREPLAT" = "ia64" ] ||
+   [ "$HARDWAREPLAT" = "ppc64le" ]
+then
+  BITWIDTH=64
+else
+  # x86 is the only native 32-bit platform
+  BITWIDTH=32
+fi
+
+# Uncomment the next line to force a 32-bit application compile/link
+#BITWIDTH=32
+
+# Set flags for 32-bit compilation on non-native 32-bit platforms
+if [ $BITWIDTH = "32" ]
+then
+  LIB="lib32"
+  if [ "$HARDWAREPLAT" = "s390x" ]
+  then
+    EXTRA_C_FLAGS="-m31"
+  else
+    if [ "$HARDWAREPLAT" = "ia64" ]
+    then
+      # DB2 does not support 32-bit applications on Linux on IA64
+      BITWIDTH=64
+    else
+      EXTRA_C_FLAGS="-m32"
+    fi
+  fi
+fi
+
+# Set flags for 64-bit compilation
+if [ $BITWIDTH = "64" ]
+then
+  LIB="lib64"
+  if [ "$HARDWAREPLAT" != "ia64" ]
+  then
+    # gcc on ia64 does not support the -m64 flag
+    EXTRA_C_FLAGS="-m64"
+  fi
+fi
+
+if [ "$CC" = "xlc_r" ]
+then
+  SHARED_LIB_FLAG="-qmkshrobj"
+else
+  SHARED_LIB_FLAG="-shared"
+  EXTRA_C_FLAGS="$EXTRA_C_FLAGS -fpic"
+fi
+
+LINK_FLAGS="$EXTRA_C_FLAGS $SHARED_LIB_FLAG"
+
+# Set the runtime path.
+EXTRA_LFLAG="-Wl,-rpath,$DB2PATH/$LIB"
+
+# Create the build output directory if it does not exist.
+BUILDDIR=build
+mkdir -p "$BUILDDIR"
+
+# Locate the primary source file (.sqc or .c) by searching src/ then cwd.
+SQC_SRC=""
+C_SRC=""
+for dir in src/server src/client/c .; do
+    if [ -f "$dir/$PROG.sqc" ]; then
+        SQC_SRC="$dir/$PROG.sqc"
+        C_SRC="$BUILDDIR/$PROG.c"
+        break
+    fi
+    if [ -f "$dir/$PROG.c" ]; then
+        C_SRC="$dir/$PROG.c"
+        break
+    fi
+done
+
+# If an embedded SQL program, precompile and bind it.
+# embprep writes the generated .c and .bnd into $BUILDDIR.
+if [ -n "$SQC_SRC" ]
+then
+  ./embprep "$SQC_SRC" "$BUILDDIR" $DB
+fi
+
+# Compile any extra source files.
+EXTRA_OBJS=""
+for src in $EXTRA_SRCS; do
+    obj="$BUILDDIR/$(basename ${src%.c}).o"
+    $CC $EXTRA_C_FLAGS -Isrc/client/c -I$DB2PATH/include -c "$src" -D_REENTRANT -o "$obj"
+    EXTRA_OBJS="$EXTRA_OBJS $obj"
+done
+
+# Compile the program.
+$CC $EXTRA_C_FLAGS -Isrc/client/c -I$DB2PATH/include -c "$C_SRC" -D_REENTRANT -o "$BUILDDIR/$PROG.o"
+
+# Link the program and create a shared library
+$CC $LINK_FLAGS -o "$BUILDDIR/$PROG" "$BUILDDIR/$PROG.o" $EXTRA_OBJS $EXTRA_LFLAG -L$DB2PATH/$LIB -ldb2 -lpthread $EXTRA_LINK_LIBS
+
+# Copy the shared library to the function subdirectory.
+# The user must have write permission to this directory.
+if [ $UNFENCED = "1" ]
+then
+  FUNCTION_DIR=$DB2PATH/function/unfenced
+else
+  FUNCTION_DIR=$DB2PATH/function
+fi
+rm -f $FUNCTION_DIR/$PROG
+cp "$BUILDDIR/$PROG" $FUNCTION_DIR
