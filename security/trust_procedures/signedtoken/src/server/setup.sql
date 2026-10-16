@@ -12,8 +12,8 @@
 -- USAGE:   db2 connect to $DB user $AUTHID using $PASSWORD
 --          db2 -tvf setup.sql
 --
--- VARIABLES: Substitute your own values throughout:
---   $AUTHID  — the connecting authid for the trusted context demo (e.g. boss)
+-- NOTE: You will need to change the authid BOSS to your own authid that you
+--       want to establish the trusted context for.
 -- =============================================================================
 
 -- -----------------------------------------------------------------------------
