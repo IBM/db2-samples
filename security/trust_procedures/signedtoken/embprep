@@ -1,0 +1,65 @@
+#! /bin/sh
+#############################################################################
+# (c) Copyright IBM Corp. 2026 All Rights Reserved.
+#
+# SPDX-License-Identifier: Apache-2.0
+#############################################################################
+# SCRIPT: embprep
+# To prep and bind C/C++ embedded SQL programs
+#
+# Usage: embprep <sqc_path> <build_dir> [ <db_name> [ <userid> <password> ]]
+#
+# <sqc_path>   Full or relative path to the .sqc source file.
+# <build_dir>  Directory where prep output (.c, .bnd) will be written.
+#              The directory must already exist.
+#############################################################################
+
+SQC_PATH=$1
+BUILD_DIR=$2
+DB=$3
+USERID=$4
+PASSWORD=$5
+
+# Resolve paths to absolute so they are valid from any working directory.
+case "$SQC_PATH" in
+  /*) ABS_SQC="$SQC_PATH" ;;
+  *)  ABS_SQC="$(pwd)/$SQC_PATH" ;;
+esac
+case "$BUILD_DIR" in
+  /*) ABS_BUILD="$BUILD_DIR" ;;
+  *)  ABS_BUILD="$(pwd)/$BUILD_DIR" ;;
+esac
+
+BASENAME=$(basename "${ABS_SQC%.sqc}")
+ABS_OUT_C="$ABS_BUILD/$BASENAME.c"
+ABS_OUT_BND="$ABS_BUILD/$BASENAME.bnd"
+
+# Connect to a database.
+if [ -z "$DB" ]
+then
+   db2 connect to sample
+elif [ -z "$USERID" ]
+then
+   db2 connect to $DB
+else
+   db2 connect to $DB user $USERID using $PASSWORD
+fi
+
+# Precompile the program.  Use OUTPUT to write the generated .c directly
+# into the build directory.  The .bnd file is written alongside the source
+# by default; move it to the build directory afterwards.
+if [ -f "$ABS_SQC" ]
+then
+  db2 prep "$ABS_SQC" bindfile output "$ABS_OUT_C"
+  SRC_BND="$(dirname $ABS_SQC)/$BASENAME.bnd"
+  if [ -f "$SRC_BND" ]; then
+    mv "$SRC_BND" "$ABS_OUT_BND"
+  fi
+fi
+
+# Bind the program to the database.
+db2 bind "$ABS_OUT_BND"
+
+# Disconnect from the database.
+db2 connect reset
+db2 terminate

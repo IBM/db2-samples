@@ -1,0 +1,152 @@
+#! /bin/sh
+############################################################################# 
+# (c) Copyright IBM Corp. 2026 All Rights Reserved.
+#
+# SPDX-License-Identifier: Apache-2.0
+############################################################################# 
+# SCRIPT: bldapp
+# Builds C applications for Linux
+# Usage: bldapp <prog_name> [ <db_name> [ <userid> <password> ]]
+#             [ -l "<extra_libs>" ] [ -s "<extra_srcs>" ]
+#
+# All compiled output (.o, executable) is written to the build/ subdirectory,
+# which is created automatically if it does not exist.  The source file
+# (<prog_name>.sqc or <prog_name>.c) is located by searching src/ and the
+# current directory.
+#
+# Options:
+#   -l "<extra_libs>"  Additional libraries to pass to the linker.
+#                      Quote the argument when passing multiple flags.
+#                      Example: -l "-lssl -lcrypto"
+#   -s "<extra_srcs>"  Additional C source files to compile and link.
+#                      Quote the argument when listing multiple files.
+#                      Example: -s "src/client/c/utilapptokensigner.c"
+############################################################################# 
+
+# Consume the positional arguments first, then scan for optional flags.
+PROG=$1
+DB=$2
+USERID=$3
+PASSWORD=$4
+
+EXTRA_LINK_LIBS=""
+EXTRA_SRCS=""
+
+# Parse optional flags from the remaining arguments.
+shift 4 2>/dev/null || shift $# 2>/dev/null
+while [ $# -gt 0 ]; do
+    case "$1" in
+        -l)
+            EXTRA_LINK_LIBS="$2"
+            shift 2
+            ;;
+        -s)
+            EXTRA_SRCS="$2"
+            shift 2
+            ;;
+        *)
+            shift
+            ;;
+    esac
+done
+
+# Select a compiler to use
+CC=gcc
+#CC=xlc_r
+
+# Set DB2PATH to where DB2 will be accessed.
+# The default is the standard instance path.
+DB2PATH=$HOME/sqllib
+
+# Default flags
+EXTRA_C_FLAGS=""
+
+# Figure out which Linux architecture we are on
+HARDWAREPLAT=`uname -m`
+
+# Default to native bitwidth for the platform
+if [ "$HARDWAREPLAT" = "x86_64" ] || [ "$HARDWAREPLAT" = "ppc64" ] || 
+   [ "$HARDWAREPLAT" = "s390x" ] || [ "$HARDWAREPLAT" = "ia64" ] || 
+   [ "$HARDWAREPLAT" = "ppc64le" ]
+then
+  BITWIDTH=64
+else
+  # x86 is the only native 32-bit platform
+  BITWIDTH=32
+fi
+
+# Uncomment the next line to force a 32-bit application compile/link
+#BITWIDTH=32
+
+# Set flags for 32-bit compilation on non-native 32-bit platforms
+if [ $BITWIDTH = "32" ]
+then
+  LIB="lib32"
+  if [ "$HARDWAREPLAT" = "s390x" ]
+  then
+    EXTRA_C_FLAGS="-m31"
+  else
+    if [ "$HARDWAREPLAT" = "ia64" ]
+    then
+      # DB2 does not support 32-bit applications on Linux on IA64
+      BITWIDTH=64
+    else
+      EXTRA_C_FLAGS="-m32"
+    fi
+  fi
+fi
+
+# Set flags for 64-bit compilation
+if [ $BITWIDTH = "64" ]
+then
+  LIB="lib64"
+  if [ "$HARDWAREPLAT" != "ia64" ]
+  then 
+    # gcc on ia64 does not support the -m64 flag
+    EXTRA_C_FLAGS="-m64"
+  fi
+fi
+
+# Setup the embedded library path
+EXTRA_LFLAG="-Wl,-rpath,$DB2PATH/$LIB"
+
+# Create the build output directory if it does not exist.
+BUILDDIR=build
+mkdir -p "$BUILDDIR"
+
+# Locate the primary source file (.sqc or .c) by searching src/, test/, then cwd.
+SQC_SRC=""
+C_SRC=""
+for dir in src/client/c src/server test/c .; do
+    if [ -f "$dir/$PROG.sqc" ]; then
+        SQC_SRC="$dir/$PROG.sqc"
+        C_SRC="$BUILDDIR/$PROG.c"
+        break
+    fi
+    if [ -f "$dir/$PROG.c" ]; then
+        C_SRC="$dir/$PROG.c"
+        break
+    fi
+done
+
+# Compile any extra source files.
+EXTRA_OBJS=""
+for src in $EXTRA_SRCS; do
+    obj="$BUILDDIR/$(basename ${src%.c}).o"
+    $CC $EXTRA_C_FLAGS -Isrc/client/c -I$DB2PATH/include -c "$src" -o "$obj"
+    EXTRA_OBJS="$EXTRA_OBJS $obj"
+done
+
+# If an embedded SQL program, precompile and bind it.
+# embprep writes the generated .c and .bnd into $BUILDDIR.
+if [ -n "$SQC_SRC" ]
+then
+  ./embprep "$SQC_SRC" "$BUILDDIR" $DB $USERID $PASSWORD
+fi
+
+# Compile the program.
+$CC $EXTRA_C_FLAGS -Isrc/client/c -I$DB2PATH/include -c "$C_SRC" -o "$BUILDDIR/$PROG.o"
+
+# Link the program.
+$CC $EXTRA_C_FLAGS -o "$BUILDDIR/$PROG" "$BUILDDIR/$PROG.o" $EXTRA_OBJS $EXTRA_LFLAG \
+  -L$DB2PATH/$LIB -ldb2 $EXTRA_LINK_LIBS
