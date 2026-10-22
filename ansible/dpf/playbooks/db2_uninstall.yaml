@@ -1,0 +1,20 @@
+---
+- hosts: db2_hosts
+  any_errors_fatal: true
+  gather_facts: false
+  vars_files:
+    - vars.yaml
+
+  tasks:
+
+    - name: Drop Db2 Instance
+      when: inventory_hostname == groups['db2_hosts'][0]
+      command:
+        cmd: /opt/ibm/db2/instance/db2idrop db2inst1
+        removes: /home/db2inst1/sqllib
+
+    - name: Uninstall Db2
+      command:
+        cmd: /opt/ibm/db2/install/db2_deinstall -a 
+        removes: /opt/ibm/db2
+

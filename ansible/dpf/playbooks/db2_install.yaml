@@ -1,0 +1,40 @@
+- name: Check for Db2 Install
+  stat:
+    path: /opt/ibm/db2
+  register: db2_install_path
+  
+- name: Upload Db2 Image
+  unarchive:
+    src: "{{ db2_install_image }}"
+    dest: /root
+    creates: /root/server
+  when: db2_install_path.stat.exists == False
+
+# For pacemaker
+- name: Install Db2 Prereqs
+  dnf:
+    name:
+      - ksh
+      - python3-dnf-plugin-versionlock
+    state: present
+
+- name: Install Db2
+  command:
+    cmd: /root/server/db2_install -n -y -p SERVER -b /opt/ibm/db2
+    creates: /opt/ibm/db2
+
+- name: Remove installer files
+  file:
+    path: /root/server
+    state: absent
+
+- name: Create db2inst1 user
+  user:
+    name: db2inst1
+    uid: 5000
+    create_home: false
+
+- name: Create db2fenc1 user
+  user:
+    name: db2fenc1
+    uid: 5001

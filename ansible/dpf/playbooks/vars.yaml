@@ -1,0 +1,10 @@
+vm_ip_prefix: 192.168.122
+shared_home_dev: /dev/disk/by-label/SHARED_HOME
+mlns_per_host: 2
+ansible_ssh_user: root
+ansible_ssh_common_args: '-o StrictHostKeyChecking=no'
+ansible_ssh_private_key_file: 'vm_key'
+db2_install_image: 'v12.1.2_linuxx64_server.tar.gz'
+rhel_release: '9.6'
+db2data_path: /db2data
+shared_home_export: '/shared_home'

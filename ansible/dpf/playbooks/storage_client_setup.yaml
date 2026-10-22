@@ -1,0 +1,36 @@
+---
+- hosts: db2_hosts
+  any_errors_fatal: true
+  gather_facts: false
+  vars_files:
+    - vars.yaml
+
+  tasks:
+
+  - name: Install packages
+    dnf:
+      name: iscsi-initiator-utils
+      state: latest
+
+  - name: Perform discovery
+    open_iscsi:
+      discover: true
+      ip: "{{ groups['storage_host'][0] }}"
+
+# Fails on first run of new host - need to discover first?
+# Do we need this? Commenting out for now.
+  - name: Logout
+    open_iscsi:
+      login: false
+      node_auth: "None"
+      ip: "{{ groups['storage_host'][0] }}"
+
+  - name: Login and discover iSCSI targets
+    open_iscsi:
+      login: true
+      node_auth: "None"
+      ip: "{{ groups['storage_host'][0] }}"
+
+  - name: Rescan
+    open_iscsi:
+      rescan: true
